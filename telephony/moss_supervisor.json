@@ -1,0 +1,28 @@
+{
+  "supervisor_pid": 97266,
+  "running": true,
+  "ts": 1787012589.274986,
+  "services": {
+    "answers": {
+      "pid": 97267,
+      "alive": true,
+      "healthy": true,
+      "restarts": 0,
+      "uptime_s": 3109
+    },
+    "voice": {
+      "pid": 97276,
+      "alive": true,
+      "healthy": true,
+      "restarts": 0,
+      "uptime_s": 3104
+    },
+    "telephony": {
+      "pid": 97280,
+      "alive": true,
+      "healthy": true,
+      "restarts": 0,
+      "uptime_s": 3101
+    }
+  }
+}

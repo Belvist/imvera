@@ -1,0 +1,37 @@
+# --- secrets / credentials ---
+bot.token
+*.token
+*.key
+*.pem
+.env
+.env.*
+secrets/
+
+# --- logs ---
+*.log
+logs/
+
+# --- call recordings & user data (Stage 10: never ship PII) ---
+telephony/calls/
+calls/
+**/user-*.wav
+**/reply-*.wav
+
+# --- runtime state ---
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+runtime/qwen-venv/
+*.sock
+.DS_Store
+
+# --- macOS archives / OS junk ---
+__MACOSX/
+*.zip
+
+# --- model weights (never ship in repo/ZIP) ---
+# Weights download pinned by revision + verified by scripts/models.sha256:
+#   python3 scripts/download_models.py
+runtime/models/

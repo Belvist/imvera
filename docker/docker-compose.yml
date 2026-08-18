@@ -1,0 +1,149 @@
+# MossVoice — production stack in Docker (three services + optional Telegram gateway).
+#
+#   voice     tts_server.py      9600  MOSS-TTS-Nano (ONNX) + Whisper STT (CPU)
+#   answers   llm_server.py      9500  Qwen3 LLM, /chat (transformers, CPU)
+#   telephony call_agent.py      9400  STT -> LLM -> TTS диалоговый движок
+#   --profile telegram: tg (8600), cloudflared tunnel, bot
+#
+# Usage:
+#   docker compose up -d --build                          # три сервиса
+#   WEBAPP_URL=... docker compose --profile telegram up   # + Telegram
+#     (лучше: ./tg_up.sh — сам стартует туннель и передаст URL боту)
+#
+# Resource note: everything runs on CPU. Give Docker Desktop >= 8 GB RAM.
+# Model weights are baked into the image (pinned revision + sha256 manifest);
+# the "models" volume is only a cache/override layer on top.
+
+services:
+  voice:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: mossvoice/backend:latest
+    container_name: mossvoice-voice
+    command: >
+      python /app/runtime/scripts/tts_server.py
+      --host 0.0.0.0 --port 9600 --threads 4
+      --model ${MOSS_TTS_MODEL:-moss-tts-nano}
+      --allow-ref-dir /app/refs --allow-ref-dir /app/telephony/refs
+    environment:
+      MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-small}
+      MOSS_TTS_VOICE: ${MOSS_TTS_VOICE:-Ava}
+    volumes:
+      - models:/data/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,json,sys; sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:9600/health', timeout=3)).get('ready') else 1)"]
+      interval: 20s
+      timeout: 10s
+      retries: 60
+      start_period: 600s
+    restart: unless-stopped
+
+  answers:
+    image: mossvoice/backend:latest
+    container_name: mossvoice-answers
+    command: >
+      python /app/telephony/llm_server.py
+      --host 0.0.0.0 --port 9500 --model ${MOSS_LLM_MODEL:-Qwen/Qwen3-1.7B}
+    environment:
+      MOSS_LLM_BACKEND: transformers
+    volumes:
+      - models:/data/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,json,sys; sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:9500/health', timeout=3)).get('ready') else 1)"]
+      interval: 20s
+      timeout: 10s
+      retries: 60
+      start_period: 600s
+    depends_on:
+      voice:
+        condition: service_started
+    restart: unless-stopped
+
+  telephony:
+    image: mossvoice/backend:latest
+    container_name: mossvoice-telephony
+    command: >
+      python /app/telephony/call_agent.py
+      --host 0.0.0.0 --port 9400
+      --tts-host voice --tts-port 9600
+      --outdir /data/calls
+      --ref /app/refs/ref_native_48k.wav
+    environment:
+      MOSS_LLM_URL: http://answers:9500
+      MOSS_LLM_BOOT_WAIT: "180"
+    volumes:
+      - calls:/data/calls
+    ports:
+      - "127.0.0.1:9400:9400"
+    depends_on:
+      voice:
+        condition: service_healthy
+      answers:
+        condition: service_started
+    restart: unless-stopped
+
+  # ----------------------- Telegram gateway (optional) -----------------------
+  tg:
+    profiles: ["telegram"]
+    image: mossvoice/backend:latest
+    container_name: mossvoice-tg
+    command: >
+      python /app/telephony/tg/tg_server.py
+      --host 0.0.0.0 --port 8600
+      --agent http://telephony:9400
+      --web-dir /app/telephony/tg/web
+    environment:
+      MOSSVOICE_BOT_TOKEN: ${MOSSVOICE_BOT_TOKEN:-}
+    ports:
+      - "8600:8600"
+    depends_on:
+      telephony:
+        condition: service_started
+    restart: unless-stopped
+
+  cloudflared:
+    profiles: ["telegram"]
+    image: cloudflare/cloudflared:latest
+    container_name: mossvoice-tunnel
+    command: tunnel --no-autoupdate --url http://tg:8600
+    depends_on:
+      - tg
+    restart: unless-stopped
+
+  bot:
+    profiles: ["telegram"]
+    image: mossvoice/backend:latest
+    container_name: mossvoice-bot
+    command: >
+      sh -c "python /app/telephony/tg/bot.py --webapp-url $${WEBAPP_URL}"
+    environment:
+      MOSSVOICE_BOT_TOKEN: ${MOSSVOICE_BOT_TOKEN:-}
+      WEBAPP_URL: ${WEBAPP_URL:-}
+    depends_on:
+      - cloudflared
+    restart: unless-stopped
+
+# ------------------------- Avtotesty (CI stage) ----------------------------
+# The SAME production image runs the full unit-test suite; nothing is
+# re-implemented "for tests". Daemon-level HTTP tests skip themselves when
+# no daemon is running inside the container (offline-safe suite).
+#   make test        (= docker compose run --rm tests)
+#   make test-live   integration tests against a voice daemon in this compose
+  tests:
+    profiles: ["tests"]
+    image: mossvoice/backend:latest
+    container_name: mossvoice-tests
+    working_dir: /app/telephony
+    command: sh /app/telephony/tests/run_in_container.sh
+    environment:
+      MOSS_RUNTIME_SCRIPTS: /app/runtime/scripts
+      # empty => daemon-level tests skip themselves (offline suite);
+      # "make test-live" sets it to http://voice:9600
+      MOSSTEST_TTS: ${MOSSTEST_TTS:-}
+      MOSSTEST_WAIT_DAEMON: ${MOSSTEST_WAIT_DAEMON:-}
+    depends_on: []
+
+volumes:
+  models:
+  calls:

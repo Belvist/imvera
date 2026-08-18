@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for secrets / tokens
+        run: bash scripts/check_secrets.sh
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build -f docker/Dockerfile -t mossvoice/backend:ci .
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: make test (offline suite in the production image)
+        run: make test IMG=mossvoice/backend:ci
+
+  test-live:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: make test-live (live voice daemon in compose)
+        run: make test-live IMG=mossvoice/backend:ci

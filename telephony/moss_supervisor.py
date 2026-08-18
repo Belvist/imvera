@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+"""MossVoice production supervisor — one process tree, three services.
+
+Services (each independent, restarts on crash):
+  1. voice    — tts_server.py          127.0.0.1:9600  (TTS clone + STT)
+  2. answers  — llm_server.py          127.0.0.1:9500  (LLM reply generation)
+  3. telephony— call_agent.py          127.0.0.1:9400  (dialogue engine)
+
+Usage:
+  moss_supervisor.py start [--daemon]   start all services (foreground or bg)
+  moss_supervisor.py stop               graceful shutdown of the whole tree
+  moss_supervisor.py status             health of every managed service
+  moss_supervisor.py restart            stop + start
+
+The supervisor itself never loads a model: it only keeps child processes
+alive and reports their health. A crashed child is restarted with
+exponential backoff (1s..60s), reset after 2 min of stable uptime.
+"""
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+import urllib.request
+
+TEL = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(TEL)
+RUNTIME = os.path.expanduser("~/Library/Application Support/MossVoice/runtime")
+PIDFILE = os.path.join(TEL, "moss_supervisor.pid")
+STATUSFILE = os.path.join(TEL, "moss_supervisor.json")
+
+TTS_PORT = int(os.environ.get("MOSS_TTS_PORT", "9600"))
+LLM_PORT = int(os.environ.get("MOSS_LLM_PORT", "9500"))
+AGENT_PORT = int(os.environ.get("MOSS_AGENT_PORT", "9400"))
+
+
+def python_bin():
+    env = os.environ.get("MOSS_PY")
+    if env:
+        return env
+    repo_venv = os.path.join(REPO, "runtime", "qwen-venv", "bin", "python")
+    if os.path.exists(repo_venv):
+        return repo_venv
+    venv = os.path.join(RUNTIME, "qwen-venv", "bin", "python")
+    if os.path.exists(venv):
+        return venv
+    return sys.executable
+
+
+REF = os.path.join(REPO, "refs", "ref_native_48k.wav")
+if not os.path.exists(REF):
+    REF = os.path.join(REPO, "refs", "ref_vera_female.wav")
+if not os.path.exists(REF):
+    REF = os.path.join(TEL, "refs", "sample.wav")
+
+
+def services():
+    py = python_bin()
+    return [
+        {
+            "name": "answers",
+            "cmd": [py, os.path.join(TEL, "llm_server.py"), "--port", str(LLM_PORT)],
+            "health": f"http://127.0.0.1:{LLM_PORT}/health",
+            "ready_key": "ready",
+            "startup_grace": 180,   # model load time before "unhealthy" reports
+        },
+        {
+            "name": "voice",
+            "cmd": [py, os.path.join(REPO, "runtime", "scripts", "tts_server.py"),
+                    "--runtime", RUNTIME, "--port", str(TTS_PORT), "--threads", "2",
+                    "--allow-ref-dir", os.path.join(TEL, "refs"),
+                    "--allow-ref-dir", os.path.join(REPO, "refs")],
+            "health": f"http://127.0.0.1:{TTS_PORT}/health",
+            "ready_key": "ready",
+            "startup_grace": 900,   # TTS cold load can take many minutes
+        },
+        {
+            "name": "telephony",
+            "cmd": [py, os.path.join(TEL, "call_agent.py"),
+                    "--port", str(AGENT_PORT), "--tts-port", str(TTS_PORT),
+                    "--outdir", os.path.join(TEL, "calls"), "--ref", REF],
+            "health": f"http://127.0.0.1:{AGENT_PORT}/health",
+            "ready_key": None,      # {"ok": true} is enough
+            "startup_grace": 180,
+        },
+    ]
+
+
+class Child:
+    def __init__(self, spec):
+        self.spec = spec
+        self.proc = None
+        self.started_at = 0.0
+        self.tries = 0
+        self.last_exit = None
+
+    @property
+    def name(self):
+        return self.spec["name"]
+
+    def alive(self):
+        return self.proc is not None and self.proc.poll() is None
+
+    def start(self):
+        log = open(os.path.join(TEL, f"{self.name}.supervisor.log"), "ab")
+        self.proc = subprocess.Popen(
+            self.spec["cmd"],
+            stdout=log, stderr=subprocess.STDOUT,
+            cwd=TEL,
+            env=dict(os.environ, PYTHONUNBUFFERED="1"),
+        )
+        self.started_at = time.time()
+        print(f"[supervisor] {self.name}: started pid={self.proc.pid}", flush=True)
+
+    def backoff(self):
+        return min(2 ** min(self.tries, 6), 60)
+
+    def healthy(self):
+        """True/False from the health endpoint; False (never a grace-period
+        True) while the service is still loading its model — the caller's
+        timeout decides how long that is acceptable."""
+        if not self.alive():
+            return None
+        try:
+            with urllib.request.urlopen(self.spec["health"], timeout=5) as r:
+                obj = json.loads(r.read().decode())
+            key = self.spec.get("ready_key")
+            if key:
+                return bool(obj.get(key))
+            return bool(obj.get("ok"))
+        except Exception:  # noqa: BLE001
+            return False
+
+
+class Supervisor:
+    def __init__(self):
+        self.children = [Child(s) for s in services()]
+        self.stop = False
+
+    def _on_signal(self, signum, frame):
+        self.stop = True
+
+    def _wait_healthy(self, c, timeout):
+        """Wait until a child reports healthy before starting the next one.
+
+        Boot ordering matters: MLX deadlocks when two processes load models
+        concurrently, so services come up one at a time (answers -> voice ->
+        telephony) and each model finishes loading before the next begins.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline and not self.stop:
+            h = c.healthy()
+            if h is True:
+                return True
+            if not c.alive():
+                return False
+            time.sleep(1)
+        return False
+
+    def run(self):
+        signal.signal(signal.SIGTERM, self._on_signal)
+        signal.signal(signal.SIGINT, self._on_signal)
+        with open(PIDFILE, "w") as f:
+            f.write(str(os.getpid()))
+        for c in self.children:
+            c.start()
+            if not self._wait_healthy(c, c.spec["startup_grace"]):
+                print(f"[supervisor] {c.name}: not healthy in time; "
+                      "continuing (restart loop will recover it)", flush=True)
+            self.write_status()
+        print("[supervisor] initial start complete", flush=True)
+        while not self.stop:
+            self.write_status()
+            for c in self.children:
+                if c.alive():
+                    if time.time() - c.started_at > 120:
+                        c.tries = 0
+                    continue
+                code = c.proc.poll() if c.proc else None
+                c.last_exit = code
+                c.tries += 1
+                delay = c.backoff()
+                print(f"[supervisor] {c.name}: exited ({code}); "
+                      f"restart in {delay}s (try {c.tries})", flush=True)
+                self.write_status()
+                deadline = time.time() + delay
+                while time.time() < deadline and not self.stop:
+                    time.sleep(0.2)
+                if not self.stop:
+                    c.start()
+                    self._wait_healthy(c, c.spec["startup_grace"])
+            time.sleep(1)
+        self.shutdown()
+
+    def shutdown(self):
+        print("[supervisor] stopping all services...", flush=True)
+        for c in self.children:
+            if c.alive():
+                c.proc.terminate()
+        deadline = time.time() + 10
+        for c in self.children:
+            if not c.alive():
+                continue
+            wait = max(0.1, deadline - time.time())
+            try:
+                c.proc.wait(timeout=wait)
+            except subprocess.TimeoutExpired:
+                c.proc.kill()
+        try:
+            os.remove(PIDFILE)
+        except OSError:
+            pass
+        self.write_status(running=False)
+        print("[supervisor] all services stopped", flush=True)
+
+    def write_status(self, running=True):
+        state = {
+            "supervisor_pid": os.getpid() if running else None,
+            "running": running,
+            "ts": time.time(),
+            "services": {},
+        }
+        for c in self.children:
+            state["services"][c.name] = {
+                "pid": c.proc.pid if c.alive() else None,
+                "alive": c.alive(),
+                "healthy": c.healthy(),
+                "restarts": max(0, c.tries),
+                "uptime_s": int(time.time() - c.started_at) if c.started_at else 0,
+            }
+        try:
+            with open(STATUSFILE, "w") as f:
+                json.dump(state, f, indent=2)
+        except OSError:
+            pass
+
+
+def _daemon_pid():
+    try:
+        with open(PIDFILE) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)
+        return pid
+    except (OSError, ValueError):
+        return None
+
+
+def cmd_start(daemon):
+    if _daemon_pid():
+        print(f"[supervisor] already running (pid {_daemon_pid()})")
+        return 0
+    if daemon:
+        if os.fork() > 0:
+            time.sleep(0.5)
+            print("[supervisor] starting in background — "
+                  f"tail {os.path.join(TEL, '*.supervisor.log')}")
+            return 0
+        os.setsid()
+        pid = _daemon_pid()
+        if pid:
+            print(f"[supervisor] running as pid {pid}")
+            return 0
+        Supervisor().run()
+        return 0
+    Supervisor().run()
+    return 0
+
+
+def cmd_stop():
+    pid = _daemon_pid()
+    if not pid:
+        print("[supervisor] not running")
+        return 0
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(40):
+        if _daemon_pid() is None:
+            print("[supervisor] stopped")
+            return 0
+        time.sleep(0.5)
+    # The supervisor itself is wedged: terminate the children directly so
+    # nothing survives orphaned, then reap the supervisor.
+    try:
+        with open(STATUSFILE) as f:
+            state = json.load(f)
+        for info in state.get("services", {}).values():
+            cpid = info.get("pid")
+            if cpid:
+                try:
+                    os.kill(cpid, signal.SIGTERM)
+                except OSError:
+                    pass
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+    print("[supervisor] killed (children terminated)")
+    return 0
+
+
+def cmd_status():
+    print(f"python : {python_bin()}")
+    pid = _daemon_pid()
+    print(f"supervisor: {'running pid=' + str(pid) if pid else 'NOT running'}")
+    try:
+        with open(STATUSFILE) as f:
+            state = json.load(f)
+    except Exception:  # noqa: BLE001
+        state = None
+    for s in services():
+        name = s["name"]
+        line = f"  {name:<10} {s['health']}"
+        try:
+            with urllib.request.urlopen(s["health"], timeout=5) as r:
+                obj = json.loads(r.read().decode())
+            key = s.get("ready_key") or "ok"
+            line += f"  -> ok={obj.get('ok')} ready={obj.get(key)}"
+        except Exception as e:  # noqa: BLE001
+            line += f"  -> down ({e})"
+        if state:
+            info = state.get("services", {}).get(name, {})
+            line += f"  pid={info.get('pid')} restarts={info.get('restarts')} " \
+                    f"uptime={info.get('uptime_s')}s"
+        print(line)
+    return 0
+
+
+def main():
+    args = sys.argv[1:]
+    cmd = args[0] if args else "start"
+    if cmd == "start":
+        return cmd_start("--daemon" in args)
+    if cmd == "stop":
+        return cmd_stop()
+    if cmd == "status":
+        return cmd_status()
+    if cmd == "restart":
+        cmd_stop()
+        return cmd_start("--daemon" in args or True)
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

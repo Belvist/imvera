@@ -1,0 +1,27 @@
+# MossVoice pinned runtime dependencies (Linux CPU / production image).
+# Generated from the validated macOS venv versions (Aug 2026). torch and
+# torchaudio are installed separately in the Dockerfile from the official
+# CPU index and pinned here for reference — do not install them from PyPI.
+#
+# Rebuild after ANY dependency bump: `pip freeze` into this file, then
+# re-run `make test` + `make test-live` inside the production image.
+
+torch==2.13.0
+torchaudio==2.11.0
+
+onnxruntime==1.28.0
+sentencepiece==0.2.2
+transformers==4.57.3
+soundfile==0.14.0
+librosa==0.11.0
+audioread==3.1.0
+numpy==2.4.6
+scipy==1.18.0
+huggingface_hub==0.36.2
+safetensors==0.8.0
+accelerate==1.12.0
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+websockets==17.0.1
+httpx==0.28.1
+python-telegram-bot==22.8

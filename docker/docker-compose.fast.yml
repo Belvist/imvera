@@ -1,0 +1,122 @@
+# MossVoice — FAST mode (Stage 5 of the architecture plan).
+#
+# The dialogue engine runs against CLOUD providers for the first launch:
+#   STT  OpenAI whisper-1       (MOSS_STT_PROVIDER=openai)
+#   LLM  OpenAI gpt-4o-mini     (MOSS_LLM_PROVIDER=openai)
+#   TTS  ElevenLabs             (MOSS_TTS_PROVIDER=elevenlabs)
+# Every provider has a circuit breaker + automatic LOCAL fallback
+# (voice daemon) — a cloud outage never takes the call down.
+#
+#   docker compose -f docker/docker-compose.fast.yml up -d --build
+#
+# Required environment (or .env next to this file):
+#   OPENAI_API_KEY=sk-...
+#   ELEVENLABS_API_KEY=...
+#   MOSS_TTS_ELEVEN_VOICE=<voice id>
+#
+# The MOSS-TTS-Nano voice daemon stays up: it is the fallback TTS and keeps
+# the reference audio for the learnable moss-voice-vN model line.
+
+services:
+  voice:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: mossvoice/backend:latest
+    container_name: mossvoice-voice
+    command: >
+      python /app/runtime/scripts/tts_server.py
+      --host 0.0.0.0 --port 9600 --threads 4
+      --model ${MOSS_TTS_MODEL:-moss-tts-nano}
+      --allow-ref-dir /app/refs --allow-ref-dir /app/telephony/refs
+    environment:
+      MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-small}
+      MOSS_TTS_VOICE: ${MOSS_TTS_VOICE:-Ava}
+    volumes:
+      - models:/data/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,json,sys; sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:9600/health', timeout=3)).get('ready') else 1)"]
+      interval: 20s
+      timeout: 10s
+      retries: 60
+      start_period: 600s
+    restart: unless-stopped
+
+  telephony:
+    image: mossvoice/backend:latest
+    container_name: mossvoice-telephony
+    command: >
+      python /app/telephony/call_agent.py
+      --host 0.0.0.0 --port 9400
+      --tts-host voice --tts-port 9600
+      --outdir /data/calls
+      --ref /app/refs/ref_native_48k.wav
+    environment:
+      # --- Stage 5: cloud-first providers ----------------------------------
+      MOSS_STT_PROVIDER: ${MOSS_STT_PROVIDER:-openai}
+      MOSS_LLM_PROVIDER: ${MOSS_LLM_PROVIDER:-openai}
+      MOSS_TTS_PROVIDER: ${MOSS_TTS_PROVIDER:-elevenlabs}
+      # keys travel via env only — never baked into the image (.dockerignore
+      # blocks bot.token etc.; see docs/FAST_MODE.md)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      MOSS_TTS_ELEVEN_VOICE: ${MOSS_TTS_ELEVEN_VOICE:-}
+      MOSS_STT_OPENAI_MODEL: ${MOSS_STT_OPENAI_MODEL:-whisper-1}
+      MOSS_LLM_OPENAI_MODEL: ${MOSS_LLM_OPENAI_MODEL:-gpt-4o-mini}
+      MOSS_TTS_ELEVEN_MODEL: ${MOSS_TTS_ELEVEN_MODEL:-eleven_multilingual_v2}
+      # --- local fallbacks still reachable (circuit breaker flips to them) -
+      MOSS_TTS_HOST: voice
+      MOSS_TTS_PORT: "9600"
+    volumes:
+      - calls:/data/calls
+    ports:
+      - "127.0.0.1:9400:9400"
+    depends_on:
+      voice:
+        condition: service_started
+    restart: unless-stopped
+
+  # ----------------------- Telegram gateway (optional) -----------------------
+  tg:
+    profiles: ["telegram"]
+    image: mossvoice/backend:latest
+    container_name: mossvoice-tg
+    command: >
+      python /app/telephony/tg/tg_server.py
+      --host 0.0.0.0 --port 8600
+      --agent http://telephony:9400
+      --web-dir /app/telephony/tg/web
+    environment:
+      MOSSVOICE_BOT_TOKEN: ${MOSSVOICE_BOT_TOKEN:-}
+    ports:
+      - "8600:8600"
+    depends_on:
+      telephony:
+        condition: service_started
+    restart: unless-stopped
+
+  cloudflared:
+    profiles: ["telegram"]
+    image: cloudflare/cloudflared:latest
+    container_name: mossvoice-tunnel
+    command: tunnel --no-autoupdate --url http://tg:8600
+    depends_on:
+      - tg
+    restart: unless-stopped
+
+  bot:
+    profiles: ["telegram"]
+    image: mossvoice/backend:latest
+    container_name: mossvoice-bot
+    command: >
+      sh -c "python /app/telephony/tg/bot.py --webapp-url $${WEBAPP_URL}"
+    environment:
+      MOSSVOICE_BOT_TOKEN: ${MOSSVOICE_BOT_TOKEN:-}
+      WEBAPP_URL: ${WEBAPP_URL:-}
+    depends_on:
+      - cloudflared
+    restart: unless-stopped
+
+volumes:
+  models:
+  calls:

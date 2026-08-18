@@ -1,0 +1,20 @@
+# Never ship these into the MossVoice docker image
+bot.token
+*.token
+*.key
+*.pem
+.env
+.env.*
+.git
+.gitignore
+.DS_Store
+**/__pycache__/
+*.pyc
+telephony/calls/
+calls/
+**/*.log
+**/user-*.wav
+**/reply-*.wav
+runtime/qwen-venv/
+runtime/models/
+docs/

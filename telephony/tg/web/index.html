@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Звонок</title>
+<!-- FIX(initData): the Telegram WebApp script injects
+     window.Telegram.WebApp.initData. Without it window.Telegram is undefined
+     and the server HMAC check always failed. Served LOCALLY so the page works
+     even when telegram.org is unreachable from the device. -->
+<script src="telegram-web-app.js"></script>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-user-select:none; user-select:none; }
+  html,body { height:100%; }
+  body { font-family:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+         color:#1c1c1e; background:#f2f2f7;
+         display:flex; flex-direction:column; max-width:480px; margin:0 auto;
+         padding:0 24px;
+         padding-top:calc(28px + env(safe-area-inset-top));
+         padding-bottom:calc(24px + env(safe-area-inset-bottom)); }
+  .top { text-align:center; margin-top:8px; }
+  .timer { font-size:16px; font-weight:500; color:#000; font-variant-numeric:tabular-nums; }
+  .status { font-size:13px; color:#6c6c70; margin-top:3px; min-height:16px; }
+
+  .person { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .avatar { width:96px; height:96px; border-radius:50%; background:#d1d1d6; color:#48484a;
+            display:flex; align-items:center; justify-content:center; font-size:40px; }
+  .name { font-size:24px; font-weight:600; margin-top:16px; color:#000; }
+  .hint { font-size:14px; color:#8e8e93; margin-top:6px; }
+
+  .controls { display:flex; justify-content:center; gap:28px; padding:8px 0 16px; }
+  .wrap { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .wrap .lbl { font-size:12px; color:#6c6c70; }
+  .fab { width:64px; height:64px; border-radius:50%; border:none; cursor:pointer;
+         display:flex; align-items:center; justify-content:center; font-size:24px; color:#fff;
+         transition:transform .06s; }
+  .fab:active { transform:scale(.92); }
+  .call { background:#34c759; }
+  .hangup { background:#ff3b30; }
+
+  .log { max-height:120px; overflow-y:auto; margin-top:4px; padding-top:10px; border-top:1px solid #e5e5ea; }
+  .log .row { font-size:13px; color:#3a3a3c; padding:3px 0; }
+  .log .row b { font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="timer" id="timer"></div>
+    <div class="status" id="status">Свободен</div>
+  </div>
+
+  <div class="person">
+    <div class="avatar" id="avatar">&#9835;</div>
+    <div class="name" id="name">MossVoice</div>
+    <div class="hint" id="hint">Тел. агент</div>
+  </div>
+
+  <div class="log" id="log" style="display:none"></div>
+
+  <div class="controls">
+    <div class="wrap" id="idlewrap">
+      <button class="fab call" id="callbtn">&#128222;</button>
+      <span class="lbl">Вызов</span>
+    </div>
+    <div class="wrap" id="callwrap" style="display:none">
+      <button class="fab hangup" id="hangbtn">&#128233;</button>
+      <span class="lbl">Завершить</span>
+    </div>
+  </div>
+
+<script>
+const $=id=>document.getElementById(id);
+const timer=$("timer"), status=$("status"), hint=$("hint"), avatar=$("avatar"),
+      logEl=$("log"), callbtn=$("callbtn"), hangbtn=$("hangbtn"),
+      idlewrap=$("idlewrap"), callwrap=$("callwrap");
+
+let ws=null, audioCtx=null, micCtx=null, recStream=null, recProc=null, callActive=false, micSampleRate=16000, noSession=false;
+let t0=null, timerInt=null;
+let micOn=false;
+
+function setStatus(t){ status.textContent=t; }
+function pad(n){ return n<10?"0"+n:""+n; }
+function startTimer(){ t0=Date.now(); timerInt=setInterval(()=>{
+  const s=Math.floor((Date.now()-t0)/1000);
+  timer.textContent=pad(Math.floor(s/60))+":"+pad(s%60);
+},500); }
+function stopTimer(){ clearInterval(timerInt); timerInt=null; timer.textContent=""; }
+
+function addLog(txt){ logEl.style.display="block"; const r=document.createElement("div"); r.className="row"; r.textContent=txt; logEl.appendChild(r); logEl.scrollTop=logEl.scrollHeight; }
+
+function b64ToArrayBuffer(b64){ const bin=atob(b64),len=bin.length; const buf=new ArrayBuffer(len),v=new Uint8Array(buf); for(let i=0;i<len;i++)v[i]=bin.charCodeAt(i); return buf; }
+
+function ensureCtx(){ if(!audioCtx||audioCtx.state==="closed") audioCtx=new (window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
+let playbackEpoch=0;
+const player={prevEnd:0, live:new Set()};
+function stopPlayback(){
+  for(const s of player.live){ try{ s.stop(); }catch(e){} }
+  player.live.clear();
+  const ctx=audioCtx;
+  player.prevEnd = (ctx&&ctx.currentTime) ? ctx.currentTime+0.01 : 0;
+}
+function pushChunk(b64, epoch){
+  // BARGE-IN FIX: a queued chunk from a cancelled turn must never play after
+  // flushPlayback() bumped the epoch.
+  return new Promise(resolve=>{
+    if(!b64 || (epoch!==undefined && epoch!==playbackEpoch)) return resolve();
+    (async()=>{
+      try{
+        const ctx=ensureCtx();
+        if(ctx.state==="suspended") await ctx.resume();
+        const ab=await ctx.decodeAudioData(b64ToArrayBuffer(b64));
+        if(epoch!==undefined && epoch!==playbackEpoch) return resolve();
+        const src=ctx.createBufferSource(); src.buffer=ab; src.connect(ctx.destination);
+        const t=Math.max(ctx.currentTime+0.01, player.prevEnd);
+        player.prevEnd=t+ab.duration;
+        player.live.add(src);
+        src.onended=()=>{ player.live.delete(src); };
+        src.start(t);
+        // LATENCY FIX: resolve right after SCHEDULING (prevEnd already
+        // reserves the slot) — waiting for onended kept the promise chain
+        // serialized to real-time and blocked barge-in flushing.
+        resolve();
+      }catch(e){ resolve(); }
+    })();
+  });
+}
+
+// --- streaming: a promise chain so each chunk plays after the previous is scheduled ---
+let audioChain=Promise.resolve();
+function addAudioChunk(b64){ const epoch=playbackEpoch; audioChain=audioChain.then(()=>pushChunk(b64,epoch)).catch(()=>{}); return audioChain; }
+
+// flushPlayback: barge-in — instantly kill anything queued/playing, keep mic on
+function flushPlayback(){
+  playbackEpoch++;
+  stopPlayback();
+  audioChain=Promise.resolve();
+}
+
+function resample(ch,from,to){ const r=to/from,out=new Float32Array(Math.floor(ch.length*r));
+  for(let i=0;i<out.length;i++){ const t=i/r,i0=Math.floor(t),i1=Math.min(i0+1,ch.length-1),f=t-i0;
+    out[i]=ch[i0]*(1-f)+ch[i1]*f; } return out; }
+
+async function startMic(){
+  if(micOn) return;
+  try { recStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}}); }
+  catch(e){ setStatus("Нет доступа к микрофону"); return; }
+  // AUDIT FIX: the mic runs on its OWN AudioContext. startMic used to close
+  // the shared playback context, killing the greeting chunks that were still
+  // playing.
+  if(micCtx && micCtx.state!=="closed") micCtx.close();
+  micCtx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
+  micSampleRate=micCtx.sampleRate;
+  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:"samplerate",sampleRate:micSampleRate}));
+  const src=micCtx.createMediaStreamSource(recStream);
+  recProc=micCtx.createScriptProcessor(1024,1,1);
+  src.connect(recProc); recProc.connect(micCtx.destination);
+  recProc.onaudioprocess=e=>{
+    const ch=e.inputBuffer.getChannelData(0);
+    let eff=ch; if(micSampleRate!==16000) eff=resample(ch,micSampleRate,16000);
+    const pcm=new Int16Array(eff.length);
+    for(let i=0;i<eff.length;i++){ pcm[i]=Math.max(-1,Math.min(1,eff[i]))*32767; }
+    if(ws&&ws.readyState===1) ws.send(pcm.buffer);
+  };
+  micOn=true;
+}
+function stopMic(){
+  if(recProc){recProc.disconnect();recProc=null;}
+  if(recStream){recStream.getTracks().forEach(t=>t.stop());recStream=null;}
+  if(micCtx&&micCtx.state!=="closed"){ try{micCtx.close();}catch(e){} }
+  micCtx=null;
+  micOn=false;
+}
+
+function endCall(finalMsg){
+  callActive=false; stopMic(); stopTimer(); stopPlayback();
+  if(ws){ try{ws.close();}catch(e){} ws=null; }
+  // AUDIT FIX: the call used to keep scheduled audio sources alive (and
+  // textContent assigned HTML entities literally); now playback is stopped and
+  // the status bar is reset. finalMsg lets the error path keep its reason
+  // instead of the misleading "Разговор завершён".
+  setStatus(finalMsg||"Разговор завершён");
+  idlewrap.style.display="flex"; callwrap.style.display="none";
+}
+
+callbtn.onclick=()=>{
+  // initData exists only when the page runs inside Telegram's WebApp container.
+  // We still attempt the connection so the server decides (dev mode may accept
+  // unverified sessions), but remember the flag for a friendly error message.
+  const tg=window.Telegram&&window.Telegram.WebApp;
+  const initData=(tg&&tg.initData)||"";
+  if(tg){ try{ tg.expand(); }catch(e){} }
+  noSession=!initData;
+  status.style.color="";
+  idlewrap.style.display="none"; callwrap.style.display="flex";
+  callActive=true; setStatus("Соединение…"); startTimer();
+  const proto=location.protocol==="https:"?"wss":"ws";
+  ws=new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onopen=()=>{
+    setStatus("Говорите…");
+    // AUDIT FIX: pass the Telegram WebApp initData so the server can verify
+    // the call session (validated only when the server was started with a bot
+    // token). Also send the mic sample rate for exact VAD timing.
+    ws.send(JSON.stringify({type:"start",init_data:initData,rate:micSampleRate||16000}));
+  };
+  ws.onmessage=async ev=>{
+    if(ev.data instanceof Blob) return;
+    const m=JSON.parse(ev.data);
+    if(m.type==="ready"){ if(!micOn) startMic(); }
+    else if(m.type==="flush"){ flushPlayback(); }
+    else if(m.type==="interim"){
+      // streaming STT: show partial transcript live while the agent thinks
+      if(m.transcript) setStatus("Распознаю: "+m.transcript);
+    }
+    else if(m.type==="chunk"){
+      // full-duplex: mic stays ON; agent audio just plays over it
+      if(m.wav_b64) addAudioChunk(m.wav_b64);
+      // CONVERSATION FIX: log the user transcript exactly once (the first
+      // audio frame carries it; later frames repeat the metadata).
+      if(m.transcript){ addLog("Вы: "+m.transcript); m.transcript=null; }
+    }
+    else if(m.type==="finished"){
+      await audioChain.catch(()=>{});
+      if(m.reply) addLog("Агент: "+(m.reply||""));
+      if(m.outcome && m.outcome.status){
+        const o=m.outcome;
+        const label={ok:"Всё в порядке",attention:"Требуется внимание",alert:"Обнаружена опасность",
+                     no_answer:"Не ответил",started:"Звонок начат"}[o.status]||o.status;
+        addLog("Итог для родственника: "+label+(o.notes&&o.notes.length?(" ("+o.notes.join(", ")+")"):""));
+      }
+      if(m.finished){ endCall(); return; }
+      setStatus("Говорите…");
+    }
+    else if(m.type==="error"){
+      // Server rejected the session. Show WHY and keep the reason on screen
+      // (endCall used to overwrite it with "Разговор завершён").
+      endCall(noSession
+        ?"Нет Telegram-сессии: откройте через кнопку «Позвонить» бота в Telegram"
+        :(m.error?("Ошибка: "+m.error):"Ошибка"));
+    }
+  };
+  ws.onclose=()=>{ if(callActive) endCall(); };
+  ws.onerror=()=> setStatus("Ошибка соединения");
+};
+hangbtn.onclick=()=>{ if(ws){ try{ws.send(JSON.stringify({type:"stop"}));}catch(e){} } endCall(); };
+</script>
+</body>
+</html>

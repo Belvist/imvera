@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    MossVoice telephone agent dialplan.
+    Any authenticated / local call lands here and is handled by the Lua
+    script, which drives the conversation with the MossVoice call agent.
+-->
+<include>
+  <extension name="mossvoice_agent">
+    <!-- Route calls to extension 4400 (our agent; 5000 is taken by ivr_demo) -->
+    <condition field="destination_number" expression="^4400$">
+      <action application="answer"/>
+      <action application="lua" data="/Users/earflow/Downloads/MossVoice/telephony/moss_agent.lua"/>
+      <action application="hangup"/>
+    </condition>
+  </extension>
+</include>
