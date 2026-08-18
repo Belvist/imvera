@@ -26,6 +26,8 @@ venv/
 runtime/qwen-venv/
 *.sock
 .DS_Store
+telephony/moss_supervisor.pid
+telephony/moss_supervisor.json
 
 # --- macOS archives / OS junk ---
 __MACOSX/
