@@ -37,3 +37,4 @@ __MACOSX/
 # Weights download pinned by revision + verified by scripts/models.sha256:
 #   python3 scripts/download_models.py
 runtime/models/
+voice-bench/out/
