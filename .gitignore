@@ -38,3 +38,7 @@ __MACOSX/
 #   python3 scripts/download_models.py
 runtime/models/
 voice-bench/out/
+
+# agent session artifacts (not for repo)
+.tmp_postfix_check.py
+telephony/tests/_tmp_conf_calls/

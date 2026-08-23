@@ -1,20 +1,88 @@
-# MossVoice — production stack in Docker (three services + optional Telegram gateway).
+# MossVoice — DEV ENVIRONMENT (single-node compose).
 #
-#   voice     tts_server.py      9600  MOSS-TTS-Nano (ONNX) + Whisper STT (CPU)
-#   answers   llm_server.py      9500  Qwen3 LLM, /chat (transformers, CPU)
+# This is NOT the production topology. It runs one replica of everything on
+# one machine, which is exactly what a dev environment should do. The
+# product architecture (cells, voice worker pools, admission router,
+# PgBouncer/PG-HA, K8s HPA) is defined in ENGINEERING_PLAN.md §16 — this
+# file will be replaced by it, not grown into it.
+#
+#   voice     tts_server.py      9600  Silero TTS (женский голос, 48 кГц) + Whisper STT
+#   answers   llama-server       9500  Qwen3-4B GGUF (llama.cpp, OpenAI-совместимый API)
 #   telephony call_agent.py      9400  STT -> LLM -> TTS диалоговый движок
+#   workflow  outbox_worker      —     outbox delivery + incident escalation
+#   db/cache/storage             PostgreSQL + Redis + MinIO (data core)
 #   --profile telegram: tg (8600), cloudflared tunnel, bot
 #
 # Usage:
-#   docker compose up -d --build                          # три сервиса
-#   WEBAPP_URL=... docker compose --profile telegram up   # + Telegram
-#     (лучше: ./tg_up.sh — сам стартует туннель и передаст URL боту)
+#   make up        собрать и поднять весь стек        (первый запуск скачивает
+#   make update    обновить: пересобрать образы и перезапустить)
+#   make ps/logs   статус / логи
+#   make stop      остановить
 #
-# Resource note: everything runs on CPU. Give Docker Desktop >= 8 GB RAM.
-# Model weights are baked into the image (pinned revision + sha256 manifest);
-# the "models" volume is only a cache/override layer on top.
+# Models live in the "models" volume, NOT in the image: rebuilds are fast and
+# `make update` never re-downloads weights. First boot downloads:
+#   Silero TTS (torch hub) + Whisper-small (HF) в voice, Qwen3-4B GGUF в answers.
+#
+# Resource note: voice ~1.5 GB + answers ~3 GB + data core ~1 GB. Give
+# Docker Desktop >= 12 GB RAM (Settings -> Resources -> Memory).
 
 services:
+  # ------------------------ Data core (Phase 2) ----------------------------
+  # Authoritative state (PG), cache/leases (Redis), audio objects (MinIO).
+  # Profile "db" starts them together for development/drills; production
+  # services consume them via MOSS_PG_URL / MOSS_REDIS_URL / MOSS_S3_* env.
+  db:
+    image: postgres:16-alpine
+    container_name: mossvoice-db
+    environment:
+      POSTGRES_DB: ${MOSS_PG_DB:-mossvoice}
+      POSTGRES_USER: ${MOSS_PG_USER:-mossvoice}
+      POSTGRES_PASSWORD: ${MOSS_PG_PASSWORD:-mossvoice_dev}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MOSS_PG_USER:-mossvoice} -d ${MOSS_PG_DB:-mossvoice}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  cache:
+    image: redis:7-alpine
+    container_name: mossvoice-cache
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  storage:
+    image: minio/minio:latest
+    container_name: mossvoice-storage
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MOSS_S3_ACCESS_KEY:-mossvoice_dev}
+      MINIO_ROOT_PASSWORD: ${MOSS_S3_SECRET_KEY:-mossvoice_dev_secret}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
   voice:
     build:
       context: ..
@@ -24,11 +92,17 @@ services:
     command: >
       python /app/runtime/scripts/tts_server.py
       --host 0.0.0.0 --port 9600 --threads 4
-      --model ${MOSS_TTS_MODEL:-moss-tts-nano}
+      --model ${MOSS_TTS_MODEL:-silero}
       --allow-ref-dir /app/refs --allow-ref-dir /app/telephony/refs
     environment:
-      MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-small}
-      MOSS_TTS_VOICE: ${MOSS_TTS_VOICE:-Ava}
+      # whisper-tiny fp32: ~0.3-0.6s STT (base/small 2-5x slower on ARM;
+      # int8 is slower than fp32 there). Accuracy tradeoff: rare names may
+      # mangle; safety-critical phrases are fine. Override to
+      # openai/whisper-small if accuracy matters more than latency.
+      MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-tiny}
+      MOSS_SILERO_SPEAKER: ${MOSS_SILERO_SPEAKER:-kseniya}
+    ports:
+      - "127.0.0.1:9600:9600"
     volumes:
       - models:/data/models
     healthcheck:
@@ -36,28 +110,28 @@ services:
       interval: 20s
       timeout: 10s
       retries: 60
-      start_period: 600s
+      start_period: 900s
     restart: unless-stopped
 
   answers:
-    image: mossvoice/backend:latest
+    image: ghcr.io/ggml-org/llama.cpp:server
     container_name: mossvoice-answers
-    command: >
-      python /app/telephony/llm_server.py
-      --host 0.0.0.0 --port 9500 --model ${MOSS_LLM_MODEL:-Qwen/Qwen3-1.7B}
+    entrypoint: ["/bin/sh", "/app/llama_entrypoint.sh"]
     environment:
-      MOSS_LLM_BACKEND: transformers
+      MOSS_LLM_GGUF_URL: ${MOSS_LLM_GGUF_URL:-https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf}
+      MOSS_LLM_THREADS: ${MOSS_LLM_THREADS:-10}
+      MOSS_LLM_CTX: ${MOSS_LLM_CTX:-4096}
     volumes:
+      - ../scripts/llama_entrypoint.sh:/app/llama_entrypoint.sh:ro
       - models:/data/models
+    ports:
+      - "127.0.0.1:9500:9500"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,json,sys; sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:9500/health', timeout=3)).get('ready') else 1)"]
-      interval: 20s
-      timeout: 10s
-      retries: 60
-      start_period: 600s
-    depends_on:
-      voice:
-        condition: service_started
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:9500/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
     restart: unless-stopped
 
   telephony:
@@ -67,13 +141,35 @@ services:
       python /app/telephony/call_agent.py
       --host 0.0.0.0 --port 9400
       --tts-host voice --tts-port 9600
-      --outdir /data/calls
+      --outdir /tmp/mossvoice
       --ref /app/refs/ref_native_48k.wav
     environment:
       MOSS_LLM_URL: http://answers:9500
+      MOSS_LLM_PROTOCOL: openai
       MOSS_LLM_BOOT_WAIT: "180"
+      # STT runs IN this process (phone path) — same model policy as voice.
+      MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-tiny}
+      # Business processing (outbox/incidents) runs in the `workflow`
+      # deployment, NOT in the realtime call process.
+      MOSS_OUTBOX_INPROCESS: "0"
+      # ADMISSION CONTROL: hard cap on live calls (0 = unlimited, dev).
+      # At the cap new calls get 503 capacity — never degraded audio.
+      MOSS_MAX_CONCURRENT_CALLS: ${MOSS_MAX_CONCURRENT_CALLS:-0}
+      MOSS_PG_URL: postgresql://${MOSS_PG_USER:-mossvoice}:${MOSS_PG_PASSWORD:-mossvoice_dev}@db:5432/${MOSS_PG_DB:-mossvoice}
+      MOSS_REDIS_URL: redis://cache:6379/0
+      MOSS_S3_ENDPOINT: http://storage:9000
+      MOSS_S3_ACCESS_KEY: ${MOSS_S3_ACCESS_KEY:-mossvoice_dev}
+      MOSS_S3_SECRET_KEY: ${MOSS_S3_SECRET_KEY:-mossvoice_dev_secret}
+      MOSS_S3_BUCKET: ${MOSS_S3_BUCKET:-mossvoice-recordings}
     volumes:
-      - calls:/data/calls
+      # FreeSWITCH (host) and the agent (container) must see the SAME paths:
+      # the Lua dialplan plays reply WAVs and uploads caller turns by path,
+      # and both sides share /tmp/mossvoice one-to-one.
+      - /tmp/mossvoice:/tmp/mossvoice
+      # Conversation scenarios: edit on the host, `docker compose restart
+      # telephony` picks them up — no image rebuild needed.
+      - ../telephony/vera_scenarios.txt:/app/telephony/vera_scenarios.txt:ro
+      - models:/data/models
     ports:
       - "127.0.0.1:9400:9400"
     depends_on:
@@ -81,6 +177,24 @@ services:
         condition: service_healthy
       answers:
         condition: service_started
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Business worker deployment: outbox delivery + incident escalation.
+  # Deliberately SEPARATE from the realtime call process (failure domain:
+  # an outbox backlog must never steal CPU from live audio). Stateless,
+  # lease-based — scale to N replicas safely.
+  workflow:
+    image: mossvoice/backend:latest
+    container_name: mossvoice-workflow
+    command: python /app/telephony/workers/outbox_worker_main.py
+    environment:
+      MOSS_PG_URL: postgresql://${MOSS_PG_USER:-mossvoice}:${MOSS_PG_PASSWORD:-mossvoice_dev}@db:5432/${MOSS_PG_DB:-mossvoice}
+      MOSS_WORKER_ID: workflow-1
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   # ----------------------- Telegram gateway (optional) -----------------------
@@ -96,7 +210,11 @@ services:
     environment:
       MOSSVOICE_BOT_TOKEN: ${MOSSVOICE_BOT_TOKEN:-}
     ports:
-      - "8600:8600"
+      # SECURITY: bind to loopback only. The public path is the cloudflared
+      # tunnel (container -> container, no host port involved). With an
+      # empty MOSSVOICE_BOT_TOKEN the initData HMAC check is disabled, and
+      # a 0.0.0.0 binding would expose /ws and /metrics to the LAN.
+      - "127.0.0.1:8600:8600"
     depends_on:
       telephony:
         condition: service_started
@@ -142,8 +260,13 @@ services:
       # "make test-live" sets it to http://voice:9600
       MOSSTEST_TTS: ${MOSSTEST_TTS:-}
       MOSSTEST_WAIT_DAEMON: ${MOSSTEST_WAIT_DAEMON:-}
+      MOSS_PG_URL: ${MOSS_PG_URL:-postgresql://mossvoice:mossvoice_dev@db:5432/mossvoice}
+      MOSS_REDIS_URL: ${MOSS_REDIS_URL:-redis://cache:6379/0}
     depends_on: []
 
 volumes:
   models:
   calls:
+  pgdata:
+  redisdata:
+  miniodata:

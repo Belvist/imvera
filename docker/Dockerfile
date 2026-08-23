@@ -29,12 +29,13 @@ COPY telephony /app/telephony
 COPY refs /app/refs
 COPY scripts /app/scripts
 
-# Ship the MOSS-TTS-Nano weights inside the image. Never COPY from the repo:
-# weights are excluded from git/ZIP and are instead downloaded pinned to a
-# known-good HF revision and verified against scripts/models.sha256. Docker
-# layer-caches this step, so rebuilds do not re-download.
-RUN python3 /app/scripts/download_models.py /data/models \
-    && rm -rf /data/models/*/.cache
+# Models are NOT baked into the image anymore (the image was ~4 GiB and a
+# rebuild re-pinned stale weights). Everything lives in the /data/models
+# volume and downloads at first boot:
+#   - Silero TTS ru v5    -> torch hub, $TORCH_HOME (voice service)
+#   - Whisper STT         -> HuggingFace, $HF_HOME   (voice service)
+#   - Qwen3-4B GGUF (LLM) -> llama_entrypoint.sh     (answers service)
+# Volume = survives rebuilds; update = `make update` re-pulls images only.
 
 # Keep runtime data out of the image layer.
 RUN rm -rf /app/telephony/calls /app/telephony/__pycache__ \
@@ -44,6 +45,7 @@ RUN rm -rf /app/telephony/calls /app/telephony/__pycache__ \
 
 ENV MOSS_RUNTIME_SCRIPTS=/app/runtime/scripts \
     HF_HOME=/data/models \
+    TORCH_HOME=/data/models/torchhub \
     MOSS_TTS_MODEL_DIR=/data/models
 
 EXPOSE 9400 9500 9600 8600

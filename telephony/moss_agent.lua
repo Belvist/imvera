@@ -83,11 +83,20 @@ function json_get(data, key)
     return string.match(data, pat)
 end
 
+-- SHELL SAFETY: call_id is interpolated into curl URLs, file names and
+-- mkdir/rm -rf lines below. The agent answers [0-9a-f]+; accept nothing
+-- else so a compromised/odd response can never inject shell metachars.
+function safe_id(s)
+    if type(s) ~= "string" then return nil end
+    if string.match(s, "^[%w%-_]+$") then return s end
+    return nil
+end
+
 -- Must match the MVERA greeting on the agent side (call_agent.DEFAULT_GREETING)
 -- so the agent's greeting cache is hit and its dialogue engine treats turn 1
 -- as the caller's wellbeing answer.
 local GREETING_TEXT =
-    "Здравствуйте! Это МВЕРА. Как вы себя чувствуете?"
+    "Здравствуйте! Это Имвэра. Как вы себя чувствуете?"
 
 function get_greeting(salt)
     local body = string.format([=[{"text": %q}]=], GREETING_TEXT)
@@ -110,6 +119,90 @@ function play_wav(path)
     return ok and session:ready() or false
 end
 
+-- Streaming turn: POST /turn_stream in the BACKGROUND, then poll the
+-- segment directory and play each finished sentence the moment it lands.
+-- First audio starts while the LLM is still generating the rest.
+--
+-- STEP 3 (CONTINUOUS AUDIO): `chunks` is a TABLE of recorded WAV paths, not
+-- a single pre-merged file. The agent server already concatenates
+-- {"audio": [chunk1, chunk2, ...]} itself (save_upload), so Lua no longer
+-- writes an intermediate turn-merge on disk — one fewer stale WAV in the
+-- hot path and no double concat.
+function do_turn_stream(call_id, chunks, segdir)
+    local bodyf = tmpdir .. "/body_" .. unique_id(call_id) .. ".json"
+    local bf = io.open(bodyf, "wb")
+    if not bf then return nil end
+    -- Build the JSON "audio":[list] array by hand (no cjson dependency).
+    local arr = {}
+    for _, cw in ipairs(chunks or {}) do
+        table.insert(arr, string.format("%q", cw))
+    end
+    local audio_json = "[" .. table.concat(arr, ", ") .. "]"
+    bf:write("{\"audio\": " .. audio_json ..
+             ", \"segment_dir\": " .. string.format("%q", segdir) .. "}")
+    bf:close()
+    local respf = tmpdir .. "/resp_" .. unique_id(call_id) .. ".json"
+    local cmd = string.format(
+        "curl -s -m 300 -X POST 'http://%s:%s/calls/%s/turn_stream' " ..
+        "-H 'Content-Type: application/json' -d @'%s' -o '%s' &",
+        agent_host, agent_port, call_id, bodyf, respf)
+    os.execute(cmd)
+
+    -- poll & play: seg-NNNN.wav appears atomically (tmp -> rename)
+    local n = 0
+    local deadline = os.time() + 90
+    -- WALL-CLOCK FIX: os.clock() is CPU time of this process; the poll loop
+    -- spends its life blocked in io/os.execute, so CPU seconds accumulate
+    -- orders of magnitude slower than wall time and the ack never fired.
+    -- Count actual 0.1 s sleeps instead: 12 x 0.1 ~= the intended ~1.2 s.
+    local waits = 0
+    local ack_played = false
+    while os.time() < deadline do
+        if not session:ready() then break end
+        local next_seg = segdir .. string.format("/seg-%04d.wav", n + 1)
+        local fh = io.open(next_seg, "rb")
+        if fh then
+            fh:close()
+            n = n + 1
+            play_wav(next_seg)
+        else
+            -- Backchannel: if the reply is still not ready after ~1.2 s,
+            -- play ONE pre-rendered ack ("Ага, услышала вас") instead of
+            -- silent dead air.
+            if not ack_played and waits >= 12 then
+                ack_played = true
+                local acks = {}
+                local p = io.popen("ls " .. tmpdir .. "/acks/ack-*.wav 2>/dev/null")
+                for f in p:lines() do table.insert(acks, f) end
+                p:close()
+                if #acks > 0 then
+                    math.randomseed(os.time())
+                    play_wav(acks[math.random(#acks)])
+                end
+            end
+            local df = io.open(segdir .. "/done.json", "rb")
+            if df then
+                df:close()
+                break
+            end
+            os.execute("sleep 0.1")
+            waits = waits + 1
+        end
+    end
+    os.remove(bodyf)
+    os.remove(respf)
+
+    -- final flags: finished -> the call ends after this turn
+    local finished = false
+    local df = io.open(segdir .. "/done.json", "rb")
+    if df then
+        local data = df:read("*a")
+        df:close()
+        finished = (json_get(data, "finished") == "true")
+    end
+    return finished
+end
+
 function main()
     mkdirs()
     local ok, err = pcall(function() session:answer() end)
@@ -119,7 +212,7 @@ function main()
 
     -- create an isolated session for THIS call
     local data = http_post("/calls", [[{}]], "")
-    local call_id = json_get(data, "call_id")
+    local call_id = safe_id(json_get(data, "call_id"))
     if not call_id or call_id == "" then
         return
     end
@@ -127,30 +220,82 @@ function main()
     local turn_files = {}
     local finished_cleanly = false
 
+    -- NOTE 2026-08-23: RECORD_STEREO experiments reverted. Lowercase
+    -- "record_stereo" made the record app write EMPTY files (44-byte
+    -- headers -> "she can't hear me"), uppercase is silently ignored by
+    -- this FS build (chunks stay mono). Recording must stay MONO mixed;
+    -- Vera's playback echo in the user track is handled server-side by
+    -- the echo-guard in orchestrator (transcript ~ her last reply ->
+    -- dropped). Do NOT set any record_stereo var here without a live
+    -- loopback verification of chunk sizes FIRST.
+
     play_wav(get_greeting(call_id))
 
     for i = 1, 6 do
         if not session:ready() then
             break
         end
-        local inwav = tmpdir .. "/turn_" .. call_id .. "_" .. tostring(i) .. ".wav"
-        table.insert(turn_files, inwav)
-        -- record until silence (30 = threshold, 10 = consecutive silence hits)
-        -- or 15 seconds max, or caller presses #.
-        local rok = pcall(function()
-            session:execute("record", inwav .. " 15 30 10")
-        end)
-        if not rok or not session:ready() then
+        -- CHUNKED RECORDING with software endpointing:
+        --  * quiet room: chunk 1 ends via the FS silence detector (1 s of
+        --    silence) -> turn over, fast path identical to before;
+        --  * noisy room (TV/music): the detector never fires, so after each
+        --    CAPPED chunk we ask the agent /has_speech (whisper VAD gate):
+        --    no caller speech in the chunk -> turn over. Bounds the noise
+        --    latency at ~5 s instead of dragging the full cap.
+        local chunks = {}
+        local turn_done = false
+        for ci = 1, 3 do
+            if not session:ready() then break end
+            local cw = tmpdir .. "/chunk_" .. call_id .. "_" ..
+                       tostring(i) .. "_" .. tostring(ci) .. ".wav"
+            local cap = (ci == 1) and "4 15 2" or "2 15 2"
+            local cap_s = (ci == 1) and 4 or 2
+            local rok = pcall(function()
+                session:execute("record", cw .. " " .. cap)
+            end)
+            if not rok or not session:ready() then break end
+            table.insert(chunks, cw)
+            -- did the chunk end early via silence detection? -> turn over
+            local fh = io.open(cw, "rb")
+            if fh then
+                local size = fh:seek("end")
+                fh:close()
+                local dur = (size - 44) / 16000.0   -- 8 kHz mono 16-bit
+                if dur < cap_s - 0.4 then
+                    turn_done = true
+                    break
+                end
+            end
+            -- chunk hit its cap: does it contain caller speech?
+            local body = string.format([[{"audio": %q}]], cw)
+            local rdata = http_post("/calls/" .. call_id .. "/has_speech",
+                                    body, call_id)
+            if json_get(rdata, "speech") ~= "true" then
+                turn_done = true
+                break
+            end
+        end
+        if not session:ready() then break end
+        -- STEP 3: pass the raw chunk list to the server — it concatenates
+        -- {"audio":[...]}. No intermediate turn-merge WAV on disk; the
+        -- server-side concat keeps one authoritative copy.
+        if #chunks == 0 then
             break
         end
-        local body = string.format([[{"audio": "%s"}]], inwav)
-        local rdata = http_post("/calls/" .. call_id .. "/turn", body, call_id)
-        local reply_path = json_get(rdata, "reply_wav_path")
-        local done = json_get(rdata, "finished")
-        -- continuous media: reply playback can be barged into, then the loop
-        -- immediately records the caller's next (interrupting) turn.
-        play_wav(reply_path)
-        if done == "true" then
+        for _, cw in ipairs(chunks) do
+            table.insert(turn_files, cw)
+        end
+        -- STREAMING turn: play each sentence as soon as it is synthesized.
+        local segdir = tmpdir .. "/segs_" .. call_id .. "_" ..
+                       tostring(i) .. "_" .. tostring(os.time())
+        -- call_id is validated by safe_id, quotes are pure defense-in-depth
+        os.execute("mkdir -p '" .. segdir .. "'")
+        local finished = do_turn_stream(call_id, chunks, segdir)
+        table.insert(turn_files, segdir)
+        if finished or turn_done == false and #chunks >= 4 then
+            -- safety valve: 4 capped chunks with speech — end the turn
+        end
+        if finished then
             finished_cleanly = true
             break
         end
@@ -161,7 +306,11 @@ function main()
     -- context for an hour otherwise, leaking memory with the wrong verdict.
     http_post("/calls/" .. call_id .. "/end", [[{}]], call_id)
     for _, f in ipairs(turn_files) do
-        os.remove(f)
+        if string.sub(f, -4) == ".wav" then
+            os.remove(f)
+        else
+            os.execute("rm -rf '" .. f .. "'")
+        end
     end
     return finished_cleanly
 end

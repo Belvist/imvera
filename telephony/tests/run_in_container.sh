@@ -5,6 +5,11 @@
 set -e
 cd /app/telephony
 
+# Tests construct Serve with fake engines; the real Whisper warmup would
+# load ~2.5GiB into this container and OOM the Docker VM next to the live
+# voice daemon (which already holds its own models).
+export MOSS_NO_WARMUP=1
+
 if [ -n "${MOSSTEST_WAIT_DAEMON:-}" ] && [ -n "${MOSSTEST_TTS:-}" ]; then
   echo "[tests] waiting for $MOSSTEST_TTS (up to 10 min for model download)..."
   i=0

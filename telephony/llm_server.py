@@ -95,7 +95,10 @@ class SingleFlight:
     def _release(self):
         with self._cond:
             self.in_flight = 0
-            self._cond.notify()
+            # notify_all: a timed-out waiter may consume a plain notify()
+            # without taking the slot, leaving the queue asleep up to
+            # reserve_timeout while capacity is free.
+            self._cond.notify_all()
 
     def metrics(self):
         with self._cond:

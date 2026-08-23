@@ -25,3 +25,18 @@ uvicorn[standard]==0.52.1
 websockets==17.0.1
 httpx==0.28.1
 python-telegram-bot==22.8
+
+# Silero TTS v5 runtime dependency (config parsing in the hub checkpoint).
+omegaconf==2.3.0
+antlr4-python3-runtime==4.9.3
+PyYAML==6.0.3
+
+# STT: faster-whisper (CTranslate2) — 3-4x faster than the transformers
+# pipeline on CPU with the same whisper weights.
+faster-whisper==1.2.1
+
+# Data core (Phase 2): durable Postgres truth, Redis cache, MinIO/S3 audio.
+psycopg[binary]==3.3.4
+psycopg-pool==3.3.1
+redis==8.1.0
+minio==7.2.20

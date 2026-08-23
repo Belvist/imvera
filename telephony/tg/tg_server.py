@@ -595,12 +595,22 @@ class TXPipeline:
                 try:
                     for frame in self.bridge.turn_stream(
                             pcm, rate=rate, cancel_event=cancel):
+                        # LEAK FIX: never call_soon_threadsafe() on a closed
+                        # event loop. A producer left running after the loop
+                        # closed (call torn down without barge-in) would push
+                        # callbacks into a dead loop's ready queue forever,
+                        # ballooning RSS and breaking later audio processing.
+                        if loop.is_closed():
+                            return
                         loop.call_soon_threadsafe(push, frame)
                 except Exception as e:
                     print(f"[tg-server] turn_stream producer: {e}", flush=True)
-                    loop.call_soon_threadsafe(push, {"error": str(e), "done": True})
+                    if not loop.is_closed():
+                        loop.call_soon_threadsafe(
+                            push, {"error": str(e), "done": True})
                 finally:
-                    loop.call_soon_threadsafe(push, None)  # sentinel
+                    if not loop.is_closed():
+                        loop.call_soon_threadsafe(push, None)  # sentinel
 
             thread = threading.Thread(target=producer, daemon=True)
             thread.start()

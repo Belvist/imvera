@@ -119,6 +119,41 @@ def run(coro):
     return asyncio.new_event_loop().run_until_complete(coro)
 
 
+class _RunLoop:
+    """Runs an asyncio scene and guarantees the loop + pipeline threads die.
+
+    TXPipeline's producer thread only stops when it sees cancel/closed-loop;
+    without this cleanup a test leaves a live thread spamming callbacks into
+    the loop, which bloats process RSS for the rest of the suite.
+    """
+
+    def __init__(self, tx):
+        self.tx = tx
+        self.loop = None
+
+    def __enter__(self):
+        self.loop = asyncio.new_event_loop()
+        return self
+
+    def __exit__(self, *exc):
+        # stop the producer + running task, then close the loop
+        try:
+            self.tx._cancel_event.set()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            if self.tx._task is not None and not self.tx._task.done():
+                self.tx._task.cancel()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            self.loop.run_until_complete(
+                asyncio.sleep(0.1))
+        except Exception:  # noqa: BLE001
+            pass
+        self.loop.close()
+
+
 class TXPipelineTests(unittest.TestCase):
     def test_barge_in_flushes_and_aborts(self):
         rec = _Recorder()
@@ -131,7 +166,8 @@ class TXPipelineTests(unittest.TestCase):
             await asyncio.sleep(0.2)
             return rec.payloads
 
-        payloads = asyncio.new_event_loop().run_until_complete(scene())
+        with _RunLoop(tx) as rl:
+            payloads = rl.loop.run_until_complete(scene())
         kinds = [p.get("type") for p in payloads]
         self.assertIn("flush", kinds)
         self.assertIn("chunk", kinds)
@@ -150,7 +186,8 @@ class TXPipelineTests(unittest.TestCase):
             state["busy"] = tx.busy
             return rec.payloads
 
-        payloads = asyncio.new_event_loop().run_until_complete(scene())
+        with _RunLoop(tx) as rl:
+            payloads = rl.loop.run_until_complete(scene())
         self.assertTrue(state["busy"], "a running turn must be busy")
         # flush was emitted exactly when the second turn cancelled the first
         self.assertEqual(

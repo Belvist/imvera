@@ -258,10 +258,20 @@ class SessionStoreTests(unittest.TestCase):
         store = mp.build_session_store(prefer="memory")
         self.assertIsInstance(store, mp.MemorySessionStore)
 
-    def test_factory_falls_back_on_redis_unavailable(self):
+    def test_factory_degrades_loudly_on_redis_unavailable(self):
+        # No silent fallback: a requested-but-dead Redis yields a memory cache
+        # with degraded=True + redis_requested=True (surfaced in /health).
         store = mp.build_session_store(prefer="redis",
                                        url="redis://127.0.0.1:1/0")
         self.assertIsInstance(store, mp.MemorySessionStore)
+        self.assertTrue(store.degraded)
+        self.assertTrue(store.redis_requested)
+
+    def test_factory_memory_choice_not_degraded(self):
+        store = mp.build_session_store(prefer="memory")
+        self.assertIsInstance(store, mp.MemorySessionStore)
+        self.assertFalse(store.degraded)
+        self.assertFalse(store.redis_requested)
 
 
 if __name__ == "__main__":

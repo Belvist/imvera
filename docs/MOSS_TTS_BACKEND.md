@@ -1,5 +1,12 @@
 # MOSS-TTS-Nano backend (клонирование голоса на CPU)
 
+> **Статус: legacy.** Дефолтный бэкенд голоса с 2026-08-20 — **Silero TTS
+> ru v5** (`runtime/scripts/moss_runtime/silero_tts_backend.py`, запуск
+> `tts_server.py --model silero`, голос через `MOSS_SILERO_SPEAKER`,
+> дефолт `kseniya`). Silero выбран потому, что продукту нужен стандартный
+> женский голос без артефактов; клонирование не требуется. Nano остался
+> как `--model moss-tts-nano` (этот документ описывает его).
+
 `runtime/scripts/moss_backend.py` — движок синтеза речи на базе
 **MOSS-TTS-Nano** (OpenMOSS / MOSI.AI, лицензия apache-2.0):
 

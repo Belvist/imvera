@@ -754,17 +754,33 @@ class RedisSessionStore(SessionStore):
 
 def build_session_store(prefer=None, url=None):
     """Pick the session store. MOSS_SESSION_STORE=redis (or MOSS_REDIS_URL
-    set) requests Redis; an unreachable Redis falls back to the local memory
-    store with a loud log — dialogues must never fail because of storage."""
+    set) requests Redis. An unreachable *requested* Redis goes DEGRADED: the
+    returned store is a process-local memory cache with ``degraded=True``
+    (loud log + surfaced in /health) — NOT a silent fallback. Postgres stays
+    the source of truth for durable state."""
     want = (prefer or os.environ.get(
         "MOSS_SESSION_STORE",
         "redis" if os.environ.get("MOSS_REDIS_URL") else "memory")).lower()
     if want == "redis":
         try:
             store = RedisSessionStore(url=url)
+            store.degraded = False
+            store.redis_requested = True
             print("[providers] session store: redis", flush=True)
             return store
         except Exception as e:  # noqa: BLE001
-            _fallback("session store", "redis", str(e))
-    return MemorySessionStore(
+            print(f"[providers] session store: DEGRADED — Redis requested but "
+                  f"unavailable ({e}); using process-local memory cache. "
+                  f"Surfaced in /health; Postgres remains the truth.",
+                  flush=True)
+            store = MemorySessionStore(
+                default_ttl_seconds=int(
+                    os.environ.get("MOSS_SESSION_TTL", "3600")))
+            store.degraded = True
+            store.redis_requested = True
+            return store
+    store = MemorySessionStore(
         default_ttl_seconds=int(os.environ.get("MOSS_SESSION_TTL", "3600")))
+    store.degraded = False
+    store.redis_requested = False
+    return store

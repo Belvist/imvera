@@ -226,9 +226,11 @@ class CallAgentFixTests(unittest.TestCase):
 
             def transcribe(self, wav_path):
                 self.calls += 1
-                # hop 1: whisper junk, hop 2: real speech, hop 3 tail: junk
-                return {1: "спасибо", 2: "мне кажется у меня болит голова",
-                        3: "bye"}.get(self.calls, "")
+                # hop 1: whisper junk, hop 2: real speech, hop 3 tail: junk.
+                # NOTE: "спасибо"/"до свидания" are NOT junk anymore — they
+                # are recovered as real short answers (see _SHORT_ANSWER_MAP).
+                return {1: "bye", 2: "мне кажется у меня болит голова",
+                        3: "uh"}.get(self.calls, "")
 
         sstt = call_agent.StreamingSTT(JunkEngine(), sample_rate=16000,
                                        hop_seconds=1.0)

@@ -46,6 +46,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tts_common  # noqa: E402
+from moss_runtime.silero_tts_backend import SileroTtsBackend  # noqa: E402
 
 
 # SECURITY (MEDIUM-1): when set, every non-health endpoint requires
@@ -176,6 +177,9 @@ class TTSWorker:
         self._stt_model_id = stt_model_id
         self._tts = None
         self._lock = threading.Lock()
+        # STT lazy-load lock: two concurrent first /transcribe calls both see
+        # stt_model is None and would load Whisper twice without this.
+        self._stt_lk = threading.Lock()
         self._merged_lk = threading.Lock()
         self.merged_refs = {}
         self.prompt_cache = {}
@@ -214,7 +218,10 @@ class TTSWorker:
     # ------------------------------------------------------------------ #
     def _load_tts(self, model_id):
         try:
-            self._tts = tts_common.load_tts(model_id)
+            if model_id == "silero":
+                self._tts = SileroTtsBackend()
+            else:
+                self._tts = tts_common.load_tts(model_id)
             self.sample_rate = int(self._tts.tts_model.sample_rate)
             self.ready = True
             self.error = None
@@ -351,15 +358,20 @@ class TTSWorker:
             return True
         if self.stt_model_loaded:
             return False
-        try:
-            self.stt_model = tts_common.load_stt(self._stt_model_id)
-            self.stt_model_loaded = True
-            return True
-        except Exception as exc:  # noqa: BLE001
-            print(f"[tts-server] STT load failed: {exc}", file=sys.stderr)
-            self.stt_model_loaded = True
-            self.stt_model = None
-            return False
+        with self._stt_lk:
+            if self.stt_model is not None:
+                return True
+            if self.stt_model_loaded:
+                return False
+            try:
+                self.stt_model = tts_common.load_stt(self._stt_model_id)
+                self.stt_model_loaded = True
+                return True
+            except Exception as exc:  # noqa: BLE001
+                print(f"[tts-server] STT load failed: {exc}", file=sys.stderr)
+                self.stt_model_loaded = True
+                self.stt_model = None
+                return False
 
     def transcribe(self, audio_path):
         if not (self._ensure_stt() and self.stt_model is not None):
@@ -374,6 +386,11 @@ class TTSWorker:
         if not self.ready or self._tts is None:
             return None, None, self.error or "model not ready"
         start = time.time()
+        if isinstance(self._tts, SileroTtsBackend):
+            audio, sr, err = self._tts.generate(
+                text=text, style_enabled=style_enabled)
+            self._bump("generate", start)
+            return audio, sr, err
         cfg = cfg_value if isinstance(cfg_value, (int, float)) and cfg_value > 0 else tts_common.CFG_VALUE
         steps = int(inference_steps) if inference_steps and int(inference_steps) > 0 else tts_common.INFERENCE_TIMESTEPS
 
@@ -408,6 +425,13 @@ class TTSWorker:
         if not self.ready or self._tts is None:
             raise RuntimeError(self.error or "model not ready")
         start = time.time()
+        if isinstance(self._tts, SileroTtsBackend):
+            for wav in self._tts.stream_generate(
+                    text=text, style_enabled=style_enabled,
+                    cancel_event=cancel_event):
+                yield wav
+            self._bump("stream", start)
+            return
         cfg = cfg_value if isinstance(cfg_value, (int, float)) and cfg_value > 0 else tts_common.CFG_VALUE
         steps = int(inference_steps) if inference_steps and int(inference_steps) > 0 else tts_common.INFERENCE_TIMESTEPS
 
@@ -842,7 +866,16 @@ def build_handler(worker, registry):
                     tf.write(base64.b64decode(b64.encode("ascii")))
                     tmp = tf.name
                 try:
-                    text = worker.transcribe(tmp)
+                    # SingleFlight: STT shares the CPU with TTS synthesis —
+                    # running it outside the slot broke the "one generation
+                    # at a time" invariant and let Whisper compete with the
+                    # realtime voice path.
+                    with worker.slot.acquire():
+                        text = worker.transcribe(tmp)
+                except BusyError:
+                    self._json({"ok": False,
+                                "error": "server is busy"}, 503)
+                    return
                 finally:
                     try:
                         os.unlink(tmp)

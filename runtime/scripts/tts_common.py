@@ -298,14 +298,20 @@ def validate_reference(ref_path, language="ru"):
 def load_stt(model_id=DEFAULT_STT_MODEL):
     """Load the Whisper STT model once.
 
-    Prefers the MLX backend (fast on Apple Silicon). Falls back to a
-    transformers Whisper model when mlx is unavailable (e.g. inside the
-    isolated runtime venv).
+    Prefers the MLX backend (fast on Apple Silicon), then faster-whisper
+    (CTranslate2 — 3-4x faster than transformers on CPU), and finally the
+    transformers Whisper pipeline.
     """
     try:
         from mlx_audio.stt import load as stt_load
 
         return stt_load(model_id)
+    except Exception:
+        pass
+    try:
+        return FasterWhisperAdapter(os.environ.get(
+            "MOSS_STT_TRANSFORMERS_MODEL", "openai/whisper-large-v3-turbo"
+        ))
     except Exception:
         pass
     from transformers import pipeline
@@ -314,6 +320,171 @@ def load_stt(model_id=DEFAULT_STT_MODEL):
         "MOSS_STT_TRANSFORMERS_MODEL", "openai/whisper-large-v3-turbo"
     )
     return WhisperPipelineAdapter(hf_id)
+
+
+_SILERO_VAD = None
+_SILERO_VAD_TS = None
+# RLock guards BOTH loading and INFERENCE: the Silero v5 TorchScript model
+# keeps its LSTM state inside the module and is NOT thread-safe. Under
+# concurrent calls (parallel phone turns -> STT gate + /has_speech) two
+# threads interleaving on the same state produced "select(): index out of
+# range" and eventually glibc "double free or corruption" -> SIGABRT.
+# Inference on a <=5 s chunk costs ~10-50 ms, so serializing is free.
+_SILERO_VAD_LOCK = threading.RLock()
+
+
+def _get_silero_vad():
+    """Lazy-load Silero VAD (tiny, ~1 MB) — the authoritative speech/noise
+    separator. Cached process-wide."""
+    global _SILERO_VAD, _SILERO_VAD_TS
+    if _SILERO_VAD is not None:
+        return _SILERO_VAD
+    with _SILERO_VAD_LOCK:
+        if _SILERO_VAD is None:
+            import torch
+            model, utils = torch.hub.load("snakers4/silero-vad", "silero_vad",
+                                          trust_repo=True)
+            _SILERO_VAD = model
+            # hub returns (model, utils); get_speech_timestamps lives there
+            _SILERO_VAD_TS = (utils["get_speech_timestamps"]
+                              if isinstance(utils, dict)
+                              else getattr(utils, "get_speech_timestamps",
+                                           utils[0]))
+    return _SILERO_VAD
+
+
+def vad_speech_seconds(path: str, tail_s: float = None):
+    """Seconds of real human speech in a wav file (Silero VAD).
+    tail_s: only inspect the LAST N seconds (endpointing cares about the
+    chunk tail, not its beginning).
+    Returns None when the VAD itself is unavailable — callers must FAIL OPEN
+    (treat as speech) instead of going deaf."""
+    import wave as _wave
+    import numpy as np
+    try:
+        with _wave.open(path, "rb") as w:
+            sr = w.getframerate()
+            ch = w.getnchannels()
+            raw = w.readframes(w.getnframes())
+    except Exception:  # noqa: BLE001
+        return None
+    audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    if ch > 1:
+        # record_stereo (FreeSWITCH): LEFT = caller read stream, RIGHT =
+        # played audio (Vera). Keep LEFT only — Vera's playback must not
+        # count as caller speech in the endpointing gate.
+        audio = audio.reshape(-1, ch)[:, 0]
+    if tail_s is not None and len(audio) > int(tail_s * sr):
+        audio = audio[-int(tail_s * sr):]
+    if sr != 16000:
+        from scipy.signal import resample_poly
+        import math
+        g = math.gcd(sr, 16000)
+        audio = resample_poly(audio, 16000 // g, sr // g)
+        sr = 16000
+    try:
+        import torch
+        with _SILERO_VAD_LOCK:
+            model = _get_silero_vad()
+            ts = _SILERO_VAD_TS(torch.from_numpy(audio), model,
+                                sampling_rate=16000, return_seconds=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"[vad] unavailable ({e}) — failing open", flush=True)
+        return None
+    secs = sum(float(t["end"]) - float(t["start"]) for t in ts)
+    # ENERGY FLOOR: a phone microphone hears the CALLER much louder than a
+    # TV across the room. Speech detected by VAD but this quiet is
+    # background voice (TV/neighbours), not the caller -> not a turn.
+    if ts and secs > 0:
+        frame = int(sr * 0.03)
+        energies = []
+        for t in ts:
+            s0 = int(float(t["start"]) * sr)
+            s1 = min(int(float(t["end"]) * sr), len(audio))
+            seg = audio[s0:s1]
+            for k in range(0, max(1, len(seg) - frame), frame):
+                energies.append(np.sqrt(np.mean(seg[k:k + frame] ** 2)))
+        if energies and float(np.median(energies)) < 0.008:
+            return 0.0
+    return secs
+
+
+class FasterWhisperAdapter:
+    """Duck-typed like mlx_audio STT: exposes `.generate(path, ...).text`.
+
+    CTranslate2 runs whisper-small int8 on CPU ~3-4x faster than the
+    transformers pipeline. Segments carry no_speech_prob/compression_ratio/
+    avg_logprob like the MLX path, so STT confidence keeps working.
+    """
+
+    def __init__(self, model_id):
+        from faster_whisper import WhisperModel
+
+        # Accept both "small" and HF ids like "openai/whisper-small".
+        size = (model_id or "small").rsplit("/", 1)[-1]
+        size = size.replace("whisper-", "") or "small"
+        if size not in ("tiny", "base", "small", "medium", "large",
+                        "large-v1", "large-v2", "large-v3", "turbo",
+                        "large-v3-turbo"):
+            size = "small"
+        self._model = WhisperModel(
+            size, device="cpu",
+            # NOTE: int8 is ~2x SLOWER than fp32 on ARM (Apple Silicon VM,
+            # no int8 acceleration in Docker) — fp32 is the right default.
+            compute_type=os.environ.get("MOSS_STT_COMPUTE", "float32"),
+            # CONCURRENCY: 3 threads/transcribe beats 10 — with several
+            # requests in flight, 10-thread jobs fight over cores
+            # (measured: 1.4 -> 2.3 phrases/sec aggregate).
+            cpu_threads=int(os.environ.get("MOSS_STT_THREADS", "3")))
+        self._id = model_id
+
+    def generate(self, path, verbose=False, task="transcribe", language="ru",
+                 **kwargs):
+        class _R:
+            text = ""
+            segments = ()
+            speech_s = 0.0
+
+        # NOISE GATE pass 1: authoritative Silero VAD on the file. Pure
+        # noise/TV/music is rejected HERE without running whisper at all
+        # (fast + no hallucinations possible).
+        vad_speech = vad_speech_seconds(path)
+        if vad_speech is not None and vad_speech < 0.15:
+            r = _R()
+            return r
+
+        segs = []
+        parts = []
+        speech_s = 0.0
+        raw_segments, _info = self._model.transcribe(
+            path, language=language or None, task=task, vad_filter=True,
+            # ACCURACY (STEP 4, STREAMING STT): a beam 1 greedy decode makes
+            # whisper-tiny mishear common phrases ("здравствуйте" -> "сам
+            # оттвыж") on real phone audio. Beam 5 is the measured sweet spot
+            # for RTF on this stack and is now tunable via MOSS_STT_BEAM.
+            beam_size=int(os.environ.get("MOSS_STT_BEAM", "5")),
+            # temperature 0.0 + no retry ladder stays: retries cost up to 5
+            # passes on noisy audio and the noise gate already rejects pure
+            # silence/TV before we get here. accuracy comes from the beam.
+            temperature=0.0,
+            condition_on_previous_text=False,  # no cross-segment hallucination
+        )
+        for s in raw_segments:
+            segs.append({
+                "no_speech_prob": getattr(s, "no_speech_prob", 0.0),
+                "compression_ratio": getattr(s, "compression_ratio", 0.0),
+                "avg_logprob": getattr(s, "avg_logprob", -1.0),
+            })
+            speech_s += max(0.0, float(getattr(s, "end", 0.0)) -
+                            float(getattr(s, "start", 0.0)))
+            parts.append(s.text)
+        r = _R()
+        r.text = " ".join(parts).strip()
+        r.segments = segs
+        # Silero VAD is the authority on speech duration (whisper segment
+        # timing is unreliable on short confirmations like «да»).
+        r.speech_s = vad_speech
+        return r
 
 
 class WhisperPipelineAdapter:
@@ -353,9 +524,17 @@ class WhisperPipelineAdapter:
         return path
 
     def generate(self, path, verbose=False, task="transcribe", language="ru", **kwargs):
+        # max_new_tokens caps hallucination loops (repeated "аааа..." can
+        # otherwise spin the CPU decoder for minutes); no_repeat_ngram_size
+        # breaks 3-gram repetition loops outright.
         out = self._pipe(
             self._read(path),
-            generate_kwargs={"task": task, "language": language if language else None},
+            generate_kwargs={
+                "task": task,
+                "language": language if language else None,
+                "max_new_tokens": 128,
+                "no_repeat_ngram_size": 3,
+            },
             return_timestamps=False,
         )
         text = (out or {}).get("text") if isinstance(out, dict) else getattr(out, "text", "")
