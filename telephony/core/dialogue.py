@@ -197,6 +197,9 @@ VERA_SYSTEM_PROMPT = (
     "одного латинского слова или буквы (никаких «tonight», «good», «ok»). "
     "Пиши грамотно: «радА, что вы хорошо себя чувствуете», согласуй род и "
     "падежи.\n"
+    "РОД: ты — женщина по имени Вера. О себе — ТОЛЬКО в женском роде: "
+    "«я рада», «я поняла», «я записала», «я готова». Никогда: «рад», "
+    "«понял», «готов».\n"
     "ВЕЖЛИВОСТЬ: всегда обращайтесь на «вы», НИКОГДА на «ты». Правильно: "
     "«Как вы себя чувствуете?», «Что вы сегодня делали?». Неправильно: «как "
     "ты», «тебе», «твой». Вы обращаетесь к пожилому человеку уважительно.\n"
@@ -342,8 +345,12 @@ def _clean_llm(text):
 
 # BROKEN-REPLY GUARD (2026-08-24): deterministic checks for Qwen3 output
 # that must never reach the speaker: parroting openers and latin leakage.
+# 2026-08-24 live calls added: «Вы слышали? Как настроение?» (echo of the
+# caller's «ага услышал»), «Как приятно, что вы о нас подумали» — all
+# mirror-parroting of garbled STT input.
 _MIRROR_OPENERS_RE = re.compile(
-    r"^\s*(вы говорите|вы сомневаетесь|вы спрашиваете|рад[аы]?,?\s+что вы "
+    r"^\s*(вы говорите|вы слышали|вы сказали|вы сомневаетесь|"
+    r"вы спрашиваете|как приятно,?\s+что вы|рад[аы]?,?\s+что вы "
     r"(хорошо|нормально))", re.I)
 _LATIN_WORD_RE = re.compile(r"[A-Za-z]")
 
@@ -753,6 +760,22 @@ class Agent:
             if last:
                 return {"text": caller_text, "intent": None,
                         "fallback": f"Повторяю: {last}"}
+        # GREETING MANNER (2026-08-24): when the elder says «здравствуйте»,
+        # the only polite answer is a warm hello-back + the pending agenda
+        # question. Live calls routed this into the LLM, producing
+        # non-sequiturs («Рада слышать! Какой сегодня день?»). Scripted,
+        # once per call; repeats fall through to the natural flow.
+        if caller_text and not getattr(self, "_hello_back_done", False) \
+                and re.search(
+                    r"(здравствуйте|добрый день|доброе утро|"
+                    r"добрый вечер)", caller_text.lower()):
+            self._hello_back_done = True
+            q = (self._ask_task()
+                 or (self._wrap_up_question()
+                     if getattr(self, "_agenda_topic", lambda: None)() is None
+                     else "Как вы меня слышите?"))
+            return {"text": caller_text, "intent": None,
+                    "fallback": f"И вам здравствуйте! {q}"}
         if ev.kind == "no_speech":
             # SILENCE/NOISE FLOW: never feed noise to the LLM, never repeat
             # the same prompt. 1st empty turn -> gentle repeat request;
@@ -869,16 +892,30 @@ class Agent:
                     fb = self._wrap_up_question()
                     return {"text": caller_text, "intent": None,
                             "fallback": fb}
-                # VARIETY: warm acknowledgments pool (was 2 phrases repeated
-                # every call — the top complaint 2026-08-23).
-                q = self._ask_task() or self._pick_not_repeated([
-                    "Хорошо. Я рядом — если что-то понадобится, скажите.",
-                    "Отлично. Тогда всего доброго, я на связи.",
-                    "Рада слышать. Я тут, если что.",
-                    "Хорошо-хорошо. Пусть день будет спокойным.",
-                    "Замечательно. Звоните, как почувствуете что-то.",
-                    "Очень хорошо. Я всегда на связи с вами.",
-                ])
+                # VARIETY: warm acknowledgments pool. AGENDA-DONE DEAD END
+                # (2026-08-24): when all topics are covered, a bare ack
+                # («Хорошо. Я рядом.») kills the call — the elder hears an
+                # empty «ага». Pair the ack with an open invitation.
+                nxt = self._ask_task()
+                if nxt:
+                    q = nxt
+                else:
+                    q = "{} {}".format(
+                        self._pick_not_repeated([
+                            "Хорошо. Я рядом — если что-то понадобится, "
+                            "скажите.",
+                            "Отлично. Тогда всего доброго, я на связи.",
+                            "Рада слышать. Я тут, если что.",
+                            "Хорошо-хорошо. Пусть день будет спокойным.",
+                            "Замечательно. Звоните, как почувствуете "
+                            "что-то.",
+                            "Очень хорошо. Я всегда на связи с вами.",
+                        ]),
+                        self._pick_not_repeated([
+                            "Добавите что-нибудь для близких?",
+                            "Что-нибудь ещё записать?",
+                            "Может, что-то вспомнилось?",
+                        ]))
                 return {"text": caller_text, "intent": None, "fallback": q}
             # longer positive answer: close the topic, hand the NEXT topic
             # to the LLM as its reply goal (task stays in free wording).

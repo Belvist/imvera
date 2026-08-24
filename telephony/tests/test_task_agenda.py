@@ -9,7 +9,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.dialogue import Agent, _clean_llm, reply_looks_broken  # noqa: E402
+from core.dialogue import (  # noqa: E402
+    Agent, _clean_llm, _feminize_self, reply_looks_broken)
 
 
 class TaskAgendaTests(unittest.TestCase):
@@ -229,6 +230,51 @@ class BrokenReplyGuardTests(unittest.TestCase):
         # non-question tail after the question is dropped too (reply ends
         # with the question naturally)
         self.assertTrue(fixed.startswith("Как вы сегодня"))
+
+    def test_gender_guard_feminizes_self_only(self):
+        # live 2026-08-24: «я рад» / masculine slips from Qwen3
+        self.assertEqual(
+            _clean_llm("Я рад, что всё хорошо."),
+            "Я рада, что всё хорошо.")
+        self.assertEqual(
+            _clean_llm("Я вас понял. Как настроение?"),
+            "Я вас поняла. Как настроение?")
+        self.assertEqual(
+            _clean_llm("Я был занят, но готов помочь."),
+            "Я была занята, но готова помочь.")
+        # third-person masculine must survive untouched
+        self.assertEqual(
+            _feminize_self("Внук был рад помочь."),
+            "Внук был рад помочь.")
+        # no «я» in sentence -> no change
+        self.assertEqual(_feminize_self("Рада слышать!"),
+                         "Рада слышать!")
+
+    def test_repair_catches_eshche_raz(self):
+        # live: «Скажите еще раз пожалуйста» fell through to the LLM and
+        # produced «Хорошо, верю» — now it repeats the last reply
+        a = Agent(llm=None)
+        a.start_check_in()
+        a._last_reply = "Как спалось ночью?"
+        p = a.plan_reply("Скажите еще раз пожалуйста")
+        self.assertIn("Повторяю", p["fallback"])
+        self.assertIn("Как спалось ночью?", p["fallback"])
+        p2 = a.plan_reply("Жить еще раз, пожалуйста")
+        self.assertIn("Повторяю", p2["fallback"])
+
+    def test_greeting_hello_back_scripted_once(self):
+        # live: «Здравствуйте!» got non-sequitur «Какой сегодня день?»;
+        # now a warm hello-back + pending agenda question
+        a = Agent(llm=None)
+        a.start_check_in()
+        a._agenda_idx = 1          # mood topic is next
+        a._agenda_asked = False
+        p = a.plan_reply("Здравствуйте!")
+        self.assertTrue(p["fallback"].startswith("И вам здравствуйте!"))
+        self.assertIn("настроение", p["fallback"].lower())
+        # second greeting falls through to natural flow (no crash)
+        p2 = a.plan_reply("Здравствуйте ещё раз")
+        self.assertTrue(p2)
 
 
 if __name__ == "__main__":
