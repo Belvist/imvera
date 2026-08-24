@@ -17,8 +17,8 @@ from core.safety_engine import Observation, SafetyEngine  # noqa: E402
 # so a per-instance "last question" memory repeated the same phrases every
 # call. This process-level ring remembers recently SPOKEN canned phrases for
 # the lifetime of the telephony container and steers _pick_not_repeated away
-# from them. maxlen 20 ~= one full call's worth of canned lines.
-_RECENT_SPOKEN = collections.deque(maxlen=20)
+# from them. maxlen 40 ~= two full calls' worth of canned lines.
+_RECENT_SPOKEN = collections.deque(maxlen=40)
 _RECENT_LOCK = threading.Lock()
 
 
@@ -278,6 +278,42 @@ def reply_looks_hallucinated(reply: str, transcript: str) -> bool:
     return bool(m) and "чувствует" not in (transcript or "").lower()
 
 
+# GENDER GUARD (2026-08-24): Vera is a WOMAN and must speak about herself
+# in the feminine; Qwen3-4B still slips into masculine forms («я рад»,
+# «я понял»). Deterministic feminization of self-references: applied only
+# to words in the SAME sentence AFTER a standalone «я», so third-person
+# masculine («дедушка был рад») stays untouched.
+_SELF_FEM = {
+    "рад": "рада", "был": "была", "сделал": "сделала", "готов": "готова",
+    "услышал": "услышала", "записал": "записала", "понял": "поняла",
+    "передал": "передала", "проверил": "проверила", "помог": "помогла",
+    "успел": "успела", "смог": "смогла", "заметил": "заметила",
+    "запомнил": "запомнила", "прав": "права", "согласен": "согласна",
+    "доволен": "довольна", "занят": "занята", "должен": "должна",
+}
+
+
+def _feminize_self(sentence: str) -> str:
+    out, seen_ya = [], False
+    for w in sentence.split():
+        m = re.match(r"^(.*?)([,.!?…:;]*)$", w)
+        core, punct = m.group(1), m.group(2)
+        lw = core.lower()
+        if lw == "я":
+            seen_ya = True
+            out.append(w)
+            continue
+        fem = _SELF_FEM.get(lw)
+        if seen_ya and fem and fem != lw:
+            if core[:1].isupper():
+                fem = fem.capitalize()
+            w = fem + punct
+            # seen_ya stays True: chained verbs feminize too
+            # («я рада и записала»)
+        out.append(w)
+    return " ".join(out)
+
+
 def _clean_llm(text):
     """Делает вывод модели безопасным для озвучки."""
     t = " ".join((text or "").split())
@@ -294,6 +330,8 @@ def _clean_llm(text):
             if q_seen:
                 break  # drop every question after the first
             q_seen = True
+        # GENDER GUARD: Vera speaks about herself only in feminine
+        s = _feminize_self(s)
         kept.append(s)
     t = " ".join(kept).strip() or " ".join(sentences[:1]).strip()
     if len(t) > 380:
@@ -704,9 +742,13 @@ class Agent:
         self._help_pending = False
         # CONVERSATIONAL REPAIR: when the caller asks us to repeat, the only
         # right answer is to say our previous reply again — not a new topic.
+        # 2026-08-24: live calls showed "Скажите еще раз пожалуйста" fall
+        # through to the LLM («Хорошо, верю») — added ещё/еще раз, скажите
+        # снова, как вы сказали.
         if caller_text and re.search(
                 r"(повторите|повтори|что ты сказала|что вы сказали|"
-                r"не расслышал|не понял|что как)", caller_text.lower()):
+                r"как вы сказали|ещё раз|еще раз|скажите снова|"
+                r"не расслышал|не понял)", caller_text.lower()):
             last = getattr(self, "_last_reply", None)
             if last:
                 return {"text": caller_text, "intent": None,
@@ -932,12 +974,15 @@ class Agent:
 
     # VARIETY (2026-08-24): the 1st empty turn used to be ONE fixed line
     # («Повторите, пожалуйста…») heard on EVERY call with a silent start.
-    # Warm «вы», no promises, at most one question mark.
+    # Warm «вы», no promises, at most one question mark. Pool widened 4→6 —
+    # with a silent caller this line opens most turns of the whole call.
     REPEAT_REQUESTS = (
         "Повторите, пожалуйста, я вас не расслышала.",
         "Простите, я не разобрала — скажите ещё раз, пожалуйста.",
         "Плохо слышно. Повторите, я вас слушаю.",
         "Извините, переспросите, пожалуйста, я записываю всё внимательно.",
+        "Акустика подводит. Скажите ещё раз, я рядом и слушаю.",
+        "Не расслышала ваших слов. Повторите, пожалуйста, чуть медленнее.",
     )
 
     # TAPERED SILENCE LADDER (2026-08-24, VUI practice — Manning "Voice UI
@@ -1077,7 +1122,11 @@ class Agent:
             fresh = [v for v in (pool or variants)
                      if v not in _RECENT_SPOKEN]
             pick = random.choice(fresh or pool or variants)
-            _RECENT_SPOKEN.append(pick)
+            # appendleft: the pick must NOT be the first thing evicted by its
+            # own selection (a full call's worth of lines used to push the
+            # goodbye out of the maxlen window before the next call read it
+            # — so consecutive calls could still get the same close).
+            _RECENT_SPOKEN.appendleft(pick)
         return pick
 
     def _ask_help(self):
@@ -1093,7 +1142,10 @@ class Agent:
         # VARIETY (2026-08-24): the close is spoken on EVERY call — was only
         # two phrasings, the most-heard repetition in the product. No new
         # promises added («записала/увидят» only), warm «вы», no questions.
-        return random.choice(self.GOODBYES)
+        # Rotates via _pick_not_repeated: plain random.choice could still
+        # deal the SAME goodbye twice in a row across calls (the ring buffer
+        # only guards pools picked through it).
+        return self._pick_not_repeated(self.GOODBYES)
 
     GOODBYES = (
         "Спасибо! Всё записала. До свидания!",

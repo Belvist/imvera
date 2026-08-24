@@ -49,10 +49,16 @@ class TaskAgendaTests(unittest.TestCase):
         self.assertTrue(any(w in p["fallback"].lower() for w in
                             ("плохо", "нехорошо", "недомогание",
                              "неважно", "помощь")))
-        # denial clears the concern (its own scripted follow-up)
+        # denial clears the concern (its own scripted follow-up).
+        # Pool wording rotates via _pick_not_repeated — accept ANY member of
+        # FALSE_ALARM_ACKS (2026-08-24: pool grew 2→4, matching only the
+        # first two phrasings made this test flaky ~50% of runs).
         p = a.plan_reply("нет, не сейчас хорошо, отпустило")
-        self.assertTrue("перестраховалась" in p["fallback"].lower()
-                        or "извините за тревогу" in p["fallback"].lower())
+        fb = p["fallback"].lower()
+        self.assertTrue(any(w in fb for w in (
+            "перестраховалась", "извините за тревогу",
+            "лишнюю тревогу", "всё обошлось", "что отпустило")),
+            f"not a false-alarm ack: {p['fallback']!r}")
         # next short OK RESUMES the agenda where it paused — now «сон»,
         # NOT a restart from «самочувствие»
         p = a.plan_reply("да, всё хорошо")
@@ -111,6 +117,28 @@ class VarietyTests(unittest.TestCase):
                 self.assertNotIn(word, low, f"promise in goodbye: {line}")
             self.assertLessEqual(line.count("?"), 1)
             self.assertNotIn(" ты ", f" {low} ")
+
+    def test_goodbye_no_repeat_across_calls_and_pool_rules(self):
+        # 2026-08-24 (run 2): _goodbye() still used plain random.choice —
+        # the SAME close could land twice in a row across calls even after
+        # the pool grew to 6. It now rotates via _pick_not_repeated.
+        first = Agent(llm=None)._goodbye()
+        second = Agent(llm=None)._goodbye()
+        self.assertNotEqual(first, second,
+                            f"same goodbye twice in a row: {first!r}")
+        # 2026-08-24 (run 2): REPEAT_REQUESTS widened 4→6; rules hold
+        # (unique, warm «вы», no promises, <=1 question mark).
+        pool = Agent.REPEAT_REQUESTS
+        self.assertGreaterEqual(len(pool), 5)
+        self.assertEqual(len(set(pool)), len(pool))
+        forbidden = ("вызову", "позвоню", "отправлю", "предупрежу",
+                     "передам", "сообщу")
+        for line in pool:
+            low = line.lower()
+            for word in forbidden:
+                self.assertNotIn(word, low, f"promise in line: {line}")
+            self.assertNotIn(" ты ", f" {low} ")
+            self.assertLessEqual(line.count("?"), 1)
 
     def test_generic_acks_pool_variety_and_no_promises(self):
         # 2026-08-24: generic acknowledgments were THREE bare phrases
