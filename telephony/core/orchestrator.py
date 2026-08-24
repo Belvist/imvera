@@ -18,7 +18,7 @@ import uuid
 
 from core.state import CallContext, CallBusyError, AdmissionError, \
     SESSION_TTL_SEC, DEFAULT_GREETING
-from core.dialogue import Agent, reply_looks_hallucinated
+from core.dialogue import Agent, reply_looks_broken, reply_looks_hallucinated
 from core.events import StreamingSTT, reply_segments
 from adapters.audio import wav_to_pcm, pcm_to_wav, parse_multipart_wav
 from adapters.moss_tts import TTSClient
@@ -1058,11 +1058,14 @@ class Serve:
                 break
             if not segment:
                 continue
-            # HALLUCINATION GUARD: Qwen3 sometimes asserts things the caller
-            # never said (appearance/voice comments). Such a sentence is
-            # replaced with the scripted fallback BEFORE it is spoken.
-            if plan is not None and plan.get("intent") and \
-                    reply_looks_hallucinated(segment, transcript or ""):
+            # HALLUCINATION + BROKEN-REPLY GUARDS: Qwen3 sometimes asserts
+            # things the caller never said (appearance comments), parrots the
+            # caller's words («Вы говорите о…») or code-switches to english.
+            # Such a sentence is replaced with the scripted fallback BEFORE
+            # it is spoken.
+            if plan is not None and plan.get("intent") and (
+                    reply_looks_hallucinated(segment, transcript or "")
+                    or reply_looks_broken(segment)):
                 print(f"[call-agent] hallucination guard: {segment[:60]}",
                       flush=True)
                 segment = (plan.get("fallback") or segment)

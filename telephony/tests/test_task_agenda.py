@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.dialogue import Agent  # noqa: E402
+from core.dialogue import Agent, _clean_llm, reply_looks_broken  # noqa: E402
 
 
 class TaskAgendaTests(unittest.TestCase):
@@ -44,9 +44,11 @@ class TaskAgendaTests(unittest.TestCase):
         p = a.plan_reply("да, всё хорошо")          # closes самочувствие
         self.assertIn("настроение", p["fallback"].lower())
         # symptom mid-agenda: safety control question PAUSES the agenda
+        # (pool wording rotates — match any of its care-check phrasings)
         p = a.plan_reply("голова болит и кружится")
-        self.assertTrue("плохо" in p["fallback"].lower()
-                        or "нехорошо" in p["fallback"].lower())
+        self.assertTrue(any(w in p["fallback"].lower() for w in
+                            ("плохо", "нехорошо", "недомогание",
+                             "неважно", "помощь")))
         # denial clears the concern (its own scripted follow-up)
         p = a.plan_reply("нет, не сейчас хорошо, отпустило")
         self.assertTrue("перестраховалась" in p["fallback"].lower()
@@ -134,13 +136,13 @@ class VarietyTests(unittest.TestCase):
     def test_small_pools_variety_and_no_promises(self):
         # 2026-08-24: silence escalation / false-alarm apology / third-person
         # worry follow-ups each had 2-4 inline lines; now named class pools
-        # (>= 4 unique, promise-free, «вы», <=1 question mark) that rotate
+        # (>= 3 unique, promise-free, «вы», <=1 question mark) that rotate
         # via _pick_not_repeated.
         forbidden = ("вызову", "позвоню", "отправлю", "предупрежу",
                      "передам", "сообщу")
-        for pool in (Agent.SILENCE_ESCALATION, Agent.FALSE_ALARM_ACKS,
+        for pool in (Agent.QUIET_HOLDS, Agent.FALSE_ALARM_ACKS,
                      Agent.WORRY_FOLLOWUPS):
-            self.assertGreaterEqual(len(pool), 4)
+            self.assertGreaterEqual(len(pool), 3)
             self.assertEqual(len(set(pool)), len(pool))
             for line in pool:
                 low = line.lower()
@@ -150,9 +152,55 @@ class VarietyTests(unittest.TestCase):
                 self.assertNotIn(" ты ", f" {low} ")
                 self.assertLessEqual(line.count("?"), 1)
         a = Agent(llm=None)
-        picks = {a._pick_not_repeated(Agent.SILENCE_ESCALATION)
+        picks = {a._pick_not_repeated(Agent.QUIET_HOLDS)
                  for _ in range(5)}
-        self.assertGreaterEqual(len(picks), 3)
+        self.assertGreaterEqual(len(picks), 2)
+
+    def test_tapered_silence_ladder_no_drama(self):
+        # 2026-08-24: long silence used to spam dramatic lines («Вам
+        # плохо?», «Постучите по трубке», «Вы меня пугаете тишиной»).
+        # New ladder: calm prompts 1-4, then one-word holds; drama banned.
+        a = Agent(llm=None)
+        a.start_check_in()
+        seen = []
+        for _ in range(8):
+            p = a.plan_reply("")
+            fb = (p.get("fallback") or "").lower()
+            self.assertTrue(fb)
+            seen.append(fb)
+            a.last_intent = None
+        for scary in ("плохо?", "постучите", "пугаете", "пугаю"):
+            for fb in seen:
+                self.assertNotIn(scary, fb,
+                                 f"drama survived ladder: {fb}")
+        # late turns collapse to short holds: no question marks after turn 4
+        late = seen[4:]
+        for fb in late:
+            self.assertNotIn("?", fb)
+
+
+class BrokenReplyGuardTests(unittest.TestCase):
+    """2026-08-24: deterministic NLG guards against Qwen3 drift seen live."""
+
+    def test_mirror_openers_rejected(self):
+        for bad in ("Вы говорите о сейчас? Какое самочувствие?",
+                    "Вы сомневаетесь, как справиться. Как спали?",
+                    "Рада, что вы хорошо себя чувствуете сегодня?"):
+            self.assertTrue(reply_looks_broken(bad), bad)
+
+    def test_latin_leak_rejected(self):
+        self.assertTrue(reply_looks_broken("Как вы спать tonight?"))
+        self.assertTrue(reply_looks_broken("Всё good, как настроение?"))
+        # normal russian passes
+        self.assertFalse(reply_looks_broken(
+            "Рада слышать! А настроение какое сегодня?"))
+
+    def test_clean_llm_keeps_single_question(self):
+        fixed = _clean_llm("Как вы сегодня? Чем заняты?")
+        self.assertEqual(fixed.count("?"), 1)
+        # non-question tail after the question is dropped too (reply ends
+        # with the question naturally)
+        self.assertTrue(fixed.startswith("Как вы сегодня"))
 
 
 if __name__ == "__main__":

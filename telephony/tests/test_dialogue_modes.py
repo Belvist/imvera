@@ -115,10 +115,12 @@ class ModeMachineTests(unittest.TestCase):
         plan = a.plan_reply("")
         self.assertEqual(a.mode, "clarify")
         self.assertIsNone(plan.get("intent"))
-        # 1st empty turn: gentle repeat request; 2nd+: check on the person
-        self.assertIn("Повторите", plan["fallback"])
+        # 1st empty turn: gentle repeat request (rotating pool, legacy line
+        # kept verbatim in the pool); 2nd: calm tapered-ladder check
+        # (2026-08-24: fixed calm line, drama dropped).
+        self.assertIn(plan["fallback"], Agent.REPEAT_REQUESTS)
         plan2 = a.plan_reply("")
-        self.assertIn("плохо", plan2["fallback"])
+        self.assertEqual(plan2["fallback"], "Алло, вы меня слышите?")
 
     def test_possible_red_asks_control_question(self):
         a = self._agent()

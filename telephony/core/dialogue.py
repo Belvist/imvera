@@ -186,8 +186,17 @@ VERA_SYSTEM_PROMPT = (
     "задавай один естественный вопрос по теме: уточни подробности, спроси "
     "про самочувствие, планы, настроение. Вопрос — проявление интереса; без "
     "него разговор умирает.\n"
+    "НИКОГДА не начинай ответ с пересказа слов человека: обороты «вы "
+    "говорите о…», «вы сомневаетесь…», «рада, что вы хорошо» — ЗАПРЕЩЕНЫ "
+    "(это звучит как попугай). Начинай коротким тёплым откликом («Рада "
+    "слышать», «Как хорошо») или сразу мягким вопросом по теме. Пример "
+    "хорошего ответа: сказано «спала хорошо» -> «Рада слышать! А настроение "
+    "какое сегодня?»\n"
     "Формат: две-три короткие фразы, 10–30 слов, только русский. РОВНО ОДИН "
-    "вопросительный знак в ответе — не больше. Только на русском.\n"
+    "вопросительный знак в ответе — не больше. Только русский язык: ни "
+    "одного латинского слова или буквы (никаких «tonight», «good», «ok»). "
+    "Пиши грамотно: «радА, что вы хорошо себя чувствуете», согласуй род и "
+    "падежи.\n"
     "ВЕЖЛИВОСТЬ: всегда обращайтесь на «вы», НИКОГДА на «ты». Правильно: "
     "«Как вы себя чувствуете?», «Что вы сегодня делали?». Неправильно: «как "
     "ты», «тебе», «твой». Вы обращаетесь к пожилому человеку уважительно.\n"
@@ -273,12 +282,45 @@ def _clean_llm(text):
     """Делает вывод модели безопасным для озвучки."""
     t = " ".join((text or "").split())
     t = re.sub(r"^(Вера|Assistant|Ответ)\s*:\s*", "", t, flags=re.IGNORECASE)
-    parts = re.split(r"(?<=[.!?…])\s+", t)
-    t = " ".join(parts[:2]).strip()
+    # ONE-QUESTION RULE (2026-08-24): the prompt says "ровно один
+    # вопросительный знак", yet live calls still showed double questions
+    # («Как вы сегодня? Чем заняты?») — two questions overwhelm an elderly
+    # caller. Deterministically keep only the FIRST interrogative sentence.
+    sentences = [s for s in re.split(r"(?<=[.!?…])\s+", t) if s.strip()]
+    q_seen = False
+    kept = []
+    for s in sentences:
+        if "?" in s:
+            if q_seen:
+                break  # drop every question after the first
+            q_seen = True
+        kept.append(s)
+    t = " ".join(kept).strip() or " ".join(sentences[:1]).strip()
     if len(t) > 380:
         cut = t[:380].rfind(" ")
         t = t[:cut].rstrip() + "."
     return t
+
+
+# BROKEN-REPLY GUARD (2026-08-24): deterministic checks for Qwen3 output
+# that must never reach the speaker: parroting openers and latin leakage.
+_MIRROR_OPENERS_RE = re.compile(
+    r"^\s*(вы говорите|вы сомневаетесь|вы спрашиваете|рад[аы]?,?\s+что вы "
+    r"(хорошо|нормально))", re.I)
+_LATIN_WORD_RE = re.compile(r"[A-Za-z]")
+
+
+def reply_looks_broken(reply: str) -> bool:
+    """True when the segment must be replaced by a scripted line BEFORE it
+    is spoken: mirror-parroting of the caller's words or code-switching to
+    english ('Как вы спать tonight' — seen live 2026-08-23)."""
+    if not reply:
+        return False
+    if _MIRROR_OPENERS_RE.match(reply):
+        return True
+    letters = _LATIN_WORD_RE.findall(reply)
+    # a couple of stray latin chars can slip; a real english word cannot
+    return len(letters) >= 4
 
 
 _CLOSING_RE = re.compile(
@@ -677,15 +719,23 @@ class Agent:
             self._empty_turns = getattr(self, "_empty_turns", 0) + 1
             self._set_mode("clarify")
             if self._empty_turns == 1:
-                fb = "Повторите, пожалуйста, я вас не расслышала."
+                # VARIETY (2026-08-24): was ONE fixed line heard on every call.
+                fb = self._pick_not_repeated(self.REPEAT_REQUESTS)
             elif self._empty_turns == 2:
-                # deterministic escalation: the person may feel unwell
-                fb = "Вы меня слышите? Вам плохо?"
+                # TAPERED ESCALATION (2026-08-24, VUI practice: escalating
+                # prompts with a stop condition): short and calm. The old
+                # «Вам плохо?» frightened callers — dropped.
+                fb = "Алло, вы меня слышите?"
+            elif self._empty_turns == 3:
+                fb = ("Если вам удобно, скажите «да» — "
+                      "я рядом и вас слушаю.")
+            elif self._empty_turns == 4:
+                # last full prompt; further silence gets ONE-WORD holds,
+                # never drama (W3C COGA: fallbacks must not become loops).
+                fb = "Я подожду. Скажите, когда будете готовы говорить."
             else:
-                # VARIETY (2026-08-24): escalation pool rotates via
-                # _pick_not_repeated (was plain random.choice — invisible to
-                # the cross-call ring buffer) and grew 4 -> 6 lines.
-                fb = self._pick_not_repeated(self.SILENCE_ESCALATION)
+                fb = self._pick_not_repeated(
+                    self.QUIET_HOLDS)
             return {"text": caller_text, "intent": None, "fallback": fb}
         self._empty_turns = 0
         if ev.kind == "possible_red":
@@ -694,11 +744,10 @@ class Agent:
             self.status = "attention"
             self._set_mode("safety_confirm")
             self._clearing = True
-            q = self._pick_not_repeated([
-                "Мне показалось, что вы неважно себя чувствуете. "
-                "Вам сейчас плохо?",
-                "Вы говорите, что вам нехорошо. Записать это для близких?",
-            ])
+            # VARIETY (2026-08-24): was 2 inline lines; named pool rotates
+            # across calls via _pick_not_repeated. Meaning kept: gentle
+            # check-in, offer to record, never promise to call.
+            q = self._pick_not_repeated(self.SYMPTOM_CHECKS)
             self._last_question = q
             return {"text": caller_text,
                     "intent": "мягко уточнить самочувствие, не пугая человека; "
@@ -708,10 +757,10 @@ class Agent:
             self._note("самочувствие не подтверждено")
             self.status = "attention"
             self._set_mode("safety_active")
-            q = self._pick_not_repeated([
-                "Не буду настаивать. Если станет хуже — скажите, я запишу.",
-                "Хорошо. Если станет хуже — сразу скажите.",
-            ])
+            # VARIETY (2026-08-24): was 2 inline lines; named pool rotates
+            # across calls. Meaning kept: don't insist, invite to report
+            # worsening later — «я запишу», never a promise to act.
+            q = self._pick_not_repeated(self.STAY_OBSERVANT_ACKS)
             self._last_question = q
             return {"text": caller_text,
                     "intent": "успокоить и продолжить разговор, не настаивая; "
@@ -861,17 +910,46 @@ class Agent:
         "Верно ли я поняла — я запишу это для близких?",
     )
 
-    # VARIETY (2026-08-24): escalation on the 3rd+ silent turn in a row.
-    # Warm «вы», no promises, at most one question mark; rotates via
-    # _pick_not_repeated so consecutive silence never sounds identical
-    # across calls either (ring buffer remembers).
-    SILENCE_ESCALATION = (
-        "Всё ли у вас в порядке? Отзовитесь, пожалуйста.",
-        "Если вам плохо — скажите, я записываю для близких.",
-        "Я на линии, слышу тишину. Вам нужна помощь?",
-        "Скажите хоть слово, я очень слушаю вас сейчас.",
-        "Вы меня пугаете тишиной. Всё ли хорошо?",
-        "Постучите по трубке или скажите слово — я здесь.",
+    # VARIETY (2026-08-24): gentle control question when a symptom is heard
+    # (possible_red). Was 2 inline lines; safety MEANING unchanged — the
+    # machine still sets _clearing so a following «нет, отпустило» clears.
+    SYMPTOM_CHECKS = (
+        "Мне показалось, что вы неважно себя чувствуете. "
+        "Вам сейчас плохо?",
+        "Вы говорите, что вам нехорошо. Записать это для близких?",
+        "Вы упомянули недомогание. Как вы себя чувствуете сейчас?",
+        "Скажите честно — вам нужна помощь? Я запишу всё для родных.",
+    )
+
+    # VARIETY (2026-08-24): soft stand-down after an unconfirmed concern
+    # (uncertain_red). Was 2 inline lines; «я запишу» kept promise-free.
+    STAY_OBSERVANT_ACKS = (
+        "Не буду настаивать. Если станет хуже — скажите, я запишу.",
+        "Хорошо. Если станет хуже — сразу скажите.",
+        "Хорошо, верю. Но если что-то изменится — я рядом и всё записываю.",
+        "Договорились. Только обещайте сообщить мне, если станет хуже.",
+    )
+
+    # VARIETY (2026-08-24): the 1st empty turn used to be ONE fixed line
+    # («Повторите, пожалуйста…») heard on EVERY call with a silent start.
+    # Warm «вы», no promises, at most one question mark.
+    REPEAT_REQUESTS = (
+        "Повторите, пожалуйста, я вас не расслышала.",
+        "Простите, я не разобрала — скажите ещё раз, пожалуйста.",
+        "Плохо слышно. Повторите, я вас слушаю.",
+        "Извините, переспросите, пожалуйста, я записываю всё внимательно.",
+    )
+
+    # TAPERED SILENCE LADDER (2026-08-24, VUI practice — Manning "Voice UI
+    # Systems" ch.13: escalating prompts + max error count; W3C COGA:
+    # fallbacks must not loop): turns 2-4 are calm full prompts, turn 5+
+    # collapses to ONE-WORD holds so long silence never becomes chatter or
+    # drama («Вам плохо?», «Постучите по трубке» — dropped, they frightened
+    # people on live calls).
+    QUIET_HOLDS = (
+        "Я рядом.",
+        "Я здесь, когда вы будете готовы.",
+        "Слушаю вас.",
     )
 
     # VARIETY (2026-08-24): follow-up after a false-alarm apology (real call:
