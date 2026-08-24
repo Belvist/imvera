@@ -774,8 +774,13 @@ class Agent:
                  or (self._wrap_up_question()
                      if getattr(self, "_agenda_topic", lambda: None)() is None
                      else "Как вы меня слышите?"))
+            # VARIETY (2026-08-24): the opener was ONE fixed line heard
+            # verbatim on every call that opened with «здравствуйте»; it now
+            # rotates cross-call via _pick_not_repeated. No questions here —
+            # the single question mark comes from the agenda question q.
             return {"text": caller_text, "intent": None,
-                    "fallback": f"И вам здравствуйте! {q}"}
+                    "fallback": "{} {}".format(
+                        self._pick_not_repeated(self.HELLO_BACKS), q)}
         if ev.kind == "no_speech":
             # SILENCE/NOISE FLOW: never feed noise to the LLM, never repeat
             # the same prompt. 1st empty turn -> gentle repeat request;
@@ -972,6 +977,19 @@ class Agent:
         return {"text": caller_text,
                 "intent": "откликнуться на детали сказанного и задать один естественный уточняющий вопрос по теме",
                 "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
+
+    # VARIETY (2026-08-24): scripted hello-back openers (elder says
+    # «Здравствуйте!»). Was ONE fixed line «И вам здравствуйте!» — heard
+    # verbatim on every such call. Rotates cross-call via _pick_not_repeated;
+    # the agenda question is appended by the caller, so NO question marks here.
+    HELLO_BACKS = (
+        "И вам здравствуйте!",
+        "Здравствуйте! Рада вас слышать.",
+        "Здравствуйте-здравствуйте! Как хорошо, что позвонили.",
+        "Здравствуйтесь и вы. Я как раз на связи.",
+        "Приветствую вас! Слышу вас хорошо.",
+        "Здравствуйте! Очень приятно услышать ваш голос.",
+    )
 
     # VARIETY (2026-08-24): the generic acknowledgment pool used to be THREE
     # bare phrases («Понимаю.», «Вот как.», «Наверное, так и бывает.») picked

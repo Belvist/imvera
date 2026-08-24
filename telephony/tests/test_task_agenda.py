@@ -138,8 +138,30 @@ class VarietyTests(unittest.TestCase):
             low = line.lower()
             for word in forbidden:
                 self.assertNotIn(word, low, f"promise in line: {line}")
+
+    def test_hello_back_pool_variety_and_rules(self):
+        # 2026-08-24 (run 3): the scripted hello-back opener was ONE fixed
+        # line («И вам здравствуйте!») heard verbatim on every call that
+        # opened with «здравствуйте». Now a 6-line pool rotating cross-call
+        # via _pick_not_repeated; product rules hold.
+        pool = Agent.HELLO_BACKS
+        self.assertGreaterEqual(len(pool), 5)
+        self.assertEqual(len(set(pool)), len(pool))
+        self.assertNotIn("И вам здравствуйте! Как", pool)  # no double lines
+        forbidden = ("вызову", "позвоню", "отправлю", "предупрежу",
+                     "передам", "сообщу")
+        for line in pool:
+            low = line.lower()
+            for word in forbidden:
+                self.assertNotIn(word, low, f"promise in hello-back: {line}")
+            self.assertEqual(line.count("?"), 0,
+                             f"question mark in opener: {line}")
             self.assertNotIn(" ты ", f" {low} ")
-            self.assertLessEqual(line.count("?"), 1)
+        # two consecutive calls pick different openers (cross-call ring)
+        first = Agent(llm=None)._pick_not_repeated(Agent.HELLO_BACKS)
+        second = Agent(llm=None)._pick_not_repeated(Agent.HELLO_BACKS)
+        self.assertNotEqual(first, second,
+                            f"same hello-back twice in a row: {first!r}")
 
     def test_generic_acks_pool_variety_and_no_promises(self):
         # 2026-08-24: generic acknowledgments were THREE bare phrases
