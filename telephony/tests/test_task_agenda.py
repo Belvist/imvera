@@ -110,6 +110,27 @@ class VarietyTests(unittest.TestCase):
             self.assertLessEqual(line.count("?"), 1)
             self.assertNotIn(" ты ", f" {low} ")
 
+    def test_generic_acks_pool_variety_and_no_promises(self):
+        # 2026-08-24: generic acknowledgments were THREE bare phrases
+        # («Понимаю.», «Вот как.») picked by plain random.choice — the exact
+        # empty nods the system prompt forbids. Pool must be warm, unique,
+        # promise-free and rotate via _pick_not_repeated.
+        pool = Agent.GENERIC_ACKS
+        self.assertGreaterEqual(len(pool), 5)
+        self.assertEqual(len(set(pool)), len(pool))
+        forbidden = ("вызову", "позвоню", "отправлю", "предупрежу",
+                     "передам", "сообщу")
+        for line in pool:
+            low = line.lower()
+            for word in forbidden:
+                self.assertNotIn(word, low, f"promise in ack: {line}")
+            self.assertLessEqual(line.count("?"), 1)
+            self.assertNotIn(" ты ", f" {low} ")
+        # rotation actually varies picks within one call (no bare repeats):
+        a = Agent(llm=None)
+        picks = {a._pick_not_repeated(pool) for _ in range(4)}
+        self.assertGreaterEqual(len(picks), 3)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

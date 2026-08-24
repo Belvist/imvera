@@ -728,11 +728,7 @@ class Agent:
             if not explicit and not help_was_pending:
                 return {"text": caller_text,
                         "intent": "откликнуться на детали сказанного и задать один естественный уточняющий вопрос по теме",
-                        "fallback": random.choice([
-                            "Понимаю.",
-                            "Вот как.",
-                            "Наверное, так и бывает.",
-                        ])}
+                        "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
             self._note("требуется помощь")
             self.status = "attention"
             self._set_mode("check_in")
@@ -854,18 +850,26 @@ class Agent:
                     "intent": "откликнуться на детали сказанного и задать "
                               "один уточняющий вопрос по теме "
                               f"«{topic}» (это цель звонка)",
-                    "fallback": random.choice([
-                        "Понимаю.",
-                        "Вот как.",
-                        "Наверное, так и бывает.",
-                    ])}
+                    "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
         return {"text": caller_text,
                 "intent": "откликнуться на детали сказанного и задать один естественный уточняющий вопрос по теме",
-                "fallback": random.choice([
-                    "Понимаю.",
-                    "Вот как.",
-                    "Наверное, так и бывает.",
-                ])}
+                "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
+
+    # VARIETY (2026-08-24): the generic acknowledgment pool used to be THREE
+    # bare phrases («Понимаю.», «Вот как.», «Наверное, так и бывает.») picked
+    # with plain random.choice in three places — exactly the empty nods the
+    # system prompt forbids, repeated call after call. Warm, promise-free
+    # alternatives now rotate via _pick_not_repeated (cross-call memory).
+    GENERIC_ACKS = (
+        "Понимаю вас.",
+        "Да, конечно, я вас слушаю.",
+        "Хорошо, что рассказали — я всё запомнила.",
+        "Спасибо, что поделились со мной.",
+        "Я рядом и внимательно вас слушаю.",
+        "Как хорошо, что вы мне это рассказываете.",
+        "Понимаю, такое бывает. Я записала ваши слова.",
+        "Верно ли я поняла — я запишу это для близких?",
+    )
 
     def _build_history(self):
         # NOTE (latency experiment 2026-08-21): moving the per-turn intent
