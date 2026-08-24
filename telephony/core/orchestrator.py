@@ -121,6 +121,11 @@ class Serve:
                     try:
                         body = json.dumps({
                             "model": "local", "max_tokens": 1,
+                            # EXACT same rendering as real turns (incl. the
+                            # template kwarg): any difference risks splitting
+                            # the KV-cache prefix the ping exists to keep.
+                            "chat_template_kwargs": {"enable_thinking":
+                                                     False},
                             "messages": [
                                 {"role": "system", "content": sys_prompt},
                                 {"role": "user", "content": "ок"},
@@ -573,11 +578,15 @@ class Serve:
                 return f"{int((t_cur - t_prev) * 1000)}ms"
 
             stt_ms = _ms(t_turn, t_stt)
+            # HONEST LABELS (2026-08-23): "llm" here is the deterministic
+            # plan (state machine), NOT model generation — the LLM streams
+            # DURING the next window, so "gen+tts" owns both. Old labels
+            # ("llm=", "tts=") sent us chasing the wrong stage.
             llm_ms = _ms(t_stt, t_llm_first)
             tts_ms = _ms(t_llm_first, t_first_audio)
             total_ms = _ms(t_turn, t_first_audio)
             print(f"[call-agent] LATENCY {call_id}: "
-                  f"stt={stt_ms} llm={llm_ms} tts={tts_ms} "
+                  f"stt={stt_ms} plan={llm_ms} gen+tts={tts_ms} "
                   f"first_audio={total_ms} "
                   f"usr='{(transcript or '')[:80]}' "
                   f"rep='{(reply or '')[:60]}'", flush=True)

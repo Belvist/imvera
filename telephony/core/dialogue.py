@@ -5,12 +5,21 @@ and the turn-based Agent. No I/O: it programs against duck-typed llm/tts
 objects, so the same dialogue layer works with local or cloud providers.
 """
 
+import collections
 import os
 import random
 import re
 import threading
 
 from core.safety_engine import Observation, SafetyEngine  # noqa: E402
+
+# CROSS-CALL VARIETY (2026-08-23): the Agent instance is recreated per call,
+# so a per-instance "last question" memory repeated the same phrases every
+# call. This process-level ring remembers recently SPOKEN canned phrases for
+# the lifetime of the telephony container and steers _pick_not_repeated away
+# from them. maxlen 20 ~= one full call's worth of canned lines.
+_RECENT_SPOKEN = collections.deque(maxlen=20)
+_RECENT_LOCK = threading.Lock()
 
 
 # Whisper often hallucinates on near-silence / very short clips.
@@ -332,26 +341,43 @@ class Agent:
     # free (the LLM gets the current topic as its reply goal; these canned
     # variants are only instant fallbacks). Safety/clarify interjections
     # PAUSE the agenda — the flow always returns to the current topic.
+    # Variety (2026-08-23): every canned question now has FIVE natural
+    # variants; topic keywords stay recognizable for tests/families.
     AGENDA = (
         ("самочувствие", (
             "Как вы себя чувствуете сейчас?",
             "Как самочувствие сегодня?",
+            "Как ваше самочувствие?",
+            "Ну что, как себя чувствуем сегодня?",
+            "Как поживаете, как здоровье?",
         )),
         ("настроение", (
             "Как настроение?",
             "Что настроение сегодня — бодрое?",
+            "Какое сегодня настроение?",
+            "Хорошее ли сегодня настроение?",
+            "Настроение как — не грустите?",
         )),
         ("сон", (
             "Как спалось ночью?",
             "Хорошо ли вы спали?",
+            "Как ночной сон — спокойный?",
+            "Ночью хорошо спалось?",
+            "Как выспались сегодня?",
         )),
         ("планы", (
             "Какие планы на сегодня?",
             "Чем сегодня займётесь?",
+            "Что сегодня задумали делать?",
+            "Как проведёте сегодняшний день?",
+            "Есть ли какие планы на день?",
         )),
         ("передать родным", (
             "Что-нибудь передать близким?",
             "Хотите что-то записать для родных?",
+            "Передать ли что-то вашим близким?",
+            "Что передать вашим родным от вас?",
+            "Есть что-то, что я должна передать семье?",
         )),
     )
 
@@ -473,6 +499,11 @@ class Agent:
             "Вы рассказали обо всём — я всё записала для близких. "
             "Добавите что-нибудь?",
             "Я записала всё важное. Хотите что-то ещё передать родным?",
+            "Всё запомнила и записала. Что-нибудь ещё добавить для семьи?",
+            "Кажется, обо всём поговорили. Осталось что-то, что надо "
+            "записать?",
+            "Записала всё, что вы рассказали. Ещё что-то передадите "
+            "близким?",
         ])
         self._last_question = q
         return q
@@ -502,6 +533,11 @@ class Agent:
         self.mode = "check_in"
         self._update_step()
         self._last_question = MVERA_GREETING
+        # ECHO GUARD (2026-08-23): the recording is a MONO MIX, so the tail of
+        # this greeting ("Здравствуйте!") lands in turn-1 audio and tiny used
+        # to transcribe it as the CALLER's words. Seeding _last_reply lets
+        # orchestrator._looks_like_echo catch that echo on the first turn.
+        self._last_reply = MVERA_GREETING
         # the greeting IS agenda topic 0 («самочувствие») on the table
         self._agenda_asked = True
         return MVERA_GREETING
@@ -649,6 +685,8 @@ class Agent:
                 fb = random.choice([
                     "Всё ли у вас в порядке? Отзовитесь, пожалуйста.",
                     "Если вам плохо — скажите, я записываю для близких.",
+                    "Я на линии, слышу тишину. Вам нужна помощь?",
+                    "Скажите хоть слово, я очень слушаю вас сейчас.",
                 ])
             return {"text": caller_text, "intent": None, "fallback": fb}
         self._empty_turns = 0
@@ -754,9 +792,15 @@ class Agent:
                     fb = self._wrap_up_question()
                     return {"text": caller_text, "intent": None,
                             "fallback": fb}
+                # VARIETY: warm acknowledgments pool (was 2 phrases repeated
+                # every call — the top complaint 2026-08-23).
                 q = self._ask_task() or self._pick_not_repeated([
                     "Хорошо. Я рядом — если что-то понадобится, скажите.",
                     "Отлично. Тогда всего доброго, я на связи.",
+                    "Рада слышать. Я тут, если что.",
+                    "Хорошо-хорошо. Пусть день будет спокойным.",
+                    "Замечательно. Звоните, как почувствуете что-то.",
+                    "Очень хорошо. Я всегда на связи с вами.",
                 ])
                 return {"text": caller_text, "intent": None, "fallback": q}
             # longer positive answer: close the topic, hand the NEXT topic
@@ -769,7 +813,14 @@ class Agent:
                                   "близких; спросить, не хочет ли человек "
                                   "что-то ещё добавить",
                         "fallback": fb}
-            q = self._ask_task() or "Очень рада это слышать."
+            q = (self._ask_task()
+                 or self._pick_not_repeated([
+                     "Очень рада это слышать.",
+                     "Как же хорошо, спасибо.",
+                     "Вот и замечательно.",
+                     "У меня прямо легче стало.",
+                     "Рада за вас, правда.",
+                 ]))
             nxt = self._agenda_topic()
             if self._current_is_family():
                 # Family-app question: the EXACT text must reach the elder,
@@ -908,23 +959,42 @@ class Agent:
             self._last_reply = reply_text
 
     def _pick_not_repeated(self, variants):
-        """Pick a phrase that differs from the last asked question so Vera
-        never nags with the same words twice in a row."""
-        pool = [v for v in variants if v != getattr(self, "_last_question", None)]
-        return random.choice(pool or variants)
+        """Pick a phrase that differs from the last asked question AND from
+        anything spoken in RECENT calls (process-level ring). Falls back to
+        the full pool when everything was recently used — variety degrades
+        gracefully instead of breaking."""
+        pool = [v for v in variants if v != getattr(self, "_last_question",
+                                                    None)]
+        with _RECENT_LOCK:
+            fresh = [v for v in (pool or variants)
+                     if v not in _RECENT_SPOKEN]
+            pick = random.choice(fresh or pool or variants)
+            _RECENT_SPOKEN.append(pick)
+        return pick
 
     def _ask_help(self):
         return self._pick_not_repeated([
             "Нужна ли вам помощь?",
             "Помощь требуется?",
             "Что записать для близких?",
+            "Что именно нужно сделать? Я запишу для родных.",
+            "Какая помощь вам нужна? Опишите, пожалуйста.",
         ])
 
     def _goodbye(self):
-        return random.choice([
-            "Спасибо! Всё записала. До свидания!",
-            "Хорошо, записала. Всего доброго!",
-        ])
+        # VARIETY (2026-08-24): the close is spoken on EVERY call — was only
+        # two phrasings, the most-heard repetition in the product. No new
+        # promises added («записала/увидят» only), warm «вы», no questions.
+        return random.choice(self.GOODBYES)
+
+    GOODBYES = (
+        "Спасибо! Всё записала. До свидания!",
+        "Хорошо, записала. Всего доброго!",
+        "Спасибо за разговор! Всё записала для близких. До свидания!",
+        "Рада была побеседовать. Берегите себя, всего доброго!",
+        "Всё отметила, родные это увидят. Будьте здоровы!",
+        "Хорошего вам дня и крепкого здоровья. До свидания!",
+    )
 
     def _ask(self, text):
         """One conversational turn (blocking). Backwards-compatible wrapper

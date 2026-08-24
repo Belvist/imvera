@@ -93,7 +93,7 @@ class FamilyAgendaTests(unittest.TestCase):
         self.assertTrue(any("вопрос родных" in n for n in a.notes))
         # the agenda just FINISHED -> wrap-up in the very same reply
         self.assertTrue(any(w in p["fallback"].lower() for w in
-                            ("записала", "добавите")))
+                            ("записа", "доба")))
 
     def test_unanswered_question_stays_pending(self):
         a = self._agent_with_questions()
@@ -113,7 +113,7 @@ class FamilyAgendaTests(unittest.TestCase):
         p = a.plan_reply("нормально")
         # fifth topic closed -> straight to wrap-up, no family entries
         self.assertTrue(any(w in p["fallback"].lower() for w in
-                            ("записала", "добавите")))
+                            ("записа", "доба")))
         self.assertEqual(a.family_questions, [])
         self.assertEqual(a._agenda_extra, ())
 

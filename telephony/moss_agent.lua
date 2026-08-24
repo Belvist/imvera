@@ -166,10 +166,13 @@ function do_turn_stream(call_id, chunks, segdir)
             n = n + 1
             play_wav(next_seg)
         else
-            -- Backchannel: if the reply is still not ready after ~1.2 s,
+            -- Backchannel: if the reply is still not ready after ~0.6 s,
             -- play ONE pre-rendered ack ("Ага, услышала вас") instead of
-            -- silent dead air.
-            if not ack_played and waits >= 12 then
+            -- silent dead air. 2026-08-23: was 12 waits (~1.2 s); live calls
+            -- showed first_audio at 4-6 s (LLM ~10 tok/s under host load),
+            -- so the ack must land EARLIER to keep the caller convinced
+            -- she is listening.
+            if not ack_played and waits >= 6 then
                 ack_played = true
                 local acks = {}
                 local p = io.popen("ls " .. tmpdir .. "/acks/ack-*.wav 2>/dev/null")

@@ -27,14 +27,14 @@ class TaskAgendaTests(unittest.TestCase):
         self.assertTrue("сон" in p["fallback"].lower()
                         or "спал" in p["fallback"].lower())
         p = a.plan_reply("спала хорошо")
-        self.assertTrue("план" in p["fallback"].lower()
-                        or "займётесь" in p["fallback"].lower())
+        self.assertTrue(any(w in p["fallback"].lower() for w in
+                            ("план", "займётес", "делать", "проведёте")))
         p = a.plan_reply("всё хорошо, буду ещё читать")
         fb = p["fallback"].lower()
         self.assertTrue(any(w in fb for w in
                             ("родн", "передать", "записать")))
         p = a.plan_reply("хорошо, запишите для них пару слов")
-        self.assertIn("записала", p["fallback"].lower())
+        self.assertIn("записа", p["fallback"].lower())
         for topic in ("самочувствие", "настроение", "сон", "планы",
                       "передать родным"):
             self.assertIn(f"обсуждено: {topic}", a.notes)
@@ -64,6 +64,51 @@ class TaskAgendaTests(unittest.TestCase):
         self.assertEqual(a._agenda_idx, 0)
         p = a.plan_reply("да, всё хорошо")
         self.assertIn("настроение", p["fallback"].lower())
+
+
+class VarietyTests(unittest.TestCase):
+    """Cross-call variety (2026-08-23): canned questions must NOT repeat
+    between consecutive calls in the same process."""
+
+    @staticmethod
+    def _run_call():
+        a = Agent(llm=None)
+        a.start_check_in()
+        asked = []
+        asked.append(a.plan_reply("да, всё хорошо")["fallback"])    # mood
+        asked.append(a.plan_reply("настроение хорошее")["fallback"])  # sleep
+        asked.append(a.plan_reply("спала хорошо")["fallback"])      # plans
+        asked.append(a.plan_reply("всё хорошо, буду читать")["fallback"])
+        return asked
+
+    def test_two_calls_no_repeated_canned_questions(self):
+        first = self._run_call()
+        second = self._run_call()
+        overlap = set(first) & set(second)
+        self.assertFalse(overlap,
+                         f"canned lines repeated across calls: {overlap}")
+
+    def test_small_pool_degrades_gracefully(self):
+        a = Agent(llm=None)
+        pool = ["А?", "Б?"]
+        for _ in range(10):
+            pick = a._pick_not_repeated(pool)
+            self.assertIn(pick, pool)
+
+    def test_goodbye_pool_variety_and_no_promises(self):
+        # 2026-08-24: the close used to be 2 phrases heard on EVERY call.
+        # Product rules: Vera never promises to call/send anything — she
+        # only records; at most ONE question mark per line; unique lines.
+        self.assertGreaterEqual(len(Agent.GOODBYES), 5)
+        self.assertEqual(len(set(Agent.GOODBYES)), len(Agent.GOODBYES))
+        forbidden = ("вызову", "позвоню", "отправлю", "предупрежу",
+                     "передам", "сообщу")
+        for line in Agent.GOODBYES:
+            low = line.lower()
+            for word in forbidden:
+                self.assertNotIn(word, low, f"promise in goodbye: {line}")
+            self.assertLessEqual(line.count("?"), 1)
+            self.assertNotIn(" ты ", f" {low} ")
 
 
 if __name__ == "__main__":
