@@ -131,6 +131,29 @@ class VarietyTests(unittest.TestCase):
         picks = {a._pick_not_repeated(pool) for _ in range(4)}
         self.assertGreaterEqual(len(picks), 3)
 
+    def test_small_pools_variety_and_no_promises(self):
+        # 2026-08-24: silence escalation / false-alarm apology / third-person
+        # worry follow-ups each had 2-4 inline lines; now named class pools
+        # (>= 4 unique, promise-free, «вы», <=1 question mark) that rotate
+        # via _pick_not_repeated.
+        forbidden = ("вызову", "позвоню", "отправлю", "предупрежу",
+                     "передам", "сообщу")
+        for pool in (Agent.SILENCE_ESCALATION, Agent.FALSE_ALARM_ACKS,
+                     Agent.WORRY_FOLLOWUPS):
+            self.assertGreaterEqual(len(pool), 4)
+            self.assertEqual(len(set(pool)), len(pool))
+            for line in pool:
+                low = line.lower()
+                for word in forbidden:
+                    self.assertNotIn(word, low,
+                                     f"promise in line: {line}")
+                self.assertNotIn(" ты ", f" {low} ")
+                self.assertLessEqual(line.count("?"), 1)
+        a = Agent(llm=None)
+        picks = {a._pick_not_repeated(Agent.SILENCE_ESCALATION)
+                 for _ in range(5)}
+        self.assertGreaterEqual(len(picks), 3)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

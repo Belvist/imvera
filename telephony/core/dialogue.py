@@ -682,12 +682,10 @@ class Agent:
                 # deterministic escalation: the person may feel unwell
                 fb = "Вы меня слышите? Вам плохо?"
             else:
-                fb = random.choice([
-                    "Всё ли у вас в порядке? Отзовитесь, пожалуйста.",
-                    "Если вам плохо — скажите, я записываю для близких.",
-                    "Я на линии, слышу тишину. Вам нужна помощь?",
-                    "Скажите хоть слово, я очень слушаю вас сейчас.",
-                ])
+                # VARIETY (2026-08-24): escalation pool rotates via
+                # _pick_not_repeated (was plain random.choice — invisible to
+                # the cross-call ring buffer) and grew 4 -> 6 lines.
+                fb = self._pick_not_repeated(self.SILENCE_ESCALATION)
             return {"text": caller_text, "intent": None, "fallback": fb}
         self._empty_turns = 0
         if ev.kind == "possible_red":
@@ -745,10 +743,7 @@ class Agent:
             self.status = "attention"
             self._set_mode("check_in")
             self._help_pending = True
-            q = self._pick_not_repeated([
-                "Расскажите подробнее, что случилось?",
-                "Я записала ваше беспокойство. Что именно случилось?",
-            ])
+            q = self._pick_not_repeated(self.WORRY_FOLLOWUPS)
             self._last_question = q
             return {"text": caller_text,
                     "intent": "узнать больше о беспокойстве собеседника; "
@@ -767,12 +762,7 @@ class Agent:
                 # the caller just denied the concern and asked why we thought
                 # so — acknowledge the false alarm warmly (real call:
                 # "а почему ты так подумал?")
-                fb = self._pick_not_repeated([
-                    "Простите, я перестраховалась — вы сказали, что голова "
-                    "болела. Как она сейчас?",
-                    "Поняла вас, извините за тревогу. Как самочувствие "
-                    "сейчас?",
-                ])
+                fb = self._pick_not_repeated(self.FALSE_ALARM_ACKS)
                 self._last_question = fb
                 return {"text": caller_text, "intent": None, "fallback": fb}
             elif self.status == "unknown":
@@ -869,6 +859,42 @@ class Agent:
         "Как хорошо, что вы мне это рассказываете.",
         "Понимаю, такое бывает. Я записала ваши слова.",
         "Верно ли я поняла — я запишу это для близких?",
+    )
+
+    # VARIETY (2026-08-24): escalation on the 3rd+ silent turn in a row.
+    # Warm «вы», no promises, at most one question mark; rotates via
+    # _pick_not_repeated so consecutive silence never sounds identical
+    # across calls either (ring buffer remembers).
+    SILENCE_ESCALATION = (
+        "Всё ли у вас в порядке? Отзовитесь, пожалуйста.",
+        "Если вам плохо — скажите, я записываю для близких.",
+        "Я на линии, слышу тишину. Вам нужна помощь?",
+        "Скажите хоть слово, я очень слушаю вас сейчас.",
+        "Вы меня пугаете тишиной. Всё ли хорошо?",
+        "Постучите по трубке или скажите слово — я здесь.",
+    )
+
+    # VARIETY (2026-08-24): follow-up after a false-alarm apology (real call:
+    # «а почему ты так подумал?»); was 2 lines heard back-to-back on any
+    # safety clearing. Rotates via _pick_not_repeated, warm «вы».
+    FALSE_ALARM_ACKS = (
+        "Простите, я перестраховалась — вы сказали, что голова болела. "
+        "Как она сейчас?",
+        "Поняла вас, извините за тревогу. Как самочувствие сейчас?",
+        "Хорошо, что отпустило. Я всё же записала — близкие в курсе. "
+        "Как вы себя чувствуете?",
+        "Рада, что всё обошлось. Простите за лишнюю тревогу. Как вы "
+        "сейчас, бодрости хватает?",
+    )
+
+    # VARIETY (2026-08-24): follow-up when the caller worries about a loved
+    # one (third-person worry); was 2 interchangeable questions.
+    WORRY_FOLLOWUPS = (
+        "Расскажите подробнее, что случилось?",
+        "Я записала ваше беспокойство. Что именно случилось?",
+        "Спокойно, я всё записываю. Расскажите, что произошло?",
+        "Понимаю вашу тревогу. Что именно вас беспокоит? Опишите, "
+        "пожалуйста.",
     )
 
     def _build_history(self):
