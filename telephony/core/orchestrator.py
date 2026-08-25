@@ -991,14 +991,20 @@ class Serve:
                 # she asks the caller to repeat.
                 print("[call-agent] echo-guard: transcript matches "
                       "Vera's last reply -> repeat request", flush=True)
-                plan = agent.plan_reply("")
+                plan = agent.plan_reply("", reason="echo")
                 agent.last_intent = plan.get("intent") or ""
                 canned_reply = None if plan.get("intent") \
                     else (plan.get("fallback") or "")
                 transcript = None
             else:
                 agent.observe_confidence(stream_confidence)
-                plan = agent.plan_reply(transcript)
+                # LOW_CONF reason (2026-08-25): real speech scored below the
+                # gate — route through the yes/no ANCHOR in the empty-turn
+                # ladder (a productive question) instead of a blind
+                # «Повторите». Only the phone path blanks the transcript here;
+                # an empty stream transcript also gets the anchor.
+                reason = "low_conf" if transcript == "" else None
+                plan = agent.plan_reply(transcript, reason=reason)
                 agent.last_intent = plan.get("intent") or ""
                 canned_reply = None if plan.get("intent") \
                     else (plan.get("fallback") or "")

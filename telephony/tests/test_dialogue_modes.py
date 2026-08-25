@@ -115,10 +115,11 @@ class ModeMachineTests(unittest.TestCase):
         plan = a.plan_reply("")
         self.assertEqual(a.mode, "clarify")
         self.assertIsNone(plan.get("intent"))
-        # 1st empty turn: gentle repeat request (rotating pool, legacy line
-        # kept verbatim in the pool); 2nd: calm tapered-ladder check
-        # (2026-08-24: fixed calm line, drama dropped).
-        self.assertIn(plan["fallback"], Agent.REPEAT_REQUESTS)
+        # 1st empty turn (2026-08-25): a yes/no WELLNESS ANCHOR instead of a
+        # blind «Повторите» — whisper-tiny recognises «хорошо/плохо» nearly
+        # perfectly, so the call moves forward on silence; 2nd: fixed calm
+        # tapered-ladder line (drama dropped).
+        self.assertIn(plan["fallback"], Agent.ANCHORS)
         plan2 = a.plan_reply("")
         self.assertEqual(plan2["fallback"], "Алло, вы меня слышите?")
 

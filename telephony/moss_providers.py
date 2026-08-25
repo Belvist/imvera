@@ -473,6 +473,14 @@ class OpenAILLMProvider(LLMProvider):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
         self.model = model or os.environ.get("MOSS_LLM_OPENAI_MODEL",
                                              "gpt-4o-mini")
+        # Cloud experiment (2026-08-25): any OpenAI-compatible endpoint —
+        # official OpenAI or OpenRouter — via MOSS_LLM_BASE_URL.
+        self.URL = os.environ.get("MOSS_LLM_BASE_URL", self.URL)
+        # DeepSeek-style reasoning models on OpenRouter burn the token budget
+        # on <reasoning> and return empty content under our 100-150 token
+        # cap (seen live 2026-08-25). Only OpenRouter accepts this param —
+        # the official OpenAI endpoint would reject it with 400.
+        self._no_reasoning = "openrouter" in self.URL
         self.timeout = timeout
         self._breaker = _Breaker()
 
@@ -483,10 +491,13 @@ class OpenAILLMProvider(LLMProvider):
         self._breaker.guard()
         if not self.api_key:
             raise ProviderError("OPENAI_API_KEY missing")
+        body = {**({"reasoning": {"enabled": False}}
+                   if self._no_reasoning else {}),
+                "model": self.model, "messages": messages,
+                "max_tokens": max_tokens, "temperature": temp}
         obj = _http_json(
             "POST", self.URL,
-            body={"model": self.model, "messages": messages,
-                  "max_tokens": max_tokens, "temperature": temp},
+            body=body,
             headers={"Authorization": f"Bearer {self.api_key}"},
             timeout=min(timeout, self.timeout))
         try:
@@ -504,15 +515,21 @@ class OpenAILLMProvider(LLMProvider):
         self._breaker.guard()
         if not self.api_key:
             raise ProviderError("OPENAI_API_KEY missing")
-        body = json.dumps({"model": self.model, "messages": messages,
-                           "max_tokens": max_tokens, "temperature": temp,
-                           "stream": True}).encode()
+        body = dict({"reasoning": {"enabled": False}}
+                 if self._no_reasoning else {})
+        body.update({"model": self.model, "messages": messages,
+                     "max_tokens": max_tokens, "temperature": temp,
+                     "stream": True})
+        body = json.dumps(body).encode()
         try:
-            conn = _http_client.HTTPSConnection("api.openai.com", 443,
-                                                timeout=min(timeout,
-                                                            self.timeout))
+            from urllib.parse import urlsplit
+            u = urlsplit(self.URL)
+            conn = _http_client.HTTPSConnection(
+                u.hostname or "api.openai.com", 443,
+                timeout=min(timeout, self.timeout))
             try:
-                conn.request("POST", "/v1/chat/completions", body=body,
+                conn.request("POST", u.path or "/v1/chat/completions",
+                             body=body,
                              headers={"Authorization": f"Bearer {self.api_key}",
                                       "Content-Type": "application/json"})
                 resp = conn.getresponse()

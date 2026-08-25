@@ -506,6 +506,9 @@ class Agent:
         self._help_pending = False       # a help question is on the table
         # Family-app questions for THIS call (see set_family_questions).
         self.family_questions = []
+        # Facts (cross-turn memory) extracted from caller turns — see
+        # _extract_facts/_facts_note.
+        self.facts = []
         self._init_agenda()
 
     def _init_agenda(self):
@@ -629,6 +632,7 @@ class Agent:
         self._clearing = False
         self._help_pending = False
         self.family_questions = []
+        self.facts = []
         self._init_agenda()
 
     def start_check_in(self):
@@ -678,14 +682,28 @@ class Agent:
     # .py), NOT from substring matching in the dialogue layer. The Agent only
     # decides HOW to reply based on the VerdictEvent.
 
-    def plan_reply(self, caller_text):
+    def plan_reply(self, caller_text, reason=None):
         """Run the MVERA mode machine; return a reply plan without talking
         to any model. Plan keys:
             text      user utterance
             intent    LLM objective (None -> the fallback is the FINAL reply)
             fallback  canned phrase (also the garbage/timeout fallback)
         State mutations (memory, mode, status, notes, llm_history user turn)
-        happen HERE — safe under the per-call lock."""
+        happen HERE — safe under the per-call lock.
+
+        ``reason`` separates WHY a turn has no usable transcript so the
+        empty-turn ladder stays productive instead of blind «Повторите»:
+            None       no speech / VAD silence / STT failure
+            "low_conf" real speech existed but scored below the gate
+            "echo"     transcript looked like Vera's own words
+        Only the empty-turn ladder reads it (see _silence_flow)."""
+        # ECHO MUTE (2026-08-25): an "echo" reason means the transcript IS
+        # Vera's own words coming back from the mixed recording. Blank the
+        # text so it never pollutes memory/history and route it through the
+        # echo ladder (_silence_flow, reason="echo") — a productive repeat
+        # request instead of regenerating her own phrase.
+        if reason == "echo":
+            caller_text = ""
         # TERMINAL GUARD (S24): after done, late/duplicate turns cannot
         # mutate the verdict, the history or the engine state.
         if self.done:
@@ -756,9 +774,9 @@ class Agent:
                         "intent": "тепло попрощаться",
                         "fallback": self._goodbye()}
             # not a goodbye after all — continue the conversation normally
-        return self._plan_mode(caller_text, ev)
+        return self._plan_mode(caller_text, ev, reason)
 
-    def _plan_mode(self, caller_text, ev):
+    def _plan_mode(self, caller_text, ev, reason=None):
         """Event -> mode/intent/fallback for a non-terminal turn."""
         # HELP CONFIRMATION WINDOW: _help_pending was armed when we asked a
         # help question last turn ("Нужна ли вам помощь?"). Consume it HERE,
@@ -801,32 +819,14 @@ class Agent:
                     "fallback": "{} {}".format(
                         self._pick_not_repeated(self.HELLO_BACKS), q)}
         if ev.kind == "no_speech":
-            # SILENCE/NOISE FLOW: never feed noise to the LLM, never repeat
-            # the same prompt. 1st empty turn -> gentle repeat request;
-            # from the 2nd on -> check on the person (they may feel unwell,
-            # have fallen asleep, or the phone may be far away).
-            self._empty_turns = getattr(self, "_empty_turns", 0) + 1
+            # SILENCE/NOISE/EMPTY FLOW (2026-08-25): the ladder now depends on
+            # WHY the turn had no usable transcript (plan_reply's `reason`).
+            # See _silence_flow() — every empty turn carries a productive
+            # yes/no anchor instead of a blind «Повторите».
             self._set_mode("clarify")
-            if self._empty_turns == 1:
-                # VARIETY (2026-08-24): was ONE fixed line heard on every call.
-                fb = self._pick_not_repeated(self.REPEAT_REQUESTS)
-            elif self._empty_turns == 2:
-                # TAPERED ESCALATION (2026-08-24, VUI practice: escalating
-                # prompts with a stop condition): short and calm. The old
-                # «Вам плохо?» frightened callers — dropped.
-                fb = "Алло, вы меня слышите?"
-            elif self._empty_turns == 3:
-                fb = ("Если вам удобно, скажите «да» — "
-                      "я рядом и вас слушаю.")
-            elif self._empty_turns == 4:
-                # last full prompt; further silence gets ONE-WORD holds,
-                # never drama (W3C COGA: fallbacks must not become loops).
-                fb = "Я подожду. Скажите, когда будете готовы говорить."
-            else:
-                fb = self._pick_not_repeated(
-                    self.QUIET_HOLDS)
-            return {"text": caller_text, "intent": None, "fallback": fb}
+            return self._silence_flow(caller_text, reason)
         self._empty_turns = 0
+        self._echo_turns = 0
         if ev.kind == "possible_red":
             # POSSIBLE_RED -> gentle control question; stay observant.
             self._note("плохое самочувствие")
@@ -905,87 +905,131 @@ class Agent:
                 return {"text": caller_text, "intent": None, "fallback": fb}
             elif self.status == "unknown":
                 self.status = "ok"
-            # SPEED FAST PATH: a short confirmation ("да", "всё хорошо") is
-            # answered from a rotating script INSTANTLY — no LLM round-trip
-            # (~2 s saved on the most common turn type). The follow-up now
-            # comes from the CALL AGENDA (task-oriented flow): the answered
-            # topic closes, Vera moves to the next one.
-            canon = short_real_answer(caller_text)
-            if canon and len(caller_text.split()) <= 3:
-                if self._agenda_asked and self._agenda_advance(caller_text):
+            # CONTENT-FIRST (2026-08-25): the current topic closes only when
+            # its question is actually on the table AND the reply answers it,
+            # OR when the words clearly address it on their own (topic
+            # keywords). A generic "всё хорошо" right after a long story is an
+            # ACKNOWLEDGMENT, not a skip — the deferred topic stays open, so
+            # the call never jumps topics on a nod.
+            self._extract_facts(caller_text)
+            topic = self._agenda_topic()
+            if not self._clearing and \
+                    not self._current_is_family() and \
+                    len((caller_text or "").split()) >= 6 and \
+                    not self._matches_topic(caller_text):
+                # NARRATIVE GUARD (2026-08-25): a long off-topic story
+                # (>=6 words that don't name the current wellness topic) is
+                # reacted to on its CONTENT, never force-advanced. Defer the
+                # topic (_agenda_asked=False) so a following generic nod
+                # ("всё хорошо") leaves it open too — it only closes later
+                # via a genuine topical reply. Real calls: «Внучка приезжала,
+                # мы чай пили...» must NOT bounce to «Как сон?».
+                self._agenda_asked = False
+                return {"text": caller_text,
+                        "intent": "тепло откликнуться на рассказ человека и "
+                                  "задать один короткий вопрос по его "
+                                  "содержанию",
+                        "fallback": self._pick_not_repeated(
+                            self.GENERIC_ACKS)}
+            is_short = bool(short_real_answer(caller_text)) and \
+                len(caller_text.split()) <= 3
+            on_table = self._agenda_asked and topic is not None
+            reached = not on_table and topic is not None \
+                and self._matches_topic(caller_text)
+            if on_table or reached:
+                finished = self._agenda_advance(caller_text)
+                if finished:
                     fb = self._wrap_up_question()
+                    self._last_question = fb
+                    return {"text": caller_text,
+                            "intent": "тёпло подвести итог: всё записала "
+                                      "для близких; спросить, не хочет ли "
+                                      "человек что-то ещё добавить",
+                            "fallback": fb}
+                if is_short and on_table:
+                    # SPEED FAST PATH: instant answer — script bridge + the
+                    # next topic question, no LLM round-trip (0.6-0.75 s).
+                    q = self._ask_task() or self._wrap_up_question()
+                    self._last_question = q
+                    if self._current_is_family():
+                        fb = q
+                    else:
+                        fb = "{} {}".format(
+                            self._pick_not_repeated(self.BRIDGES), q)
                     return {"text": caller_text, "intent": None,
                             "fallback": fb}
-                # VARIETY: warm acknowledgments pool. AGENDA-DONE DEAD END
-                # (2026-08-24): when all topics are covered, a bare ack
-                # («Хорошо. Я рядом.») kills the call — the elder hears an
-                # empty «ага». Pair the ack with an open invitation.
-                nxt = self._ask_task()
-                if nxt:
-                    q = nxt
+                # longer positive answer: close the topic, hand the NEXT topic
+                # to the LLM as its reply goal (task stays in free wording).
+                nxt = self._agenda_topic()
+                q = (self._ask_task()
+                     or self._wrap_up_question())
+                self._last_question = q
+                if self._current_is_family():
+                    goal = ("тёпло откликнуться на сказанное, затем передать "
+                            "вопрос от близких дословно: "
+                            f"«{self._agenda_question()}» — только этот один "
+                            "вопрос")
+                elif nxt:
+                    goal = (f"порадоваться, откликнуться на детали сказанного "
+                            f"и одним естественным вопросом перейти к теме "
+                            f"«{nxt}»")
                 else:
-                    q = "{} {}".format(
-                        self._pick_not_repeated([
-                            "Хорошо. Я рядом — если что-то понадобится, "
-                            "скажите.",
-                            "Отлично. Тогда всего доброго, я на связи.",
-                            "Рада слышать. Я тут, если что.",
-                            "Хорошо-хорошо. Пусть день будет спокойным.",
-                            "Замечательно. Звоните, как почувствуете "
-                            "что-то.",
-                            "Очень хорошо. Я всегда на связи с вами.",
-                        ]),
-                        self._pick_not_repeated([
-                            "Добавите что-нибудь для близких?",
-                            "Что-нибудь ещё записать?",
-                            "Может, что-то вспомнилось?",
-                        ]))
-                return {"text": caller_text, "intent": None, "fallback": q}
-            # longer positive answer: close the topic, hand the NEXT topic
-            # to the LLM as its reply goal (task stays in free wording).
-            finished = self._agenda_asked and self._agenda_advance(caller_text)
-            if finished:
-                fb = self._wrap_up_question()
-                return {"text": caller_text,
-                        "intent": "тёпло подвести итог: всё записала для "
-                                  "близких; спросить, не хочет ли человек "
-                                  "что-то ещё добавить",
-                        "fallback": fb}
-            q = (self._ask_task()
-                 or self._pick_not_repeated([
-                     "Очень рада это слышать.",
-                     "Как же хорошо, спасибо.",
-                     "Вот и замечательно.",
-                     "У меня прямо легче стало.",
-                     "Рада за вас, правда.",
-                 ]))
-            nxt = self._agenda_topic()
-            if self._current_is_family():
-                # Family-app question: the EXACT text must reach the elder,
-                # so the reply goal carries it verbatim.
-                goal = ("тёпло откликнуться на сказанное, затем передать "
-                        "вопрос от близких дословно: "
-                        f"«{self._agenda_question()}» — только этот один "
-                        "вопрос")
-            elif nxt:
-                goal = (f"порадоваться, откликнуться на детали сказанного и "
-                        f"одним естественным вопросом перейти к теме «{nxt}»")
-            else:
-                goal = "порадоваться и откликнуться на детали сказанного"
-            return {"text": caller_text, "intent": goal, "fallback": q}
+                    goal = "порадоваться и откликнуться на детали сказанного"
+                return {"text": caller_text, "intent": goal, "fallback": q}
+            # generic acknowledgment — topic NOT moved (deferred by narration,
+            # or nothing on the table). Warm + one open invitation so a bare
+            # «ага» never kills the call.
+            fb = "{} {}".format(
+                self._pick_not_repeated(self.GENERIC_ACKS),
+                self._pick_not_repeated(self.WRAP_OPENERS))
+            self._last_question = fb
+            return {"text": caller_text, "intent": None, "fallback": fb}
         # unknown: NOT masked to attention — it stays its own status and can
-        # never become GREEN. Vera just responds to what was said — and the
-        # CALL AGENDA keeps the task in sight: her reply goal names the
-        # current topic, so even free LLM phrasing stays on-task.
+        # never become GREEN. 2026-08-25 content-first: a NARRATIVE (>= 4
+        # words, e.g. a story about the day) is answered on its CONTENT — the
+        # reply goal NEVER force-asks the agenda topic onto what the user
+        # just told («Внучка приезжала...» must not bounce to «Как сон?»).
+        # The current topic is marked DEFERRED (_agenda_asked=False) so a
+        # following generic "всё хорошо" doesn't close it either; it closes
+        # later via a genuine topical reply.
+        self._extract_facts(caller_text)
         topic = self._agenda_topic()
-        if topic is not None and not self._agenda_asked:
+        words = len((caller_text or "").split())
+        if words >= 4:
+            # narrative / story / elaborate unknown: react on content.
+            self._agenda_asked = False
+            if words >= 6:
+                return {"text": caller_text,
+                        "intent": "тепло откликнуться на рассказ человека и "
+                                  "задать один короткий вопрос по его "
+                                  "содержанию",
+                        "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
+            # 4-5 words: content reaction + one gentle topical question if it
+            # fits naturally, WITHOUT advancing the agenda.
             q = self._ask_task()
+            self._last_question = q
             if self._current_is_family():
-                intent = ("откликнуться на сказанное и передать вопрос от "
-                          f"близких дословно: «{self._agenda_question()}»")
+                g = ("откликнуться на сказанное и передать вопрос от "
+                     f"близких дословно: «{self._agenda_question()}»")
+            elif topic is not None:
+                g = (f"откликнуться на детали и одним вопросом узнать про "
+                     f"«{topic}»")
             else:
-                intent = ("откликнуться на детали сказанного и одним "
-                          f"естественным вопросом спросить про «{topic}»")
+                g = ("откликнуться на детали и задать один уточняющий "
+                     "вопрос по теме")
+            return {"text": caller_text, "intent": g, "fallback": q}
+        if topic is not None and not self._agenda_asked:
+            # short, topic not on the table yet: put it naturally.
+            q = self._ask_task()
+            self._last_question = q
+            if self._current_is_family():
+                intent = ("откликнуться и передать вопрос от близких "
+                          f"дословно: «{self._agenda_question()}»")
+            elif topic is not None:
+                intent = ("откликнуться и одним естественным вопросом "
+                          f"узнать про «{topic}»")
+            else:
+                intent = "откликнуться и задать один уточняющий вопрос"
             return {"text": caller_text, "intent": intent, "fallback": q}
         if topic is not None:
             return {"text": caller_text,
@@ -994,8 +1038,116 @@ class Agent:
                               f"«{topic}» (это цель звонка)",
                     "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
         return {"text": caller_text,
-                "intent": "откликнуться на детали сказанного и задать один естественный уточняющий вопрос по теме",
+                "intent": "откликнуться на детали сказанного и задать "
+                          "один естественный уточняющий вопрос по теме",
                 "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
+
+    # ---- silence / no-speech ladder (2026-08-25) --------------------------
+    # The 1st empty turn is NO LONGER a blind «Повторите» — it asks a
+    # yes/no ANCHOR on the current wellness state, which whisper-tiny
+    # recognises almost perfectly {"хорошо" / "плохо"}, so the call moves
+    # forward instead of looping. Repeated emptiness escalates through the
+    # calm tapered-ladder and collapses to wordless HOLDs (VUI practice).
+    ANCHORS = (
+        "Плохо слышно. Скажите коротко: хорошо или плохо.",
+        "Очень тихо. Ответьте одним словом: хорошо или плохо.",
+        "Слышно плохо. Скажите коротко: хорошо или плохо.",
+    )
+
+    def _silence_flow(self, caller_text, reason):
+        """Empty-turn reply by CAUSE (plan_reply's ``reason``):
+          * "echo"      transcript looked like Vera's own words — 1st: repeat
+                        request; 2nd+: anchor then quiet holds.
+          * None /      real silence OR speech below the confidence gate —
+                        "low_conf"    the yes/no anchor on the FIRST empty turn;
+                        next steps go up the calm tapered ladder.
+        """
+        if reason == "echo":
+            n = getattr(self, "_echo_turns", 0) + 1
+            self._echo_turns = n
+            if n == 1:
+                fb = self._pick_not_repeated(self.REPEAT_REQUESTS)
+            elif n == 2:
+                fb = self._pick_not_repeated(self.ANCHORS)
+            else:
+                fb = self._pick_not_repeated(self.QUIET_HOLDS)
+            return {"text": caller_text, "intent": None, "fallback": fb}
+        n = getattr(self, "_empty_turns", 0) + 1
+        self._empty_turns = n
+        if n == 1:
+            fb = self._pick_not_repeated(self.ANCHORS)
+        elif n == 2:
+            fb = "Алло, вы меня слышите?"
+        elif n == 3:
+            fb = "Если вам удобно, скажите «да» — я рядом и вас слушаю."
+        elif n == 4:
+            fb = "Я подожду. Скажите, когда будете готовы говорить."
+        else:
+            fb = self._pick_not_repeated(self.QUIET_HOLDS)
+        return {"text": caller_text, "intent": None, "fallback": fb}
+
+    # Topic keyword guessing (content-first): a volunteered reply that names
+    # the current topic's signal words closes it even when the question had
+    # been deferred by a narrative. Conservative roots only — a generic
+    # «всё хорошо» matches nothing.
+    _TOPIC_KEYS = {
+        "самочувствие": ("самочув", "чувству", "здоров", "болит", "болеет",
+                         "голов", "давлен", "таблет", "лекар"),
+        "настроение": ("настроени", "груст", "весел", "бодр", "радост",
+                       "тоск"),
+        "сон": ("сон", "спал", "поспал", "выспал", "уснул", "снился",
+                "ночь", "ночью"),
+        "планы": ("план", "соберусь", "хочу сегодня", "планиру",
+                  "собираюсь"),
+        "передать родным": ("передать", "передайте", "записать", "запис",
+                            "запиш", "родным", "близким", "семье"),
+    }
+
+    def _matches_topic(self, text):
+        """Return True when ``text`` clearly answers the CURRENT topic."""
+        topic = self._agenda_topic()
+        if not topic or not text:
+            return False
+        keys = self._TOPIC_KEYS.get(topic)
+        if not keys:
+            return False
+        low = text.lower()
+        return any(k in low for k in keys)
+
+    # ---- facts (compact cross-in memory, 2026-08-25) -----------------------
+    # Extracted from caller turns so the model gets the ESSENCE of the call
+    # without a raw 10-turn window. Rendered as a bracketed note on the
+    # current user message (keeps the llama.cpp KV-prefix stable). Filled
+    # read-only from the safety keyword lists; capped at recent 6.
+    def _extract_facts(self, text):
+        if not (text or "").strip():
+            return
+        low = (text or "").lower()
+        facts = []
+        if re.search(r"таблет|лекар|принял|приняла|выпил|выпила", low):
+            facts.append("приняла лекарства")
+        if re.search(r"голов|давлен|болит|температур|плохо", low) and \
+                not re.search(r"\bне\s+(болит|плохо|болеет)", low):
+            facts.append("недомогание")
+        if re.search(r"спа(л|ла)|сон|ночью|заснул", low):
+            facts.append("сон")
+        if re.search(r"внуч|бабушк|дедушк|сын|дочер|сестр|брат|муж|жён|друг", low):
+            facts.append("родные")
+        if re.search(r"(послезавтра|сегодня|завтра|собир|план|пойд|у пойду)", low) or \
+                re.search(r"(буду|хочу)\s+(\w+\s+){0,3}(гулять|готовить|читать|гулят|делать)", low):
+            facts.append("планы")
+        if re.search(r"хорош|нормал|отлично|прекрас|бодр", low) and \
+                re.search(r"настроен|чувств", low):
+            facts.append("настроение хорошее")
+        for f in facts:
+            if f not in self.facts:
+                self.facts.append(f)
+        self.facts = self.facts[-6:]
+
+    def _facts_note(self):
+        if not self.facts:
+            return ""
+        return "; известно: " + "; ".join(self.facts)
 
     # VARIETY (2026-08-24): scripted hello-back openers (elder says
     # «Здравствуйте!»). Was ONE fixed line «И вам здравствуйте!» — heard
@@ -1024,6 +1176,29 @@ class Agent:
         "Как хорошо, что вы мне это рассказываете.",
         "Понимаю, такое бывает. Я записала ваши слова.",
         "Верно ли я поняла — я запишу это для близких?",
+    )
+
+    # BRIDGES (2026-08-25): short warm bridge spoken BEFORE the next agenda
+    # question on the SPEED FAST PATH (a bare «да»/«хорошо» — no LLM). One
+    # connective, no question mark, no promises; the question itself travels
+    # separately (so a single „?" rule holds).
+    BRIDGES = (
+        "Замечательно.",
+        "Рада это слышать.",
+        "Как хорошо!",
+        "Приятно слышать.",
+        "Вот и славно.",
+        "Хорошо, спасибо за ответ.",
+    )
+
+    # WRAP_OPENERS (2026-08-25): the tail of the generic-ack reply when the
+    # topic is NOT moved (narrative-deferred / nothing on the table). Always
+    # an open one-question invitation so a bare «ага» never ends the call.
+    WRAP_OPENERS = (
+        "Добавите что-нибудь для близких?",
+        "Что-нибудь ещё записать?",
+        "Может, что-то вспомнилось?",
+        "Есть что-то ещё, чем вы хотите поделиться?",
     )
 
     # VARIETY (2026-08-24): gentle control question when a symptom is heard
@@ -1127,6 +1302,9 @@ class Agent:
             if last_reply:
                 note += (f"; твой предыдущий ответ был «{last_reply}» — "
                          "не повторяй его вопрос, спроси о другом")
+            facts_note = self._facts_note()
+            if facts_note:
+                note += f"; {facts_note}"
             note += ")"
             if last["role"] == "user":
                 last["content"] = last["content"] + "\n" + note

@@ -102,6 +102,18 @@ class CloudLLMAdapter:
             print(f"[call-agent] cloud LLM error: {e}", flush=True)
             return None
 
+    def chat_stream(self, messages, max_tokens=100, temp=0.65, timeout=60):
+        """Yield text deltas from the cloud provider (OpenAI-compatible SSE).
+        Never raises: on failure the dialogue layer falls back to scripted
+        phrases via the canned `fallback`."""
+        try:
+            yield from self.provider.chat_stream(
+                messages, max_tokens=max_tokens, temp=temp,
+                timeout=min(timeout, 30))
+        except Exception as e:  # noqa: BLE001
+            print(f"[call-agent] cloud LLM stream error: {e}", flush=True)
+            return
+
 
 class CloudTTSAdapter:
     """TTSProvider -> TTSClient duck-API (generate/stream/cancel)."""

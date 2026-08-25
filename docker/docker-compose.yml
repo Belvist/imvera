@@ -151,6 +151,17 @@ services:
       MOSS_LLM_URL: http://answers:9500
       MOSS_LLM_PROTOCOL: openai
       MOSS_LLM_BOOT_WAIT: "180"
+      # CLOUD LLM EXPERIMENT (2026-08-25): switch the DIALOGUE to an
+      # OpenAI-compatible cloud endpoint by setting, in .env:
+      #   MOSS_LLM_PROVIDER=openai
+      #   OPENAI_API_KEY=sk-or-...            (OpenRouter key)
+      #   MOSS_LLM_OPENAI_MODEL=openai/gpt-4o-mini
+      #   MOSS_LLM_BASE_URL=https://openrouter.ai/api/v1/chat/completions
+      # Local llama.cpp (answers) stays up as the automatic fallback.
+      MOSS_LLM_PROVIDER: ${MOSS_LLM_PROVIDER:-local}
+      MOSS_LLM_OPENAI_MODEL: ${MOSS_LLM_OPENAI_MODEL:-gpt-4o-mini}
+      MOSS_LLM_BASE_URL: ${MOSS_LLM_BASE_URL:-https://api.openai.com/v1/chat/completions}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # STT runs IN this process (phone path) — same model policy as voice.
       MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-tiny}
       # Business processing (outbox/incidents) runs in the `workflow`
