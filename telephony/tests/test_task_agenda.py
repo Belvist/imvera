@@ -291,9 +291,14 @@ class BrokenReplyGuardTests(unittest.TestCase):
         a.start_check_in()
         a._agenda_idx = 1          # mood topic is next
         a._agenda_asked = False
+        # T002 (2026-08-25): opener now ROTATES from the HELLO_BACKS pool
+        # (variety), so assert the MEANING, not one fixed wording: any pool
+        # opener + the pending agenda question («настроение»).
         p = a.plan_reply("Здравствуйте!")
-        self.assertTrue(p["fallback"].startswith("И вам здравствуйте!"))
-        self.assertIn("настроение", p["fallback"].lower())
+        fb = p["fallback"]
+        self.assertTrue(any(fb.startswith(h) for h in Agent.HELLO_BACKS),
+                        f"opener not from HELLO_BACKS pool: {fb!r}")
+        self.assertIn("настроение", fb.lower())
         # second greeting falls through to natural flow (no crash)
         p2 = a.plan_reply("Здравствуйте ещё раз")
         self.assertTrue(p2)
