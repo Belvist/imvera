@@ -82,6 +82,22 @@ def minio_enabled():
     return client is not None
 
 
+def minio_configured():
+    """True when MinIO is CONFIGURED (env vars present), regardless of whether
+    it is currently reachable.
+
+    Used by retention (read.md rev-4 Gate C). A store that is configured but
+    down still holds user recordings, so its deletion must be CONFIRMED before
+    the metadata (object keys) is purged. A store that was never configured
+    has no external objects to protect, so purging metadata is safe.
+    """
+    return bool(
+        os.environ.get("MOSS_S3_ENDPOINT")
+        and os.environ.get("MOSS_S3_ACCESS_KEY")
+        and os.environ.get("MOSS_S3_SECRET_KEY")
+    )
+
+
 def put_object(key, data):
     """Upload bytes to MinIO (best-effort). Returns the object key on
     success, None when MinIO is not configured or the upload fails."""
@@ -96,9 +112,15 @@ def put_object(key, data):
         return None
 
 
-def save_wav(outdir, wav_bytes, call_id=None, turn_id=None):
-    """Persist a reply WAV. Returns the local path; when MinIO is configured
-    the object is uploaded too (caller stores the key in Postgres)."""
+def save_wav(outdir, wav_bytes, call_id=None, turn_id=None, upload=True):
+    """Persist a reply WAV to LOCAL disk. Returns the local path.
+
+    ``upload=True`` (default) also pushes the object to MinIO when configured
+    — kept for non-hot-path callers (greeting warmup, backchannel). The VOICE
+    HOT PATH (read.md rev-3 G1) passes ``upload=False``: the local file write
+    stays synchronous but the MinIO network upload is deferred to the
+    background PersistenceWorker so object storage never delays first audio.
+    """
     os.makedirs(outdir, exist_ok=True)
     if call_id:
         outdir = os.path.join(outdir, call_id)
@@ -108,17 +130,31 @@ def save_wav(outdir, wav_bytes, call_id=None, turn_id=None):
     p = os.path.join(outdir, stub)
     with open(p, "wb") as f:
         f.write(wav_bytes)
-    if call_id:
+    if upload and call_id:
         put_object(f"calls/{call_id}/{stub}", wav_bytes)
     return p
 
 
-def save_user_wav(outdir, wav_path, call_id=None, turn_id=None):
-    """Copy the caller's audio to the call archive so it can be replayed later.
+def upload_local_file(key, path):
+    """Push a local WAV file to MinIO as one object. Best-effort; safe to run
+    inside the PersistenceWorker (hot-path caller has already written the
+    local copy synchronously)."""
+    try:
+        with open(path, "rb") as f:
+            put_object(key, f.read())
+        return key
+    except OSError:
+        return None
+
+
+def save_user_wav(outdir, wav_path, call_id=None, turn_id=None, upload=True):
+    """Copy the caller's audio to the LOCAL call archive (replay source).
 
     Recordings are isolated per call: ``{outdir}/{call_id}/user-{turn}.wav``.
-    A turn id is a per-call counter, so two simultaneous calls never collide.
-    When MinIO is configured the copy is uploaded as an object too.
+    Local copy is always synchronous (the uploaded temp must be captured while
+    it exists). ``upload=True`` also pushes the object to MinIO synchronously
+    — non-hot-path default. The VOICE HOT PATH passes ``upload=False`` and
+    hands MinIO off to the background PersistenceWorker (read.md rev-3 G1).
     """
     if not wav_path or not os.path.exists(wav_path):
         return None
@@ -130,7 +166,7 @@ def save_user_wav(outdir, wav_path, call_id=None, turn_id=None):
     p = os.path.join(outdir, stub)
     try:
         shutil.copyfile(wav_path, p)
-        if call_id:
+        if upload and call_id:
             with open(p, "rb") as f:
                 put_object(f"calls/{call_id}/{stub}", f.read())
         return p
@@ -141,3 +177,23 @@ def save_user_wav(outdir, wav_path, call_id=None, turn_id=None):
 def object_checksum(data):
     """SHA-256 of audio bytes (stored in Postgres alongside the key)."""
     return _sha256(data)
+
+
+def delete_objects(keys):
+    """Best-effort removal of S3 objects (read.md rev-3 G8 retention).
+
+    Silently tolerates a down/unconfigured object store — retention must
+    never wedge the worker on a network hang. Returns the count actually
+    removed (0 when MinIO is not configured/reachable).
+    """
+    client, bucket = _ensure_minio()
+    if client is None:
+        return 0
+    removed = 0
+    for key in keys:
+        try:
+            client.remove_object(bucket, key)
+            removed += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"[s3] delete {key} failed: {e}", flush=True)
+    return removed

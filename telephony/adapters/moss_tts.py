@@ -4,7 +4,26 @@ import base64
 import http.client
 import json
 import os
+import time
 import urllib.request
+
+
+def _env_int(name, default):
+    try:
+        return int(os.environ.get(name) or default)
+    except (TypeError, ValueError):
+        return default
+
+
+# Sane, environment-overridable timeouts (2026-08-27). The old hardcoded
+# 600 s ceiling meant one stalled generation froze a turn for ten minutes —
+# a network partition or wedged model was promoted into a user-visible
+# hang. New defaults bound every dependent call so a dead dependency fails
+# fast and the caller gets a fallback instead of indifference.
+TTS_GEN_TIMEOUT = _env_int("MOSS_TTS_GEN_TIMEOUT", 35)       # one-shot /generate
+TTS_STREAM_IDLE = _env_int("MOSS_TTS_STREAM_IDLE", 20)       # max gap between frames
+TTS_STREAM_TOTAL = _env_int("MOSS_TTS_STREAM_TOTAL", 60)     # max total stream wall-time
+TTS_CANCEL_TIMEOUT = _env_int("MOSS_TTS_CANCEL_TIMEOUT", 3)  # /stream-cancel
 
 
 class TTSClient:
@@ -70,7 +89,8 @@ class TTSClient:
                 data=json.dumps(payload).encode(),
                 headers={"Content-Type": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=600) as r:
+            with urllib.request.urlopen(req,
+                                        timeout=TTS_GEN_TIMEOUT) as r:
                 obj = json.loads(r.read().decode())
         except Exception as e:
             print(f"[call-agent] TTS error: {e}", flush=True)
@@ -105,7 +125,11 @@ class TTSClient:
             payload["stream_id"] = stream_id
         conn = None
         try:
-            conn = http.client.HTTPConnection(self.host, self.port, timeout=600)
+            # Socket timeout bounds the IDLE gap between streamed frames (not
+            # the whole stream) so a stalled TTS cannot wedge the call for
+            # minutes; a separate wall-clock deadline bounds the total stream.
+            conn = http.client.HTTPConnection(self.host, self.port,
+                                              timeout=TTS_STREAM_IDLE)
             conn.request(
                 "POST", "/stream",
                 body=json.dumps(payload).encode(),
@@ -113,8 +137,13 @@ class TTSClient:
             )
             resp = conn.getresponse()
             buf = b""
+            t0 = time.monotonic()
             while True:
                 if cancel_event is not None and cancel_event.is_set():
+                    break
+                if time.monotonic() - t0 > TTS_STREAM_TOTAL:
+                    print(f"[call-agent] TTS stream total timeout "
+                          f"({TTS_STREAM_TOTAL}s) exceeded", flush=True)
                     break
                 chunk = resp.read1(65536)
                 if not chunk:
@@ -155,7 +184,7 @@ class TTSClient:
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=5) as r:
+            with urllib.request.urlopen(req, timeout=TTS_CANCEL_TIMEOUT) as r:
                 r.read()
         except Exception as e:  # noqa: BLE001
             print(f"[call-agent] TTS stream-cancel error: {e}", flush=True)

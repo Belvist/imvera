@@ -83,6 +83,39 @@ def apply_migrations(pg_url=None, migrations_dir=None, log=print):
     return applied
 
 
+# Tables the realtime voice process actually needs to function. The migration
+# JOB owns DDL (read.md rev-3); a running Voice process must NOT run DDL — it
+# only verifies the schema it expects is present (read-only SELECT).
+_REQUIRED_TABLES = [
+    "schema_migrations", "call_sessions", "call_attempts", "dialogue_turns",
+    "dialogue_answers", "call_results", "provider_events", "outbox_messages",
+    "incidents", "incident_actions", "consents", "person_memory",
+    "audit_log",
+]
+
+
+def schema_missing(pg_url=None):
+    """Read-only compatibility check: return the list of required tables that
+    are MISSING. Empty list == the schema the voice process expects exists.
+
+    Used by the realtime process at startup (read.md rev-3) instead of running
+    piggyback DDL — DDL is the migration job's job, not a live call's.
+    """
+    url = pg_url or _default_url()
+    if not url:
+        raise RuntimeError("MOSS_PG_URL not set")
+    conn = _connect(url)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = current_schema()")
+            present = {row[0] for row in cur.fetchall()}
+    finally:
+        conn.close()
+    return [t for t in _REQUIRED_TABLES if t not in present]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pg-url", default=None)

@@ -7,6 +7,9 @@
 #   make test-live  автотесты + HTTP-интеграция с live TTS-демоном в compose
 #   make up         собрать и поднять ВЕСЬ стек (db/cache/storage/voice/
 #                   answers/telephony; первый старт качает модели в volume)
+#   make release    ЕДИНСТВЕННЫЙ официальный packaging path (read.md rev-3 G0):
+#                   git archive allowlist -> scan -> sha256 -> ZIP. Никакого
+#                   Finder→Compress — иначе в ZIP попадут calls/.env/log.
 #   make update     пересобрать образы (--pull) и перезапустить стек
 #   make ps         статус сервисов
 #   make logs       логи всего стека (Ctrl-C, чтобы выйти)
@@ -18,16 +21,22 @@
 IMG      ?= mossvoice/backend:latest
 COMPOSE  ?= docker compose -f docker/docker-compose.yml
 
-.PHONY: build test test-fast test-live up update ps stop logs clean db-up db-down test-db
+.PHONY: build test test-fast test-live up update ps stop logs clean db-up db-down test-db test-data release migrate
 
 build:
 	docker build -f docker/Dockerfile -t $(IMG) .
 
+migrate:
+	# Schema-migration JOB (read.md rev-3): DDL runs here, one-shot, before
+	# the realtime rollout. Independent of the rest of the stack.
+	$(COMPOSE) build migrate
+	$(COMPOSE) run --rm migrate
+
 test: build
-	$(COMPOSE) --profile tests run --rm tests
+	MOSS_IMAGE=$(IMG) $(COMPOSE) --profile tests run --rm tests
 
 test-fast:
-	$(COMPOSE) --profile tests run --rm \
+	MOSS_IMAGE=$(IMG) $(COMPOSE) --profile tests run --rm \
 		-v "$(CURDIR)/telephony:/app/telephony" tests
 
 # Data-core drills: real Postgres/Redis/MinIO + integration suite.
@@ -45,17 +54,29 @@ test-db:
 		-m unittest discover -s telephony/tests -t telephony -v; st=$$?; \
 		$(COMPOSE) stop db cache; exit $$st
 
+# Integration-data tier (read.md rev-3): REAL Postgres/Redis/MinIO in compose,
+# migrations applied, then the full suite inside the container. (Unit tier is
+# `make test` — no data deps, offline-safe.)
+test-data:
+	$(COMPOSE) up -d db cache storage
+	$(COMPOSE) run --rm migrate
+	MOSS_IMAGE=$(IMG) $(COMPOSE) --profile tests run --rm tests-data; st=$$?; \
+		$(COMPOSE) stop db cache storage; exit $$st
+
 test-live: build
 	MOSSTEST_TTS=http://voice:9600 MOSSTEST_WAIT_DAEMON=1 \
-		$(COMPOSE) --profile tests up -d voice
+		MOSS_IMAGE=$(IMG) $(COMPOSE) --profile tests up -d voice
 	MOSSTEST_TTS=http://voice:9600 MOSSTEST_WAIT_DAEMON=1 \
-		$(COMPOSE) --profile tests run --rm \
+		MOSS_IMAGE=$(IMG) $(COMPOSE) --profile tests run --rm \
 		-e MOSSTEST_TTS=http://voice:9600 -e MOSSTEST_WAIT_DAEMON=1 tests; st=$$?; \
-		$(COMPOSE) --profile tests stop voice; \
-		$(COMPOSE) --profile tests rm -f voice; \
+		MOSS_IMAGE=$(IMG) $(COMPOSE) --profile tests stop voice; \
+		MOSS_IMAGE=$(IMG) $(COMPOSE) --profile tests rm -f voice; \
 		exit $$st
 
 up:
+	# Schema first (migration JOB owns DDL); telephony is gated on its success.
+	$(COMPOSE) up -d --build db
+	$(COMPOSE) run --rm migrate
 	$(COMPOSE) up -d --build
 
 update:
@@ -73,3 +94,6 @@ logs:
 
 clean:
 	$(COMPOSE) down -v --remove-orphans
+
+release:
+	bash scripts/make_release.sh

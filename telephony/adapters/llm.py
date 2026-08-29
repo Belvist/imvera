@@ -55,11 +55,29 @@ class LLMClient:
         self._openai = (
             os.environ.get("MOSS_LLM_PROTOCOL", "").strip().lower() == "openai"
         )
+        # ARCHITECTURE 2026-08-27: the orchestrator must NEVER load a heavy
+        # model into its own process. An incident that downs the llm-server is
+        # exactly when loading several GB of MLX weights in-process would OOM
+        # or CPU-thrash the live voice process. In-process generation is now
+        # DISABLED by default: the cascade is only remote/cloud -> scripted.
+        # It can be re-enabled for staging debug only via
+        # MOSS_LLM_ALLOW_IN_PROCESS=1 (never in production).
+        self._allow_in_process = (
+            os.environ.get("MOSS_LLM_ALLOW_IN_PROCESS", "").strip().lower()
+            in ("1", "true", "yes")
+        )
 
     def _ensure(self):
         return self._ensure_local()
 
     def _ensure_local(self):
+        # ARCHITECTURE 2026-08-27: by default the orchestrator never loads a
+        # model in-process. Only staging with MOSS_LLM_ALLOW_IN_PROCESS=1 opts
+        # back in; production keeps the realtime process light and answers with
+        # the scripted fallback when the remote/cloud LLM is unavailable.
+        if not self._allow_in_process:
+            self._failed = True
+            return False
         if self._loaded or self._failed:
             return self._loaded
         with self._gen_lock:
@@ -82,8 +100,10 @@ class LLMClient:
 
         If the daemon answers /health (even while its model is still loading)
         we wait up to ``wait_up`` for ready=True instead of loading a SECOND
-        copy of the model in-process (RAM). If it does not answer at all we
-        give up fast and fall back to in-process loading.
+        copy of the model in-process (RAM). If the daemon does not answer at
+        all we give up fast; in-process loading is staging-only
+        (MOSS_LLM_ALLOW_IN_PROCESS=1), otherwise replies fall back to the
+        scripted phrase.
         """
         deadline = time.time() + self._remote_wait
         while time.time() < deadline:
@@ -108,8 +128,9 @@ class LLMClient:
         return False
 
     def ready(self):
-        """Prefer the separate llm-server; load the model in-process only as
-        a fallback so startup stays fast when the service is already up."""
+        """Prefer the separate llm-server. The model is loaded in-process
+        only when staging opted in via MOSS_LLM_ALLOW_IN_PROCESS=1, so
+        startup stays fast when the service is already up."""
         if self.remote_ready():
             return True
         return self._ensure_local()
@@ -157,8 +178,10 @@ class LLMClient:
 
     def chat(self, messages, max_tokens=150, temp=0.4, timeout=60):
         """Generate a reply for chat-style ``messages``. Returns cleaned text
-        or None on any failure/timeout. Tries the remote LLM first, then the
-        in-process model — the scripted fallback is the final safety net."""
+        or None on any failure/timeout. Tries the remote/cloud LLM first;
+        in-process generation is a staging-only tier
+        (MOSS_LLM_ALLOW_IN_PROCESS=1) and the scripted fallback is the final
+        safety net."""
         if self._openai:
             out = self._chat_openai(messages, max_tokens, temp, timeout)
             if out is None:
@@ -234,8 +257,8 @@ class LLMClient:
     # ---- token streaming (REALTIME FIX, Stage 5) ----------------------------
     # The reply is generated as DELTAS so the dialogue engine can send the
     # first complete sentence to TTS while the rest is still being generated:
-    #   remote llm-server /chat_stream  ->  in-process mlx stream_generate
-    #   ->  batch chat() as a single-delta last resort.
+    #   remote llm-server /chat_stream  ->  (staging only, opt-in) in-process
+    #   mlx stream  ->  empty stream -> the caller uses its scripted phrase.
     def chat_stream(self, messages, max_tokens=150, temp=0.4, timeout=60):
         """Yield text deltas. Never raises: a failed backend silently moves
         to the next fallback tier; an empty stream means the caller uses its
@@ -256,7 +279,7 @@ class LLMClient:
                     if self._remote_failures >= 3:
                         self._remote_down_until = time.time() + 60
                     print(f"[call-agent] openai-llm stream error ({e}); "
-                          "falling back to in-process", flush=True)
+                          "scripted fallback", flush=True)
                     if yielded:
                         # PARTIAL-STREAM GUARD: deltas already reached the
                         # caller/TTS; regenerating locally would replay the
@@ -282,7 +305,7 @@ class LLMClient:
                 if self._remote_failures >= 3:
                     self._remote_down_until = time.time() + 60
                 print(f"[call-agent] llm-server stream error ({e}); "
-                      "falling back to in-process", flush=True)
+                      "scripted fallback", flush=True)
                 if yielded:
                     # PARTIAL-STREAM GUARD: see the openai branch above.
                     return

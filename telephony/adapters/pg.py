@@ -49,6 +49,20 @@ def _default_url():
     return os.environ.get("MOSS_PG_URL", "")
 
 
+def _env_ms(name, default):
+    """Parse a positive integer milliseconds env var, clamped to >= 1, else
+    the default. Invalid/absent input yields the default (never crashes the
+    pool constructor on a typo)."""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        v = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return v if v >= 1 else default
+
+
 class PgStore:
     """Thin, SQL-first facade over psycopg3. Every method is idempotent or
     guarded; mutation methods accept an optional ``conn`` so callers can run
@@ -62,11 +76,21 @@ class PgStore:
 
         self.available = True
         self.degraded = False
+        # read.md rev-2 #21: hard-bind every pooled connection's cost so a
+        # wedged/contended query cannot pin a hot-path thread forever.
+        # statement 3s / lock acquire 2s / open-idle-tx 10s — well under the
+        # TTS/LLM budget; a transaction that idles longer is a bug, not a mode.
+        opts = [
+            f"-c statement_timeout={_env_ms('MOSS_PG_STATEMENT_TIMEOUT_MS', 3000)}",
+            f"-c lock_timeout={_env_ms('MOSS_PG_LOCK_TIMEOUT_MS', 2000)}",
+            "-c idle_in_transaction_session_timeout=10000",
+        ]
         self._pool = ConnectionPool(
             self.url,
             min_size=pool_min,
             max_size=pool_max,
-            kwargs={"connect_timeout": connect_timeout},
+            kwargs={"connect_timeout": connect_timeout,
+                    "options": " ".join(opts)},
             open=False,
         )
         self._pool.open()
@@ -554,6 +578,65 @@ class PgStore:
             "WHERE e.phone = %s ORDER BY q.created_at DESC LIMIT %s",
             (phone_digits, limit), fetch="all")
         return rows or []
+
+    # ------------------------------------------------------------------ #
+    # Retention (read.md rev-3 G8): TTL-driven, guaranteed purge.
+    # ------------------------------------------------------------------ #
+    def expired_calls(self, now_iso=None, limit=200):
+        """Call sessions past their retention window, oldest first.
+
+        ``retention_days`` defaults to 90; the cut-off is decided by the
+        call's END (ended_at for terminal calls, created_at as fallback) +
+        retention_days. Returns rows so the retention worker can, per call:
+        collect S3 audio keys, delete local WAVs, then purge the rows.
+        """
+        return self._exec(
+            "SELECT call_id, COALESCE(ended_at, created_at) AS ref_ts, "
+            "       retention_days "
+            "FROM call_sessions "
+            "WHERE status IN ('completed', 'failed', 'expired') "
+            "  AND COALESCE(ended_at, created_at) + "
+            "      make_interval(days => retention_days) < now() "
+            "ORDER BY COALESCE(ended_at, created_at) LIMIT %s",
+            (limit,), fetch="all") or []
+
+    def audio_keys_for(self, call_id):
+        """S3 object keys referenced by a call's turns (for object purge)."""
+        rows = self._exec(
+            "SELECT audio_key FROM dialogue_turns "
+            "WHERE call_id = %s AND audio_key IS NOT NULL",
+            (call_id,), fetch="all") or []
+        return [r["audio_key"] for r in rows]
+
+    def purge_call(self, call_id, audit_actor="retention", conn=None):
+        """Atomically delete every trace of a call's AUDIO/CONTENT while
+        leaving a durable audit marker. Returns True when a call existed.
+
+        Deletes (cascade to children) the session; the audit row references
+        only call_id — no transcript/audio survives the purge.
+        """
+        own = conn is None
+        if own:
+            conn = self._conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM call_sessions WHERE call_id = %s "
+                    "RETURNING call_id", (call_id,))
+                existed = cur.fetchone() is not None
+                if existed:
+                    cur.execute(
+                        "INSERT INTO audit_log "
+                        "(actor, action, entity, entity_id, detail) "
+                        "VALUES (%s, 'data.retention.purged', 'call', %s, "
+                        "'{\"reason\":\"ttl_retention\"}'::jsonb)",
+                        (audit_actor, call_id))
+            if own:
+                conn.commit()
+        finally:
+            if own:
+                self.release(conn)
+        return existed
 
 
 def maybe_pg_store(url=None, check=True):

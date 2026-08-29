@@ -627,6 +627,11 @@ def build_handler(worker, registry):
             path = self.path.split("?")[0]
             if path in ("/health", "/healthz"):
                 self._json({
+                    # read.md rev-3 G4: identity contract — the supervisor
+                    # refuses to adopt a port whose /health does not answer
+                    # this service name + protocol_version.
+                    "service": "mossvoice-tts",
+                    "protocol_version": 1,
                     "ok": True,
                     "ready": worker.ready,
                     "sample_rate": worker.sample_rate,

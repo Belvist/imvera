@@ -90,13 +90,37 @@ def confidence_from_result(wav_path, result):
 class STTEngine:
     def __init__(self):
         self._model = None
+        # TRUTHFUL READINESS (2026-08-27): the engine tracks load state so
+        # /ready and the warm-up can distinguish "usable" from "broken".
+        # Before, a failed load printed "STT ready" unconditionally — the
+        # service claimed health while every turn fell back to "Повторите".
+        self._ready = False
+        self._failed = False
 
     def _ensure(self):
-        if self._model is None:
+        if self._ready:
+            return self._model
+        if self._failed:
+            return None
+        if self._model is not None:
+            # externally injected model (tests/short-circuit) — loaded and
+            # usable by construction
+            self._ready = True
+            return self._model
+        try:
             import tts_common
 
             self._model = tts_common.load_stt(tts_common.DEFAULT_STT_MODEL)
+            self._ready = True
+        except Exception as e:  # noqa: BLE001
+            print(f"[call-agent] STT load failed: {e}", flush=True)
+            self._failed = True
+            self._model = None
         return self._model
+
+    def ready(self):
+        """True when the STT model is actually loaded and usable."""
+        return self._ensure() is not None
 
     def transcribe(self, wav_path):
         """Raw transcript (unchanged public contract) or None."""

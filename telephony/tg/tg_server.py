@@ -113,6 +113,18 @@ DEFAULT_GREETING = "Здравствуйте! Это МВЕРА. Как вы с�
 # agent stalled the asyncio loop for up to 10 minutes.
 CONTROL_TIMEOUT = 60
 
+def _env_int(name, default):
+    try:
+        return int(os.environ.get(name) or default)
+    except (TypeError, ValueError):
+        return default
+
+# Streaming turn reads (2026-08-27): bound the IDLE gap between frames and the
+# TOTAL wall-time, so a stalled dependency cannot wedge the gateway for the
+# old CONTROL_TIMEOUT*10 == 600 s. Environment-overridable.
+TURN_STREAM_IDLE = _env_int("MOSS_TURN_STREAM_IDLE", 30)
+TURN_STREAM_TOTAL = _env_int("MOSS_TURN_STREAM_TOTAL", 60)
+
 
 class TokenBucket:
     """Per-key token bucket. Small, thread-safe, used to rate-limit WS
@@ -259,6 +271,19 @@ class AgentBridge:
         finally:
             self.call_id = None
 
+    def turn_text(self, text):
+        """WebApp text channel: POST a typed turn to the agent's scoped
+        /turn_text endpoint and return the parsed reply json. Safe to call
+        with no active call (call_id None) — returns None."""
+        if not self.call_id:
+            return None
+        try:
+            return self._post(f"/calls/{self.call_id}/turn_text",
+                              {"text": text}, timeout=CONTROL_TIMEOUT)
+        except Exception as e:
+            print(f"[tg-server] turn_text error: {e}", flush=True)
+            return None
+
     def cancel_stream(self):
         """Ask the agent to abort the currently-generating TTS utterance
         (barge-in). Safe to call when nothing is streaming. The open stream
@@ -303,7 +328,7 @@ class AgentBridge:
         conn = None
         try:
             conn = http.client.HTTPConnection(self._host, self._port,
-                                              timeout=CONTROL_TIMEOUT * 10)
+                                              timeout=TURN_STREAM_IDLE)
             with self._conn_lock:
                 self._active_conns.append(conn)
             body = json.dumps(
@@ -320,8 +345,13 @@ class AgentBridge:
                 yield {"error": f"turn rejected ({resp.status})", "done": True}
                 return
             buf = b""
+            t0 = time.monotonic()
             while True:
                 if cancel_event is not None and cancel_event.is_set():
+                    break
+                if time.monotonic() - t0 > TURN_STREAM_TOTAL:
+                    print(f"[tg-server] turn_stream total timeout "
+                          f"({TURN_STREAM_TOTAL}s) exceeded", flush=True)
                     break
                 chunk = resp.read1(65536)
                 if not chunk:
@@ -568,6 +598,11 @@ class TXPipeline:
     async def _run(self, pcm, rate, gen, cancel):
         meta = {}
         thread = None
+        # ARCHITECTURE 2026-08-27: a stream task belongs to exactly ONE
+        # orchestrator generation. A frame tagged with a different
+        # generation_id (an old TTS stream that survived its cancel) is
+        # dropped HERE, by identity — not trusted to have died in time.
+        expected_gen = None
         try:
             loop = asyncio.get_running_loop()
             # Latency-bound queue: at most ~48 audio frames (~1.5 s of audio).
@@ -640,6 +675,15 @@ class TXPipeline:
                     break
                 if frame is None:
                     break
+                gid = frame.get("generation_id")
+                if gid is not None:
+                    if expected_gen is None:
+                        expected_gen = gid
+                    elif gid != expected_gen:
+                        # FIX 2026-08-27: stale generation (superseded by a
+                        # barge-in/new turn). Drop by identity — the old TTS
+                        # must not reach the phone/browser.
+                        continue
                 wire = self._to_wire(frame)
                 if wire is None:
                     continue
@@ -649,7 +693,9 @@ class TXPipeline:
                         "transcript" in frame or "reply" in frame):
                     meta = {"transcript": frame.get("transcript"),
                             "reply": frame.get("reply"),
-                            "finished": bool(frame.get("finished"))}
+                            "finished": bool(frame.get("finished")),
+                            "turn_id": frame.get("turn_id"),
+                            "generation_id": frame.get("generation_id")}
                 if wire.get("wav_b64"):
                     # CONVERSATION FIX: extend the echo-suppression window while
                     # audio flows to the client.
@@ -692,6 +738,16 @@ class TXPipeline:
 
     @staticmethod
     def _to_wire(frame):
+        # ARCHITECTURE 2026-08-27: ALWAYS carry the orchestrator's
+        # generation identity to the client. Previously _to_wire rebuilt the
+        # frame and DROPPED turn_id/generation_id, so the WebApp could not
+        # discard a stale LLM/TTS result after barge-in by identity.
+        def _tags(wire):
+            for k in ("turn_id", "generation_id"):
+                if frame.get(k) is not None:
+                    wire[k] = frame.get(k)
+            return wire
+
         if frame.get("type") == "interim":
             # streaming-STT (P0-REALTIME-CORE step 11): pass partial transcripts
             # through to the client immediately for live display.
@@ -699,7 +755,7 @@ class TXPipeline:
                     "final": bool(frame.get("final"))}
             if frame.get("reply"):
                 wire["reply"] = frame.get("reply")
-            return wire
+            return _tags(wire)
         if frame.get("done"):
             wire = {"type": "chunk", "done": True,
                     "transcript": frame.get("transcript"),
@@ -708,13 +764,13 @@ class TXPipeline:
             # preserve the cancel-origin of the done frame (AUDIT A2)
             if frame.get("aborted"):
                 wire["aborted"] = True
-            return wire
+            return _tags(wire)
         wire = {"type": "chunk", "i": frame.get("i"),
                 "wav_b64": frame.get("wav_b64"),
                 "done": bool(frame.get("done"))}
         if frame.get("sample_rate"):
             wire["sample_rate"] = frame.get("sample_rate")
-        return wire
+        return _tags(wire)
 
 
 @app.websocket("/ws")
@@ -888,6 +944,15 @@ async def ws(ws: WebSocket):
                         mic_rate = r
                 except (TypeError, ValueError):
                     pass
+            elif mtype == "text":
+                # WebApp->Agent->LLM text channel: typed message. If the agent
+                # is mid-speech (or greeting still playing) it is a barge-in.
+                text = (msg.get("text") or "")[:2000]
+                if tx.busy or tx.greeting_active:
+                    tx.barge_in()
+                data = await off(bridge.turn_text, text)
+                reply = (data or {}).get("reply") or ""
+                await ws.send_json({"type": "reply", "reply": reply})
             elif mtype == "stop":
                 tx.barge_in()
                 await off(bridge.end_call)

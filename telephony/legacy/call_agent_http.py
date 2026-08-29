@@ -60,9 +60,66 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _components(self):
+        """Live status of the realtime components (never throws).
+
+        STT/LLM are probed for "actually usable"; TTS goes through its own
+        health endpoint. LLM NOT ready is a degraded mode (scripted replies),
+        never a lie about the other two.
+        """
+        serve = self.server.serve
+        stt_ok = bool(getattr(serve.stt, "ready", lambda: False)())
+        llm_ok = bool(getattr(serve.llm, "ready", lambda: False)())
+        tts_ok, tts_err = serve.tts.health()
+        return {
+            "stt": stt_ok,
+            "llm": llm_ok,
+            "tts": tts_ok,
+            # read.md rev-4 gate D: schema compatibility is an explicit
+            # readiness capability, not a silent console print.
+            "schema": bool(getattr(serve, "schema_compatible", True)),
+            "postgres": bool(getattr(serve, "pg_available", False)),
+        }, tts_err
+
+    def _ready(self):
+        """Readiness gate: the voice pipeline must ACTUALLY work.
+
+        200 when STT and TTS are usable (LLM may degrade to the scripted
+        fallback — a real working mode); otherwise 503 with per-component
+        status so an operator sees exactly what is broken. The response
+        carries an explicit `mode`: "full" (LLM online) or "degraded"
+        (LLM down, scripted fallback) — read.md rev-2 #14, and consumers
+        (compose healthcheck) only look at `ready`.
+        """
+        comps, tts_err = self._components()
+        # read.md rev-4 gate D: schema compatibility gates readiness too.
+        ready = bool(comps["stt"] and comps["tts"] and comps["schema"])
+        self._json({"ready": ready,
+                    # read.md rev-3 G4: identity contract — the supervisor
+                    # refuses to adopt a port that does not answer this
+                    # service name + protocol_version.
+                    "service": "mossvoice-telephony",
+                    "protocol_version": 1,
+                    "mode": "full" if (ready and comps["llm"])
+                            else "degraded" if ready else "down",
+                    "components": comps,
+                    "error": None if ready else tts_err},
+                   status=200 if ready else 503)
+
     def do_GET(self):
+        serve = self.server.serve
+        # TRUTHFUL READINESS (2026-08-27): /live only proves the process is
+        # alive; /ready aggregates the ACTUAL realtime components (STT/LLM/TTS)
+        # so a container is never "healthy" while the voice pipeline is broken
+        # (the previous /health returned "ok": True unconditionally).
+        if self.path.startswith("/live"):
+            self._json({"ok": True})
+            return
+        if self.path.startswith("/ready"):
+            self._ready()
+            return
         if self.path.startswith("/health"):
-            ok, err = self.server.serve.tts.health()
+            comps, tts_err = self._components()
             serve = self.server.serve
             with serve._sess_lock:
                 active_calls = len(serve.sessions)
@@ -71,10 +128,20 @@ class Handler(BaseHTTPRequestHandler):
                     "MOSS_MAX_CONCURRENT_CALLS", "0") or 0)
             except ValueError:
                 max_calls = 0
+            # TRUTHFUL READINESS: "ok" is only true when the realtime
+            # pipeline (STT + TTS) is ACTUALLY usable. Previously /health
+            # returned "ok": True unconditionally — a broken STT/TTS still
+            # looked healthy. LLM is reported but does not gate "ok" (the
+            # scripted fallback is a real, working degraded mode).
+            ok = bool(comps["stt"] and comps["tts"] and comps["schema"])
             self._json({
-                "ok": True,
-                "tts": ok,
-                "error": err,
+                # read.md rev-3 G4: identity contract (see /ready above).
+                "service": "mossvoice-telephony",
+                "protocol_version": 1,
+                "ok": ok,
+                "components": comps,
+                "tts": comps["tts"],
+                "error": tts_err,
                 "pg": getattr(serve, "pg_available", False),
                 "redis_degraded": getattr(serve.store, "degraded", False),
                 "redis_requested": getattr(serve.store, "redis_requested",
@@ -148,11 +215,19 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/calls" or path == "/new":
             payload = self._read_json_body()
             caller_id = (payload or {}).get("caller_id")
+            mode = (payload or {}).get("mode")
             try:
-                call_id = self.server.serve.new_call(caller_id=caller_id)
+                call_id = self.server.serve.new_call(caller_id=caller_id,
+                                                     mode=mode)
             except AdmissionError as e:
                 self._json({"ok": False, "error": "capacity",
                             "active": e.active, "limit": e.limit}, 503)
+                return
+            except ValueError as e:
+                # FIX 2026-08-27: invalid mode -> 400 (new_call now validates
+                # the value against Agent.MODES instead of silently driving
+                # the state machine into an unknown mode).
+                self._json({"ok": False, "error": str(e)}, 400)
                 return
             self._json({"ok": True, "call_id": call_id})
             return
@@ -204,6 +279,30 @@ class Handler(BaseHTTPRequestHandler):
             if action == "turn_stream":
                 self._handle_turn_stream(call_id)
                 return
+            if action == "turn_text":
+                # WebApp->Agent->LLM text channel: POST {"text": ...}; the
+                # agent produces a reply with no audio in the loop.
+                payload = self._read_json_body()
+                text = (payload or {}).get("text")
+                if not isinstance(text, str) or not text.strip() \
+                        or len(text) > 2000:
+                    self._json({"ok": False,
+                                "error": "text required, <=2000 chars"}, 400)
+                    return
+                try:
+                    result = self.server.serve.process_text_turn(
+                        text, call_id=call_id)
+                except KeyError:
+                    self._json({"ok": False, "error": "call not found"}, 404)
+                    return
+                except CallBusyError:
+                    # FIX 2026-08-27: process_text_turn now enters through
+                    # begin_turn; a text turn overlapping a voice turn is
+                    # rejected with 429 like any other overlapping turn.
+                    self._json({"ok": False, "error": "call busy"}, 429)
+                    return
+                self._json(result)
+                return
             if action == "stream-cancel":
                 try:
                     ctx = self.server.serve.get_call(call_id)
@@ -216,7 +315,14 @@ class Handler(BaseHTTPRequestHandler):
                 sid = ctx.stream_id
                 if sid:
                     self.server.serve.tts.cancel_stream_by_id(sid)
-                self._json({"ok": True, "cancelled": bool(ctx.streaming)})
+                # ARCHITECTURE 2026-08-27: a cancelled generation is DEAD the
+                # moment the cancel lands — any late LLM/TTS result tagged
+                # with the old generation_id is discarded downstream before it
+                # can reach the phone. turn_id stays, generation_id advances
+                # (turn 14 can have generations 20 -> 21 after a barge-in).
+                gen = ctx.invalidate_generation()
+                self._json({"ok": True, "cancelled": bool(ctx.streaming),
+                            "generation_id": gen})
                 return
             self._json({"ok": False, "error": "not found"}, 404)
             return

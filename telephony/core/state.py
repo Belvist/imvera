@@ -49,6 +49,40 @@ class CallContext:
     # AUDIT FIX: id of the TTS stream currently generating this call's reply,
     # so /stream-cancel can abort it server-side (not just client-side).
     stream_id: str = ""
+    # ARCHITECTURE 2026-08-27: TURN/GENERATION identity end-to-end.
+    # ``turn_id`` counts USER TURNS (a new user utterance). ``generation_id``
+    # counts ANSWER GENERATIONS: it advances on every new turn AND on every
+    # barge-in/cancel that kills an in-flight generation — so after an
+    # interrupt it can be AHEAD of turn_id (turn stays 14, generation moves
+    # 20 -> 21). Every streamed frame is tagged with both; a consumer discards
+    # any result with a stale generation_id (old LLM/TTS finishing after a
+    # barge-in), so it can never be played over a newer turn.
+    turn_id: int = 0
+    generation_id: int = 0
+    _generation_lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def new_turn(self):
+        """Begin a new dialogue generation for a NEW user turn.
+
+        Monotonic under ``_generation_lock`` (a barge-in/new requested turn can
+        arrive from the async HTTP handler while a worker is inside
+        process_turn_stream). Returns the (turn_id, generation_id) pair.
+        """
+        with self._generation_lock:
+            self.turn_id += 1
+            self.generation_id += 1
+            return self.turn_id, self.generation_id
+
+    def invalidate_generation(self):
+        """Kill the current in-flight generation WITHOUT ending the turn.
+
+        Called on barge-in / stream-cancel: the old LLM/TTS result must be
+        stale the moment anything downstream probes generation_id. The NEXT
+        new_turn() still bumps both counters.
+        """
+        with self._generation_lock:
+            self.generation_id += 1
+            return self.generation_id
 
 
 class CallBusyError(Exception):
