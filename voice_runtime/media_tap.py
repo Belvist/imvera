@@ -17,6 +17,8 @@ import os
 import struct
 import wave
 
+from media_adapter import MediaAdapter  # noqa: E402
+
 SAMPLE_RATE = 16000
 WAV_HEADER = 44
 _BYTES_PER_SAMPLE = 2
@@ -44,8 +46,13 @@ def resample_linear(samples, src_rate, dst_rate):
     return out
 
 
-class LiveWavReader:
-    """Tail-reader for a growing `uuid_record` WAV.
+class LiveWavReader(MediaAdapter):
+    """Tail-reader for a growing `uuid_record` WAV (DEV-ONLY, read.md G2).
+
+    Implements the ``MediaAdapter`` contract so the VAD/turn loop does not
+    care which transport delivers media. The production cutover replaces this
+    with a continuous PCM stream (ESL media bug / WebSocket / RTP); until
+    then ``uuid_record`` remains the dev adapter only.
 
     Emits int16 mono samples (LEFT channel when stereo) resampled to the
     requested rate. ``broken`` is True once the file is proven NOT a valid
@@ -54,12 +61,12 @@ class LiveWavReader:
     """
 
     def __init__(self, path):
+        super().__init__()
         self.path = path
         self._pos = 0
         self._header_seen = False
         self._channels = 1
         self._rate = SAMPLE_RATE
-        self.broken = False
         self._pending = b""
 
     @staticmethod
@@ -162,6 +169,11 @@ class LiveWavReader:
             return 0
         size = self.size
         return max(0, size - WAV_HEADER)
+
+    # MediaAdapter contract alias (read.md G2): the VAD loop calls
+    # frames_in(); LiveWavReader implements it as the tail-read.
+    def frames_in(self, rate=SAMPLE_RATE):
+        return self.read_new(rate=rate)
 
 
 def write_wav(path, samples, rate=SAMPLE_RATE):
