@@ -501,6 +501,96 @@ VeraVoice. Не трогать без прямого указания владе
 
 ## Команды
 
+## Аудит 2026-08-29 (STT + диалоги): полный разбор дефектов и FIXES_PLAN
+
+Проведён полный аудит (критичные 1.1–1.15, высокие, средние — см. FIXES_PLAN.md
+в корне, план P0–P11 зафиксирован). КРАТКОЕ СЕЙЧАС:
+- **Живой ESL-пароль закоммичен** (esl_client.py/esl_stream.py/loopback_test.py =
+  `d7f78342…9f89` = live pattern), check_secrets не ловит hex → утечёт в release.
+- **voice_runtime НЕ существует в деплое**: git ls-files=0 (untracked), в Dockerfile/
+  compose/release отсутствует; live = сирота-процесс (pid 29169). 7 launchd
+  `agent-loop.*` непрерывно долбят 4400 → 0ea49711ae79 держит 673 пустых ходов,
+  680 BLANK=SILENT за 24 ч (loopback-шум размывает capacity и «парные ноги»).
+- **4400=прод dialplan идёт в Lua, runtime на 4401/4402** — инверсия G1.
+- **apply спека нет:** esl_stream.py (POC), legacy/, worker/ vs workers/,
+  call_agent.py-фасад, release/артефакты в дереве, _paths.py без pyproject.
+- **Динамические тесты:** make test-fast **228 OK (28 skip)**; dialog_quality.py
+  --strict **10/10 PASS**; НО они не покрывают voice_runtime и live-контур.
+- **STT измерено на живом звонке ca81bc3ac2c7 (dialogue_turns):** binary-гейт 0.55
+  пропускает «уверенный мусор»: «Торатичина» conf 0.614, «Лоха!» 0.763,
+  **«упал» → «у палок не ударилось» conf 0.774** → потеряно safety-слово
+  (verdict=ok, хотя говорили «упал»). Гейт vs словарный фильтр/порог по сущностям
+  здоровья/`MOSS_STT_MODEL=base` — P1b.
+- **Диалог (тот же звонок):** canned «Рада, что вы говорите. А …» повторён 5×;
+  якорь «хорошо/плохо» дублируется и НЕ ловит «да, я тебя слышу»; вопрос повестки
+  повторяется (687/694). Реальные дефекты диалога — в P1/P1b.
+- FIXES_PLAN порядок: P0 (пароль) + P1 (баги dialogue/safety) → P1b (STT-гейт) →
+  P2 (контракт runtime↔agent: fреймовый ответ/streaming/caller_id) → P3
+  (ESL-reconnect/barge-in-port) → P5 (G1 4400=runtime) → P6–P11.
+
+## ВЫПОЛНЕНО 2026-08-29 (FIXES_PLAN P0+P1+P1b)
+
+- **P0 ESL-пароль:** ротирован live-пароль FreeSWITCH (event_socket.conf.xml +
+  ~/.fs_cli_conf chmod 600, FS перезапущен, ESL auth +OK новым паролем);
+  дефолт из кода убран (voice_runtime/esl_client.py → env MOSS_ESL_PASSWORD,
+  пустой = fail-fast; loopback_test уже требовал env); telephony/esl_stream.py
+  (старый POC) удалён из дерева; release/mossvoice-ba73b7f/ (содержал пароль)
+  удалён; check_secrets.sh: hex-детекция (ровно 32-hex, не ловит git-SHA),
+  tracked-фильтр (release = git archive → FAIL только по tracked, ignored/untracked
+  → WARN); скан зелёный. Voice_runtime/loopback_test.py требует MOSS_ESL_PASSWORD.
+- **P1 dialogue:** _help_pending больше не сбрасывается в plan_reply (живёт до
+  _plan_mode) — «да» на «Нужна помощь?» записывается; _closing_confirmed
+  реализован (повторное короткое «до свидания» = подтверждение, сброс при
+  продолжении — одно переспрашивание на прощание); _agenda_question
+  index-guarded (деградация в wrap-up вместо IndexError).
+- **P1 safety:** _CONTEXTUAL_EMERGENCY_TOKENS (врач/доктор/срочно) требуют SELF +
+  маркер остроты («записалась к врачу» = не red; «вызовите мне врача» = red);
+  _negated_left для падений («я не упал» = ok, «я упал, но не сильно» = red).
+- **P1b STT:** новый core/vocab.py (CORE_ROOTS + FUNCTION_WORDS +
+  CRITICAL_HEALTH_ROOTS + OBSERVED_NOISE + суффиксный стем); orchestrator
+  гейтит транскрипт без распознаваемых слов → reason="low_conf" (якорь, не LLM);
+  критические сущности (упал/удар/болит/врач/таблетки…) НЕ режутся — реальный
+  кейс «у палок не ударилось» («удар») сохраняется.
+- Тесты: +test_dialogue_fixes_20260829.py (6), test_safety_engine
+  FallAsymmetryAndContextualEmergency (6), test_vocab_gate.py (4). make test-fast
+  = **241 OK (28 skip)**.
+- **P2 контракт runtime↔agent (2026-08-29):** agent_http._stream_post читает
+  chunked octet-stream (200=успех; 4xx/5xx=AgentError с телом); call_session.
+  _stream_done сбрасывает streaming/suppress/segdir на отказ ТОЛЬКО текущего
+  turn (guard turn_no); create_call({caller_id}) — runtime передаёт caller из
+  CHANNEL_ANSWER/scan → повестка check-in + семейные вопросы ожили; done.json
+  перенесён в конец process_turn_stream (после persist/emit; при cancel тоже
+  пишется). +test_agent_http.py (8).
+- **P3 устойчивость runtime (2026-08-29):** ESL disconnect несёт Event-Name
+  (esl_ok сбрасывается, /ready=503; reconnect уже был); очередь событий no-drop
+  (blocking put + backpressure); PLAYBACK_STOP watchdog (_play_end = duration +
+  0.5с, сброс в on_tick); barge-in порог MIN_SPEECH_MS/ECHO_MIN (не срабатывает
+  на 30мс кашле). +PlaybackWatchdog/onset тесты; test_socket_close усилен.
+- **P5 G1 репо-часть (2026-08-29):** dialplan rev-6 (4400=answer+park=runtime,
+  4402 loopback, 4401 удалён), runtime regex ^44(00|02)$, loopback_test/фикстуры
+  на 4400, scripts/install_freeswitch.sh (идемпотентный: dialplan sync +
+  mossvoice_dir + public-4400 чистка + reloadxml + ESL + /ready check).
+  ДЕПЛОЙ на живой FS ОТЛОЖЕН до P8 (runtime как сервис) — иначе сломаются
+  прод-звонки владельца (сейчас живой прод = Lua, runtime-процесс умер).
+- Voice_runtime локальные юнит-тесты: `python3 -m unittest discover -s
+  voice_runtime -p "test_*.py"` = **36 OK**. make test-fast **241 OK (28 skip)**.
+  Осталось: P4 (живой звонок: record_stereo/LEFT), P8 (деплой runtime в
+  compose/supervisor), P5-применение (install_freeswitch.sh → 4400=runtime),
+  P6 (streaming MediaAdapter), P7 (G0-чистка), P9–P11.
+- **P8 деплой runtime 2026-08-29:** runtime на ХОСТЕ под launchd
+  (com.mossvoice.runtime.plist KeepAlive; supervisor `--service runtime` —
+  добавлена опция; scripts/run_runtime.sh берёт ESL-пароль из ~/.fs_cli_conf).
+  `/ready`=esl_connected+agent_ok. Container не достаёт ESL 127.0.0.1 → host.
+- **P4 находка 2026-08-29 (БЛОКЕР прод-переключения):** loopback B-leg
+  (inbound 44xx) держит канал в EARLY (не ACTIVE) → uuid_record пишет ПУСТОЙ
+  tap (0/44 байта) → CallSession отказывает сессию. A-leg стерео РАБОТАЕТ
+  (channels=2 rate=8000), но runtime НЕ должен цеплять outbound (фикс
+  _on_answer: direction==inbound). РЕАЛЬНЫЙ звонок (Zoiper, канал ACTIVE) —
+  единственный валидный тест P4. До него runtime ограничен dev-extension
+  ^4402$, dialplan живой FS ВОЗВРАЩЁН на 4400→Lua (install_freeswitch.sh
+  применён, но откатан из-за неверифицированного inbound). Урок: loopback
+  НЕ годится как end-to-end тест runtime — только реальный абонент.
+
 ## Ключевые решения (не переоткрывать)
 
 - **Silero-VAD не потокобезопасен (2026-08-22):** TorchScript-модель хранит
