@@ -137,6 +137,617 @@ def clean_transcript(text):
 
 
 # ----------------------------------------------------------------------------
+# DialogueFSM — the formal dialogue state machine (2026-08-29 rework)
+#
+# The conversation was previously ONE ~400-line if/elif chain in
+# Agent.plan_reply with state scattered across ad-hoc flags (_interrupt,
+# _closing_confirm_pending, _help_pending, _agenda_asked, ...). That is what
+# cracked: every new rule ("давай пока" should close, "нет спасибо" must be
+# honoured) required threading more flags through more branches.
+#
+# Now the conversation is ONE explicit machine (UML/Harel statechart):
+#   * STATE       = the qualitative phase Vera is in;
+#   * EVENT       = the classified caller input (verdict-driven);
+#   * TRANSITION  = (src, event, guard, action, dst) — the single table below;
+#   * EXTENDED STATE = everything else lives on the Agent (agenda index,
+#                      confirmations, safety verdict, facts...) and is read by
+#                      guards / written by actions.
+#
+# Engineering rules (enforced by core/fsm.py, see its docstring):
+#   guards PURE, RTC dispatch, unhandled event -> explicit safe fallback,
+#   "*" sources factor out common behavior (no state explosion).
+# ----------------------------------------------------------------------------
+from core.fsm import StateMachine, UnhandledEvent  # noqa: E402
+
+
+class DialogueFSM:
+    # ---- states ---------------------------------------------------------
+    IDLE = "IDLE"                     # no agenda running (default chat)
+    CHECKIN = "CHECKIN"               # service-initiated wellness walk
+    SIDE_QUESTION = "SIDE_QUESTION"   # answering the caller's own question
+    CLARIFY = "CLARIFY"               # empty/no-speech ladder
+    SAFETY_CONFIRM = "SAFETY_CONFIRM"  # possible_red control question
+    SAFETY_ACTIVE = "SAFETY_ACTIVE"    # confirmed/uncertain danger
+    HELP = "HELP"                     # help request confirmation window
+    WORRY = "WORRY"                   # third-person worry
+    GOODBYE_CONFIRM = "GOODBYE_CONFIRM"  # one-shot close confirmation
+    CLOSING = "CLOSING"               # terminal warm goodbye
+    DONE = "DONE"                     # finished
+
+    # public `mode` string each state reports (Agent API compatibility)
+    MODE_OF = {
+        IDLE: "companion",
+        CHECKIN: "check_in",
+        SIDE_QUESTION: "companion",
+        CLARIFY: "clarify",
+        SAFETY_CONFIRM: "safety_confirm",
+        SAFETY_ACTIVE: "safety_active",
+        HELP: "check_in",
+        WORRY: "check_in",
+        GOODBYE_CONFIRM: "check_in",
+        CLOSING: "closing",
+        DONE: "closing",
+    }
+    # inverse: public mode string -> FSM state (used to restore an interrupt)
+    _STATE_OF = {
+        "companion": IDLE,
+        "check_in": CHECKIN,
+        "clarify": CLARIFY,
+        "safety_confirm": SAFETY_CONFIRM,
+        "safety_active": SAFETY_ACTIVE,
+        "closing": CLOSING,
+    }
+    _MODE_STEP = {"companion": 0, "check_in": 1, "clarify": 2,
+                  "safety_confirm": 3, "safety_active": 4, "closing": 5}
+
+    # ---- events (classified caller inputs) ------------------------------
+    E_DONE = "done"          # late turn after finish
+    E_REPAIR = "repair"      # "повторите, что вы сказали"
+    E_DANGER = "danger"      # safety confirmed_red
+    E_FROZEN = "frozen"      # safety frozen
+    E_GOODBYE = "goodbye"    # explicit closing wording (confirm-eligible)
+    E_GOODBYE_DIRECT = "goodbye_direct"  # unambiguous farewell: close now
+    E_CONFIRM = "confirm"    # reply while close-confirmation is pending
+    E_QUESTION = "question"  # caller asks a question during check-in
+    E_HELP = "help"          # help request (explicit or confirming)
+    E_WORRY = "worry"        # third-person worry
+    E_SYMPTOM = "symptom"    # possible_red
+    E_UNCERTAIN = "uncertain"  # uncertain_red
+    E_OK = "ok"              # affirmative verdict
+    E_EMPTY = "empty"        # no usable transcript (silence/lowconf/echo)
+    E_GREETING = "greeting"  # caller says hello (first time)
+    E_REFUSE = "refuse"      # short polite decline of an offer (P-ACK)
+    E_UNKNOWN = "unknown"    # everything else
+
+    def __init__(self):
+        self.sm = StateMachine("dialogue", self.IDLE)
+        self._build_transitions()
+        self._hello_back_done = False   # greeting handler fires once per call
+        self._empty_turns = 0
+        self._echo_turns = 0
+        self._refused_offer = False     # P-CLOSE2: honoured decline -> fast close
+        # per-dispatch transient (set by dispatch, read by guards)
+        self._last_text = None
+        self._last_reason = None
+
+    # ---- state access ---------------------------------------------------
+    @property
+    def state(self):
+        return self.sm.state
+
+    def mode(self, agent):
+        return self.MODE_OF.get(self.sm.state, "companion")
+
+    def step(self, agent):
+        return self._MODE_STEP.get(self.mode(agent), 0)
+
+    def reset(self, agent):
+        self.sm.state = self.IDLE
+        self._hello_back_done = False
+        self._empty_turns = 0
+        self._echo_turns = 0
+        self._refused_offer = False
+
+    # ---- dispatch -------------------------------------------------------
+    def dispatch(self, agent, text, reason=None, verdict=None, append=True):
+        """Classify the caller input and run the machine (RTC).
+
+        ``verdict``/``append`` are for INTERNAL re-dispatch (resume after an
+        interrupt / after a close-confirmation): the safety engine must not
+        observe the same text twice, and the history must not record the
+        same turn twice."""
+        # TERMINAL GUARD: a late/duplicate turn after finish must not mutate
+        # the history (matches the pre-rework order — done-check first).
+        if append and text and not agent.done:
+            agent.memory.append(text)
+            agent.llm_history.append(("user", text))
+        ev, verdict = self._classify(agent, text, reason, verdict)
+        self._last_text = text
+        self._last_reason = reason
+        self._last_verdict = verdict
+        try:
+            plan = self.sm.handle(agent, ev)
+        except UnhandledEvent:
+            # NEVER a silent wrong answer: degrade to a warm generic ack.
+            return {"text": text,
+                    "intent": "откликнуться на сказанное коротко",
+                    "fallback": agent._pick_not_repeated(agent.GENERIC_ACKS)}
+        return plan
+
+    # ---- classifier: raw input -> one event -----------------------------
+    def _classify(self, agent, text, reason, verdict=None):
+        if agent.done:
+            return self.E_DONE, verdict
+        if text and re.search(
+                r"(повторите|повтори|что ты сказала|что вы сказали|"
+                r"как вы сказали|ещё раз|еще раз|скажите снова|"
+                r"не расслышал|не понял)", text.lower()):
+            return self.E_REPAIR, verdict
+        # question-over-check-in (read.md #16) is decided BEFORE the safety
+        # verdict, matching the pre-rework order. While answering a side
+        # question the caller may keep asking — stay in the answer phase.
+        if self.sm.state in (self.CHECKIN, self.SIDE_QUESTION) \
+                and _is_text_question(text):
+            return self.E_QUESTION, verdict
+        if verdict is None:
+            verdict = agent.safety.observe(Observation(
+                question=getattr(agent, "_last_question", None),
+                raw_text=text,
+                confidence=getattr(agent, "_last_confidence", None),
+                source="stt",
+            ))
+        kind = verdict.kind
+        if kind == "frozen":
+            return self.E_FROZEN, verdict
+        if kind == "confirmed_red":
+            return self.E_DANGER, verdict
+        # P-ACK (2026-08-29): a short polite decline ("нет спасибо", "не
+        # надо", "ничего") is its OWN event — honoured, never re-interpreted
+        # as help/affirmative. Classified BEFORE the safety verdict branches
+        # that would route it into a generic/help reply.
+        if text and _is_refusal(text):
+            return self.E_REFUSE, verdict
+        # P-CLOSE1: an UNAMBIGUOUS farewell closes now (no re-confirm);
+        # a confirm-eligible goodbye goes through the one-shot guard.
+        # P-CLOSE2: after a honoured refusal a lone «пока» is a leave, not
+        # a «пока нет» — close directly.
+        if text and (_is_closing_direct(text) or
+                     (self._refused_offer
+                      and re.fullmatch(r"\s*пока[\s.,!?]*", text,
+                                       re.IGNORECASE))):
+            return self.E_GOODBYE_DIRECT, verdict
+        if text and _is_closing(text):
+            return self.E_GOODBYE, verdict
+        if self.sm.state == self.GOODBYE_CONFIRM and text:
+            return self.E_CONFIRM, verdict
+        # help confirmation window: consume the armed flag once per turn
+        help_was_pending = getattr(agent, "_help_pending", False)
+        agent._help_pending = False
+        if not self._hello_back_done and text and re.search(
+                r"(здравствуйте|добрый день|доброе утро|добрый вечер)",
+                text.lower()):
+            return self.E_GREETING, verdict
+        if kind == "possible_red":
+            return self.E_SYMPTOM, verdict
+        if kind == "uncertain_red":
+            return self.E_UNCERTAIN, verdict
+        if kind == "help_request":
+            if ("запрос помощи" in (verdict.notes or ())) or help_was_pending:
+                return self.E_HELP, verdict
+            # a bare "да"/"конечно" in free conversation is not help
+            return self.E_UNKNOWN, verdict
+        if kind == "third_person":
+            return self.E_WORRY, verdict
+        if kind == "no_speech":
+            return self.E_EMPTY, verdict
+        if kind == "ok":
+            return self.E_OK, verdict
+        return self.E_UNKNOWN, verdict
+
+    # ---- guards (PURE predicates over extended state) -------------------
+    @staticmethod
+    def _g_short(ctx, ev):
+        t = ctx._fsm._last_text or ""
+        return bool(t) and len(t.split()) <= 3
+
+    @staticmethod
+    def _g_confirm_pending(ctx, ev):
+        return bool(getattr(ctx, "_closing_confirm_pending", False))
+
+    @staticmethod
+    def _g_not_confirmed(ctx, ev):
+        return not getattr(ctx, "_closing_confirmed", False) \
+            and not ctx._fsm._refused_offer
+
+    @staticmethod
+    def _g_short_unconfirmed(ctx, ev):
+        """A SHORT goodbye that has not already been confirmed (and the
+        caller has not already declined an offer) — confirm it once before
+        closing. A refused caller or a re-confirmed goodbye closes directly."""
+        if ctx._fsm._refused_offer:
+            return False
+        if getattr(ctx, "_closing_confirmed", False):
+            return False
+        t = ctx._fsm._last_text or ""
+        return bool(t) and len(t.split()) <= 3
+
+    @staticmethod
+    def _g_confirmed(ctx, ev):
+        t = (ctx._fsm._last_text or "").lower()
+        return _is_closing(t) or bool(re.search(
+            r"\b(да|ага|угу|конечно)\b", t))
+
+    @staticmethod
+    def _g_resume_phase(ctx, ev):
+        inter = getattr(ctx, "_interrupt", None)
+        return inter is not None and inter.get("phase") == "resume"
+
+    @staticmethod
+    def _g_clearing(ctx, ev):
+        return bool(getattr(ctx, "_clearing", False))
+
+    # ---- actions (mutate extended state, return the reply plan) --------
+    def _a_done(self, agent, ev):
+        return {"text": agent._fsm._last_text, "intent": None,
+                "fallback": agent._goodbye(), "terminal": True}
+
+    def _a_frozen(self, agent, ev):
+        return {"text": agent._fsm._last_text, "intent": None,
+                "fallback": agent._goodbye(), "terminal": True}
+
+    def _a_danger(self, agent, ev):
+        agent.status = "alert"
+        agent._note("обнаружена опасность")
+        agent._finish()
+        return {"text": agent._fsm._last_text, "terminal": True,
+                "intent": "успокоить, попросить оставаться на месте, "
+                          "сказать что записала, спросить нужна ли "
+                          "скорая; ничего не обещать вызвать",
+                "fallback": random.choice([
+                    "Останьтесь на месте. Я всё записала, близкие "
+                    "увидят. Вам нужна скорая?",
+                    "Не вставайте. Я отметила, родные узнают. "
+                    "Дождитесь помощи.",
+                ])}
+
+    def _a_repair(self, agent, ev):
+        last = getattr(agent, "_last_reply", None)
+        if last:
+            return {"text": agent._fsm._last_text, "intent": None,
+                    "fallback": f"Повторяю: {last}"}
+        # nothing to repeat -> fall through to normal processing
+        return self.dispatch(agent, agent._fsm._last_text,
+                             agent._fsm._last_reason,
+                             verdict=self._last_verdict, append=False)
+
+    def _a_side_start(self, agent, ev):
+        agent._interrupt = {
+            "resume_mode": "check_in",
+            "agenda_asked": agent._agenda_asked,
+            "phase": "answer",
+        }
+        agent._agenda_asked = False
+        return {"text": agent._fsm._last_text,
+                "intent": "прямо и тепло ответить на вопрос или реплику "
+                          "собеседника своими словами, коротко",
+                "fallback": agent._pick_not_repeated(agent.GENERIC_ACKS)}
+
+    def _a_side_answer(self, agent, ev):
+        agent._interrupt = dict(agent._interrupt, phase="answer")
+        agent._agenda_asked = False
+        return {"text": agent._fsm._last_text,
+                "intent": "прямо и тепло ответить на вопрос или реплику "
+                          "собеседника своими словами, коротко",
+                "fallback": agent._pick_not_repeated(agent.GENERIC_ACKS)}
+
+    def _a_side_resume(self, agent, ev):
+        inter = agent._interrupt
+        agent._interrupt = None
+        # resume_mode stores the MODE string ("check_in"); map it back to the
+        # FSM state (the stored value is part of the Agent test contract).
+        resume_state = self._STATE_OF.get(inter.get("resume_mode"))
+        if resume_state:
+            self.sm.state = resume_state
+        agent._agenda_asked = bool(inter.get("agenda_asked")) if inter \
+            else agent._agenda_asked
+        # process THIS turn as the topic answer (no re-append, no re-observe)
+        return self.dispatch(agent, agent._fsm._last_text,
+                             agent._fsm._last_reason,
+                             verdict=self._last_verdict, append=False)
+
+    def _a_side_reask(self, agent, ev):
+        agent._interrupt = dict(agent._interrupt, phase="resume")
+        q = agent._agenda_question() or agent._wrap_up_question()
+        agent._last_question = q
+        return {"text": agent._fsm._last_text, "intent": None,
+                "fallback": ("Пожалуйста. Возвращаясь к нашему "
+                             "разговору — " + q)}
+
+    def _a_confirm_ask(self, agent, ev):
+        agent._closing_confirm_pending = True
+        agent._closing_confirmed = True
+        q = ("Вы сейчас прощаетесь? Скажите «да» — и я пожелаю вам "
+             "добра, или расскажите, как вы себя чувствуете.")
+        agent._last_question = q
+        return {"text": agent._fsm._last_text, "intent": None, "fallback": q}
+
+    def _a_confirm_no(self, agent, ev):
+        agent._closing_confirm_pending = False
+        agent._closing_confirmed = False
+        # the caller was NOT leaving — process the reply normally
+        self.sm.state = self.CHECKIN
+        return self.dispatch(agent, agent._fsm._last_text,
+                             agent._fsm._last_reason,
+                             verdict=self._last_verdict, append=False)
+
+    def _a_help(self, agent, ev):
+        agent._note("требуется помощь")
+        agent.status = "attention"
+        agent._help_pending = True
+        q = agent._ask_help()
+        agent._last_question = q
+        return {"text": agent._fsm._last_text,
+                "intent": "сказать, что записала просьбу о помощи — "
+                          "близкие её увидят, спросить, что именно "
+                          "нужно; не обещать ничего сделать самой",
+                "fallback": q}
+
+    def _a_worry(self, agent, ev):
+        agent._note("беспокойство о близких")
+        agent.status = "attention"
+        agent._help_pending = True
+        q = agent._pick_not_repeated(agent.WORRY_FOLLOWUPS)
+        agent._last_question = q
+        return {"text": agent._fsm._last_text,
+                "intent": "узнать больше о беспокойстве собеседника; "
+                          "записи видят близкие, ничего не обещать "
+                          "передавать самому",
+                "fallback": q}
+
+    def _a_symptom(self, agent, ev):
+        agent._note("плохое самочувствие")
+        agent.status = "attention"
+        agent._clearing = True
+        q = agent._pick_not_repeated(agent.SYMPTOM_CHECKS)
+        agent._last_question = q
+        return {"text": agent._fsm._last_text,
+                "intent": "мягко уточнить самочувствие, не пугая человека; "
+                          "не обещать вызвать помощь",
+                "fallback": q}
+
+    def _a_uncertain(self, agent, ev):
+        agent._note("самочувствие не подтверждено")
+        agent.status = "attention"
+        q = agent._pick_not_repeated(agent.STAY_OBSERVANT_ACKS)
+        agent._last_question = q
+        return {"text": agent._fsm._last_text,
+                "intent": "успокоить и продолжить разговор, не настаивая; "
+                          "не обещать вызывать помощь",
+                "fallback": q}
+
+    def _a_false_alarm(self, agent, ev):
+        agent.status = "ok"
+        agent._clearing = False
+        fb = agent._pick_not_repeated(agent.FALSE_ALARM_ACKS)
+        agent._last_question = fb
+        return {"text": agent._fsm._last_text, "intent": None, "fallback": fb}
+
+    def _a_greeting(self, agent, ev):
+        agent._fsm._hello_back_done = True
+        q = (agent._ask_task()
+             or (agent._wrap_up_question()
+                 if agent._agenda_topic() is None
+                 else "Как вы меня слышите?"))
+        return {"text": agent._fsm._last_text, "intent": None,
+                "fallback": "{} {}".format(
+                    agent._pick_not_repeated(agent.HELLO_BACKS), q)}
+
+    def _a_refuse(self, agent, ev):
+        """P-ACK/P-CLOSE2 (2026-08-29): honour a short polite decline —
+        acknowledge WITHOUT pushing another question (this was the top
+        complaint of the live post-mortem: «нет спасибо» -> «Да, конечно,
+        добавьте что-нибудь?»). Also arms the fast close: a following
+        goodbye (or silence) ends the call without re-confirming."""
+        agent._fsm._refused_offer = True
+        agent._extract_facts(agent._fsm._last_text)
+        fb = agent._pick_not_repeated(agent.REFUSAL_ACKS)
+        agent._last_question = fb
+        return {"text": agent._fsm._last_text, "intent": None, "fallback": fb}
+
+    def _a_empty(self, agent, ev):
+        # P-ANCHOR (2026-08-29): silence right after a honoured decline or a
+        # pending close-confirmation means the caller has stopped talking —
+        # end the call, do NOT demand "хорошо или плохо" from a person who
+        # already said goodbye.
+        if agent._fsm._refused_offer \
+                or getattr(agent, "_closing_confirmed", False):
+            agent._finish()
+            return {"text": agent._fsm._last_text, "intent": None,
+                    "fallback": agent._goodbye(), "terminal": True}
+        return agent._silence_flow(agent._fsm._last_text,
+                                   agent._fsm._last_reason)
+
+    def _a_close(self, agent, ev):
+        agent._finish()
+        return {"text": agent._fsm._last_text, "terminal": True,
+                "intent": "тепло попрощаться: короткое пожелание "
+                          "(«Берегите себя», «Всего доброго»)",
+                "fallback": agent._goodbye()}
+
+    def _a_ok(self, agent, ev):
+        agent._extract_facts(agent._fsm._last_text)
+        text = agent._fsm._last_text or ""
+        topic = agent._agenda_topic()
+        if agent.status == "unknown":
+            agent.status = "ok"
+        # NARRATIVE GUARD: a long off-topic story is answered on content,
+        # never force-advanced.
+        if not agent._current_is_family() \
+                and len(text.split()) >= 6 \
+                and not agent._matches_topic(text):
+            agent._agenda_asked = False
+            return {"text": text,
+                    "intent": "тепло откликнуться на рассказ человека и "
+                              "задать один короткий вопрос по его "
+                              "содержанию",
+                    "fallback": agent._pick_not_repeated(
+                        agent.GENERIC_ACKS)}
+        is_short = bool(short_real_answer(text)) and len(text.split()) <= 3
+        on_table = agent._agenda_asked and topic is not None
+        reached = not on_table and topic is not None \
+            and agent._matches_topic(text)
+        if on_table or reached:
+            finished = agent._agenda_advance(text)
+            if finished:
+                fb = agent._wrap_up_question()
+                agent._last_question = fb
+                return {"text": text,
+                        "intent": "тёпло подвести итог: всё записала "
+                                  "для близких; спросить, не хочет ли "
+                                  "человек что-то ещё добавить",
+                        "fallback": fb}
+            if is_short and on_table:
+                q = agent._ask_task() or agent._wrap_up_question()
+                agent._last_question = q
+                if agent._current_is_family():
+                    fb = q
+                else:
+                    fb = "{} {}".format(
+                        agent._pick_not_repeated(agent.BRIDGES), q)
+                return {"text": text, "intent": None, "fallback": fb}
+            nxt = agent._agenda_topic()
+            q = (agent._ask_task() or agent._wrap_up_question())
+            agent._last_question = q
+            if agent._current_is_family():
+                goal = ("тёпло откликнуться на сказанное, затем передать "
+                        "вопрос от близких дословно: "
+                        f"«{agent._agenda_question()}» — только этот один "
+                        "вопрос")
+            elif nxt:
+                goal = (f"порадоваться, откликнуться на детали сказанного "
+                        f"и одним естественным вопросом перейти к теме "
+                        f"«{nxt}»")
+            else:
+                goal = "порадоваться и откликнуться на детали сказанного"
+            return {"text": text, "intent": goal, "fallback": q}
+        fb = "{} {}".format(
+            agent._pick_not_repeated(agent.GENERIC_ACKS),
+            agent._pick_not_repeated(agent.WRAP_OPENERS))
+        agent._last_question = fb
+        return {"text": text, "intent": None, "fallback": fb}
+
+    def _a_unknown(self, agent, ev):
+        agent._extract_facts(agent._fsm._last_text)
+        text = agent._fsm._last_text or ""
+        topic = agent._agenda_topic()
+        words = len(text.split())
+        if words >= 4:
+            agent._agenda_asked = False
+            if words >= 6:
+                return {"text": text,
+                        "intent": "тепло откликнуться на рассказ человека и "
+                                  "задать один короткий вопрос по его "
+                                  "содержанию",
+                        "fallback": agent._pick_not_repeated(
+                            agent.GENERIC_ACKS)}
+            q = agent._ask_task()
+            agent._last_question = q
+            if agent._current_is_family():
+                g = ("откликнуться на сказанное и передать вопрос от "
+                     f"близких дословно: «{agent._agenda_question()}»")
+            elif topic is not None:
+                g = (f"откликнуться на детали и одним вопросом узнать про "
+                     f"«{topic}»")
+            else:
+                g = ("откликнуться на детали и задать один уточняющий "
+                     "вопрос по теме")
+            return {"text": text, "intent": g, "fallback": q}
+        if topic is not None and not agent._agenda_asked:
+            q = agent._ask_task()
+            agent._last_question = q
+            if agent._current_is_family():
+                intent = ("откликнуться и передать вопрос от близких "
+                          f"дословно: «{agent._agenda_question()}»")
+            elif topic is not None:
+                intent = ("откликнуться и одним естественным вопросом "
+                          f"узнать про «{topic}»")
+            else:
+                intent = "откликнуться и задать один уточняющий вопрос"
+            return {"text": text, "intent": intent, "fallback": q}
+        if topic is not None:
+            return {"text": text,
+                    "intent": "откликнуться на детали сказанного и задать "
+                              "один уточняющий вопрос по теме "
+                              f"«{topic}» (это цель звонка)",
+                    "fallback": agent._pick_not_repeated(agent.GENERIC_ACKS)}
+        return {"text": text,
+                "intent": "откликнуться на детали сказанного и задать "
+                          "один естественный уточняющий вопрос по теме",
+                "fallback": agent._pick_not_repeated(agent.GENERIC_ACKS)}
+
+    # ---- the single transition table ------------------------------------
+    # (src, event, guard, dst, action). "*" = any state/event. First match
+    # wins; guards are pure. Order matters only where guards overlap.
+    def _build_transitions(self):
+        sm = self.sm
+        add = sm.add
+        # terminal / cross-cutting (factored via "*" source — no repetition)
+        add("*", self.E_DONE, self.DONE, self._a_done,
+            name="any/done")
+        add("*", self.E_FROZEN, self.DONE, self._a_frozen,
+            name="any/frozen")
+        add("*", self.E_DANGER, self.SAFETY_ACTIVE, self._a_danger,
+            name="any/danger")
+        add("*", self.E_REPAIR, None, self._a_repair, name="any/repair")
+        # side-question interrupt (caller asks during the wellness walk)
+        add(self.CHECKIN, self.E_QUESTION, self.SIDE_QUESTION,
+            self._a_side_start, name="checkin/question")
+        add(self.SIDE_QUESTION, self.E_QUESTION, self.SIDE_QUESTION,
+            self._a_side_answer, name="side/question")
+        # an EMPTY turn mid-interrupt: the silence ladder runs but the
+        # interrupt STAYS ACTIVE in "answer" phase (position untouched) —
+        # the next real reply resumes it. Must precede the catch-all reask.
+        add(self.SIDE_QUESTION, self.E_EMPTY, self.SIDE_QUESTION,
+            self._a_empty, name="side/empty")
+        add(self.SIDE_QUESTION, "*", self.CHECKIN, self._a_side_resume,
+            guard=self._g_resume_phase, name="side/resume")
+        add(self.SIDE_QUESTION, "*", self.SIDE_QUESTION, self._a_side_reask,
+            name="side/reask")
+        # goodbye: one-shot confirmation then real close (P-CLOSE)
+        add(self.GOODBYE_CONFIRM, self.E_GOODBYE, self.CLOSING,
+            self._a_close, guard=self._g_short, name="confirm/goodbye")
+        add(self.GOODBYE_CONFIRM, self.E_CONFIRM, self.CLOSING,
+            self._a_close, guard=self._g_confirmed, name="confirm/yes")
+        add(self.GOODBYE_CONFIRM, self.E_CONFIRM, self.CHECKIN,
+            self._a_confirm_no, name="confirm/no")
+        for st in (self.CHECKIN, self.CLARIFY, self.HELP, self.WORRY):
+            add(st, self.E_GOODBYE, self.GOODBYE_CONFIRM,
+                self._a_confirm_ask,
+                guard=self._g_short_unconfirmed,
+                name="%s/goodbye-confirm" % st)
+        add("*", self.E_GOODBYE, self.CLOSING, self._a_close,
+            name="any/goodbye")
+        # safety / help / worry
+        add("*", self.E_REFUSE, None, self._a_refuse, name="any/refuse")
+        add("*", self.E_GOODBYE_DIRECT, self.CLOSING, self._a_close,
+            name="any/goodbye-direct")
+        add("*", self.E_HELP, self.HELP, self._a_help, name="any/help")
+        add("*", self.E_WORRY, self.WORRY, self._a_worry, name="any/worry")
+        add("*", self.E_SYMPTOM, self.SAFETY_CONFIRM, self._a_symptom,
+            name="any/symptom")
+        add("*", self.E_UNCERTAIN, self.SAFETY_ACTIVE, self._a_uncertain,
+            name="any/uncertain")
+        add(self.SAFETY_CONFIRM, self.E_OK, self.CHECKIN, self._a_false_alarm,
+            guard=self._g_clearing, name="safetyconfirm/ok-clears")
+        add("*", self.E_EMPTY, self.CLARIFY, self._a_empty, name="any/empty")
+        add("*", self.E_GREETING, self.CHECKIN, self._a_greeting,
+            name="any/greeting")
+        # ordinary turns
+        add("*", self.E_OK, None, self._a_ok, name="any/ok")
+        add("*", self.E_UNKNOWN, None, self._a_unknown, name="any/unknown")
+
+
+# ----------------------------------------------------------------------------
 # Agent logic — MVERA wellness-check call
 # ----------------------------------------------------------------------------
 # MVERA: сервис сам звонит пожилому человеку, ведёт короткий разговор,
@@ -368,11 +979,32 @@ def reply_looks_broken(reply: str) -> bool:
     return len(letters) >= 4
 
 
+# P-CLOSE1 (2026-08-29): «давай/давайте пока», «всё/ну/ладно пока»,
+# «буду прощаться» etc. are UNAMBIGUOUS closes — two-word colloquial
+# farewells, never «пока нет». They end the call WITHOUT the one-shot
+# re-confirmation («Вы прощаетесь?»), which would have delayed the very
+# goodbye the caller just said.
+_CLOSING_DIRECT_RE = re.compile(
+    r"(давай(те)?\s*,?\s*пока|пока\s*,?\s*давай(те)?|"
+    r"(всё|ну|ладно|хватит)\s*,?\s*(давай|пока|давай\s*пока)|"
+    r"буду прощаться|будем прощаться|пора прощаться|заканчиваю разговор)",
+    re.IGNORECASE,
+)
+
+
+def _is_closing_direct(text):
+    """True for an unambiguous farewell that should NOT be re-confirmed
+    («давай пока», «всё давай», «буду прощаться»...)."""
+    return bool(text and _CLOSING_DIRECT_RE.search(text))
+
+
 _CLOSING_RE = re.compile(
     r"(до свидания|до свиданья|досвидания|всего доброго|всего хорошего|"
     r"до встречи|прощайте|спасибо за звонок|на сегодня всё|заканчиваем|"
     r"не буду мешать|пойду отдыхать|позвоню позже|будьте здоровы|"
-    r"пока пока|пока-пока)",
+    r"пока пока|пока-пока|давай(те)?\s*,?\s*пока|пока\s*,?\s*давай|"
+    r"(всё|ну|ладно|хватит)\s*,?\s*(давай|пока|давай\s*пока)|"
+    r"буду прощаться|будем прощаться|пора прощаться|заканчиваю разговор)",
     re.IGNORECASE,
 )
 
@@ -382,11 +1014,39 @@ def _is_closing(text):
 
     Deliberately conservative: bare "пока" is NOT a close (it often means
     "пока нет" / "not yet" in answer to a question); only unambiguous
-    goodbyes count, so a real request is never cut short.
+    goodbyes count, so a real request is never cut short. Since the 2026-08-29
+    live-call post-mortem ("давай, пока" never ended the call) the explicit
+    colloquial closes are covered too: давай/давайте пока, всё давай,
+    ну пока, ладно пока, буду прощаться.
     """
     if not text:
         return False
     return bool(_CLOSING_RE.search(text))
+
+
+# REFUSAL DETECTION (P-ACK / P-CLOSE2, 2026-08-29): a short polite decline
+# of an offer/question ("нет спасибо", "не надо", "ничего") must be honoured
+# as a stop — Vera acknowledges and does NOT push another question. It also
+# arms the fast-close: a following goodbye (or silence) ends the call WITHOUT
+# the "Вы прощаетесь?" re-confirmation.
+_REFUSAL_RE = re.compile(
+    r"^(\s*"
+    r"(нет\s*,?\s*спасибо|нет\s*,?\s*не\s*надо|нет\s*,?\s*не\s*нужно|"
+    r"не\s*надо|не\s*нужно|ничего\s*,?\s*(не\s*нужно|не\s*надо)?|"
+    r"ничего\s*не\s*хочу|ничего\s*не\s*буду|не\s*хочу|не\s*буду|"
+    r"нет\s*ничего|всё\s*ничего|спасибо\s*не\s*надо)"
+    r"[\s.,!?]*"
+    r")$",
+    re.IGNORECASE,
+)
+
+
+def _is_refusal(text):
+    """True for a short explicit decline of an offer (never a bare "нет" —
+    that may answer a yes/no control question)."""
+    if not text or len(text.split()) > 5:
+        return False
+    return bool(_REFUSAL_RE.match(text.strip()))
 
 
 # QUESTION OVER CHECK-IN (2026-08-27): a direct caller question outranks the
@@ -520,8 +1180,6 @@ class Agent:
     def __init__(self, config=None, llm=None):
         self.memory = []
         self.llm_history = []          # (role, text) for the LLM dialogue
-        self.mode = "companion"
-        self.step = 0          # derived from mode (kept for session docs)
         self.status = "unknown"  # verdict: unknown -> ok/attention/alert
         self.notes = []
         self.done = False
@@ -535,12 +1193,29 @@ class Agent:
         self._clearing = False           # control question pending: OK clears
         self._help_pending = False       # a help question is on the table
         self._interrupt = None           # read.md #16: pending question-over-check-in
+        self._closing_confirm_pending = False   # "Вы прощаетесь?" is pending
+        self._closing_confirmed = False  # the close was confirmed once
         # Family-app questions for THIS call (see set_family_questions).
         self.family_questions = []
         # Facts (cross-turn memory) extracted from caller turns — see
         # _extract_facts/_facts_note.
         self.facts = []
+        # The formal dialogue state machine (2026-08-29): all control flow
+        # lives in its transition table; the Agent is the extended-state holder.
+        self._fsm = DialogueFSM()
         self._init_agenda()
+
+    # ---- state accessors (delegated to the FSM) --------------------------
+    @property
+    def mode(self):
+        """The public mode string — derived from the FSM state (Agent API
+        compatibility: companion / check_in / clarify / safety_confirm /
+        safety_active / closing)."""
+        return self._fsm.mode(self)
+
+    @property
+    def step(self):
+        return self._fsm.step(self)
 
     def _init_agenda(self):
         """Call-agenda state (task-oriented flow): which topic is live, was
@@ -659,8 +1334,6 @@ class Agent:
     def reset(self):
         self.memory = []
         self.llm_history = []
-        self.mode = "companion"
-        self.step = 0
         self.status = "unknown"
         self.notes = []
         self.done = False
@@ -671,8 +1344,11 @@ class Agent:
         self._clearing = False
         self._help_pending = False
         self._interrupt = None
+        self._closing_confirm_pending = False
+        self._closing_confirmed = False
         self.family_questions = []
         self.facts = []
+        self._fsm.reset(self)
         self._init_agenda()
 
     def start_check_in(self):
@@ -680,8 +1356,7 @@ class Agent:
 
         Returns the greeting to speak. In the default companion mode no
         greeting question is forced — the conversation just happens."""
-        self.mode = "check_in"
-        self._update_step()
+        self._fsm.sm.state = self._fsm.CHECKIN
         self._last_question = MVERA_GREETING
         # ECHO GUARD (2026-08-23): the recording is a MONO MIX, so the tail of
         # this greeting ("Здравствуйте!") lands in turn-1 audio and tiny used
@@ -697,17 +1372,10 @@ class Agent:
         Low confidence can neither create GREEN nor confirm RED (U9)."""
         self._last_confidence = confidence
 
-    def _set_mode(self, mode):
-        self.mode = mode
-        self._update_step()
-
     def _note(self, text):
         """Append a verdict note once (no duplicates in long conversations)."""
         if text not in self.notes:
             self.notes.append(text)
-
-    def _update_step(self):
-        self.step = self._MODE_STEP.get(self.mode, 0)
 
     # ---- reply planning + token streaming (REALTIME FIX, Stage 4+5) -------
     # plan_reply() runs the DETERMINISTIC mode machine only (fast, under the
@@ -723,13 +1391,15 @@ class Agent:
     # decides HOW to reply based on the VerdictEvent.
 
     def plan_reply(self, caller_text, reason=None):
-        """Run the MVERA mode machine; return a reply plan without talking
-        to any model. Plan keys:
+        """Run the formal dialogue state machine (DialogueFSM); return a
+        reply plan without talking to any model. Plan keys:
             text      user utterance
             intent    LLM objective (None -> the fallback is the FINAL reply)
             fallback  canned phrase (also the garbage/timeout fallback)
-        State mutations (memory, mode, status, notes, llm_history user turn)
-        happen HERE — safe under the per-call lock.
+        State mutations (memory, status, notes, llm_history user turn) happen
+        HERE — safe under the per-call lock. All CONTROL FLOW lives in the
+        DialogueFSM transition table; this method only classifies the input
+        and delegates.
 
         ``reason`` separates WHY a turn has no usable transcript so the
         empty-turn ladder stays productive instead of blind «Повторите»:
@@ -740,428 +1410,15 @@ class Agent:
         # ECHO MUTE (2026-08-25): an "echo" reason means the transcript IS
         # Vera's own words coming back from the mixed recording. Blank the
         # text so it never pollutes memory/history and route it through the
-        # echo ladder (_silence_flow, reason="echo") — a productive repeat
-        # request instead of regenerating her own phrase.
+        # echo ladder — a productive repeat request instead of regenerating
+        # her own phrase.
         if reason == "echo":
             caller_text = ""
-        # TERMINAL GUARD (S24): after done, late/duplicate turns cannot
-        # mutate the verdict, the history or the engine state.
-        if self.done:
-            return {"text": caller_text, "intent": None,
-                    "fallback": self._goodbye(), "terminal": True}
-        if caller_text:
-            self.memory.append(caller_text)
-            self.llm_history.append(("user", caller_text))
-        # NOTE: _help_pending is deliberately NOT cleared here. It is armed
-        # when a help/worry question is put on the table (see _ask_help) and
-        # consumed exactly ONCE in _plan_mode ("да" on "Нужна помощь?" is a
-        # confirmation). Clearing it early (it used to run right here, before
-        # the _plan_mode check) made a bare "да" reply to a help question
-        # land in a generic ack instead of recording the help request.
-        # CONVERSATIONAL REPAIR FIRST (read.md rev-2): a repeat request must
-        # NEVER arm the question interrupt — «скажи» is a question word, so
-        # "Скажите ещё раз пожалуйста" would be misread as a side question,
-        # arming an interrupt that then eats the NEXT turn. A repair only
-        # recalls our last reply; mode machine stays untouched.
-        if caller_text and re.search(
-                r"(повторите|повтори|что ты сказала|что вы сказали|"
-                r"как вы сказали|ещё раз|еще раз|скажите снова|"
-                r"не расслышал|не понял)", caller_text.lower()):
-            last = getattr(self, "_last_reply", None)
-            if last:
-                return {"text": caller_text, "intent": None,
-                        "fallback": f"Повторяю: {last}"}
-        # QUESTION OVER CHECK-IN (read.md #16 / rev-2 #11): a direct caller
-        # question wins over the routine check-in flow — the caller is
-        # engaged in chat, not answering a questionnaire. The switch is a
-        # TEMPORARY INTERRUPT with an explicit RESUME_PENDING phase:
-        #   check_in --user question--> INTERRUPT (answer the side
-        #   question) --non-question reply («спасибо»)--> RESUME TRANSITION
-        #   (Vera re-asks the pending agenda question) --next reply-->
-        #   RESUME DONE: the reply IS the wellbeing answer, processed below.
-        # The agenda NEVER advances mid-interrupt (position untouched).
-        inter = getattr(self, "_interrupt", None)
-        if self.mode == "check_in" and _is_text_question(caller_text):
-            # START / RESTART INTERRUPT: keep the check-in state (position,
-            # on-table flag); defer the topic while the question is answered.
-            if not inter:
-                self._interrupt = {
-                    "resume_mode": self.mode,
-                    "agenda_asked": self._agenda_asked,
-                    "phase": "answer",
-                }
-            elif inter.get("phase") == "resume":
-                # a NEW question lands while the transition was pending —
-                # go back to answering, don't consume the resume.
-                self._interrupt = dict(inter, phase="answer")
-            self._agenda_asked = False
-            self._set_mode("companion")
-        elif inter and _is_text_question(caller_text):
-            # still answering side questions — stay in "answer" phase
-            self._interrupt = dict(inter, phase="answer")
-            self._agenda_asked = False
-        elif inter and caller_text:
-            # a non-question reply while interrupting.
-            if inter.get("phase") == "resume":
-                # RESUME DONE (rev-2 #11): the reply after the re-asked
-                # agenda question is the REAL topic answer — restore the
-                # interrupted mode and fall through so _plan_mode processes
-                # THIS turn as the wellbeing answer (topic is on the table).
-                self._interrupt = None
-                if inter.get("resume_mode") in self.MODES:
-                    self._set_mode(inter["resume_mode"])
-                self._agenda_asked = bool(inter.get("agenda_asked"))
-            else:
-                # RESUME TRANSITION: a non-question reply («спасибо») right
-                # after the side question is NOT the topic answer — do not
-                # even interpret it as one. Re-ask the pending agenda
-                # question explicitly; only the NEXT reply counts as answer.
-                self._interrupt = dict(inter, phase="resume")
-                q = self._agenda_question() or self._wrap_up_question()
-                self._last_question = q
-                return {"text": caller_text, "intent": None,
-                        "fallback": ("Пожалуйста. Возвращаясь к нашему "
-                                     "разговору — " + q)}
+        # TERMINAL GUARD (S24) is handled inside the FSM (E_DONE -> terminal
+        # goodbye): after done, late/duplicate turns cannot mutate the
+        # verdict, the history or the engine state.
+        return self._fsm.dispatch(self, caller_text, reason)
 
-        ev = self.safety.observe(Observation(
-            question=self._last_question,
-            raw_text=caller_text,
-            confidence=self._last_confidence,
-            source="stt",
-        ))
-
-        if ev.kind == "frozen":
-            return {"text": caller_text, "intent": None,
-                    "fallback": self._goodbye()}
-        if ev.kind == "confirmed_red":
-            # SAFETY: danger always outranks an ordinary goodbye.
-            self.status = "alert"
-            self.notes.append("обнаружена опасность")
-            self._set_mode("safety_active")
-            self._finish()
-            # NO false hope: Vera never promises to call anyone — she only
-            # records; the app shows it to the family, they act.
-            return {"text": caller_text, "terminal": True,
-                    "intent": "успокоить, попросить оставаться на месте, "
-                              "сказать что записала, спросить нужна ли "
-                              "скорая; ничего не обещать вызвать",
-                    "fallback": random.choice([
-                        "Останьтесь на месте. Я всё записала, близкие "
-                        "увидят. Вам нужна скорая?",
-                        "Не вставайте. Я отметила, родные узнают. "
-                        "Дождитесь помощи.",
-                    ])}
-        if _is_closing(caller_text):
-            # MISHEAR GUARD: whisper-tiny confuses «Да, всё хорошо» ↔ «До
-            # свидания». If a goodbye arrives as an answer to our own
-            # question (check-in/clarify) and it is short — confirm once
-            # instead of hanging up on a person who may have just said
-            # "всё хорошо". A real goodbye confirms; a mishearing corrects.
-            words = len((caller_text or "").split())
-            # LOOP FIX (2026-08-29): a SECOND short goodbye right after our
-            # confirmation question IS the confirmation itself — finish
-            # instead of re-asking (previously the same question replayed
-            # forever, because _closing_confirmed was never assigned).
-            if getattr(self, "_closing_confirm_pending", False) \
-                    and words <= 3:
-                self._set_mode("closing")
-                self._finish()
-                return {"text": caller_text, "terminal": True,
-                        "intent": "тепло попрощаться: короткое пожелание "
-                                  "(«Берегите себя», «Всего доброго»)",
-                        "fallback": self._goodbye()}
-            if self.mode in ("check_in", "clarify") and words <= 3 \
-                    and not getattr(self, "_closing_confirmed", False):
-                self._closing_confirm_pending = True
-                self._closing_confirmed = True
-                q = ("Вы сейчас прощаетесь? Скажите «да» — и я пожелаю вам "
-                     "добра, или расскажите, как вы себя чувствуете.")
-                self._last_question = q
-                return {"text": caller_text, "intent": None,
-                        "fallback": q}
-            self._set_mode("closing")
-            self._finish()
-            return {"text": caller_text, "terminal": True,
-                    "intent": "тепло попрощаться: короткое пожелание "
-                              "(«Берегите себя», «Всего доброго»)",
-                    "fallback": self._goodbye()}
-        if getattr(self, "_closing_confirm_pending", False) and caller_text:
-            # the turn right after the goodbye-confirmation request
-            self._closing_confirm_pending = False
-            t = (caller_text or "").lower()
-            if _is_closing(t) or re.search(r"\b(да|ага|угу|конечно)\b", t):
-                self._set_mode("closing")
-                self._finish()
-                return {"text": caller_text, "terminal": True,
-                        "intent": "тепло попрощаться",
-                        "fallback": self._goodbye()}
-            # not a goodbye after all — continue the conversation normally;
-            # a LATER goodbye gets its own single confirmation again.
-            self._closing_confirmed = False
-        return self._plan_mode(caller_text, ev, reason)
-
-    def _plan_mode(self, caller_text, ev, reason=None):
-        """Event -> mode/intent/fallback for a non-terminal turn."""
-        # HELP CONFIRMATION WINDOW: _help_pending was armed when we asked a
-        # help question last turn ("Нужна ли вам помощь?"). Consume it HERE,
-        # once per turn — clearing it earlier in plan_reply ran BEFORE this
-        # check, so a bare "да" could never be recognised as a confirmation.
-        help_was_pending = getattr(self, "_help_pending", False)
-        self._help_pending = False
-        # INTERRUPT ANSWER (read.md #16): during a question interrupt we are
-        # in companion mode ONLY to answer the caller's question — never push
-        # the deferred agenda topic, never count the reply as a topical
-        # answer. Resume happens on the next turn in plan_reply.
-        if getattr(self, "_interrupt", None) and caller_text:
-            self._agenda_asked = False
-            return {"text": caller_text,
-                    "intent": "прямо и тепло ответить на вопрос или реплику "
-                              "собеседника своими словами, коротко",
-                    "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
-        # GREETING MANNER (2026-08-24): when the elder says «здравствуйте»,
-        # the only polite answer is a warm hello-back + the pending agenda
-        # question. Live calls routed this into the LLM, producing
-        # non-sequiturs («Рада слышать! Какой сегодня день?»). Scripted,
-        # once per call; repeats fall through to the natural flow.
-        if caller_text and not getattr(self, "_hello_back_done", False) \
-                and re.search(
-                    r"(здравствуйте|добрый день|доброе утро|"
-                    r"добрый вечер)", caller_text.lower()):
-            self._hello_back_done = True
-            q = (self._ask_task()
-                 or (self._wrap_up_question()
-                     if getattr(self, "_agenda_topic", lambda: None)() is None
-                     else "Как вы меня слышите?"))
-            # VARIETY (2026-08-24): the opener was ONE fixed line heard
-            # verbatim on every call that opened with «здравствуйте»; it now
-            # rotates cross-call via _pick_not_repeated. No questions here —
-            # the single question mark comes from the agenda question q.
-            return {"text": caller_text, "intent": None,
-                    "fallback": "{} {}".format(
-                        self._pick_not_repeated(self.HELLO_BACKS), q)}
-        if ev.kind == "no_speech":
-            # SILENCE/NOISE/EMPTY FLOW (2026-08-25): the ladder now depends on
-            # WHY the turn had no usable transcript (plan_reply's `reason`).
-            # See _silence_flow() — every empty turn carries a productive
-            # yes/no anchor instead of a blind «Повторите».
-            self._set_mode("clarify")
-            return self._silence_flow(caller_text, reason)
-        self._empty_turns = 0
-        self._echo_turns = 0
-        if ev.kind == "possible_red":
-            # POSSIBLE_RED -> gentle control question; stay observant.
-            self._note("плохое самочувствие")
-            self.status = "attention"
-            self._set_mode("safety_confirm")
-            self._clearing = True
-            # VARIETY (2026-08-24): was 2 inline lines; named pool rotates
-            # across calls via _pick_not_repeated. Meaning kept: gentle
-            # check-in, offer to record, never promise to call.
-            q = self._pick_not_repeated(self.SYMPTOM_CHECKS)
-            self._last_question = q
-            return {"text": caller_text,
-                    "intent": "мягко уточнить самочувствие, не пугая человека; "
-                              "не обещать вызвать помощь",
-                    "fallback": q}
-        if ev.kind == "uncertain_red":
-            self._note("самочувствие не подтверждено")
-            self.status = "attention"
-            self._set_mode("safety_active")
-            # VARIETY (2026-08-24): was 2 inline lines; named pool rotates
-            # across calls. Meaning kept: don't insist, invite to report
-            # worsening later — «я запишу», never a promise to act.
-            q = self._pick_not_repeated(self.STAY_OBSERVANT_ACKS)
-            self._last_question = q
-            return {"text": caller_text,
-                    "intent": "успокоить и продолжить разговор, не настаивая; "
-                              "не обещать вызывать помощь",
-                    "fallback": q}
-        if ev.kind == "help_request":
-            # A bare "да"/"конечно" in free conversation is NOT a help
-            # request — it only means help when we asked a help question
-            # this turn ("Нужна ли вам помощь?") or the phrase is explicit
-            # ("мне нужна помощь", "помогите").
-            explicit = "запрос помощи" in (ev.notes or ())
-            if not explicit and not help_was_pending:
-                return {"text": caller_text,
-                        "intent": "откликнуться на детали сказанного и задать один естественный уточняющий вопрос по теме",
-                        "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
-            self._note("требуется помощь")
-            self.status = "attention"
-            self._set_mode("check_in")
-            self._help_pending = True
-            q = self._ask_help()
-            self._last_question = q
-            return {"text": caller_text,
-                    "intent": "сказать, что записала просьбу о помощи — "
-                              "близкие её увидят, спросить, что именно "
-                              "нужно; не обещать ничего сделать самой",
-                    "fallback": q}
-        if ev.kind == "third_person":
-            self._note("беспокойство о близких")
-            self.status = "attention"
-            self._set_mode("check_in")
-            self._help_pending = True
-            q = self._pick_not_repeated(self.WORRY_FOLLOWUPS)
-            self._last_question = q
-            return {"text": caller_text,
-                    "intent": "узнать больше о беспокойстве собеседника; "
-                              "записи видят близкие, ничего не обещать "
-                              "передавать самому",
-                    "fallback": q}
-        if ev.kind == "ok":
-            # CONVERSATION FIX: a positive answer does NOT auto-advance to a
-            # help question. Vera simply stays in the conversation. Status:
-            # an OK right after a safety control question CLEARS the concern;
-            # otherwise OK never downgrades attention/alert (help request,
-            # third-person worry, uncertain red) and only promotes unknown.
-            if self._clearing:
-                self.status = "ok"
-                self._clearing = False
-                # the caller just denied the concern and asked why we thought
-                # so — acknowledge the false alarm warmly (real call:
-                # "а почему ты так подумал?")
-                fb = self._pick_not_repeated(self.FALSE_ALARM_ACKS)
-                self._last_question = fb
-                return {"text": caller_text, "intent": None, "fallback": fb}
-            elif self.status == "unknown":
-                self.status = "ok"
-            # CONTENT-FIRST (2026-08-25): the current topic closes only when
-            # its question is actually on the table AND the reply answers it,
-            # OR when the words clearly address it on their own (topic
-            # keywords). A generic "всё хорошо" right after a long story is an
-            # ACKNOWLEDGMENT, not a skip — the deferred topic stays open, so
-            # the call never jumps topics on a nod.
-            self._extract_facts(caller_text)
-            topic = self._agenda_topic()
-            if not self._clearing and \
-                    not self._current_is_family() and \
-                    len((caller_text or "").split()) >= 6 and \
-                    not self._matches_topic(caller_text):
-                # NARRATIVE GUARD (2026-08-25): a long off-topic story
-                # (>=6 words that don't name the current wellness topic) is
-                # reacted to on its CONTENT, never force-advanced. Defer the
-                # topic (_agenda_asked=False) so a following generic nod
-                # ("всё хорошо") leaves it open too — it only closes later
-                # via a genuine topical reply. Real calls: «Внучка приезжала,
-                # мы чай пили...» must NOT bounce to «Как сон?».
-                self._agenda_asked = False
-                return {"text": caller_text,
-                        "intent": "тепло откликнуться на рассказ человека и "
-                                  "задать один короткий вопрос по его "
-                                  "содержанию",
-                        "fallback": self._pick_not_repeated(
-                            self.GENERIC_ACKS)}
-            is_short = bool(short_real_answer(caller_text)) and \
-                len(caller_text.split()) <= 3
-            on_table = self._agenda_asked and topic is not None
-            reached = not on_table and topic is not None \
-                and self._matches_topic(caller_text)
-            if on_table or reached:
-                finished = self._agenda_advance(caller_text)
-                if finished:
-                    fb = self._wrap_up_question()
-                    self._last_question = fb
-                    return {"text": caller_text,
-                            "intent": "тёпло подвести итог: всё записала "
-                                      "для близких; спросить, не хочет ли "
-                                      "человек что-то ещё добавить",
-                            "fallback": fb}
-                if is_short and on_table:
-                    # SPEED FAST PATH: instant answer — script bridge + the
-                    # next topic question, no LLM round-trip (0.6-0.75 s).
-                    q = self._ask_task() or self._wrap_up_question()
-                    self._last_question = q
-                    if self._current_is_family():
-                        fb = q
-                    else:
-                        fb = "{} {}".format(
-                            self._pick_not_repeated(self.BRIDGES), q)
-                    return {"text": caller_text, "intent": None,
-                            "fallback": fb}
-                # longer positive answer: close the topic, hand the NEXT topic
-                # to the LLM as its reply goal (task stays in free wording).
-                nxt = self._agenda_topic()
-                q = (self._ask_task()
-                     or self._wrap_up_question())
-                self._last_question = q
-                if self._current_is_family():
-                    goal = ("тёпло откликнуться на сказанное, затем передать "
-                            "вопрос от близких дословно: "
-                            f"«{self._agenda_question()}» — только этот один "
-                            "вопрос")
-                elif nxt:
-                    goal = (f"порадоваться, откликнуться на детали сказанного "
-                            f"и одним естественным вопросом перейти к теме "
-                            f"«{nxt}»")
-                else:
-                    goal = "порадоваться и откликнуться на детали сказанного"
-                return {"text": caller_text, "intent": goal, "fallback": q}
-            # generic acknowledgment — topic NOT moved (deferred by narration,
-            # or nothing on the table). Warm + one open invitation so a bare
-            # «ага» never kills the call.
-            fb = "{} {}".format(
-                self._pick_not_repeated(self.GENERIC_ACKS),
-                self._pick_not_repeated(self.WRAP_OPENERS))
-            self._last_question = fb
-            return {"text": caller_text, "intent": None, "fallback": fb}
-        # unknown: NOT masked to attention — it stays its own status and can
-        # never become GREEN. 2026-08-25 content-first: a NARRATIVE (>= 4
-        # words, e.g. a story about the day) is answered on its CONTENT — the
-        # reply goal NEVER force-asks the agenda topic onto what the user
-        # just told («Внучка приезжала...» must not bounce to «Как сон?»).
-        # The current topic is marked DEFERRED (_agenda_asked=False) so a
-        # following generic "всё хорошо" doesn't close it either; it closes
-        # later via a genuine topical reply.
-        self._extract_facts(caller_text)
-        topic = self._agenda_topic()
-        words = len((caller_text or "").split())
-        if words >= 4:
-            # narrative / story / elaborate unknown: react on content.
-            self._agenda_asked = False
-            if words >= 6:
-                return {"text": caller_text,
-                        "intent": "тепло откликнуться на рассказ человека и "
-                                  "задать один короткий вопрос по его "
-                                  "содержанию",
-                        "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
-            # 4-5 words: content reaction + one gentle topical question if it
-            # fits naturally, WITHOUT advancing the agenda.
-            q = self._ask_task()
-            self._last_question = q
-            if self._current_is_family():
-                g = ("откликнуться на сказанное и передать вопрос от "
-                     f"близких дословно: «{self._agenda_question()}»")
-            elif topic is not None:
-                g = (f"откликнуться на детали и одним вопросом узнать про "
-                     f"«{topic}»")
-            else:
-                g = ("откликнуться на детали и задать один уточняющий "
-                     "вопрос по теме")
-            return {"text": caller_text, "intent": g, "fallback": q}
-        if topic is not None and not self._agenda_asked:
-            # short, topic not on the table yet: put it naturally.
-            q = self._ask_task()
-            self._last_question = q
-            if self._current_is_family():
-                intent = ("откликнуться и передать вопрос от близких "
-                          f"дословно: «{self._agenda_question()}»")
-            elif topic is not None:
-                intent = ("откликнуться и одним естественным вопросом "
-                          f"узнать про «{topic}»")
-            else:
-                intent = "откликнуться и задать один уточняющий вопрос"
-            return {"text": caller_text, "intent": intent, "fallback": q}
-        if topic is not None:
-            return {"text": caller_text,
-                    "intent": "откликнуться на детали сказанного и задать "
-                              "один уточняющий вопрос по теме "
-                              f"«{topic}» (это цель звонка)",
-                    "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
-        return {"text": caller_text,
-                "intent": "откликнуться на детали сказанного и задать "
-                          "один естественный уточняющий вопрос по теме",
-                "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
 
     # ---- silence / no-speech ladder (2026-08-25) --------------------------
     # The 1st empty turn is NO LONGER a blind «Повторите» — it asks a
@@ -1184,8 +1441,8 @@ class Agent:
                         next steps go up the calm tapered ladder.
         """
         if reason == "echo":
-            n = getattr(self, "_echo_turns", 0) + 1
-            self._echo_turns = n
+            n = self._fsm._echo_turns + 1
+            self._fsm._echo_turns = n
             if n == 1:
                 fb = self._pick_not_repeated(self.REPEAT_REQUESTS)
             elif n == 2:
@@ -1193,8 +1450,8 @@ class Agent:
             else:
                 fb = self._pick_not_repeated(self.QUIET_HOLDS)
             return {"text": caller_text, "intent": None, "fallback": fb}
-        n = getattr(self, "_empty_turns", 0) + 1
-        self._empty_turns = n
+        n = self._fsm._empty_turns + 1
+        self._fsm._empty_turns = n
         if n == 1:
             fb = self._pick_not_repeated(self.ANCHORS)
         elif n == 2:
@@ -1320,6 +1577,21 @@ class Agent:
         "Что-нибудь ещё записать?",
         "Может, что-то вспомнилось?",
         "Есть что-то ещё, чем вы хотите поделиться?",
+    )
+
+    # REFUSAL_ACKS (2026-08-29, P-ACK/P-CLOSE2): a short polite decline
+    # ("нет спасибо", "не надо", "ничего") is honoured — acknowledge WITHOUT
+    # pushing another question (the old "Да, конечно, добавьте что-нибудь?"
+    # after "нет спасибо" was the top complaint of the live post-mortem).
+    # No question mark: it also naturally opens the door to a clean goodbye.
+    REFUSAL_ACKS = (
+        "Хорошо, я всё записала для близких. Обращайтесь, если "
+        "что-то понадобится.",
+        "Поняла вас. Все важное записано. Если что-то понадобится — "
+        "я рядом.",
+        "Хорошо. Я оставила запись для семьи. Берегите себя.",
+        "Записала всё, что вы рассказали. Родные это увидят. "
+        "Берегите себя.",
     )
 
     # VARIETY (2026-08-24): gentle control question when a symptom is heard

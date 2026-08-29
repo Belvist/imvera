@@ -90,6 +90,43 @@ reason="low_conf" (якорь, не LLM); критические сущност�
 НИКОГДА не режутся. Регрессии: `test_vocab_gate.py` (4), включая реальный кейс
 «у палок не ударилось» (проходит — «удар» критический). make test-fast 241 OK.
 
+## P-FSM — диалог переведён на формальную state machine (2026-08-29)
+
+После аудита звонка `59064eb2d1a9` (5/10) и жалобы владельца «логика разбросана,
+пиздец тяжело» монолитный if/elif в `plan_reply` (~400 строк, ad-hoc флаги)
+заменён на **одну явную машину по UML/Harel statecharts**:
+
+- **`core/fsm.py`** — generic `StateMachine`: ОДНА таблица переходов
+  (src, event, guard, action, dst), guard'ы PURE (только читают), action
+  мутируют и возвращают план, RTC-диспетчер, `UnhandledEvent` → явный
+  безопасный fallback (warm generic ack), «*»-источник выносит общее
+  (danger/done/repair) — нет state explosion. Тест `test_fsm.py` (4).
+- **`DialogueFSM`** в `dialogue.py` — состояния IDLE/CHECKIN/SIDE_QUESTION/
+  CLARIFY/SAFETY_CONFIRM/SAFETY_ACTIVE/HELP/WORRY/GOODBYE_CONFIRM/CLOSING/
+  DONE; события — классифицированные входы (verdict-driven: danger, ok,
+  help, worry, symptom, uncertain, empty, goodbye(_direct), confirm, refuse,
+  question, greeting, unknown, repair, done). Вся логика — в
+  `_build_transitions()`; новое правило = ОДНА строка.
+- **Agent** стал тонким фасадом: `plan_reply()` = `_fsm.dispatch(self, text,
+  reason)`; `mode`/`step` — свойства от FSM-состояния; extended state
+  (agenda, флаги, счётчики) живёт на Agent.
+- **P-CLOSE1**: «давай/давайте пока», «всё/ну/ладно пока», «буду прощаться»
+  — однозначное прощание → `E_GOODBYE_DIRECT` → закрытие БЕЗ переспрашивания
+  «Вы прощаетесь?». (Раньше «давай, пока» не завершало звонок вообще.)
+- **P-CLOSE2 + P-ACK**: «нет спасибо»/«не надо»/«ничего» — отдельное событие
+  `E_REFUSE`: вежливое «записала, обращайтесь» БЕЗ навязчивого «добавите
+  что-нибудь?» и арм быстрого закрытия; после отказа bare «пока» закрывает
+  напрямую.
+- **P-ANCHOR**: пустой ход после отказа/подтверждённого прощания → тёплое
+  «берегите себя» (terminal), НЕ «хорошо или плохо» (звучало как глухота
+  человеку, который уже попрощался).
+- Регрессии: `FSMCloseAndRefusalTests` (5) в test_dialogue_fixes_20260829.py.
+  `make test-fast` **248 OK (28 skip)**, dialog_quality --strict **10/10**,
+  voice_runtime **36 OK**.
+- ПРАВИЛА построения state-machine логики записаны в AGENTS.md («как
+  правильно строить логику диалога») — guard'ы PURE, RTC, unhandled→fallback,
+  «*»-факторинг, extended state, тест-первым.
+
 ## P2 — Контракт VoiceRuntime ↔ agent (главный блокер realtime)
 
 **1.4 turn_stream клиент не читает ответ** — сервер отвечает chunked
