@@ -590,6 +590,20 @@ VeraVoice. Не трогать без прямого указания владе
   ^4402$, dialplan живой FS ВОЗВРАЩЁН на 4400→Lua (install_freeswitch.sh
   применён, но откатан из-за неверифицированного inbound). Урок: loopback
   НЕ годится как end-to-end тест runtime — только реальный абонент.
+- **FSM-рефакторинг диалога + P-CLOSE/P-ACK/P-ANCHOR/E_HEARD (2026-08-29):**
+  диалог переведён на формальную state machine (core/fsm.py generic +
+  DialogueFSM; см. AGENTS.md «ПРАВИЛА: как правильно строить логику
+  диалога»). Закрыты дефекты звонка 59064eb2d1a9 (5/10): «давай/всё/ну
+  пока», «буду прощаться» → закрытие сразу; «нет спасибо»/«не надо» —
+  вежливо, без навязчивого «добавите?», арм fast-close; тишина после
+  отказа/прощания → «берегите себя» (не «хорошо или плохо»); «я тебя
+  слышу» на якоре → возврат к теме (E_HEARD). Харнесс voice-lab/
+  dialog_quality.py --strict = **14/14 PASS**. make test-fast **252 OK**.
+- **P7 G0-чистка (2026-08-29):** legacy/ → telephony/api/http.py; worker/ →
+  agent_service/; entrypoint call_agent.py делегирует каноническим модулям.
+  P6: MediaAdapter-контракт (voice_runtime/media_adapter.py; uuid_record —
+  dev-only). Live-инфра: IP-автосинк починен (fs_cli PATH), 7 launchd
+  agent-loop отключены (scripts/disable_agent_loops.sh). voice_runtime 42 OK.
 
 ## ПРАВИЛА: как правильно строить логику диалога (state machine) — ОБЯЗАТЕЛЬНО
 
