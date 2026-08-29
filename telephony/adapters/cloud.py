@@ -121,7 +121,7 @@ class CloudLLMAdapter:
         except Exception:  # noqa: BLE001
             return False
 
-    def chat(self, messages, max_tokens=100, temp=0.65, timeout=60):
+    def chat(self, messages, max_tokens=70, temp=0.65, timeout=60):
         try:
             return self.provider.chat(messages, max_tokens=max_tokens,
                                       temp=temp, timeout=min(timeout, 30))
@@ -129,7 +129,7 @@ class CloudLLMAdapter:
             print(f"[call-agent] cloud LLM error: {e}", flush=True)
             return None
 
-    def chat_stream(self, messages, max_tokens=100, temp=0.65, timeout=60):
+    def chat_stream(self, messages, max_tokens=70, temp=0.65, timeout=60):
         """Yield text deltas from the cloud provider (OpenAI-compatible SSE).
         Never raises: on failure the dialogue layer falls back to scripted
         phrases via the canned `fallback`."""

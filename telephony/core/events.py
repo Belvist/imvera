@@ -240,6 +240,34 @@ def reply_segments(agent, plan, cancel_event=None,
             buffer = buffer[cut:].strip()
             if emitted >= max_segments:
                 return
+        # EARLY-FIRST-SOUND (2026-08-30): the cloud LLM (DeepSeek/OpenRouter)
+        # takes ~1-1.2s for the first token, and waiting for a full sentence
+        # pushes first_audio past 3s (live call feedback). As soon as a
+        # usable fragment has streamed with no sentence break yet, ship it
+        # as the first segment — TTS starts speaking it while the model
+        # finishes the sentence. The trailing tail flushes the rest.
+        # Cut conservatively: only at a comma or a word boundary AFTER at
+        # least 6 words, so we never splice mid-word or on a dangling
+        # preposition ("Ой, как неприятно, что | голова").
+        if emitted == 0:
+            words = buffer.split()
+            if len(words) >= 6:
+                cut = -1
+                for marker in (" , ", ", "):
+                    i = buffer.find(marker)
+                    if 0 < i < len(buffer) - len(marker):
+                        head = buffer[:i].strip()
+                        hw = head.split()
+                        if len(hw) >= 4 and cut < i:
+                            cut = i
+                if cut > 0:
+                    seg = buffer[:cut].strip()
+                    if not _is_dup(seg):
+                        emitted += 1
+                        emitted_chars += len(seg)
+                        yield seg
+                        buffer = buffer[cut:].strip()
+                        break
 
     # flush a trailing reply that has no terminal punctuation
     tail = buffer.strip()
