@@ -668,6 +668,16 @@ VeraVoice. Не трогать без прямого указания владе
   Верифицировано в контейнере: STTEngine→SttHostAdapter, conf=1.0, live
   loopback TURN течёт (stt=1137ms). Запуск хост-STT: launchctl start
   com.mossvoice.stt (лог /tmp/mossvoice_stt.log).
+- **LLM ТОЛЬКО ОБЛАЧНЫЙ (2026-08-29): владелец убрал локальный llama.cpp/
+  Qwen3-4B из диалогов (слабо отвечает).** При MOSS_LLM_PROVIDER=openai
+  отсутствие/отказ ключа даёт NullLLM (пусто → скриптовая фраза), НЕ
+  локальную модель (adapters/cloud.py); `answers` перенесён в profile
+  `local-llm` (не стартует по умолчанию, ~2.5GB freed). Текущий прод:
+  **deepseek/deepseek-v4-flash-0731 через OpenRouter** (ключ в docker/.env),
+  проверено: CloudLLMAdapter отвечает, live-loopback gen out_chars=57.
+  Выигрыш памяти: telephony 3.66GiB→247MiB (STT на хосте + нет локальной
+  LLM). Фолбэк при облаке = скриптовые фразы (не локальная модель).
+  ВНИМАНИЕ: без ключа в docker/.env диалоги падают на скрипт.
 
 ## ПРАВИЛА: как правильно строить логику диалога (state machine) — ОБЯЗАТЕЛЬНО
 
