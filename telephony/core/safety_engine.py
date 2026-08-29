@@ -231,7 +231,7 @@ def _idx(tokens, word):
     return -1
 
 
-def _negated_left(tokens, j):
+def _negated_left(tokens, j, window=NEG_WINDOW):
     """True when a negator sits BEFORE token j (leading denial).
 
     Falls are asymmetric (2026-08-29): only a negator IN FRONT of the fall
@@ -240,12 +240,19 @@ def _negated_left(tokens, j):
     "не" just softens how badly). The symmetric ±NEG_WINDOW window used to
     swallow real falls once "не" landed within 3 tokens after the verb.
     """
-    for i in range(max(0, j - NEG_WINDOW), j):
+    for i in range(max(0, j - window), j):
         if tokens[i] in NEGATORS:
             if i + 1 < len(tokens) and tokens[i + 1] in _ABILITY:
                 continue
             return True
     return False
+
+
+# Positive words are only negated by a negator DIRECTLY before them (up to 2
+# tokens): «не хорошо», «не совсем хорошо» are complaints; «я отлично
+# чувствую, ничего не болела, жива здорова» — the «не» belongs to
+# "болела", the trailing "жива здорова" is a SEPARATE positive clause.
+POSITIVE_NEG_WINDOW = 2
 
 
 def _has_phrase(tokens, phrase):
@@ -582,7 +589,16 @@ class SafetyEngine:
                         high_self = True
                 continue
             if any(tok.startswith(r) for r in POSITIVE_ROOTS):
-                if is_neg:
+                # POSITIVE ASYMMETRY (2026-08-29): «я отлично чувствую,
+                # ничего НЕ болела» — the "не" negates "болела", NOT the
+                # "отлично" two words before it. The symmetric ±window used
+                # to flip a clean bill of health into "не хорошо" (possible_
+                # red) and Vera answered "вам сейчас плохо?" to a caller
+                # who said they feel great. A positive is only negated by a
+                # negator DIRECTLY before it (narrow window) — «не хорошо»
+                # is a complaint, but «отлично ... не болела, жива здорова»
+                # keeps the trailing positive clause separate.
+                if _negated_left(tokens, j, window=POSITIVE_NEG_WINDOW):
                     # "не хорошо" is a complaint; "не жалуюсь" is fine.
                     # LEADING-DENIAL override: "Нет, не сейчас хорошо" answers
                     # the control question with NO — the complaint refers to
