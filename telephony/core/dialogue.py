@@ -157,7 +157,7 @@ def clean_transcript(text):
 #   guards PURE, RTC dispatch, unhandled event -> explicit safe fallback,
 #   "*" sources factor out common behavior (no state explosion).
 # ----------------------------------------------------------------------------
-from core.fsm import StateMachine, UnhandledEvent  # noqa: E402
+from core.fsm import StateMachine  # noqa: E402
 
 
 class DialogueFSM:
@@ -226,6 +226,7 @@ class DialogueFSM:
         self._hello_back_done = False   # greeting handler fires once per call
         self._empty_turns = 0
         self._echo_turns = 0
+        self._dispatch_depth = 0
         self._refused_offer = False     # P-CLOSE2: honoured decline -> fast close
         # per-dispatch transient (set by dispatch, read by guards)
         self._last_text = None
@@ -247,9 +248,12 @@ class DialogueFSM:
         self._hello_back_done = False
         self._empty_turns = 0
         self._echo_turns = 0
+        self._dispatch_depth = 0
         self._refused_offer = False
 
     # ---- dispatch -------------------------------------------------------
+    MAX_DISPATCH_DEPTH = 4   # re-dispatch (resume/repair/confirm) nesting cap
+
     def dispatch(self, agent, text, reason=None, verdict=None, append=True):
         """Classify the caller input and run the machine (RTC).
 
@@ -262,18 +266,27 @@ class DialogueFSM:
         if append and text and not agent.done:
             agent.memory.append(text)
             agent.llm_history.append(("user", text))
-        ev, verdict = self._classify(agent, text, reason, verdict)
-        self._last_text = text
-        self._last_reason = reason
-        self._last_verdict = verdict
-        try:
-            plan = self.sm.handle(agent, ev)
-        except UnhandledEvent:
-            # NEVER a silent wrong answer: degrade to a warm generic ack.
+        # DEPTH GUARD (2026-08-29): actions may re-dispatch the SAME turn
+        # (repair, side-question resume, close-confirmation continue). A
+        # future mis-edit could make that loop forever — cap the nesting so
+        # the machine degrades to a warm ack instead of blowing the stack.
+        depth = getattr(self, "_dispatch_depth", 0)
+        if depth >= self.MAX_DISPATCH_DEPTH:
             return {"text": text,
                     "intent": "откликнуться на сказанное коротко",
                     "fallback": agent._pick_not_repeated(agent.GENERIC_ACKS)}
-        return plan
+        self._dispatch_depth = depth + 1
+        try:
+            ev, verdict = self._classify(agent, text, reason, verdict)
+            self._last_text = text
+            self._last_reason = reason
+            self._last_verdict = verdict
+            # The machine is TOTAL: a ("*","*") catch-all in the table turns
+            # any unhandled pair into an explicit safe ack (never silent,
+            # never an exception on the hot path).
+            return self.sm.handle(agent, ev)
+        finally:
+            self._dispatch_depth -= 1
 
     # ---- classifier: raw input -> one event -----------------------------
     def _classify(self, agent, text, reason, verdict=None):
@@ -373,15 +386,6 @@ class DialogueFSM:
         return bool(t) and len(t.split()) <= 3
 
     @staticmethod
-    def _g_confirm_pending(ctx, ev):
-        return bool(getattr(ctx, "_closing_confirm_pending", False))
-
-    @staticmethod
-    def _g_not_confirmed(ctx, ev):
-        return not getattr(ctx, "_closing_confirmed", False) \
-            and not ctx._fsm._refused_offer
-
-    @staticmethod
     def _g_short_unconfirmed(ctx, ev):
         """A SHORT goodbye that has not already been confirmed (and the
         caller has not already declined an offer) — confirm it once before
@@ -409,6 +413,18 @@ class DialogueFSM:
         return bool(getattr(ctx, "_clearing", False))
 
     # ---- actions (mutate extended state, return the reply plan) --------
+    def _a_unhandled(self, agent, ev):
+        """TOTAL-machine catch-all (2026-08-29): reached only when no
+        specific (state, event) transition matched — the pairs the
+        classifier can NOT produce (e.g. E_CONFIRM outside GOODBYE_CONFIRM,
+        E_QUESTION outside CHECKIN/SIDE_QUESTION). Never silent, never an
+        exception on the hot path: log the unexpected pair and reply warm."""
+        print("[dialogue-fsm] UNHANDLED event=%s state=%s -> warm ack"
+              % (ev, self.sm.state), flush=True)
+        return {"text": agent._fsm._last_text,
+                "intent": "откликнуться на сказанное коротко",
+                "fallback": agent._pick_not_repeated(agent.GENERIC_ACKS)}
+
     def _a_done(self, agent, ev):
         return {"text": agent._fsm._last_text, "intent": None,
                 "fallback": agent._goodbye(), "terminal": True}
@@ -781,6 +797,13 @@ class DialogueFSM:
         # ordinary turns
         add("*", self.E_OK, None, self._a_ok, name="any/ok")
         add("*", self.E_UNKNOWN, None, self._a_unknown, name="any/unknown")
+        # TOTAL MACHINE (2026-08-29): LAST row is the catch-all. It matches
+        # only pairs with no specific transition (the classifier cannot
+        # produce e.g. E_CONFIRM outside GOODBYE_CONFIRM, E_QUESTION outside
+        # CHECKIN/SIDE_QUESTION) and turns them into an explicit warm ack
+        # with a log line — never a silent swallow, never an exception on
+        # the hot path. MUST stay the last declared row.
+        add("*", "*", None, self._a_unhandled, name="any/any (catch-all)")
 
 
 # ----------------------------------------------------------------------------
