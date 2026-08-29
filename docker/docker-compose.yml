@@ -121,11 +121,13 @@ services:
     environment:
       # Accuracy vs latency (2026-08-29): whisper-tiny mangled Russian phone
       # audio ("здравствуйте" -> gibberish) — the "неправильно слышит"
-      # symptom. whisper-small is the measured sweet spot: real-word RU
-      # accuracy at ~1-3 s/turn on ARM (fp32). Override via MOSS_STT_MODEL
-      # (e.g. openai/whisper-base for less latency, openai/whisper-medium
-      # / large-v3-turbo for even better accuracy on strong hardware).
+      # symptom. STT moved to the Qwen3-ASR host service (voice_runtime/
+      # stt_host.py on Apple Silicon via MLX, Apache-2.0) which beats whisper
+      # on real Russian phone audio; MOSS_STT_HOST is the host service reach
+      # (host.docker.internal from the container). The whisper fallback stays
+      # as a safety net when the host STT is unreachable.
       MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-small}
+      MOSS_STT_HOST: ${MOSS_STT_HOST:-http://host.docker.internal:9705}
       MOSS_SILERO_SPEAKER: ${MOSS_SILERO_SPEAKER:-kseniya}
     ports:
       - "127.0.0.1:9600:9600"
@@ -188,8 +190,10 @@ services:
       MOSS_LLM_OPENAI_MODEL: ${MOSS_LLM_OPENAI_MODEL:-gpt-4o-mini}
       MOSS_LLM_BASE_URL: ${MOSS_LLM_BASE_URL:-https://api.openai.com/v1/chat/completions}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      # STT runs IN this process (phone path) — same model policy as voice.
+      # STT runs IN this process (phone path) — Qwen3-ASR host service
+      # preferred (better RU accuracy), whisper fallback otherwise.
       MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-small}
+      MOSS_STT_HOST: ${MOSS_STT_HOST:-http://host.docker.internal:9705}
       # Business processing (outbox/incidents) runs in the `workflow`
       # deployment, NOT in the realtime call process.
       MOSS_OUTBOX_INPROCESS: "0"

@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
 """Shared helpers for MOSS-TTS-Nano + STT pipeline."""
 import hashlib
+import json
 import os
 import re
 import tempfile
 import threading
+import urllib.error
+import urllib.request
 
 import numpy as np
 
 DEFAULT_STT_MODEL = "mlx-community/whisper-large-v3-turbo-asr-fp16"
+# Qwen3-ASR host service (voice_runtime/stt_host.py). When MOSS_STT_HOST is
+# set, load_stt() prefers this HTTP endpoint — the Qwen3-ASR model runs on
+# Apple Silicon (MLX) on the host and beats whisper-small on real Russian
+# phone audio (measured 2026-08-29: "настроение" correctly, 0.2-1.8s/file).
+STT_HOST = os.environ.get("MOSS_STT_HOST", "")
 # MOSS-TTS-Nano (OpenMOSS/MOSI.AI, apache-2.0): ~0.1B multilingual zero-shot
 # voice-clone TTS that runs on CPU (ONNX, no GPU needed). Native output is
 # 48 kHz. Clones a voice from a reference audio; falls back to a built-in
@@ -296,12 +304,19 @@ def validate_reference(ref_path, language="ru"):
 
 
 def load_stt(model_id=DEFAULT_STT_MODEL):
-    """Load the Whisper STT model once.
+    """Load the STT model once.
 
-    Prefers the MLX backend (fast on Apple Silicon), then faster-whisper
+    Prefers the Qwen3-ASR host service (Apple Silicon, MLX) when
+    MOSS_STT_HOST is set — it beats whisper on real Russian phone audio.
+    Then the MLX backend (host, fast on Apple Silicon), then faster-whisper
     (CTranslate2 — 3-4x faster than transformers on CPU), and finally the
     transformers Whisper pipeline.
     """
+    if STT_HOST:
+        try:
+            return SttHostAdapter()
+        except Exception:
+            pass
     try:
         from mlx_audio.stt import load as stt_load
 
@@ -407,6 +422,76 @@ def vad_speech_seconds(path: str, tail_s: float = None):
         if energies and float(np.median(energies)) < 0.008:
             return 0.0
     return secs
+
+
+class SttHostAdapter:
+    """Duck-typed like mlx_audio STT: exposes `.generate(path, ...).text`.
+
+    Delegates to the Qwen3-ASR host service (voice_runtime/stt_host.py).
+    The container cannot run MLX, so the model lives on the host and this
+    adapter is the transport. Same `.generate` contract as the whisper
+    adapters (used by STTEngine.transcribe_with_confidence).
+    """
+
+    def __init__(self, host=None, timeout=60):
+        self._host = (host or STT_HOST).rstrip("/")
+        self._timeout = timeout
+        self._id = "qwen3-asr-host"
+        if not self._host:
+            raise ValueError("MOSS_STT_HOST is empty")
+
+    def _wav(self, path):
+        """Read a wav file into memory (max 50 MB)."""
+        with open(path, "rb") as f:
+            data = f.read()
+        if len(data) > 50 * 1024 * 1024:
+            raise ValueError("audio too large for host STT")
+        return data
+
+    def generate(self, path, verbose=False, task="transcribe", language="ru",
+                 **kwargs):
+        class _R:
+            text = ""
+            segments = ()
+            speech_s = 0.0
+
+        # NOISE GATE pass 1: authoritative Silero VAD on the file. Pure
+        # noise/TV/music is rejected HERE without hitting the host at all
+        # (fast + no hallucinations possible).
+        vad_speech = vad_speech_seconds(path)
+        r = _R()
+        if vad_speech is not None and vad_speech < 0.15:
+            return r
+        r.speech_s = vad_speech if vad_speech is not None else 0.0
+        boundary = "--mossstt" + hashlib.md5(path.encode()).hexdigest()[:8]
+        payload = self._wav(path)
+        body = (("--%s\r\nContent-Disposition: form-data; name=\"file\"; "
+                 "filename=\"turn.wav\"\r\nContent-Type: audio/wav\r\n\r\n")
+                % boundary).encode("utf-8") + payload + \
+            ("\r\n--%s--\r\n" % boundary).encode("utf-8")
+        req = urllib.request.Request(
+            self._host + "/transcribe", data=body,
+            headers={"Content-Type": "multipart/form-data; boundary=%s"
+                     % boundary},
+            method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                obj = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            print("[stt-host] HTTP %d: %s"
+                  % (e.code, e.read().decode("utf-8", "replace")[:120]),
+                  flush=True)
+            return r
+        except Exception as e:  # noqa: BLE001
+            print("[stt-host] error: %s" % e, flush=True)
+            return r
+        r.text = (obj.get("text") or "").strip()
+        # a synthetic segment keeps confidence_from_segments working (Qwen
+        # reports no per-segment logprobs; audio-energy gate already ran).
+        if r.text:
+            r.segments = ({"no_speech_prob": 0.0, "compression_ratio": 0.0,
+                           "avg_logprob": -0.4},)
+        return r
 
 
 class FasterWhisperAdapter:
