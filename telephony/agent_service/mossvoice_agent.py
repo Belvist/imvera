@@ -3,7 +3,7 @@
 import os
 
 from core.orchestrator import Serve
-from legacy.call_agent_http import QuietHTTPServer, Handler
+from api.http import QuietHTTPServer, Handler
 
 
 def build_server(args):

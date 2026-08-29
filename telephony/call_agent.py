@@ -71,9 +71,9 @@ from adapters.redis_store import _maybe_session_store  # noqa: E402
 from adapters.postgres_results import Recorder  # noqa: E402
 from adapters.s3_recordings import save_wav, save_user_wav  # noqa: E402
 from adapters.audio import wav_to_pcm, pcm_to_wav, parse_multipart_wav  # noqa: E402
-from legacy.call_agent_http import QuietHTTPServer, Handler  # noqa: E402
-from worker.mossvoice_agent import build_server, run  # noqa: E402
-from worker.main import main  # noqa: E402
+from api.http import QuietHTTPServer, Handler  # noqa: E402
+from agent_service.mossvoice_agent import build_server, run  # noqa: E402
+from agent_service.main import main  # noqa: E402
 
 __all__ = [
     "Serve",

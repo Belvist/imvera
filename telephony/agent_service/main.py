@@ -3,7 +3,7 @@
 import argparse
 import os
 
-from worker.mossvoice_agent import run, default_outdir
+from agent_service.mossvoice_agent import run, default_outdir
 
 
 def main():

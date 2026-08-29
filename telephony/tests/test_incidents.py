@@ -266,7 +266,7 @@ class IncidentDrillTests(unittest.TestCase):
         """POST /incidents/<id>/ack over HTTP moves open -> checking."""
         from conftest_or_paths import SAMPLE_REF
         from core.orchestrator import Serve
-        from legacy.call_agent_http import Handler, QuietHTTPServer
+        from api.http import Handler, QuietHTTPServer
 
         class _Args:
             refs = [SAMPLE_REF]

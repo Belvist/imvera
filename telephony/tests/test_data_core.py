@@ -295,7 +295,7 @@ class DataCoreDrillTests(unittest.TestCase):
         1 outbox message."""
         from conftest_or_paths import SAMPLE_REF
         from core.orchestrator import Serve
-        from legacy.call_agent_http import Handler, QuietHTTPServer
+        from api.http import Handler, QuietHTTPServer
 
         class _Args:
             refs = [SAMPLE_REF]
