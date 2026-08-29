@@ -339,11 +339,15 @@ class SafetyEngine:
             elif kind == "confirmed_red":
                 kind = "possible_red"         # cannot confirm an emergency
 
-        # Latch: confirmed/uncertain RED never downgrades to ok/GREEN.
+        # Latch: confirmed RED never downgrades to ok/GREEN. UNCERTAIN_RED
+        # (an unconfirmed concern) is NOT latched — a later positive
+        # ("уже отпустило", "настроение хорошее") clears it back to OK so
+        # the conversation can resume the agenda. Without this, a single
+        # "да" on an open question wedged the call in safety_active forever
+        # (live post-mortem 2026-08-29: 47/100 synthetic calls never
+        # finished — every following turn answered from safety_active).
         if self._state == "CONFIRMED_RED":
             return self._event("confirmed_red", obs, p, latched=True)
-        if self._state == "UNCERTAIN_RED" and kind != "confirmed_red":
-            return self._event("uncertain_red", obs, p, latched=True)
 
         if kind == "no_speech":
             return self._event("no_speech", obs, p)
@@ -359,6 +363,22 @@ class SafetyEngine:
                 self._awaiting = False
                 return self._event("uncertain_red", obs, p)
             if p["affirmative"]:
+                # CONFIRM-QUESTION GATE (2026-08-29): a bare "да"/"ага" only
+                # confirms when the pending question is a YES/NO one ("вам
+                # плохо?", "нужна помощь?"). If Vera asked an OPEN question
+                # ("что вас беспокоит?", "что именно сейчас?") then "да" is
+                # a backchannel ("да, слушаю") — NOT a confirmation of
+                # danger. Escalate to UNCERTAIN (re-ask) instead of a
+                # confirmed_red that alarms the family for a routine
+                # complaint (live post-mortem: 7/100 synthetic calls false-
+                # alarmed on «да»).
+                q = (getattr(obs, "question", None) or "").lower()
+                if q and not re.search(r"(плохо|неважно|нужна помощь|"
+                                       r"помощь|худо|плохое самочувствие|"
+                                       r"больно|болит)", q):
+                    self._state = "UNCERTAIN_RED"
+                    self._awaiting = False
+                    return self._event("uncertain_red", obs, p)
                 self._state = "CONFIRMED_RED"
                 self._awaiting = False
                 return self._event("confirmed_red", obs, p)

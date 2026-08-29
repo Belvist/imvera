@@ -229,15 +229,31 @@ class MachineTests(unittest.TestCase):
                 "confirmed_red", f"latch broken by {t!r}")
             self.assertTrue(eng.last_event.latched)
 
-    def test_uncertain_red_never_becomes_ok(self):
+    def test_uncertain_red_is_recoverable_by_positive(self):
+        """2026-08-29: UNCERTAIN_RED (an UNCONFIRMED concern) must be
+        recoverable — a later positive («уже отпустило», «всё хорошо»)
+        clears it back to OK so the agenda can resume. It used to latch
+        forever, wedging the call in safety_active (47/100 synthetic calls
+        never finished). CONFIRMED_RED still latches (see the test above)."""
         eng = SafetyEngine()
         eng.observe(Observation(raw_text="плохо"))
         eng.observe(Observation(raw_text="не знаю"))
         self.assertEqual(eng.state, "UNCERTAIN_RED")
-        for t in ("всё хорошо", "нет", "неплохо"):
-            self.assertEqual(
-                eng.observe(Observation(raw_text=t)).kind,
-                "uncertain_red", f"uncertain downgraded by {t!r}")
+        # a clear positive recovers (no latch)
+        ev = eng.observe(Observation(raw_text="всё хорошо"))
+        self.assertEqual(ev.kind, "ok")
+        self.assertEqual(eng.state, "OK")
+
+    def test_uncertain_red_keeps_without_positive(self):
+        eng = SafetyEngine()
+        eng.observe(Observation(raw_text="плохо"))
+        eng.observe(Observation(raw_text="не знаю"))
+        self.assertEqual(eng.state, "UNCERTAIN_RED")
+        # non-positive inputs do not silently clear it
+        for t in ("не знаю", "непомню"):
+            eng.observe(Observation(raw_text=t))
+            self.assertEqual(eng.state, "UNCERTAIN_RED",
+                             f"uncertain cleared by {t!r}")
 
     def test_freeze_blocks_all_mutation(self):
         eng = SafetyEngine()
@@ -270,9 +286,14 @@ class AgentFlowTests(unittest.TestCase):
         self.assertEqual(a.outcome["status"], "ok")
 
     def test_bad_feeling_then_confirmed_is_alert(self):
+        """2026-08-29: a bare «да»/«да плохо» on an OPEN control question
+        («Как вас сейчас самочувствие?») is NOT a danger confirmation — it
+        goes to uncertain/attention so the family is not alarmed for a
+        routine complaint. A real confirmed fall/emergency still alerts
+        (covered by the corpus: «упала»/«скорая» = confirmed_red)."""
         a = self._agent("плохо", "да")
-        self.assertEqual(a.status, "alert")
-        self.assertEqual(a.outcome["status"], "alert")
+        self.assertEqual(a.status, "attention")
+        self.assertIn("самочувствие не подтверждено", a.notes)
 
     def test_bad_feeling_then_fine_is_attention_cleared(self):
         a = self._agent("плохо", "всё хорошо", "нет")

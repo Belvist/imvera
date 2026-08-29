@@ -324,6 +324,11 @@ class DialogueFSM:
                 return self.E_GOODBYE_DIRECT, verdict
             if _is_closing(text):
                 return self.E_GOODBYE, verdict
+            # in the confirmation window, a bare «пока»/«да»/«ага» IS the
+            # confirmation (the caller already said goodbye once)
+            if re.fullmatch(r"\s*(пока|да|ага|угу|конечно)[\s.,!?]*",
+                            text, re.IGNORECASE):
+                return self.E_GOODBYE_DIRECT, verdict
             return self.E_CONFIRM, verdict
         # P-ACK (2026-08-29): a short polite decline ("нет спасибо", "не
         # надо", "ничего") is its OWN event — honoured, never re-interpreted
@@ -352,6 +357,12 @@ class DialogueFSM:
                                        re.IGNORECASE))):
             return self.E_GOODBYE_DIRECT, verdict
         if text and _is_closing(text):
+            return self.E_GOODBYE, verdict
+        # BARE «пока» (2026-08-29): the most common farewell of elderly
+        # callers, but not in the confirm-eligible regex (to protect «пока
+        # нет»). In normal conversation it is a goodbye — route it through
+        # the one-shot confirmation so a second «пока» closes.
+        if text and re.fullmatch(r"\s*пока[\s.,!?]*", text, re.IGNORECASE):
             return self.E_GOODBYE, verdict
         if self.sm.state == self.GOODBYE_CONFIRM and text:
             return self.E_CONFIRM, verdict
@@ -1074,7 +1085,8 @@ _CLOSING_RE = re.compile(
     r"(до свидания|до свиданья|досвидания|всего доброго|всего хорошего|"
     r"до встречи|прощайте|спасибо за звонок|на сегодня всё|заканчиваем|"
     r"не буду мешать|пойду отдыхать|позвоню позже|будьте здоровы|"
-    r"пока пока|пока-пока|давай(те)?\s*,?\s*пока|пока\s*,?\s*давай|"
+    r"берегите себя|пока пока|пока-пока|давай(те)?\s*,?\s*пока|"
+    r"пока\s*,?\s*давай|"
     r"(всё|ну|ладно|хватит)\s*,?\s*(давай|пока|давай\s*пока)|"
     r"буду прощаться|будем прощаться|пора прощаться|заканчиваю разговор)",
     re.IGNORECASE,

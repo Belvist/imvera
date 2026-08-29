@@ -63,7 +63,9 @@ VALID_KINDS = frozenset((
     "help_request", "third_person", "unknown", "frozen",
 ))
 
-_LATCHED = frozenset(("CONFIRMED_RED", "UNCERTAIN_RED"))
+# CONFIRMED_RED latches forever (the family is already alarmed). UNCERTAIN_RED
+# is recoverable by a positive (2026-08-29) so it is NOT in this set.
+_LATCHED = frozenset(("CONFIRMED_RED",))
 
 
 class InvariantTests(unittest.TestCase):
@@ -113,17 +115,29 @@ class InvariantTests(unittest.TestCase):
             self.assertEqual(ev.kind, "confirmed_red",
                              f"confirmed RED downgraded to {ev.kind} by {t!r}")
 
-    # I7: UNCERTAIN_RED never becomes ok.
-    def test_I7_uncertain_never_ok(self):
+    # I7 (2026-08-29 rework): UNCERTAIN_RED is a RECOVERABLE concern — it
+    # does NOT downgrade by non-positive input, but a clear positive
+    # ("уже отпустило") clears it so the agenda can resume. Before, it
+    # latched forever and wedged the call in safety_active (live post-
+    # mortem: 47/100 synthetic calls never finished).
+    def test_I7_uncertain_not_downgraded_by_negatives(self):
         eng = SafetyEngine()
         eng.observe(Observation(raw_text="плохо"))
         eng.observe(Observation(raw_text="не знаю"))
         self.assertEqual(eng.state, "UNCERTAIN_RED")
-        for _ in range(20):
-            t = random.choice(POOL)
+        for t in POOL:
             ev = eng.observe(Observation(raw_text=t))
             self.assertNotEqual(ev.kind, "ok",
                                 f"uncertain downgraded by {t!r}")
+
+    def test_I7_uncertain_recovered_by_positive(self):
+        eng = SafetyEngine()
+        eng.observe(Observation(raw_text="плохо"))
+        eng.observe(Observation(raw_text="не знаю"))
+        self.assertEqual(eng.state, "UNCERTAIN_RED")
+        ev = eng.observe(Observation(raw_text="уже отпустило"))
+        self.assertEqual(ev.kind, "ok")
+        self.assertEqual(eng.state, "OK")
 
     # I8: low confidence can neither create GREEN nor confirm RED.
     def test_I8_low_confidence_limits(self):
