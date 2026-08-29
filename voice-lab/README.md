@@ -9,7 +9,7 @@ Gate 1 — никакой работы над голосом.
 Интерпретатор — рантайм-venv (в нём есть numpy/mlx/transformers):
 
 ```bash
-PY="/Users/earflow/Library/Application Support/MossVoice/runtime/qwen-venv/bin/python"
+PY="$HOME/Library/Application Support/MossVoice/runtime/qwen-venv/bin/python"
 
 # REPL (обычный разговор; Вера не задаёт вопросов приветствия)
 $PY voice-lab/lab.py

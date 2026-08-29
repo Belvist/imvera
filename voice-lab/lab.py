@@ -7,7 +7,7 @@ be tuned and gated BEFORE any voice work.
 
 Usage (from repo root, with the runtime venv):
 
-    "/Users/earflow/Library/Application Support/MossVoice/runtime/qwen-venv/bin/python" \
+    "$HOME/Library/Application Support/MossVoice/runtime/qwen-venv/bin/python" \
         voice-lab/lab.py [--check-in] [--url http://127.0.0.1:9500]
 
 REPL commands:
