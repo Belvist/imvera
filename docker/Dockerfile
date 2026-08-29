@@ -26,6 +26,7 @@ WORKDIR /app
 
 COPY runtime/scripts /app/runtime/scripts
 COPY telephony /app/telephony
+COPY voice_runtime /app/voice_runtime
 COPY refs /app/refs
 COPY scripts /app/scripts
 

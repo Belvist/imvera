@@ -13,6 +13,16 @@
 #   db/cache/storage             PostgreSQL + Redis + MinIO (data core)
 #   --profile telegram: tg (8600), cloudflared tunnel, bot
 #
+# NOTE (P8, 2026-08-29): VoiceRuntime (voice_runtime/) is intentionally NOT a
+# compose service. It drives FreeSWITCH over the ESL socket bound to the
+# HOST loopback (127.0.0.1:8021) and shares /tmp/mossvoice file paths with
+# the host FreeSWITCH for uuid_broadcast playback — a container cannot reach
+# the host loopback, and opening ESL to the bridge would undo the P0 security
+# fix. The runtime therefore runs on the host next to FreeSWITCH under
+# launchd (com.mossvoice.runtime.plist + scripts/run_runtime.sh). The
+# voice_runtime/ sources ARE copied into this image (see Dockerfile) so the
+# whole tree ships in one artifact and host/container code stay in lockstep.
+#
 # Usage:
 #   make up        собрать и поднять весь стек        (первый запуск скачивает
 #   make update    обновить: пересобрать образы и перезапустить)
@@ -87,19 +97,35 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: mossvoice/backend:latest
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
     container_name: mossvoice-voice
-    command: >
-      python /app/runtime/scripts/tts_server.py
-      --host 0.0.0.0 --port 9600 --threads 4
-      --model ${MOSS_TTS_MODEL:-silero}
-      --allow-ref-dir /app/refs --allow-ref-dir /app/telephony/refs
+    # read.md rev-3: explicit exec-array form (no shell semantics), so the
+    # command is identical across Compose versions. STT lives in the
+    # telephony process (phone path) — voice is TTS only (--no-stt).
+    command:
+      - python
+      - /app/runtime/scripts/tts_server.py
+      - --host
+      - 0.0.0.0
+      - --port
+      - "9600"
+      - --threads
+      - "4"
+      - --model
+      - ${MOSS_TTS_MODEL:-silero}
+      - --allow-ref-dir
+      - /app/refs
+      - --allow-ref-dir
+      - /app/telephony/refs
+      - --no-stt
     environment:
-      # whisper-tiny fp32: ~0.3-0.6s STT (base/small 2-5x slower on ARM;
-      # int8 is slower than fp32 there). Accuracy tradeoff: rare names may
-      # mangle; safety-critical phrases are fine. Override to
-      # openai/whisper-small if accuracy matters more than latency.
-      MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-tiny}
+      # Accuracy vs latency (2026-08-29): whisper-tiny mangled Russian phone
+      # audio ("здравствуйте" -> gibberish) — the "неправильно слышит"
+      # symptom. whisper-small is the measured sweet spot: real-word RU
+      # accuracy at ~1-3 s/turn on ARM (fp32). Override via MOSS_STT_MODEL
+      # (e.g. openai/whisper-base for less latency, openai/whisper-medium
+      # / large-v3-turbo for even better accuracy on strong hardware).
+      MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-small}
       MOSS_SILERO_SPEAKER: ${MOSS_SILERO_SPEAKER:-kseniya}
     ports:
       - "127.0.0.1:9600:9600"
@@ -139,7 +165,7 @@ services:
     restart: unless-stopped
 
   telephony:
-    image: mossvoice/backend:latest
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
     container_name: mossvoice-telephony
     command: >
       python /app/telephony/call_agent.py
@@ -163,19 +189,34 @@ services:
       MOSS_LLM_BASE_URL: ${MOSS_LLM_BASE_URL:-https://api.openai.com/v1/chat/completions}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # STT runs IN this process (phone path) — same model policy as voice.
-      MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-tiny}
+      MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-small}
       # Business processing (outbox/incidents) runs in the `workflow`
       # deployment, NOT in the realtime call process.
       MOSS_OUTBOX_INPROCESS: "0"
+      # SCHEMA OWNERSHIP (read.md rev-3): DDL is the `migrate` job's; this
+      # realtime process only verifies the schema is complete (read-only).
+      MOSS_RUN_MIGRATIONS: "0"
       # ADMISSION CONTROL: hard cap on live calls (0 = unlimited, dev).
-      # At the cap new calls get 503 capacity — never degraded audio.
-      MOSS_MAX_CONCURRENT_CALLS: ${MOSS_MAX_CONCURRENT_CALLS:-0}
+      # read.md rev-2 #15: unlimited is a collapse risk even on one node
+      # (one TTS/STT/LLM) — production sets a FINITE value close to the
+      # measured knee point. Dev default: 4 concurrent calls is a sane
+      # single-node ceiling; override freely via .env.
+      MOSS_MAX_CONCURRENT_CALLS: ${MOSS_MAX_CONCURRENT_CALLS:-4}
       MOSS_PG_URL: postgresql://${MOSS_PG_USER:-mossvoice}:${MOSS_PG_PASSWORD:-mossvoice_dev}@db:5432/${MOSS_PG_DB:-mossvoice}
       MOSS_REDIS_URL: redis://cache:6379/0
       MOSS_S3_ENDPOINT: http://storage:9000
       MOSS_S3_ACCESS_KEY: ${MOSS_S3_ACCESS_KEY:-mossvoice_dev}
       MOSS_S3_SECRET_KEY: ${MOSS_S3_SECRET_KEY:-mossvoice_dev_secret}
       MOSS_S3_BUCKET: ${MOSS_S3_BUCKET:-mossvoice-recordings}
+      # PHONE-PATH "не слышит" FORENSICS (2026-08-25): keep a copy of every
+      # turn that was blanked (no usable transcript) at
+      #   <outdir>/blank_audio/<call_id>_<ts>.wav
+      # so a live "Вера говорит я вас не слышу" can be dissected offline
+      # (RMS/VAD/whisper) to tell a dead mic from a silent caller vs
+      #   quiet/attenuated RTP. Off by default to avoid disk growth and the
+      #   retention of user audio; enable per-deploy via
+      #   MOSS_RETAIN_BLANK_AUDIO=1 (PII — pair with retention/cleanup).
+      MOSS_RETAIN_BLANK_AUDIO: ${MOSS_RETAIN_BLANK_AUDIO:-0}
     volumes:
       # FreeSWITCH (host) and the agent (container) must see the SAME paths:
       # the Lua dialplan plays reply WAVs and uploads caller turns by path,
@@ -187,6 +228,15 @@ services:
       - models:/data/models
     ports:
       - "127.0.0.1:9400:9400"
+    # read.md rev-2 #13: truthful deployment — the container is healthy only
+    # when /ready reports a working realtime pipeline (STT+TTS), so TG never
+    # starts against a telephony that is alive but not usable.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,json,sys; sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:9400/ready', timeout=3)).get('ready') else 1)"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 300s
     depends_on:
       voice:
         condition: service_healthy
@@ -194,14 +244,30 @@ services:
         condition: service_started
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+  # Schema-migration JOB (read.md rev-3): DDL is owned by this one-shot
+  # service, never by the realtime telephony process. It runs once (after the
+  # DB is healthy) and exits; telephony is gated on its successful completion.
+  migrate:
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
+    container_name: mossvoice-migrate
+    command: python /app/telephony/workers/migrate_main.py
+    environment:
+      MOSS_PG_URL: postgresql://${MOSS_PG_USER:-mossvoice}:${MOSS_PG_PASSWORD:-mossvoice_dev}@db:5432/${MOSS_PG_DB:-mossvoice}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
 
   # Business worker deployment: outbox delivery + incident escalation.
   # Deliberately SEPARATE from the realtime call process (failure domain:
   # an outbox backlog must never steal CPU from live audio). Stateless,
   # lease-based — scale to N replicas safely.
   workflow:
-    image: mossvoice/backend:latest
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
     container_name: mossvoice-workflow
     command: python /app/telephony/workers/outbox_worker_main.py
     environment:
@@ -212,10 +278,32 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Retention worker (read.md rev-3 G8): guaranteed TTL purge of expired user
+  # data — PG rows + S3 objects + local WAV cache — leaving a durable audit
+  # marker. SEPARATE failure domain from the realtime call process.
+  retention:
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
+    container_name: mossvoice-retention
+    command: python /app/telephony/workers/retention_worker_main.py
+    environment:
+      MOSS_PG_URL: postgresql://${MOSS_PG_USER:-mossvoice}:${MOSS_PG_PASSWORD:-mossvoice_dev}@db:5432/${MOSS_PG_DB:-mossvoice}
+      MOSS_S3_ENDPOINT: http://storage:9000
+      MOSS_S3_ACCESS_KEY: ${MOSS_S3_ACCESS_KEY:-mossvoice_dev}
+      MOSS_S3_SECRET_KEY: ${MOSS_S3_SECRET_KEY:-mossvoice_dev_secret}
+      MOSS_S3_BUCKET: ${MOSS_S3_BUCKET:-mossvoice-recordings}
+      MOSS_CALLS_OUTDIR: /tmp/mossvoice
+      MOSS_RETENTION_INTERVAL_SECONDS: ${MOSS_RETENTION_INTERVAL_SECONDS:-3600}
+    volumes:
+      - /tmp/mossvoice:/tmp/mossvoice
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   # ----------------------- Telegram gateway (optional) -----------------------
   tg:
     profiles: ["telegram"]
-    image: mossvoice/backend:latest
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
     container_name: mossvoice-tg
     command: >
       python /app/telephony/tg/tg_server.py
@@ -231,8 +319,10 @@ services:
       # a 0.0.0.0 binding would expose /ws and /metrics to the LAN.
       - "127.0.0.1:8600:8600"
     depends_on:
+      # read.md rev-2 #13: wait for the REAL /ready gate, not just process
+      # start — TG must not talk to a telephony whose STT/TTS are broken.
       telephony:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   cloudflared:
@@ -246,7 +336,7 @@ services:
 
   bot:
     profiles: ["telegram"]
-    image: mossvoice/backend:latest
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
     container_name: mossvoice-bot
     command: >
       sh -c "python /app/telephony/tg/bot.py --webapp-url $${WEBAPP_URL}"
@@ -265,7 +355,7 @@ services:
 #   make test-live   integration tests against a voice daemon in this compose
   tests:
     profiles: ["tests"]
-    image: mossvoice/backend:latest
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
     container_name: mossvoice-tests
     working_dir: /app/telephony
     command: sh /app/telephony/tests/run_in_container.sh
@@ -275,9 +365,39 @@ services:
       # "make test-live" sets it to http://voice:9600
       MOSSTEST_TTS: ${MOSSTEST_TTS:-}
       MOSSTEST_WAIT_DAEMON: ${MOSSTEST_WAIT_DAEMON:-}
-      MOSS_PG_URL: ${MOSS_PG_URL:-postgresql://mossvoice:mossvoice_dev@db:5432/mossvoice}
-      MOSS_REDIS_URL: ${MOSS_REDIS_URL:-redis://cache:6379/0}
+      # UNIT tier (read.md rev-3): MOSS_PG_URL / MOSS_REDIS_URL are
+      # deliberately UNSET, so DB/realtime-integration tests skip themselves.
+      # This keeps `make test` a genuine offline unit suite even though the
+      # image ships the psycopg/redis deps. Real data-core drills run in the
+      # separate `tests-data` service (below), NOT here.
     depends_on: []
+
+  # Integration-data tier (read.md rev-3): the SAME image, but pointed at the
+  # real data core so Postgres/Redis-backed tests actually execute. `make
+  # test-data`. Kept separate from `tests` so unit != integration, matching
+  # the review's tier split (unit / integration-data / integration-models /
+  # sip-e2e).
+  tests-data:
+    profiles: ["tests"]
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
+    container_name: mossvoice-tests-data
+    working_dir: /app/telephony
+    command: sh /app/telephony/tests/run_in_container.sh
+    environment:
+      MOSS_RUNTIME_SCRIPTS: /app/runtime/scripts
+      MOSSTEST_TTS: ${MOSSTEST_TTS:-}
+      MOSSTEST_WAIT_DAEMON: ${MOSSTEST_WAIT_DAEMON:-}
+      MOSS_PG_URL: postgresql://${MOSS_PG_USER:-mossvoice}:${MOSS_PG_PASSWORD:-mossvoice_dev}@db:5432/${MOSS_PG_DB:-mossvoice}
+      MOSS_REDIS_URL: redis://cache:6379/0
+      MOSS_S3_ENDPOINT: http://storage:9000
+      MOSS_S3_ACCESS_KEY: ${MOSS_S3_ACCESS_KEY:-mossvoice_dev}
+      MOSS_S3_SECRET_KEY: ${MOSS_S3_SECRET_KEY:-mossvoice_dev_secret}
+      MOSS_S3_BUCKET: ${MOSS_S3_BUCKET:-mossvoice-recordings}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   models:

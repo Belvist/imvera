@@ -1,16 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    MossVoice telephone agent dialplan.
-    Any authenticated / local call lands here and is handled by the Lua
-    script, which drives the conversation with the MossVoice call agent.
+    MossVoice telephone agent dialplan (rev-6, G1 — VoiceRuntime is the ONLY
+    production route). The legacy Lua contour (moss_agent.lua) is GONE and
+    4401 is retired: every runtime call lands on 4400 (real SIP callers) or
+    4402 (loopback self-test), is answered + parked/sleeping here, and media
+    is driven entirely from voice_runtime/ over ESL (uuid_record tap,
+    uuid_broadcast playback, uuid_break barge-in). No Lua involved.
 -->
 <include>
-  <extension name="mossvoice_agent">
-    <!-- Route calls to extension 4400 (our agent; 5000 is taken by ivr_demo) -->
+  <extension name="mossvoice_runtime">
+    <!-- G1: 4400 is the SINGLE production application extension. The leg is
+         ONLY answered + parked; VoiceRuntime attaches via ESL and drives the
+         whole conversation (uuid_record tap, uuid_broadcast playback,
+         uuid_break barge-in). -->
     <condition field="destination_number" expression="^4400$">
       <action application="answer"/>
-      <action application="lua" data="/Users/earflow/Downloads/MossVoice/telephony/moss_agent.lua"/>
-      <action application="hangup"/>
+      <action application="park"/>
+    </condition>
+  </extension>
+  <extension name="mossvoice_runtime_loopback">
+    <!-- 4402 is the loopback self-test twin: park() tears a loopback pair
+         down (mod_loopback kills a parked loopback leg), so the self-test
+         leg holds with a long sleep instead. -->
+    <condition field="destination_number" expression="^4402$">
+      <action application="answer"/>
+      <action application="sleep" data="600000"/>
     </condition>
   </extension>
 </include>
