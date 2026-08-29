@@ -654,6 +654,20 @@ VeraVoice. Не трогать без прямого указания владе
   (галлюцинации «Редактор субтитров/ПОЛИЦИИ» подавлены vad_filter). Деплой:
   **MOSS_STT_MODEL=openai/whisper-small** в docker/.env (small ~1.4GiB RSS,
   в пределах VM; base был компромиссом OOM). make test-fast **261 OK**.
+- **STT ПЕРЕВЕДЁН НА Qwen3-ASR (2026-08-29, вечер):** whisper-small кривой на
+  реальном русском («настроение»→«назрение», «отлично»→«дичувствую»).
+  Решение: **хост-сервис `voice_runtime/stt_host.py`** (Qwen3-ASR-0.6B-4bit
+  через mlx_audio, Apple M5/Metal, Apache-2.0 — коммерчески можно). Измерено:
+  «Я себя сегодня чувствую отлично, ничего не болело» ✅ (whisper давал
+  «дичувствую»), «...днем упало» ✅, латентность 0.2–1.8с/файл, WER 6.42 vs
+  ~26 у whisper-small. Контейнер не может MLX → STT живёт на ХОСТЕ (launchd
+  com.mossvoice.stt, порт 9705), телефония ходит через
+  `MOSS_STT_HOST=http://host.docker.internal:9705` (host.docker.internal
+  доступен, 11мс). Адаптер `SttHostAdapter` в tts_common (тот же .generate
+  контракт, Silero-VAD-гейт спереди). whisper-small остаётся фолбэком.
+  Верифицировано в контейнере: STTEngine→SttHostAdapter, conf=1.0, live
+  loopback TURN течёт (stt=1137ms). Запуск хост-STT: launchctl start
+  com.mossvoice.stt (лог /tmp/mossvoice_stt.log).
 
 ## ПРАВИЛА: как правильно строить логику диалога (state machine) — ОБЯЗАТЕЛЬНО
 
