@@ -703,6 +703,23 @@ VeraVoice. Не трогать без прямого указания владе
   deepseek-v4-flash первый токен 1.5с (качество лучшее — оставлен),
   llama-3.1-8b 0.8с / qwen-2.5-7b 0.8с (быстрее, но canned/слабые). make
   test-fast 261 OK.
+- **КОРЕНЬ «СБРОСА» НАЙДЕН 2026-08-30 01:20 (10 сек тишины!):** звонок
+  владельца 01:17 (a9b8b69f, 1000→4400, NORMAL_CLEARING через 14с) — в CDR
+  есть, но в telephony-логах его НЕТ: Lua проиграл greeting (3.7с) и начал
+  record, абонент сбросил. Причина НЕ в диалоге: стоковый `default/global`
+  extension (dialplan/default.xml:135) выполняет
+  `<condition field="${default_password}" expression="^1234$"> → sleep 10000`
+  — а default_password до сих пор был СТОКОВЫЙ `1234`! → КАЖДЫЙ звонок в
+  default контексте получал **10 секунд полной тишины ДО ответа Веры**.
+  Владелец звонил, слышал тишину 10с → «сбросила» → вешал трубку.
+  ФИКС: `default_password=1234` → `53f3acf488b71fc9` в vars.xml (обе копии,
+  /opt/homebrew/etc + Cellar — один файл), FS перезапущен (PID 31477),
+  проверено: sleep(10000) БОЛЬШЕ не выполняется (звонок answered→Lua сразу),
+  dialplan 4400→Lua, 5060 на 192.168.1.194, STT/LLM/runtime/telephony healthy.
+  УРОК: стоковый dialplan FreeSWITCH умеет молча вставлять sleep по
+  небезопасным дефолтам — после любых изменений FS проверять
+  `fs_cli -x "eval \${default_password}"` != 1234 и грейпнуть sleep в логах
+  звонка.
 
 ## ПРАВИЛА: как правильно строить логику диалога (state machine) — ОБЯЗАТЕЛЬНО
 
