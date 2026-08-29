@@ -20,6 +20,19 @@
 # writes private-range IPv4s.
 set -uo pipefail
 
+# launchd PATH is /usr/bin:/bin — Homebrew fs_cli never resolves. The whole
+# point of this script is to RESTART sofia when the IP changes; without an
+# explicit PATH the patch happened but the profiles never reloaded
+# (2026-08-29: "fs_cli: command not found" — SIP kept listening on the old
+# pinned address after a DHCP drift). Resolve fs_cli once, deliberately.
+if command -v fs_cli >/dev/null 2>&1; then
+  FS_CLI="$(command -v fs_cli)"
+elif [ -x /opt/homebrew/bin/fs_cli ]; then
+  FS_CLI=/opt/homebrew/bin/fs_cli
+else
+  FS_CLI=fs_cli  # let the shell resolve; the invocation will fail loudly
+fi
+
 VARS="/opt/homebrew/etc/freeswitch/vars.xml"
 # Brew's vars.xml is a symlink into Cellar; BSD sed -i refuses symlinks
 # ("in-place editing only works for regular files"), so resolve the real file.
@@ -64,9 +77,9 @@ log "LAN IP changed: ${PINNED:-<unset>} -> $LAN_IP (patched $REAL_VARS)"
 
 # --- 4. hot-apply without restarting the process ------------------------ #
 if pgrep -x freeswitch >/dev/null 2>&1; then
-  fs_cli -x "reloadxml"  >> "$LOG" 2>&1 || true
-  fs_cli -x "sofia profile internal restart" >> "$LOG" 2>&1 || true
-  fs_cli -x "sofia profile external restart" >> "$LOG" 2>&1 || true
+  "$FS_CLI" -x "reloadxml"  >> "$LOG" 2>&1 || true
+  "$FS_CLI" -x "sofia profile internal restart" >> "$LOG" 2>&1 || true
+  "$FS_CLI" -x "sofia profile external restart" >> "$LOG" 2>&1 || true
   log "sofia profiles restarted on $LAN_IP"
 fi
 
