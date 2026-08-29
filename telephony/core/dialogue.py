@@ -389,6 +389,36 @@ def _is_closing(text):
     return bool(_CLOSING_RE.search(text))
 
 
+# QUESTION OVER CHECK-IN (2026-08-27): a direct caller question outranks the
+# routine wellness check. Conservative by design — only a literal '?' or a
+# text that STARTS with an interrogative counts, so a long narration never
+# accidentally flips the mode. Russian + a few commonenglish borrowings.
+_QUESTION_WORDS = (
+    "скажи", "расскажи", "что", "как", "почему", "зачем", "где",
+    "когда", "кто", "сколько", "говори", "можешь", "может", "слышишь",
+    "понимаешь", "поможешь", "what", "how", "why",
+)
+
+
+def _is_text_question(text):
+    """Conservative question detector: '?' anywhere, or the text opens with
+    an interrogative word followed by a WORD BOUNDARY (read.md #16):
+    «что-то болит», «как-то странно» are NOT questions, «что случилось?»
+    is. Only a hyphen/dash continuation keeps a prefix from counting."""
+    if not text:
+        return False
+    if "?" in text:
+        return True
+    low = (text or "").strip().lower()
+    if not low:
+        return False
+    for w in _QUESTION_WORDS:
+        end = len(w)
+        if low[:end] == w and (end >= len(low) or low[end] not in "-—"):
+            return True
+    return False
+
+
 class Agent:
     """Conversational MVERA agent (mode-driven, not step-driven).
 
@@ -504,6 +534,7 @@ class Agent:
         self._last_confidence = None     # STT confidence (None = unknown)
         self._clearing = False           # control question pending: OK clears
         self._help_pending = False       # a help question is on the table
+        self._interrupt = None           # read.md #16: pending question-over-check-in
         # Family-app questions for THIS call (see set_family_questions).
         self.family_questions = []
         # Facts (cross-turn memory) extracted from caller turns — see
@@ -562,8 +593,16 @@ class Agent:
         return all_[self._agenda_idx][0]
 
     def _agenda_question(self):
-        """Instant fallback question for the CURRENT topic."""
+        """Instant fallback question for the CURRENT topic.
+
+        Index-guarded (2026-08-29): reaching here with the agenda exhausted
+        used to raise IndexError and drop the turn (two reachable paths:
+        interrupt-resume after the last topic, and a 4-5 word story after
+        all topics with a family question attached). Degrade to the wrap-up
+        question instead — never crash the reply planner."""
         all_ = self._agenda_all()
+        if self._agenda_done or self._agenda_idx >= len(all_):
+            return self._wrap_up_question()
         return self._pick_not_repeated(all_[self._agenda_idx][1])
 
     def _ask_task(self):
@@ -631,6 +670,7 @@ class Agent:
         self._last_confidence = None
         self._clearing = False
         self._help_pending = False
+        self._interrupt = None
         self.family_questions = []
         self.facts = []
         self._init_agenda()
@@ -712,7 +752,76 @@ class Agent:
         if caller_text:
             self.memory.append(caller_text)
             self.llm_history.append(("user", caller_text))
-        self._help_pending = False
+        # NOTE: _help_pending is deliberately NOT cleared here. It is armed
+        # when a help/worry question is put on the table (see _ask_help) and
+        # consumed exactly ONCE in _plan_mode ("да" on "Нужна помощь?" is a
+        # confirmation). Clearing it early (it used to run right here, before
+        # the _plan_mode check) made a bare "да" reply to a help question
+        # land in a generic ack instead of recording the help request.
+        # CONVERSATIONAL REPAIR FIRST (read.md rev-2): a repeat request must
+        # NEVER arm the question interrupt — «скажи» is a question word, so
+        # "Скажите ещё раз пожалуйста" would be misread as a side question,
+        # arming an interrupt that then eats the NEXT turn. A repair only
+        # recalls our last reply; mode machine stays untouched.
+        if caller_text and re.search(
+                r"(повторите|повтори|что ты сказала|что вы сказали|"
+                r"как вы сказали|ещё раз|еще раз|скажите снова|"
+                r"не расслышал|не понял)", caller_text.lower()):
+            last = getattr(self, "_last_reply", None)
+            if last:
+                return {"text": caller_text, "intent": None,
+                        "fallback": f"Повторяю: {last}"}
+        # QUESTION OVER CHECK-IN (read.md #16 / rev-2 #11): a direct caller
+        # question wins over the routine check-in flow — the caller is
+        # engaged in chat, not answering a questionnaire. The switch is a
+        # TEMPORARY INTERRUPT with an explicit RESUME_PENDING phase:
+        #   check_in --user question--> INTERRUPT (answer the side
+        #   question) --non-question reply («спасибо»)--> RESUME TRANSITION
+        #   (Vera re-asks the pending agenda question) --next reply-->
+        #   RESUME DONE: the reply IS the wellbeing answer, processed below.
+        # The agenda NEVER advances mid-interrupt (position untouched).
+        inter = getattr(self, "_interrupt", None)
+        if self.mode == "check_in" and _is_text_question(caller_text):
+            # START / RESTART INTERRUPT: keep the check-in state (position,
+            # on-table flag); defer the topic while the question is answered.
+            if not inter:
+                self._interrupt = {
+                    "resume_mode": self.mode,
+                    "agenda_asked": self._agenda_asked,
+                    "phase": "answer",
+                }
+            elif inter.get("phase") == "resume":
+                # a NEW question lands while the transition was pending —
+                # go back to answering, don't consume the resume.
+                self._interrupt = dict(inter, phase="answer")
+            self._agenda_asked = False
+            self._set_mode("companion")
+        elif inter and _is_text_question(caller_text):
+            # still answering side questions — stay in "answer" phase
+            self._interrupt = dict(inter, phase="answer")
+            self._agenda_asked = False
+        elif inter and caller_text:
+            # a non-question reply while interrupting.
+            if inter.get("phase") == "resume":
+                # RESUME DONE (rev-2 #11): the reply after the re-asked
+                # agenda question is the REAL topic answer — restore the
+                # interrupted mode and fall through so _plan_mode processes
+                # THIS turn as the wellbeing answer (topic is on the table).
+                self._interrupt = None
+                if inter.get("resume_mode") in self.MODES:
+                    self._set_mode(inter["resume_mode"])
+                self._agenda_asked = bool(inter.get("agenda_asked"))
+            else:
+                # RESUME TRANSITION: a non-question reply («спасибо») right
+                # after the side question is NOT the topic answer — do not
+                # even interpret it as one. Re-ask the pending agenda
+                # question explicitly; only the NEXT reply counts as answer.
+                self._interrupt = dict(inter, phase="resume")
+                q = self._agenda_question() or self._wrap_up_question()
+                self._last_question = q
+                return {"text": caller_text, "intent": None,
+                        "fallback": ("Пожалуйста. Возвращаясь к нашему "
+                                     "разговору — " + q)}
 
         ev = self.safety.observe(Observation(
             question=self._last_question,
@@ -749,9 +858,22 @@ class Agent:
             # instead of hanging up on a person who may have just said
             # "всё хорошо". A real goodbye confirms; a mishearing corrects.
             words = len((caller_text or "").split())
+            # LOOP FIX (2026-08-29): a SECOND short goodbye right after our
+            # confirmation question IS the confirmation itself — finish
+            # instead of re-asking (previously the same question replayed
+            # forever, because _closing_confirmed was never assigned).
+            if getattr(self, "_closing_confirm_pending", False) \
+                    and words <= 3:
+                self._set_mode("closing")
+                self._finish()
+                return {"text": caller_text, "terminal": True,
+                        "intent": "тепло попрощаться: короткое пожелание "
+                                  "(«Берегите себя», «Всего доброго»)",
+                        "fallback": self._goodbye()}
             if self.mode in ("check_in", "clarify") and words <= 3 \
                     and not getattr(self, "_closing_confirmed", False):
                 self._closing_confirm_pending = True
+                self._closing_confirmed = True
                 q = ("Вы сейчас прощаетесь? Скажите «да» — и я пожелаю вам "
                      "добра, или расскажите, как вы себя чувствуете.")
                 self._last_question = q
@@ -773,7 +895,9 @@ class Agent:
                 return {"text": caller_text, "terminal": True,
                         "intent": "тепло попрощаться",
                         "fallback": self._goodbye()}
-            # not a goodbye after all — continue the conversation normally
+            # not a goodbye after all — continue the conversation normally;
+            # a LATER goodbye gets its own single confirmation again.
+            self._closing_confirmed = False
         return self._plan_mode(caller_text, ev, reason)
 
     def _plan_mode(self, caller_text, ev, reason=None):
@@ -784,19 +908,16 @@ class Agent:
         # check, so a bare "да" could never be recognised as a confirmation.
         help_was_pending = getattr(self, "_help_pending", False)
         self._help_pending = False
-        # CONVERSATIONAL REPAIR: when the caller asks us to repeat, the only
-        # right answer is to say our previous reply again — not a new topic.
-        # 2026-08-24: live calls showed "Скажите еще раз пожалуйста" fall
-        # through to the LLM («Хорошо, верю») — added ещё/еще раз, скажите
-        # снова, как вы сказали.
-        if caller_text and re.search(
-                r"(повторите|повтори|что ты сказала|что вы сказали|"
-                r"как вы сказали|ещё раз|еще раз|скажите снова|"
-                r"не расслышал|не понял)", caller_text.lower()):
-            last = getattr(self, "_last_reply", None)
-            if last:
-                return {"text": caller_text, "intent": None,
-                        "fallback": f"Повторяю: {last}"}
+        # INTERRUPT ANSWER (read.md #16): during a question interrupt we are
+        # in companion mode ONLY to answer the caller's question — never push
+        # the deferred agenda topic, never count the reply as a topical
+        # answer. Resume happens on the next turn in plan_reply.
+        if getattr(self, "_interrupt", None) and caller_text:
+            self._agenda_asked = False
+            return {"text": caller_text,
+                    "intent": "прямо и тепло ответить на вопрос или реплику "
+                              "собеседника своими словами, коротко",
+                    "fallback": self._pick_not_repeated(self.GENERIC_ACKS)}
         # GREETING MANNER (2026-08-24): when the elder says «здравствуйте»,
         # the only polite answer is a warm hello-back + the pending agenda
         # question. Live calls routed this into the LLM, producing

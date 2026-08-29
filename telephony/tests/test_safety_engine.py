@@ -322,5 +322,43 @@ class AgentFlowTests(unittest.TestCase):
         self.assertFalse(a.done)
 
 
+class FallAsymmetryAndContextualEmergencyTests(unittest.TestCase):
+    """2026-08-29 fixes: falls survive a trailing intensifier, and routine
+    "врач/срочно" mentions never confirm a red alert."""
+
+    def _ev(self, text):
+        return SafetyEngine().observe(Observation(raw_text=text))
+
+    def test_real_fall_with_intensifier_still_red(self):
+        # "не" AFTER the verb is an intensifier, not a denial
+        for t in ("я упал, но не сильно", "упал, но не ударилась",
+                  "упала, не сильно"):
+            self.assertEqual(self._ev(t).kind, "confirmed_red", t)
+
+    def test_leading_denial_cancels_fall(self):
+        for t in ("я не упал", "не упала", "я не упал вчера",
+                  "я не падал"):
+            self.assertEqual(self._ev(t).kind, "ok", t)
+
+    def test_routine_doctor_mention_is_not_red(self):
+        for t in ("записалась к врачу", "сходил к доктору",
+                  "завтра к врачу", "у меня приём у врача"):
+            self.assertNotEqual(self._ev(t).kind, "confirmed_red", t)
+
+    def test_third_person_emergency_stays_third(self):
+        for t in ("бабушке срочно нужен врач", "маме срочно",
+                  "у соседа инфаркт"):
+            self.assertEqual(self._ev(t).kind, "third_person", t)
+
+    def test_self_acute_doctor_still_red(self):
+        for t in ("вызовите мне врача", "мне нужен врач прямо сейчас"):
+            self.assertIn(self._ev(t).kind, ("confirmed_red",
+                                             "help_request"), t)
+
+    def test_unconditional_emergency_unchanged(self):
+        for t in ("скорая", "вызовите скорую", "инфаркт", "срочно"):
+            self.assertEqual(self._ev(t).kind, "confirmed_red", t)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

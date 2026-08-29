@@ -57,7 +57,17 @@ DENIAL = frozenset((
 EMERGENCY_TOKENS = frozenset((
     "скорая", "скорую", "скорой", "скорые", "неотложка", "неотложку",
     "неотложной", "инфаркт", "инсульт", "срочно", "срочная",
-    "врача", "врачу", "доктора", "доктору",
+    "врач", "врача", "врачу", "врачи", "доктор", "доктора", "доктору",
+    "докторы",
+))
+
+# Emergency tokens that only escalate for a SELF-directed ACUTE context:
+# "врач/доктор/срочно" appear constantly in everyday speech ("записалась к
+# врачу", "бабушке срочно нужен врач", "сходил к доктору"). A routine
+# mention must NOT confirm a red alert. See block 5 in _analyze.
+_CONTEXTUAL_EMERGENCY_TOKENS = frozenset((
+    "срочно", "срочная", "врач", "врача", "врачу", "врачи", "доктор",
+    "доктора", "доктору", "докторы",
 ))
 
 # Root prefixes for health-distress signals (possible_red).
@@ -219,6 +229,23 @@ def _idx(tokens, word):
         if t == word:
             return i
     return -1
+
+
+def _negated_left(tokens, j):
+    """True when a negator sits BEFORE token j (leading denial).
+
+    Falls are asymmetric (2026-08-29): only a negator IN FRONT of the fall
+    verb cancels it ("я не упал" = no fall), while a negator AFTER it is an
+    intensifier, not a denial ("я упал, но не сильно" = the fall HAPPENED,
+    "не" just softens how badly). The symmetric ±NEG_WINDOW window used to
+    swallow real falls once "не" landed within 3 tokens after the verb.
+    """
+    for i in range(max(0, j - NEG_WINDOW), j):
+        if tokens[i] in NEGATORS:
+            if i + 1 < len(tokens) and tokens[i + 1] in _ABILITY:
+                continue
+            return True
+    return False
 
 
 def _has_phrase(tokens, phrase):
@@ -489,6 +516,29 @@ class SafetyEngine:
                 return {"kind": "third_person", "affirmative": False,
                         "denial": False, "low_conf": low_conf,
                         "notes": tuple(notes)}
+            # SUBJECT FILTER (2026-08-29): «врача/врачу/доктора/доктору/
+            # срочно/срочная» are NOT emergencies on their own — a routine
+            # "записалась к врачу", "сходил к доктору" or "бабушке срочно
+            # нужен врач" is a normal life event, not a confirmed emergency.
+            # Only a SELF-directed acute context ("мне нужен врач прямо
+            # сейчас", "вызовите мне врача") escalates to confirmed_red.
+            if tok in _CONTEXTUAL_EMERGENCY_TOKENS:
+                subj = _subject_of(tokens, j)
+                if subj == "third":
+                    notes.append("у близкого проблема")
+                    return {"kind": "third_person", "affirmative": False,
+                            "denial": False, "low_conf": low_conf,
+                            "notes": tuple(notes)}
+                # Self or unattributed is NOT enough: "сходил к врачу" has
+                # no acute marker. Require an acute companion word nearby.
+                if not any(
+                        t.startswith(("сроч", "скор", "неотлож", "выз", "нуж",
+                                      "помог", "сейч", "немедл", "прям",
+                                      "вызови", "звони", "нужен", "нужно",
+                                      "нужна"))
+                        for t in tokens[max(0, j - NEG_WINDOW):
+                                        j + NEG_WINDOW + 1]):
+                    continue
             notes.append("экстренная ситуация")
             return {"kind": "confirmed_red", "affirmative": True,
                     "denial": False, "low_conf": low_conf,
@@ -545,19 +595,27 @@ class SafetyEngine:
                                 "notes": tuple(notes)}
                 else:
                     pos_found = True
+            if any(tok.startswith(r) for r in ("упа", "пада")):
+                # FALL ASYMMETRY (2026-08-29): only a negator BEFORE the
+                # fall verb cancels it ("я не упал"); a negator AFTER is an
+                # intensifier ("я упал, но не сильно" = the fall happened).
+                # The symmetric ±window used to swallow real falls once "не"
+                # landed within 3 tokens after the verb.
+                if _negated_left(tokens, j):
+                    continue
+                subj = _subject_of(tokens, j)
+                if subj == "object":
+                    object_fall_seen = True
+                    continue
+                if subj == "third":
+                    high_third = True
+                else:
+                    high_self = True
+                continue
             if is_neg:
                 continue
             if any(tok.startswith(r) for r in HIGH_ROOTS):
-                if tok.startswith(("упа", "пада")):
-                    subj = _subject_of(tokens, j)
-                    if subj == "object":
-                        object_fall_seen = True
-                        continue
-                    if subj == "third":
-                        high_third = True
-                    else:
-                        high_self = True
-                elif _subject_of(tokens, j) == "third":
+                if _subject_of(tokens, j) == "third":
                     high_third = True
                 else:
                     high_self = True
