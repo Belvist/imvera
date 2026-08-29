@@ -142,8 +142,16 @@ services:
     restart: unless-stopped
 
   answers:
+    # PRODUCT DECISION 2026-08-29: the local llama.cpp LLM is DISABLED —
+    # the owner removed it from the dialogue path (replies were poor); the
+    # cloud LLM (OpenRouter/DeepSeek via MOSS_LLM_PROVIDER=openai) is the
+    # only LLM now. This service is kept in the `local-llm` profile so the
+    # offline fallback can be re-enabled deliberately, but it is NOT part
+    # of the default stack (saves ~2.5 GB RAM). Run with
+    # `docker compose --profile local-llm up -d answers` to re-enable.
     image: ghcr.io/ggml-org/llama.cpp:server
     container_name: mossvoice-answers
+    profiles: ["local-llm"]
     entrypoint: ["/bin/sh", "/app/llama_entrypoint.sh"]
     environment:
       MOSS_LLM_GGUF_URL: ${MOSS_LLM_GGUF_URL:-https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf}
@@ -244,8 +252,8 @@ services:
     depends_on:
       voice:
         condition: service_healthy
-      answers:
-        condition: service_started
+      # answers (local llama.cpp) is in the `local-llm` profile — NOT a
+      # startup dependency (2026-08-29 product decision: cloud LLM only).
       db:
         condition: service_healthy
       migrate:

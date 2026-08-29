@@ -31,16 +31,43 @@ def _maybe_cloud_stt(local_engine):
 
 
 def _maybe_cloud_llm(local_client):
+    """Return the cloud LLM provider when MOSS_LLM_PROVIDER=openai.
+
+    PRODUCT DECISION (2026-08-29): the owner removed the local LLM from the
+    dialogue path — the local llama.cpp/Qwen3 replies were poor. When the
+    provider is "openai" we do NOT fall back to the local model: a missing
+    key or a failed call yields a NullLLM (empty replies -> the scripted
+    phrase), never a local model answer. The local client is returned only
+    when the provider is NOT openai (i.e. a local-only deployment).
+    """
     if os.environ.get("MOSS_LLM_PROVIDER", "local").lower() != "openai":
         return local_client
     from moss_providers import OpenAILLMProvider
     p = OpenAILLMProvider()
     if not p.ready():
         print("[call-agent] MOSS_LLM_PROVIDER=openai but OPENAI_API_KEY is "
-              "missing — using local LLM", flush=True)
-        return local_client
+              "missing — replies fall back to scripted phrases (local LLM "
+              "is disabled by product decision)", flush=True)
+        return NullLLM()
     print("[call-agent] LLM provider: openai", flush=True)
     return CloudLLMAdapter(p)
+
+
+class NullLLM:
+    """A deliberately empty LLM (product decision 2026-08-29): no local
+    model, no cloud — used so the dialogue layer NEVER answers with the
+    local model when the cloud is unavailable. Chat returns None / empty
+    stream, so the canned `fallback` phrase speaks instead."""
+
+    def ready(self):
+        return False
+
+    def chat(self, messages, max_tokens=100, temp=0.65, timeout=60):
+        return None
+
+    def chat_stream(self, messages, max_tokens=100, temp=0.65, timeout=60):
+        return
+        yield  # pragma: no cover — make this a generator with no deltas
 
 
 def _maybe_cloud_tts(local_client):
