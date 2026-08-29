@@ -117,6 +117,36 @@ SCENARIOS = [
         ("Здравствуйте!", None, {"one_question": True, "no_repeat": True}),
         ("Здравствуйте ещё раз", None, {}),
     ]),
+    # ---- 2026-08-29 REAL-CALL regressions (from 59064eb2d1a9 audit) ----
+    ("реальный звонок: недомогание -> отпустило -> всё хорошо -> отказ -> давай пока", [
+        # STT transcript conf 1.00: the caller opens with a real complaint.
+        ("привет, хорошо, но сегодня самочувствие не очень", None,
+         {"intent_contains": "уточнить", "idx_unchanged": True,
+          "no_repeat": True}),
+        # conf 0.97: "сейчас неплохо, уже хорошо встало" — Vera accepts.
+        ("сейчас в данный момент неплохо, мне уже хорошо встало", None,
+         {"no_repeat": True, "one_question": True}),
+        # conf 0.75: "всё хорошо" closes the topic.
+        ("всё хорошо", None, {"one_question": True}),
+        # conf 0.91: polite decline — honoured, NO pushing follow-up, and
+        # no "да, конечно, добавьте что-нибудь" (the old bug).
+        ("нет спасибо", None, {"not_push": True, "no_repeat": True,
+                               "not_contains": "добавите"}),
+        # conf 0.93: "давай, пока" — the P-CLOSE1 fix: END the call now.
+        ("давай, пока", None, {"terminal": True,
+                               "not_contains": "хорошо или плохо"}),
+    ]),
+    ("отказ -> тишина завершает без якоря", [
+        ("да, всё хорошо", None, {}),
+        ("нет, спасибо, ничего не надо", None, {"not_push": True}),
+        ("", "low_conf", {"terminal": True,
+                          "not_contains": "хорошо или плохо"}),
+    ]),
+    ("пустой ход после отказа не якорит", [
+        ("да, всё хорошо", None, {}),
+        ("спасибо, не надо", None, {"not_push": True}),
+        ("", None, {"terminal": True, "not_contains": "хорошо или плохо"}),
+    ]),
 ]
 
 
@@ -162,6 +192,13 @@ def _run_turns(agent, turns, problems, metrics):
                 problems.append(f"  {text!r}: похоже на повтор: {reply!r}")
             if check == "contains" and arg not in reply:
                 problems.append(f"  {text!r}: нет {arg!r} в {reply!r}")
+            if check == "not_contains" and arg in reply:
+                problems.append(f"  {text!r}: не должно быть {arg!r} в "
+                                f"{reply!r}")
+            if check == "not_push" and ("?" in reply or _REPEAT_RE.search(
+                    reply)):
+                problems.append(f"  {text!r}: отказ встречен вопросом/"
+                                f"повтором: {reply!r}")
             if check == "intent_contains" and arg not in (
                     plan.get("intent") or ""):
                 problems.append(f"  {text!r}: интент без {arg!r}: "

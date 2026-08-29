@@ -301,6 +301,16 @@ class DialogueFSM:
             return self.E_FROZEN, verdict
         if kind == "confirmed_red":
             return self.E_DANGER, verdict
+        # GOODBYE_CONFIRM first: while we are asking «Вы прощаетесь?» ANY
+        # reply is a confirmation/denial (a «нет спасибо» there means "I am
+        # NOT leaving" — continue), never an offer-refusal that would arm
+        # the fast close.
+        if self.sm.state == self.GOODBYE_CONFIRM and text:
+            if _is_closing_direct(text):
+                return self.E_GOODBYE_DIRECT, verdict
+            if _is_closing(text):
+                return self.E_GOODBYE, verdict
+            return self.E_CONFIRM, verdict
         # P-ACK (2026-08-29): a short polite decline ("нет спасибо", "не
         # надо", "ничего") is its OWN event — honoured, never re-interpreted
         # as help/affirmative. Classified BEFORE the safety verdict branches
@@ -1025,18 +1035,18 @@ def _is_closing(text):
 
 
 # REFUSAL DETECTION (P-ACK / P-CLOSE2, 2026-08-29): a short polite decline
-# of an offer/question ("нет спасибо", "не надо", "ничего") must be honoured
-# as a stop — Vera acknowledges and does NOT push another question. It also
-# arms the fast-close: a following goodbye (or silence) ends the call WITHOUT
-# the "Вы прощаетесь?" re-confirmation.
+# of an offer/question ("нет спасибо", "не надо", "ничего не нужно") must
+# be honoured as a stop — Vera acknowledges and does NOT push another
+# question. It also arms the fast-close: a following goodbye (or silence)
+# ends the call WITHOUT the "Вы прощаетесь?" re-confirmation.
+# Match on the PREFIX (a decline may trail off: «нет, спасибо, ничего не
+# надо»), word limit generous (≤8) — a polite decline can run on.
 _REFUSAL_RE = re.compile(
-    r"^(\s*"
-    r"(нет\s*,?\s*спасибо|нет\s*,?\s*не\s*надо|нет\s*,?\s*не\s*нужно|"
-    r"не\s*надо|не\s*нужно|ничего\s*,?\s*(не\s*нужно|не\s*надо)?|"
-    r"ничего\s*не\s*хочу|ничего\s*не\s*буду|не\s*хочу|не\s*буду|"
-    r"нет\s*ничего|всё\s*ничего|спасибо\s*не\s*надо)"
-    r"[\s.,!?]*"
-    r")$",
+    r"^\s*(нет\s*[,]?\s*спасибо|нет\s*[,]?\s*не\s*(надо|нужно)|"
+    r"не\s*(надо|нужно)|спасибо\s*[,]?\s*не\s*(надо|нужно)|"
+    r"ничего\s*[,]?\s*не\s*(надо|нужно|хочу|буду)|"
+    r"ничего\s*не\s*хочу|ничего\s*не\s*буду|нет\s*ничего|"
+    r"всё\s*[,]?\s*ничего|всё\s*есть|всё\s*есть\s*у\s*меня)",
     re.IGNORECASE,
 )
 
@@ -1044,7 +1054,7 @@ _REFUSAL_RE = re.compile(
 def _is_refusal(text):
     """True for a short explicit decline of an offer (never a bare "нет" —
     that may answer a yes/no control question)."""
-    if not text or len(text.split()) > 5:
+    if not text or len(text.split()) > 8:
         return False
     return bool(_REFUSAL_RE.match(text.strip()))
 
