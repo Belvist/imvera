@@ -214,6 +214,7 @@ class DialogueFSM:
     E_SYMPTOM = "symptom"    # possible_red
     E_UNCERTAIN = "uncertain"  # uncertain_red
     E_OK = "ok"              # affirmative verdict
+    E_HEARD = "heard"        # caller confirms they can hear us (silence ladder)
     E_EMPTY = "empty"        # no usable transcript (silence/lowconf/echo)
     E_GREETING = "greeting"  # caller says hello (first time)
     E_REFUSE = "refuse"      # short polite decline of an offer (P-ACK)
@@ -317,6 +318,17 @@ class DialogueFSM:
         # that would route it into a generic/help reply.
         if text and _is_refusal(text):
             return self.E_REFUSE, verdict
+        # E_HEARD (2026-08-29): the caller answers the silence ladder /
+        # anchor with a presence confirmation («да, я тебя слышу»). Real
+        # call ca81bc3ac2c7 showed this was answered with a canned «Рада,
+        # что вы говорите» and the conversation stalled. It is a signal to
+        # RETURN to the topic, not a generic ack.
+        if text and re.search(
+                r"(я\s+(тебя|вас)\s+(слышу|слышала)|"
+                r"слышу\s+(тебя|вас)\b|слышно\s+(хорошо|нормально)|"
+                r"(да|ага|угу)[,\s]*(слышу|слышно)|вы\s+меня\s+слышите)",
+                text.lower()):
+            return self.E_HEARD, verdict
         # P-CLOSE1: an UNAMBIGUOUS farewell closes now (no re-confirm);
         # a confirm-eligible goodbye goes through the one-shot guard.
         # P-CLOSE2: after a honoured refusal a lone «пока» is a leave, not
@@ -552,6 +564,18 @@ class DialogueFSM:
                 "fallback": "{} {}".format(
                     agent._pick_not_repeated(agent.HELLO_BACKS), q)}
 
+    def _a_heard(self, agent, ev):
+        """E_HEARD (2026-08-29): the caller confirmed they can hear us on
+        the silence ladder/anchor. Warm ack and RETURN to the current topic
+        — never a generic canned «рада, что вы говорите», never another
+        «хорошо или плохо» demand."""
+        ack = agent._pick_not_repeated(agent.HEARD_ACKS)
+        q = (agent._ask_task() or agent._wrap_up_question()
+             or agent._agenda_question())
+        agent._last_question = q
+        return {"text": agent._fsm._last_text, "intent": None,
+                "fallback": "{} {}".format(ack, q)}
+
     def _a_refuse(self, agent, ev):
         """P-ACK/P-CLOSE2 (2026-08-29): honour a short polite decline —
         acknowledge WITHOUT pushing another question (this was the top
@@ -709,6 +733,8 @@ class DialogueFSM:
         add("*", self.E_DANGER, self.SAFETY_ACTIVE, self._a_danger,
             name="any/danger")
         add("*", self.E_REPAIR, None, self._a_repair, name="any/repair")
+        # presence confirmation on the silence ladder -> return to the topic
+        add("*", self.E_HEARD, self.CHECKIN, self._a_heard, name="any/heard")
         # side-question interrupt (caller asks during the wellness walk)
         add(self.CHECKIN, self.E_QUESTION, self.SIDE_QUESTION,
             self._a_side_start, name="checkin/question")
@@ -1589,11 +1615,20 @@ class Agent:
         "Есть что-то ещё, чем вы хотите поделиться?",
     )
 
+# HEARD_ACKS (2026-08-29, E_HEARD): the caller confirmed they can hear
+    # us on the silence ladder/anchor («да, я тебя слышу»). Warm ack, then
+    # RETURN to the topic question.
+    HEARD_ACKS = (
+        "Слышу вас, спасибо.",
+        "Отлично, теперь слышно хорошо.",
+        "Рада, что мы слышим друг друга.",
+        "Спасибо, что отозвались.",
+    )
+
     # REFUSAL_ACKS (2026-08-29, P-ACK/P-CLOSE2): a short polite decline
     # ("нет спасибо", "не надо", "ничего") is honoured — acknowledge WITHOUT
     # pushing another question (the old "Да, конечно, добавьте что-нибудь?"
     # after "нет спасибо" was the top complaint of the live post-mortem).
-    # No question mark: it also naturally opens the door to a clean goodbye.
     REFUSAL_ACKS = (
         "Хорошо, я всё записала для близких. Обращайтесь, если "
         "что-то понадобится.",

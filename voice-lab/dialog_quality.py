@@ -147,6 +147,13 @@ SCENARIOS = [
         ("спасибо, не надо", None, {"not_push": True}),
         ("", None, {"terminal": True, "not_contains": "хорошо или плохо"}),
     ]),
+    # ---- 2026-08-29 from ca81bc3ac2c7 (real call, turn 7) ----
+    ("подтверждение связи на якоре — возврат к теме", [
+        ("", None, {"contains": "хорошо или плохо"}),  # 1st silence -> anchor
+        ("да, да, да, я тебя слышу", None,
+         {"not_contains": "рада, что вы говорите",
+          "one_question": True}),
+    ]),
 ]
 
 
