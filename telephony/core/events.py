@@ -182,11 +182,27 @@ def reply_segments(agent, plan, cancel_event=None,
     ``max_chars`` characters). Yields nothing when the model produces no
     usable text — the caller then falls back to the canned phrase.
     ``cancel_event`` aborts between segments (barge-in).
+
+    DUPLICATE-SEGMENT GUARD (2026-08-29): Qwen sometimes repeats the SAME
+    sentence («Записать это для близких? Записать это для близких?» —
+    live call d0220bac0967). A near-identical repeat is dropped so the
+    caller never hears the same sentence twice in one reply.
     """
     buffer = ""
     emitted = 0            # number of sentences already yielded
     emitted_chars = 0
     prefix_stripped = False
+    _prev = ""
+
+    def _is_dup(seg):
+        nonlocal _prev
+        if not _prev:
+            _prev = seg
+            return False
+        norm = lambda s: re.sub(r"[^\w]", "", s.lower())
+        dup = norm(seg) and norm(seg) == norm(_prev)
+        _prev = seg
+        return dup
 
     for delta in agent.reply_stream(plan):
         if cancel_event is not None and cancel_event.is_set():
@@ -211,6 +227,10 @@ def reply_segments(agent, plan, cancel_event=None,
             if cut is None:
                 break
             seg = buffer[:cut].strip()
+            if _is_dup(seg):
+                # drop the repeated sentence, keep streaming the rest
+                buffer = buffer[cut:].strip()
+                continue
             if emitted >= max_segments \
                     or emitted_chars + len(seg) > max_chars:
                 return

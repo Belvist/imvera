@@ -45,11 +45,14 @@ class TaskAgendaTests(unittest.TestCase):
         p = a.plan_reply("да, всё хорошо")          # closes самочувствие
         self.assertIn("настроение", p["fallback"].lower())
         # symptom mid-agenda: safety control question PAUSES the agenda
-        # (pool wording rotates — match any of its care-check phrasings)
+        # (pool wording rotates — match any of its symptom-ask phrasings;
+        # 2026-08-29: pool reworded to ask about the named symptom instead
+        # of abstract «записать для близких» — see SYMPTOM_CHECKS).
         p = a.plan_reply("голова болит и кружится")
         self.assertTrue(any(w in p["fallback"].lower() for w in
                             ("плохо", "нехорошо", "недомогание",
-                             "неважно", "помощь")))
+                             "неважно", "помощь", "что именно",
+                             "ощущаете", "беспокоит", "чувствуете")))
         # denial clears the concern (its own scripted follow-up).
         # Pool wording rotates via _pick_not_repeated — accept ANY member of
         # FALSE_ALARM_ACKS (2026-08-24: pool grew 2→4, matching only the

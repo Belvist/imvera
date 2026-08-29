@@ -101,6 +101,14 @@ OBJECT_FALL_ROOTS = (
 # Health metrics that may "fall" but ARE a health concern ("давление упало").
 HEALTH_METRIC_FALL_ROOTS = ("давл", "сахар", "пульс", "тонус")
 
+# How far (tokens) a metric subject may sit from the fall verb it explains
+# ("настроение в принципе хорошее, но сегодня днём упало" — 8 tokens).
+FALL_SUBJECT_WINDOW = 8
+
+# Indefinite subjects that make a subject-less fall ambiguous ("что-то
+# упало", "ничего не упало") — not a person, not a confirmed fall.
+_THING_FALL_SUBJECTS = frozenset(("что-то", "что", "ничего", "всё", "все"))
+
 # Root prefixes of positive/ok signals.
 POSITIVE_ROOTS = (
     "хорош", "нормал", "отлич", "прекрасн", "замечатель", "неплох",
@@ -625,9 +633,37 @@ class SafetyEngine:
                     continue
                 if subj == "third":
                     high_third = True
-                else:
+                    continue
+                if subj == "self":
                     high_self = True
-                continue
+                    continue
+                # NO SUBJECT: distinguish a METRIC/THING "falling" from a
+                # PERSON falling. «настроение упало», «давление упало»,
+                # «что-то упало» — a metric or an inanimate thing "falling"
+                # is NOT a person falling (real call f7f7605d7d03: Vera
+                # alarmed the family for a bad mood). But bare «упала»/
+                # «упал» IS a person (the «я» is dropped in speech — the
+                # safety corpus requires confirmed_red for them).
+                # A metric subject can be FAR from the verb («настроение в
+                # принципе хорошее, но сегодня днём упало» — 8 tokens).
+                nearby = tokens[max(0, j - FALL_SUBJECT_WINDOW):
+                                j + FALL_SUBJECT_WINDOW + 1]
+                is_metric = any(
+                    tok2.startswith(r)
+                    for r in HEALTH_METRIC_FALL_ROOTS + ("настроени",)
+                    for tok2 in nearby)
+                is_thing = any(t2 in _THING_FALL_SUBJECTS for t2 in nearby)
+                if is_metric:
+                    notes.append("показатель здоровья/настроение упало")
+                    return {"kind": "possible_red", "affirmative": True,
+                            "denial": False, "low_conf": low_conf,
+                            "notes": tuple(notes)}
+                if is_thing:
+                    # «что-то/ничего/всё упало» — ambiguous, ask
+                    med_self = True
+                    continue
+                # otherwise a subject-less fall verb IS a person falling
+                high_self = True
             if is_neg:
                 continue
             if any(tok.startswith(r) for r in HIGH_ROOTS):

@@ -360,5 +360,32 @@ class FallAsymmetryAndContextualEmergencyTests(unittest.TestCase):
             self.assertEqual(self._ev(t).kind, "confirmed_red", t)
 
 
+class FallMetricVsPersonTests(unittest.TestCase):
+    """2026-08-29 live-call fixes (f7f7605d7d03): «настроение упало» and
+    «что-то упало» are NOT a person falling — they must not alarm the
+    family as confirmed_red. Bare «упал/упала» (dropped «я») is a person."""
+
+    def _ev(self, text):
+        return SafetyEngine().observe(Observation(raw_text=text))
+
+    def test_metric_fall_is_possible_red(self):
+        for t in ("настроение упало",
+                  "настроение в принципе хорошее, но сегодня днём упало",
+                  "давление упало", "сахар упал"):
+            self.assertEqual(self._ev(t).kind, "possible_red", t)
+
+    def test_thing_fall_is_possible_red(self):
+        for t in ("что-то упало", "упало что-то"):
+            self.assertEqual(self._ev(t).kind, "possible_red", t)
+
+    def test_subjectless_person_fall_is_confirmed(self):
+        for t in ("упала", "упал", "я сегодня упал", "я упал, но не сильно"):
+            self.assertEqual(self._ev(t).kind, "confirmed_red", t)
+
+    def test_object_and_third_unchanged(self):
+        self.assertEqual(self._ev("упала банка").kind, "ok")
+        self.assertEqual(self._ev("бабушка упала").kind, "third_person")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -548,9 +548,22 @@ class DialogueFSM:
         agent._clearing = True
         q = agent._pick_not_repeated(agent.SYMPTOM_CHECKS)
         agent._last_question = q
+        # SYMPTOM GOAL (2026-08-29): the caller named a concrete problem
+        # («болела голова», «кружится») — the intent MUST ask about THAT
+        # symptom, not drift into a generic «записать для близких».
+        t = (agent._fsm._last_text or "").lower()
+        symptom = next((w for w in re.findall(
+            r"(голов|болит|болела|кружится|кружит|давит|тошнит|"
+            r"колет|ноет|тяжесть|шум)", t) if w), None)
+        if symptom:
+            intent = (f"уточнить про названный симптом "
+                      f"(«{symptom}»): как сейчас {symptom}, когда "
+                      f"началось; не пугать, не обещать вызвать помощь")
+        else:
+            intent = ("мягко уточнить самочувствие, не пугая человека; "
+                      "не обещать вызвать помощь")
         return {"text": agent._fsm._last_text,
-                "intent": "мягко уточнить самочувствие, не пугая человека; "
-                          "не обещать вызвать помощь",
+                "intent": intent,
                 "fallback": q}
 
     def _a_uncertain(self, agent, ev):
@@ -1665,12 +1678,16 @@ class Agent:
     # VARIETY (2026-08-24): gentle control question when a symptom is heard
     # (possible_red). Was 2 inline lines; safety MEANING unchanged — the
     # machine still sets _clearing so a following «нет, отпустило» clears.
+    # SYMPTOM_CHECKS (2026-08-29 rework): the caller named a symptom (голова
+    # болит, кружится...) — Vera must ASK about IT, not abstractly "записать
+    # для близких" (the old phrasing was a live-call complaint d0220bac0967:
+    # «болела голова» -> «Записать это для близких? Записать это для
+    # близких?», the caller's concrete problem was never addressed).
     SYMPTOM_CHECKS = (
-        "Мне показалось, что вы неважно себя чувствуете. "
-        "Вам сейчас плохо?",
-        "Вы говорите, что вам нехорошо. Записать это для близких?",
-        "Вы упомянули недомогание. Как вы себя чувствуете сейчас?",
-        "Скажите честно — вам нужна помощь? Я запишу всё для родных.",
+        "Вы упомянули, что что-то беспокоит. Что именно сейчас?",
+        "Как вас сейчас самочувствие — что ощущаете?",
+        "Скажите, что вас беспокоит — я всё внимательно записываю.",
+        "Что вы сейчас чувствуете? Расскажите подробнее, я рядом.",
     )
 
     # VARIETY (2026-08-24): soft stand-down after an unconfirmed concern
