@@ -19,6 +19,7 @@ import uuid
 from core.state import CallContext, CallBusyError, AdmissionError, \
     SESSION_TTL_SEC, DEFAULT_GREETING
 from core.dialogue import Agent, reply_looks_broken, reply_looks_hallucinated
+from core.vocab import looks_like_garbage
 from core.events import StreamingSTT, reply_segments
 from adapters.audio import wav_to_pcm, pcm_to_wav, parse_multipart_wav
 from adapters.moss_tts import TTSClient
@@ -30,13 +31,27 @@ from adapters.redis_store import _maybe_session_store
 from adapters.postgres_results import Recorder
 from adapters.pg_recorder import PgRecorder
 from adapters.pg import maybe_pg_store, PgUnavailable
-from adapters.s3_recordings import save_wav, save_user_wav, minio_enabled
-from core.migrate import apply_migrations
+from adapters.s3_recordings import (save_wav, save_user_wav, minio_enabled,
+                                     upload_local_file)
+from core.migrate import apply_migrations, schema_missing
+from core.persistence import PersistenceWorker
 from core.provider_events import process_provider_event
 from core.outbox_worker import OutboxWorker
 from core.family import (FamilyAccessError, FamilyAuthError,
                          FamilyValidationError, hash_key, normalize_phone,
                          validate_question_text)
+
+
+def env_bool(name, default=False):
+    """Strict env-flag parser: only "1"/"true"/"yes" are true.
+
+    FIX 2026-08-27: the old `if os.environ.get(...)` treated "0" as truthy
+    (a leaky default), so MOSS_RETAIN_BLANK_AUDIO=0 still retained audio.
+    """
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in ("1", "true", "yes")
 
 
 class Serve:
@@ -68,11 +83,47 @@ class Serve:
         # cache (DEGRADED surfaced, never silent); MinIO holds recordings.
         self.pg = maybe_pg_store()
         self.pg_available = getattr(self.pg, "available", False)
+        # PERSISTENCE WORKER (read.md rev-3 G1 + rev-4 gate B): PG / MinIO /
+        # Redis network I/O is drained by background threads, never in the
+        # voice hot path. Gate B makes the spool DURABLE (append-only JSONL
+        # WAL + at-least-once replay + retry/backoff + dead-letter), so a slow
+        # or down database can neither add latency nor silently drop a turn.
+        # Handlers are registered by NAME and emit() takes JSON payloads only.
+        self.persist = PersistenceWorker()
+        self.persist.register("turn.pg", self._h_persist_turn_pg, "pg")
+        self.persist.register(
+            "turn.audio",
+            lambda p: self._upload_turn_audio(p["audio_key"], p["audio_path"]),
+            "s3")
+        self.persist.register("session.redis", self._h_persist_session, "redis")
+        self.persist.start()
+        # SCHEMA OWNERSHIP (read.md rev-3): DDL is the migration JOB's job,
+        # never a live call process's. The realtime process ONLY verifies the
+        # schema it expects exists (read-only). MOSS_RUN_MIGRATIONS=1 keeps
+        # single-box dev and the offline suite self-contained; production
+        # compose runs a separate `migrate` service and sets it to 0 here.
+        # read.md rev-4 gate D (product readiness): schema compatibility is an
+        # explicit readiness capability. If the migration job hasn't produced
+        # the expected schema, the process must NOT report /ready=true — it
+        # would answer calls (STT/TTS fine) against a DB that's missing tables.
+        # Default True: no PG (or pg not configured) is not a schema-mismatch;
+        # a missing schema that we CAN see is.
+        self.schema_compatible = True
         if self.pg_available:
-            try:
-                apply_migrations(self.pg.url)
-            except Exception as e:  # noqa: BLE001
-                print(f"[call-agent] migrations failed: {e}", flush=True)
+            if os.environ.get("MOSS_RUN_MIGRATIONS", "1") == "1":
+                try:
+                    apply_migrations(self.pg.url)
+                except Exception as e:  # noqa: BLE001
+                    print(f"[call-agent] migrations failed: {e}", flush=True)
+            else:
+                try:
+                    missing = schema_missing(self.pg.url)
+                except Exception as e:  # noqa: BLE001
+                    missing = [f"(check failed: {e})"]
+                if missing:
+                    self.schema_compatible = False
+                    print(f"[call-agent] SCHEMA MISMATCH (run migration "
+                          f"job first): missing={missing}", flush=True)
         # Outbox polling worker: delivers call.result etc. to downstream
         # (family notify). ARCHITECTURE (2026-08-21): in production the
         # standalone `workflow` deployment owns background business
@@ -154,6 +205,66 @@ class Serve:
         if self.pg_available:
             return PgRecorder(self.pg, self.outdir)
         return Recorder(self.outdir)
+
+    def _persist_turn(self, ctx, role, text, source=None, confidence=None,
+                      audio_path=None, audio_key=None):
+        """Persist one dialogue turn, splitting LOCAL/MIRROR from NETWORK.
+
+        read.md rev-3 G1. The in-memory ``rec.call["turns"]`` mirror and the
+        local WAV are updated synchronously (cheap, still read by /calls and
+        the live turn response). The Postgres INSERT and the MinIO object
+        upload — the network-bound steps that used to run inside the per-call
+        lock before Vera's first audio — are handed to the background
+        ``self.persist`` worker, so a slow DB/object-store never raises voice
+        latency. The legacy file Recorder has no network step and stays fully
+        synchronous.
+        """
+        rec = ctx.recorder
+        if rec.call is None:
+            rec.new_call()
+        cid = rec.call["id"]
+        if isinstance(rec, PgRecorder):
+            # mirror now (synchronous, in-memory only)
+            rec.call["turns"].append({
+                "role": role, "text": text, "audio": audio_path,
+                "source": source or ("stt" if role == "user" else "agent"),
+                "confidence": confidence, "audio_key": audio_key,
+                "turn_id": None,
+            })
+            # PG INSERT + MinIO upload -> background worker (durable spool).
+            # The minio_enabled() probe itself is network I/O (bucket_exists):
+            # read.md rev-3 G1 — it must run in the WORKER thread, never in
+            # the hot path inside the per-call lock. Gate B: emit() takes a
+            # JSON payload and never blocks / never drops (WAL first).
+            self.persist.emit("turn.pg", {
+                "cid": cid, "role": role, "text": text,
+                "source": source or ("stt" if role == "user" else "agent"),
+                "confidence": confidence, "audio_key": audio_key,
+            })
+            if audio_key and audio_path:
+                self.persist.emit("turn.audio", {
+                    "audio_key": audio_key, "audio_path": audio_path,
+                })
+        else:
+            # file/legacy recorder: no network, keep synchronous (same as ever)
+            rec.add_turn(role, text, audio_path=audio_path,
+                         source=source, confidence=confidence,
+                         audio_key=audio_key)
+
+    def _upload_turn_audio(self, audio_key, audio_path):
+        """Worker-thread MinIO upload for a turn's audio.
+
+        read.md rev-3 G1: runs inside the PersistenceWorker. The
+        ``minio_enabled()`` probe (bucket_exists) is network I/O and therefore
+        must not touch the hot path / per-call lock. Best-effort: a down or
+        unconfigured object store simply skips the upload.
+        """
+        try:
+            if minio_enabled():
+                upload_local_file(audio_key, audio_path)
+        except Exception as e:  # noqa: BLE001
+            print(f"[persist] audio upload {audio_key} failed: {e}",
+                  flush=True)
 
     def _dispatch_outbox(self, topic, payload, msg_id):
         """Route outbox messages to real consumers.
@@ -274,8 +385,15 @@ class Serve:
         ]
 
     # ------------------------------------------------------------------ #
-    def new_call(self, caller_id=None):
+    def new_call(self, caller_id=None, mode=None):
         """Create an isolated call context. Returns the call_id.
+
+        ``mode`` optionally pins the agent's opening mode. When provided, the
+        agent is set into that mode directly (e.g. ``"companion"`` so a direct
+        phone call starts free, not forced through the check-in greeting).
+        When ``mode`` is None the historical behaviour is kept ONLY for a
+        call that knows its caller (family check-in flow); a caller-agnostic
+        call starts in the default companion mode.
 
         ADMISSION CONTROL: MOSS_MAX_CONCURRENT_CALLS (0 = unlimited, dev
         default) caps live sessions. At capacity we REJECT with
@@ -297,10 +415,22 @@ class Serve:
             caller_id=caller_id,
         )
         ctx.recorder.new_call(call_id=call_id)
-        # Service-initiated call: the agent opens in check_in mode (the
+        # Serve-initiated family call: the agent opens in check_in mode (the
         # wellbeing-question state machine). Without this the agent sits in
         # companion mode and the whole check-in flow never activates.
-        ctx.agent.start_check_in()
+        # An explicit ``mode`` (e.g. "companion" from the phone dialplan)
+        # overrides it, so the phone starts free instead of a forced greeting.
+        # FIX 2026-08-27: an arbitrary string from the API must NOT reach the
+        # private _set_mode (it drove the state machine into an unknown mode);
+        # only the declared Modes are accepted.
+        if mode is not None:
+            _valid = getattr(Agent, "MODES", ())
+            if mode not in _valid:
+                raise ValueError(
+                    f"unknown mode {mode!r}; expected one of {_valid}")
+            ctx.agent._set_mode(mode)
+        elif caller_id:
+            ctx.agent.start_check_in()
         # Family-app questions: ONE snapshot per call (deterministic turn).
         # Fail-open: a PG hiccup must never block a live call — questions
         # simply stay pending for the next one.
@@ -318,25 +448,53 @@ class Serve:
             self.pg.new_call(call_id, caller_id=caller_id)
         with self._sess_lock:
             self.sessions[call_id] = ctx
-        self._persist_session(ctx)
+        self._emit_session(ctx)
         return call_id
 
-    def _persist_session(self, ctx, ttl_seconds=None):
-        """Stage 6: mirror the live context into the session store (Redis or
-        memory) as a small JSON doc. Never blocks the call path on failure."""
+    def _h_persist_turn_pg(self, payload):
+        """PersistenceWorker 'turn.pg' handler (rev-4 gate B). Executes in the
+        PG writer thread with a JSON payload {cid, role, text, source,
+        confidence, audio_key}. Idempotent INSERT with a stable (call, turn)
+        shape; a replayed duplicate simply overwrites the same row space."""
+        self.pg.add_turn(
+            payload["cid"], payload["role"], payload["text"],
+            source=payload.get("source", "stt"),
+            confidence=payload.get("confidence"),
+            audio_key=payload.get("audio_key"))
+
+    def _h_persist_session(self, payload):
+        """PersistenceWorker 'session.redis' handler (rev-4 gate B). Mirrors
+        the live context into the session store (Redis or memory) from a JSON
+        payload so the record survives a restart. Never blocks the call path
+        on failure (retry/backoff + dead-letter live in the worker)."""
         try:
             from moss_providers import session_doc
             doc = session_doc(
-                ctx.call_id,
-                dialogue_step=ctx.agent.step,
-                summary=" ".join(ctx.agent.notes)[-500:],
-                last_intent=getattr(ctx.agent, "last_intent", "") or "",
+                payload["call_id"],
+                dialogue_step=payload.get("dialogue_step"),
+                summary=payload.get("summary", ""),
+                last_intent=payload.get("last_intent", "") or "",
                 worker_id="",
-                customer_id=ctx.caller_id or "",
+                customer_id=payload.get("customer_id", "") or "",
             )
-            self.store.put(ctx.call_id, doc, ttl_seconds=ttl_seconds)
+            self.store.put(payload["call_id"], doc,
+                           ttl_seconds=payload.get("ttl_seconds"))
         except Exception as e:  # noqa: BLE001
             print(f"[call-agent] session persist skipped: {e}", flush=True)
+
+    def _emit_session(self, ctx, ttl_seconds=None):
+        """Stage 6 (rev-4 gate B): mirror the live context into the session
+        store (Redis or memory) via the durable persistence worker, so the
+        Redis put never runs synchronously in the call hot path and never
+        blocks VOICE on business infrastructure. Payload is JSON."""
+        self.persist.emit("session.redis", {
+            "call_id": ctx.call_id,
+            "dialogue_step": ctx.agent.step,
+            "summary": " ".join(ctx.agent.notes)[-500:],
+            "last_intent": getattr(ctx.agent, "last_intent", "") or "",
+            "customer_id": ctx.caller_id or "",
+            "ttl_seconds": ttl_seconds,
+        })
 
     def get_call(self, call_id):
         """Return the call context or raise KeyError.
@@ -384,7 +542,7 @@ class Serve:
             except Exception as e:  # noqa: BLE001
                 print(f"[call-agent] end_call persist failed: {e}",
                       flush=True)
-        self._persist_session(ctx, ttl_seconds=60 * 60 * 24)
+        self._emit_session(ctx, ttl_seconds=60 * 60 * 24)
         with self._sess_lock:
             self.sessions.pop(call_id, None)
         return {
@@ -442,6 +600,10 @@ class Serve:
             ctx.turn_in_progress = True
             ctx.cancel_event.clear()
             ctx.streaming = True
+        # ARCHITECTURE 2026-08-27: each accepted turn starts a new dialogue
+        # generation. turn_id/generation_id tag every downstream result so a
+        # stale in-flight result can never be played over the new turn.
+        ctx.new_turn()
         return ctx
 
     def end_turn(self, ctx):
@@ -455,14 +617,28 @@ class Serve:
             p = self._silence_wav()
             try:
                 if p:
-                    self.stt.transcribe_clean(p)
+                    try:
+                        self.stt.transcribe_clean(p)
+                    except Exception as e:  # noqa: BLE001
+                        print(f"[call-agent] STT warmup failed: {e}",
+                              flush=True)
             finally:
                 if p:
                     try:
                         os.remove(p)
                     except OSError:
                         pass
-            print("[call-agent] STT ready", flush=True)
+            # TRUTHFUL READINESS (2026-08-27): "STT ready" is only printed
+            # when the engine ACTUALLY loaded. Before, a failed load (e.g.
+            # missing tts_common) still printed ready, and /health claimed ok
+            # while every phone turn degraded to "Повторите, пожалуйста".
+            usable = bool(
+                getattr(self.stt, "ready", lambda: False)())
+            if usable:
+                print("[call-agent] STT ready", flush=True)
+            else:
+                print("[call-agent] STT NOT ready — voice turns will degrade "
+                      "to scripted replies until it is fixed", flush=True)
         threading.Thread(target=_warm, daemon=True).start()
 
     def _silence_wav(self):
@@ -564,7 +740,7 @@ class Serve:
 
     @staticmethod
     def _maybe_latency_trace(t_turn, t_stt, t_llm_first, t_first_audio,
-                             transcript, reply, call_id):
+                             transcript, reply, call_id, turn_id, gen_id):
         """Route step 6: print the end-to-end turn breakdown to the log.
 
         Absent timing (barge-in / aborted turn) is shown as '-' rather than
@@ -585,11 +761,15 @@ class Serve:
             llm_ms = _ms(t_stt, t_llm_first)
             tts_ms = _ms(t_llm_first, t_first_audio)
             total_ms = _ms(t_turn, t_first_audio)
-            print(f"[call-agent] LATENCY {call_id}: "
+            print(f"[call-agent] LATENCY {call_id}: turn={turn_id} gen={gen_id} "
                   f"stt={stt_ms} plan={llm_ms} gen+tts={tts_ms} "
                   f"first_audio={total_ms} "
-                  f"usr='{(transcript or '')[:80]}' "
-                  f"rep='{(reply or '')[:60]}'", flush=True)
+                  # read.md rev-3 G8: NEVER log the raw conversation. The
+                  # operational log carries call/turn/generation ids and
+                  # latencies; content stays in the (separate, encrypted,
+                  # ACL'd) dialogue store. Char counts give signal without PII.
+                  f"in_chars={len(transcript or '')} "
+                  f"out_chars={len(reply or '')}", flush=True)
         except Exception:  # noqa: BLE001
             pass  # tracing never breaks the turn
 
@@ -657,6 +837,32 @@ class Serve:
          tempfile.gettempdir())
     )
 
+    @staticmethod
+    def _wav_diag(path):
+        """Read the ACTUAL WAV header of a recorded chunk and return a compact
+        diagnostic tuple (rate, channels, depth, frames, duration_sec, energy).
+
+        ``_concat_chunks`` used to rely only on file SIZE, which cannot tell a
+        real "caller not heard" bug apart from a format/codec problem. The
+        genuine sample rate lives only in the fmt chunk: reading it here lets
+        us catch chunk N differing in rate/channels from chunk 1 (which breaks
+        the concat header + Lua's duration math) and 44-byte empty files.
+        Best-effort: any stub/empty/invalid file yields None, never throws.
+        """
+        from adapters.stt import audio_energy
+        import wave as _wave
+        try:
+            with _wave.open(path, "rb") as w:
+                rate = w.getframerate()
+                ch = w.getnchannels()
+                depth = w.getsampwidth()
+                nframes = w.getnframes()
+            dur = nframes / float(rate) if rate else 0.0
+            return (rate, ch, depth, nframes, round(dur, 3), os.path.getsize(path),
+                    round(audio_energy(path), 4))
+        except Exception:  # noqa: BLE001
+            return None
+
     def _concat_chunks(self, paths):
         """Concatenate same-format mono WAV chunks (FS records) into one
         temp wav. PCM data is appended raw; the header comes from chunk 1."""
@@ -677,14 +883,21 @@ class Serve:
                 real_paths.append(real)
         if not real_paths:
             raise ValueError("no valid chunks")
-        # DIAG 2026-08-23: distinguish "RTP not arriving" (tiny/empty
-        # chunks) from "silent RTP" (full-size all-zero chunks) — the live
-        # "she can't hear me" incident needs this split.
+        # DIAG 2026-08-27: distinguish "RTP not arriving" (tiny/empty chunks)
+        # from "silent RTP" (full-size all-zero chunks) AND catch a per-chunk
+        # format/codec mismatch. Each chunk's ACTUAL header (rate, channels,
+        # depth) is read directly — the "she can't hear me" incident lives on
+        # this split. Concatenating a stereo chunk into a mono wire (or a 16k
+        # chunk after an 8k header) yields recognised-then-garbled audio.
+        _diags = [self._wav_diag(p) for p in real_paths]
         try:
-            _sizes = [os.path.getsize(p) for p in real_paths]
-            print(f"[turn-audio] {len(real_paths)} chunk(s), "
-                  f"sizes={_sizes} total={sum(_sizes)}B", flush=True)
-        except OSError:
+            print(f"[turn-audio] {len(real_paths)} chunk(s): "
+                  + "; ".join(
+                      "-" if d is None else
+                      f"{d[0]}Hz/{d[1]}ch/{d[2]*8}bit {d[3]}fr {d[4]}s "
+                      f"{d[5]}B en={d[6]}"
+                      for d in _diags), flush=True)
+        except Exception:  # noqa: BLE001
             pass
         with _wave.open(real_paths[0], "rb") as w0:
             params = w0.getparams()
@@ -715,6 +928,17 @@ class Serve:
                 wr.setsampwidth(2)
                 wr.setframerate(sr2)
                 wr.writeframes(left.astype(_np.int16).tobytes())
+        # DIAG 2026-08-27: log the FINAL file actually handed to STT (what the
+        # transcribe hop sees), so a quiet/dead/mis-encoded wire is visible
+        # BEFORE recognition scores it. Headers only — read-only, never throws.
+        try:
+            _fin = self._wav_diag(out)
+            print(f"[turn-audio] merged -> "
+                  f"{'-' if _fin is None else '%sHz/%sch/%sbit %sfr %.3fs %dB en=%.4f'
+                        % (_fin[0], _fin[1], _fin[2]*8, _fin[3], _fin[4], _fin[5], _fin[6])}",
+                  flush=True)
+        except Exception:  # noqa: BLE001
+            pass
         return out
 
     def save_upload(self, raw, ctype):
@@ -792,8 +1016,13 @@ class Serve:
 
     def _audio_key(self, call_id, kind, turn_no):
         """Deterministic MinIO object key for a turn's audio (or None when
-        object storage is not enabled)."""
-        if not (self.pg_available and minio_enabled() and turn_no):
+        object storage is not enabled).
+
+        read.md rev-3 G1: this is called in the VOICE HOT PATH (inside the
+        per-call lock), so it must NEVER probe the network. The key is purely
+        deterministic; the worker decides whether MinIO is reachable when it
+        actually uploads (_upload_turn_audio)."""
+        if not (self.pg_available and turn_no):
             return None
         return f"calls/{call_id}/{kind}-{turn_no:04d}.wav"
 
@@ -827,23 +1056,28 @@ class Serve:
             saved = None
             user_turn_no = len(rec.call["turns"]) + 1 if transcript is not None else None
             if reply_wav:
-                saved = save_wav(self.outdir, reply_wav,
+                saved = save_wav(self.outdir, reply_wav, upload=False,
                                  call_id=ctx.call_id, turn_id=user_turn_no)
 
             if transcript is not None:
-                saved_user = save_user_wav(self.outdir, wav_path,
-                                           call_id=ctx.call_id, turn_id=user_turn_no)
+                saved_user = save_user_wav(self.outdir, wav_path, upload=False,
+                                           call_id=ctx.call_id,
+                                           turn_id=user_turn_no)
                 audio_key = self._audio_key(ctx.call_id, "user", user_turn_no)
-                rec.add_turn("user", transcript, audio_path=saved_user,
-                             source="stt", confidence=confidence,
-                             audio_key=audio_key)
-            rec.add_turn("assistant", reply, audio_path=saved, source="agent")
+                self._persist_turn(ctx, "user", transcript, source="stt",
+                                   confidence=confidence,
+                                   audio_path=saved_user, audio_key=audio_key)
+            self._persist_turn(ctx, "assistant", reply, source="agent",
+                               audio_path=saved, audio_key=self._audio_key(
+                                   ctx.call_id, "reply", user_turn_no))
             summary = rec.summary_path()
             ctx.last_seen = time.time()
 
         return {
             "ok": True,
             "call_id": ctx.call_id,
+            "turn_id": ctx.turn_id,
+            "generation_id": ctx.generation_id,
             "transcript": transcript,
             "reply": reply,
             "finished": finished,
@@ -851,6 +1085,102 @@ class Serve:
             "summary_path": summary,
             "outcome": agent.outcome,
         }
+
+    def process_text_turn(self, text, call_id=None):
+        """WebApp->Agent->LLM text channel: one turn with no audio.
+
+        Reuses the same recorder API and turn flow as process_turn — only the
+        user turn originates as typed text (source="text", confidence 1.0)
+        instead of STT audio. The agent reply is generated through the normal
+        dialogue engine and recorded as an assistant turn.
+
+        FIX 2026-08-27: text turns now enter through begin_turn/end_turn like
+        every other user turn (overlap -> CallBusyError, generation bumps,
+        cancel_event safety). Previously text and voice used different paths,
+        so a text turn could interleave with a running voice turn."""
+        self.sweep_expired()
+        ctx = self.begin_turn(call_id)
+        try:
+            with ctx.lock:
+                agent, rec = ctx.agent, ctx.recorder
+                reply = agent.reply(text)
+                finished = agent.finished
+                user_turn_no = len(rec.call["turns"]) + 1
+                self._persist_turn(ctx, "user", text, source="text",
+                                   confidence=1.0, audio_key=self._audio_key(
+                                       ctx.call_id, "user", user_turn_no))
+                self._persist_turn(ctx, "assistant", reply, source="agent",
+                                   audio_key=self._audio_key(
+                                       ctx.call_id, "reply", user_turn_no))
+                summary = rec.summary_path()
+                ctx.last_seen = time.time()
+
+            return {
+                "ok": True,
+                "call_id": ctx.call_id,
+                "turn_id": ctx.turn_id,
+                "generation_id": ctx.generation_id,
+                "transcript": text,
+                "reply": reply,
+                "finished": finished,
+                "reply_wav_path": None,
+                "summary_path": summary,
+                "outcome": agent.outcome,
+            }
+        finally:
+            self.end_turn(ctx)
+
+    def _blank_turn_diag(self, wav_path, call_id, stream_confidence,
+                         transcript):
+        """Attribution for a "she can't hear me" turn on the PHONE path.
+
+        A turn that produced no usable transcript always lands here. It is
+        opaque WHY (client silent vs loud noise vs a dead/quiet RTP leg), so
+        we log objective metrics from the VERY audio at that instant and, on
+        request, retain a copy for offline VAD/whisper forensics.
+
+        Three self-explanatory causes, decided from hard numbers:
+          * SILENT  — Silero VAD found meaningfully no speech AND the energy
+            of the whole turn is near the audio-energy silence gate.
+          * MUTED   — speech energy is present but whisper could not map it
+            to text above the confidence gate (background/quiet voice).
+          * NOAUDIO — the chunks themselves carry no signal (RTP/device).
+        Callers treat this as best-effort reporting; it never throws.
+        """
+        from adapters.stt import audio_energy
+        try:
+            energy = audio_energy(wav_path)
+            # Silero VAD authoritative speech seconds (0 if floor kicks in).
+            vad = None
+            try:
+                import tts_common
+                vad = tts_common.vad_speech_seconds(wav_path)
+            except Exception:  # noqa: BLE001
+                vad = None
+            no_speech = vad is not None and vad < 0.15
+            if no_speech and energy < 0.004:
+                cause = "SILENT"
+            elif no_speech:
+                cause = "MUTED"
+            else:
+                cause = "LOWCONF" if stream_confidence is not None \
+                    and stream_confidence < 0.55 else "NOAUDIO"
+            print(f"[call-agent] BLANK {call_id}: cause={cause} "
+                  f"vad={'' if vad is None else f'{vad:.2f}s'} "
+                  f"energy={energy:.4f} conf="
+                  f"{'' if stream_confidence is None else f'{stream_confidence:.2f}'} "
+                  # read.md rev-3 G8: no raw transcript in the log — the blank
+                  # diagnosis is about WHY, not WHAT was (not) heard.
+                  f"in_chars={len(transcript or '')}", flush=True)
+            if env_bool("MOSS_RETAIN_BLANK_AUDIO") and wav_path \
+                    and os.path.exists(wav_path):
+                d = os.path.join(self.tmpdir, "blank_audio")
+                os.makedirs(d, exist_ok=True)
+                dst = os.path.join(d, f"{call_id}_{int(time.time())}.wav")
+                import shutil as _sh
+                _sh.copyfile(wav_path, dst)
+        except Exception:  # noqa: BLE001
+            pass
 
     @staticmethod
     def _looks_like_echo(transcript, last_reply):
@@ -903,8 +1233,16 @@ class Serve:
         ctx = self.get_call(call_id)
         self.sweep_expired()
 
-        # LATENCY TRACE (route step 6): mark wall-clock at each stage so a
-        # slow turn is attributable to STT / LLM / TTS, not guessed at.
+        # ARCHITECTURE 2026-08-27 (generation_id end-to-end): this stream was
+        # started for ONE dialogue generation. Capture the generation/turn
+        # NOW and attach it to every emitted frame so the receiver (WebApp,
+        # host dialplan, future STT/TTS services) can discard anything that
+        # arrives tagged with a superseded version after a barge-in.
+        _turn_id = ctx.turn_id
+        _gen_id = ctx.generation_id
+
+        # LATENCY TRACE (architecture lesson): mark wall-clock at each stage
+        # so a slow turn is attributable to STT / LLM / TTS, not guessed at.
         _t_turn = time.time()
         _t_stt = None
         _t_first_audio = None
@@ -940,6 +1278,16 @@ class Serve:
                           f"({stream_confidence:.2f}) -> repeat request",
                           flush=True)
                     transcript = ""
+                # VOCAB GATE (FIXES_PLAN P1b, 2026-08-29): confidence alone
+                # cannot stop CONFIDENT nonsense ("Торатичина" scored 0.614
+                # and "Лоха!" 0.763 on a live call — both fed the LLM/agenda).
+                # A transcript with no recognizable word (and no critical
+                # health entity like "упал"/"удар") is routed to the low-conf
+                # anchor, never to the model.
+                if transcript and looks_like_garbage(transcript):
+                    print(f"[call-agent] vocab-gate: no recognizable word "
+                          f"({stream_confidence:.2f}) -> anchor", flush=True)
+                    transcript = ""
             else:
                 with open(wav_path, "rb") as wf:
                     wav_bytes = wf.read()
@@ -959,7 +1307,8 @@ class Serve:
                 hop_text, _interim = stream_stt.feed(samples[i:i + 160])
                 if hop_text:
                     yield {"type": "interim", "transcript": hop_text,
-                           "final": False, "i": i}
+                           "final": False, "i": i,
+                           "turn_id": _turn_id, "generation_id": _gen_id}
             transcript = stream_stt.finish()
             # U9: the stream path exposes the fresh-decode confidence (None
             # when the turn came from hop concatenation only).
@@ -978,6 +1327,12 @@ class Serve:
                 # STT failure and NO-SPEECH go through the dialogue engine
                 # (empty-turn escalation: repeat request -> "Вам плохо?"),
                 # never through a hardcoded phrase that bypasses it.
+                # PHONE-PATH DIAGNOSTICS: attribute exactly WHY the turn is
+                # blank (VAD-silence vs noise/quiet voice vs confidence gate)
+                # so a live "он не слышит" becomes a number, not a guess.
+                if segment_dir:
+                    self._blank_turn_diag(wav_path, ctx.call_id,
+                                          stream_confidence, transcript)
                 plan = agent.plan_reply("")
                 agent.last_intent = plan.get("intent") or ""
                 canned_reply = None if plan.get("intent") \
@@ -1004,6 +1359,9 @@ class Serve:
                 # «Повторите». Only the phone path blanks the transcript here;
                 # an empty stream transcript also gets the anchor.
                 reason = "low_conf" if transcript == "" else None
+                if segment_dir and transcript == "":
+                    self._blank_turn_diag(wav_path, ctx.call_id,
+                                          stream_confidence, transcript)
                 plan = agent.plan_reply(transcript, reason=reason)
                 agent.last_intent = plan.get("intent") or ""
                 canned_reply = None if plan.get("intent") \
@@ -1012,36 +1370,47 @@ class Serve:
             finished = agent.finished
 
             # copy the caller's audio into the archive while the temp upload
-            # still exists
+            # still exists — LOCAL only (upload is handed to the worker below);
+            # read.md rev-3 G1 removes MinIO/PG from before-first-audio.
             user_turn_no = len(rec.call["turns"]) + 1 if transcript is not None else None
-            saved_user = save_user_wav(self.outdir, wav_path,
+            saved_user = save_user_wav(self.outdir, wav_path, upload=False,
                                        call_id=ctx.call_id, turn_id=user_turn_no) \
                 if transcript is not None else None
             if transcript is not None:
-                rec.add_turn("user", transcript, audio_path=saved_user,
-                             source="stt", confidence=stream_confidence,
-                             audio_key=self._audio_key(ctx.call_id, "user",
-                                                       user_turn_no))
+                self._persist_turn(
+                    ctx, "user", transcript, source="stt",
+                    confidence=stream_confidence, audio_path=saved_user,
+                    audio_key=self._audio_key(ctx.call_id, "user",
+                                              user_turn_no))
 
         # AUDIT FIX: register this reply's generation server-side so a
         # stream-cancel can abort the real model work (not just our read loop).
         sid = f"{ctx.call_id}-{uuid.uuid4().hex[:8]}"
         ctx.stream_id = sid
 
-        meta_base = {"call_id": ctx.call_id, "transcript": transcript,
+        meta_base = {"call_id": ctx.call_id, "turn_id": _turn_id,
+                     "generation_id": _gen_id, "transcript": transcript,
                      "finished": finished, "outcome": agent.outcome}
+        print(f"[call-agent] TURN {ctx.call_id} turn_id={_turn_id} "
+              # read.md rev-3 G8: meta_base still carries the transcript for
+              # downstream frames, but the OPERATIONAL log line must not dump
+              # raw conversation content (separate encrypted store, ACL'd).
+              f"generation_id={_gen_id} in_chars={len(transcript or '')}",
+              flush=True)
 
         if canned_reply is not None:
             # No model involved (missing transcript / scripted step): keep the
             # simple single-shot flow.
             yield {"type": "interim", "transcript": transcript, "final": True,
-                   "reply": canned_reply, "finished": finished}
+                   "reply": canned_reply, "finished": finished,
+                   "turn_id": _turn_id, "generation_id": _gen_id}
             segments = [canned_reply]
         else:
             # Live meta frame: the reply text is not final yet (it keeps
             # growing while tokens stream in); the done frame carries it.
             yield {"type": "interim", "transcript": transcript, "final": True,
-                   "finished": finished}
+                   "finished": finished,
+                   "turn_id": _turn_id, "generation_id": _gen_id}
             segments = reply_segments(agent, plan, cancel_event)
 
         response_parts = []
@@ -1092,7 +1461,8 @@ class Serve:
                     sent_done = True
                     break
                 idx = frame.get("i", idx)
-                wire = {"i": idx}
+                wire = {"i": idx, "turn_id": _turn_id,
+                        "generation_id": _gen_id}
                 if frame.get("done"):
                     seg_done = True
                     break
@@ -1124,7 +1494,8 @@ class Serve:
             if seg_done and segment_dir and seg_pcm:
                 seg_path = self._write_segment_file(segment_dir, seg_pcm)
                 if seg_path:
-                    yield {"seg_file": seg_path, "i": idx}
+                    yield {"seg_file": seg_path, "i": idx,
+                           "turn_id": _turn_id, "generation_id": _gen_id}
             if sent_done and cancel_event is not None and cancel_event.is_set():
                 break
 
@@ -1135,7 +1506,11 @@ class Serve:
         # caller is never left without an answer (Stage 9 requirement).
         if not got_audio and not (cancel_event is not None and cancel_event.is_set()):
             fb = (plan or {}).get("fallback") if plan else None
-            if fb and reply and reply != fb:
+            # FIX 2026-08-27: an EMPTY model reply (reply == "") used to make
+            # this condition false, so the caller got silence exactly when the
+            # model produced nothing usable. Only skip when we would recreate
+            # the identical fallback already emitted through another path.
+            if fb and reply != fb:
                 reply = fb
                 meta = {**meta_base, "reply": reply}
                 fb_sid = f"{sid}-fallback"
@@ -1152,7 +1527,8 @@ class Serve:
                     if not audio:
                         continue
                     got_audio = True
-                    wire = {"i": idx}
+                    wire = {"i": idx, "turn_id": _turn_id,
+                            "generation_id": _gen_id}
                     pcm, sr = wav_to_pcm(audio)
                     if pcm:
                         sample_rate = sr or sample_rate
@@ -1169,30 +1545,46 @@ class Serve:
                 if fb_pcm and segment_dir:
                     seg_path = self._write_segment_file(segment_dir, fb_pcm)
                     if seg_path:
-                        yield {"seg_file": seg_path, "i": fb_idx0}
+                        yield {"seg_file": seg_path, "i": fb_idx0,
+                               "turn_id": _turn_id,
+                               "generation_id": _gen_id}
 
         if not sent_done and not (cancel_event is not None and cancel_event.is_set()):
             yield {"done": True, **meta}
 
         ctx.stream_id = ""
 
-        if segment_dir:
-            self._write_done_file(segment_dir, meta)
-
         if cancel_event is not None and cancel_event.is_set():
+            # CANCELLED (barge-in): nothing to persist, but the consumer
+            # (VoiceRuntime/Lua) still needs the done.json marker — without
+            # it the session would sit in streaming=True forever. Written
+            # here, AFTER the done frame, so "done.json exists" still means
+            # "this turn is fully over".
+            if segment_dir:
+                self._write_done_file(segment_dir, meta)
             return
 
         saved = None
         if pcm_parts:
-            saved = save_wav(self.outdir, pcm_to_wav(b"".join(pcm_parts), sample_rate or 24000),
+            saved = save_wav(self.outdir,
+                             pcm_to_wav(b"".join(pcm_parts), sample_rate or 24000),
+                             upload=False,
                              call_id=ctx.call_id, turn_id=user_turn_no)
         with ctx.lock:
             if plan is not None and plan.get("intent"):
                 agent.commit_reply(reply)
-            rec.add_turn("assistant", reply, audio_path=saved, source="agent",
-                         audio_key=self._audio_key(ctx.call_id, "reply",
-                                                   user_turn_no))
+            # read.md rev-3 G1: assistant-turn PG INSERT + MinIO go through
+            # the background persistence worker, never the hot path.
+            self._persist_turn(
+                ctx, "assistant", reply, source="agent", audio_path=saved,
+                audio_key=self._audio_key(ctx.call_id, "reply", user_turn_no))
             ctx.last_seen = time.time()
-        self._persist_session(ctx)
+        self._emit_session(ctx)
         _trace(_t_turn, _t_stt, _t_llm_first, _t_first_audio,
-               transcript, reply, ctx.call_id)
+               transcript, reply, ctx.call_id, _turn_id, _gen_id)
+        # DONE MARKER LAST (2026-08-29, FIXES_PLAN P2): written only after
+        # persist/emit so the consumer never starts the next turn while the
+        # current one is still finishing (it used to run before persist and
+        # before the turn lock was released -> 429 busy on the next turn).
+        if segment_dir:
+            self._write_done_file(segment_dir, meta)
