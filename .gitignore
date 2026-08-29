@@ -42,3 +42,9 @@ voice-bench/out/
 # agent session artifacts (not for repo)
 .tmp_postfix_check.py
 telephony/tests/_tmp_conf_calls/
+
+# official release artifacts (make release)
+release/
+
+# editor-local notes (Trae)
+.trae/
