@@ -289,5 +289,88 @@ class _FakeTTS:
         return _wav_bytes(8000)
 
 
+class BlankTurnDiagTests(unittest.TestCase):
+    """Regression: the phone-path "she can't hear me" attribution is cheap,
+    deterministic and never throws (so a blank turn can't crash with it)."""
+
+    def setUp(self):
+        from core.orchestrator import Serve
+
+        class _Args:
+            refs = []
+            tts_port_file = None
+            tts_port = None
+            inference_steps = 6
+            no_style = False
+            outdir = "/tmp/mossvoice_blank_diag"
+            tts_host = None
+
+        serve = Serve(_Args())
+        serve.tts = _FakeTTS()
+        serve.llm.ready()
+        self.serve = serve
+        # offline: stub Silero VAD (torch) and the audio-energy gate
+        import sys
+        import types
+
+        fake_tts = types.ModuleType("tts_common")
+        fake_tts.vad_speech_seconds = lambda _p, *_a, **_k: 0.05
+        sys.modules["tts_common"] = fake_tts
+        import adapters.stt as _stt
+        self._real_energy = _stt.audio_energy
+        _stt.audio_energy = lambda _p: 0.0015
+
+    def tearDown(self):
+        import adapters.stt as stt
+        stt.audio_energy = self._real_energy
+        import sys
+        sys.modules.pop("tts_common", None)
+
+    def _capture(self, *a, **k):
+        import io
+        from contextlib import redirect_stdout
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.serve._blank_turn_diag(*a, **k)
+        return buf.getvalue()
+
+    def test_silent_is_attributed(self):
+        p = _tmp_wav(100)
+        try:
+            out = self._capture(p, "abc123", 0.05, None)
+        finally:
+            os.remove(p)
+        self.assertIn("cause=SILENT", out)
+        self.assertIn("abc123", out)
+
+    def test_never_raises(self):
+        # missing file -> audio_energy returns 1.0 (decode-hiccup fallback);
+        # must still not throw.
+        out = self._capture("/nonexistent/abc.wav", "x1", 0.05, None)
+        self.assertIsInstance(out, str)
+
+    def test_retainible_under_env(self):
+        # FIX 2026-08-27: the assertion used a FIXED /tmp dir, so files left
+        # by previous runs made len(hits)>1 flaky. Isolate per test.
+        import os
+        import tempfile
+        tmp = tempfile.mkdtemp(prefix="moss_blank_diag_")
+        self.serve.tmpdir = tmp
+        os.environ["MOSS_RETAIN_BLANK_AUDIO"] = "1"
+        try:
+            p = _tmp_wav(200)
+            try:
+                self._capture(p, "ret1", 0.05, None)
+            finally:
+                os.remove(p)
+            hits = [f for f in os.listdir(os.path.join(tmp, "blank_audio"))
+                    if f.startswith("ret1_")]
+            self.assertEqual(len(hits), 1)
+        finally:
+            os.environ.pop("MOSS_RETAIN_BLANK_AUDIO", None)
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

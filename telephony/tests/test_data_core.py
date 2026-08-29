@@ -423,6 +423,114 @@ class DataCoreDrillTests(unittest.TestCase):
                 serve.outbox.stop()
             serve.pg.close()
 
+    # ------------------------------------------------------------------ #
+    # G8 retention: expired-by-TTL purge leaves no content, only an audit row
+    # ------------------------------------------------------------------ #
+    def test_retention_purges_expired_call_and_leaves_audit(self):
+        from workers.retention_worker_main import run_once
+        pg = self.pg
+        # create an OLD terminal call (well past its retention window)
+        pg.new_call("c-ret", retention_days=0)
+        pg.add_turn("c-ret", "user", "привет", source="stt",
+                    audio_key="calls/c-ret/user-0001.wav")
+        pg.add_turn("c-ret", "assistant", "пока", source="llm",
+                    audio_key="calls/c-ret/reply-0001.wav")
+        pg.finalize_call("c-ret", "ok", notes=["done"])
+        # backdate ended_at so it is instantly expired
+        pg._exec("UPDATE call_sessions SET ended_at = now() - interval '10 days' "
+                 "WHERE call_id = 'c-ret'")
+        # a FRESH call must NOT be purged
+        pg.new_call("c-fresh", retention_days=90)
+        pg._exec("UPDATE call_sessions SET ended_at = now() "
+                 "WHERE call_id = 'c-fresh'")
+
+        keys = pg.audio_keys_for("c-ret")
+        self.assertEqual(
+            sorted(keys),
+            ["calls/c-ret/reply-0001.wav", "calls/c-ret/user-0001.wav"])
+
+        outdir = os.path.join(_HERE, "_tmp_ret")
+        os.makedirs(os.path.join(outdir, "c-ret"), exist_ok=True)
+        open(os.path.join(outdir, "c-ret", "user-0001.wav"), "w").close()
+        open(os.path.join(outdir, "c-ret", "reply-0001.wav"), "w").close()
+
+        n = run_once(pg, outdir, log=lambda *a, **k: None)
+        self.assertEqual(n, 1)  # exactly the expired call, not c-fresh
+        # content rows gone
+        self.assertEqual(pg.turns("c-ret"), [])
+        self.assertIsNone(pg._exec(
+            "SELECT verdict FROM call_results WHERE call_id = 'c-ret'",
+            fetch="val"))
+        # local WAV cache removed
+        self.assertFalse(os.path.exists(os.path.join(outdir, "c-ret")))
+        # fresh call untouched
+        self.assertEqual(pg._exec(
+            "SELECT count(*) FROM call_sessions WHERE call_id = 'c-fresh'",
+            fetch="val"), 1)
+        # a durable audit marker remains (call_id only, no content)
+        audit = pg._exec(
+            "SELECT count(*) FROM audit_log WHERE action = "
+            "'data.retention.purged' AND entity_id = 'c-ret'",
+            fetch="val")
+        self.assertEqual(audit, 1)
+
+    def test_retention_holds_metadata_while_s3_down_then_purges(self):
+        """rev-4 Gate C: when S3 is configured but down, retention must NOT
+        purge Postgres (the metadata holds the object keys) — it holds for a
+        retry; once deletion is confirmed the purge completes."""
+        from workers import retention_worker_main as rw
+        pg = self.pg
+        pg.new_call("c-s3down", retention_days=0)
+        pg.add_turn("c-s3down", "user", "привет", source="stt",
+                    audio_key="calls/c-s3down/user-0001.wav")
+        pg.finalize_call("c-s3down", "ok")
+        pg._exec("UPDATE call_sessions SET ended_at = now() - interval '10 days' "
+                 "WHERE call_id = 'c-s3down'")
+
+        # Make the worker believe S3 is configured (so it must confirm deletes)
+        env_keys = ("MOSS_S3_ENDPOINT", "MOSS_S3_ACCESS_KEY", "MOSS_S3_SECRET_KEY")
+        saved = {k: os.environ.get(k) for k in env_keys}
+        os.environ["MOSS_S3_ENDPOINT"] = "http://127.0.0.1:9"
+        os.environ["MOSS_S3_ACCESS_KEY"] = "x"
+        os.environ["MOSS_S3_SECRET_KEY"] = "y"
+
+        real_delete = rw.delete_objects
+        outdir = os.path.join(_HERE, "_tmp_ret_s3")
+        try:
+            # Phase 1: S3 unreachable -> deletion not confirmed -> hold
+            rw.delete_objects = lambda keys: 0
+            n = rw.run_once(pg, outdir, log=lambda *a, **k: None)
+            self.assertEqual(n, 0, "nothing purged while S3 deletion pending")
+            # metadata (and therefore the object keys) must SURVIVE the hold
+            self.assertEqual(pg.audio_keys_for("c-s3down"),
+                             ["calls/c-s3down/user-0001.wav"])
+            self.assertEqual(pg._exec(
+                "SELECT count(*) FROM call_sessions "
+                "WHERE call_id = 'c-s3down'", fetch="val"), 1)
+
+            # Phase 2: S3 recovers -> confirmed -> retry purges everything
+            rw.delete_objects = lambda keys: len(keys)
+            n = rw.run_once(pg, outdir, log=lambda *a, **k: None)
+            self.assertEqual(n, 1, "retry with confirmed delete purges the call")
+            self.assertEqual(pg.audio_keys_for("c-s3down"), [])
+            self.assertEqual(pg._exec(
+                "SELECT count(*) FROM call_sessions "
+                "WHERE call_id = 'c-s3down'", fetch="val"), 0)
+            audit = pg._exec(
+                "SELECT count(*) FROM audit_log WHERE action = "
+                "'data.retention.purged' AND entity_id = 'c-s3down'",
+                fetch="val")
+            self.assertEqual(audit, 1)
+        finally:
+            rw.delete_objects = real_delete
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+            import shutil
+            shutil.rmtree(outdir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

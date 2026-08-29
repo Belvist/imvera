@@ -1,10 +1,14 @@
 #!/bin/zsh
-# MossVoice Telephony — production start (one supervisor, three services):
+# MossVoice Telephony — production start (one supervisor, four services):
 #   1. FreeSWITCH (SIP server) — only if installed
 #   2. moss_supervisor.py ->
 #        answers    llm_server.py   127.0.0.1:9500  (генерация ответов, Qwen3)
-#        voice      tts_server.py   127.0.0.1:9600  (TTS-клон + STT)
-#        telephony  call_agent.py   127.0.0.1:9400  (диалоговый движок)
+#        voice      tts_server.py   127.0.0.1:9600  (TTS only — --no-stt)
+#        telephony  call_agent.py   127.0.0.1:9400  (legacy STT + диалоговый движок)
+#        runtime    voice_runtime.py 127.0.0.1:9700 (VoiceRuntime / G3)
+#   read.md rev-3/rev-4: STT (Whisper) lives in the telephony process on the
+#   phone path; the voice daemon deploys --no-stt so Whisper is NOT loaded
+#   twice. If/when a separate STT service lands, update ONLY this block.
 set -e
 
 TEL="$(cd "$(dirname "$0")" && pwd)"
@@ -30,7 +34,7 @@ if [[ -x "$FS_BIN" ]]; then
     log "FreeSWITCH already running."
   fi
 else
-  log "FreeSWITCH not installed — SIP extension 4400 unavailable (Telegram bridge still works)."
+  log "FreeSWITCH not installed — SIP extension 4401 unavailable (Telegram bridge still works)."
 fi
 
 # --- 2. The three core services --------------------------------------------
@@ -50,6 +54,6 @@ log "Голос (voice)       : http://127.0.0.1:9600"
 log "Генерация (answers) : http://127.0.0.1:9500"
 log "Телефония (agent)   : http://127.0.0.1:9400"
 if [[ -x "$FS_CLI" ]]; then
-  log "SIP: номер агента 4400; тест: $FS_CLI -x \"originate loopback/4400/default &echo\""
+  log "SIP: номер агента 4401; тест: $FS_CLI -x \"originate loopback/4402/default &echo\""
 fi
 log "Остановка: $(dirname "$0")/moss_supervisor.py stop"
