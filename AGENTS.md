@@ -604,6 +604,24 @@ VeraVoice. Не трогать без прямого указания владе
   P6: MediaAdapter-контракт (voice_runtime/media_adapter.py; uuid_record —
   dev-only). Live-инфра: IP-автосинк починен (fs_cli PATH), 7 launchd
   agent-loop отключены (scripts/disable_agent_loops.sh). voice_runtime 42 OK.
+- **FSM инженерный аудит + OOM-цикл 2026-08-29 (послеобеденная сессия):**
+  (1) Машина стала ТОТАЛЬНОЙ: добавлен явный catch-all ("*","*") →
+  `_a_unhandled` вместо try/except (никогда не молчит, лог + warm ack);
+  dispatch получил MAX_DISPATCH_DEPTH=4 (защита от бесконечного
+  re-dispatch: repair/side-resume/confirm-continue); мёртвые guard'ы
+  _g_confirm_pending/_g_not_confirmed удалены. Тесты: +totality,
+  +catch-all-last, +unhandled-warm-ack (make test-fast 255 OK).
+  (2) **ОТКРЫТ OOM-цикл**: контейнер telephony перезапускался каждые
+  ~45с (docker events показывал `oom` → die → start; RestartCount=23).
+  Причина: whisper-small в контейнере (дефолт compose) в предзагрузке
+  давал пик 4.4GiB; хост 16GB занят на 15G/16G (171MB свободно, VM
+  Docker 11.67GiB) → cgroup OOM-killer бил telephony. ФИКС: dev-override
+  в docker/.env `MOSS_STT_MODEL=openai/whisper-base` (base меньше small,
+  точнее tiny — продукт-дефолт small ОСТАЁТСЯ в compose как канон).
+  Верифицировано: telephony Up healthy, потребление 935MiB, RestartCount 0,
+  STT ready, loopback TURN in_chars=13. УРОК: перед деплоем большой STT/
+  LLM модели проверять, что 16GB-хост тянет пик; для этой машины
+  `MOSS_STT_MODEL=openai/whisper-base` — рабочий дефолт dev.
 
 ## ПРАВИЛА: как правильно строить логику диалога (state machine) — ОБЯЗАТЕЛЬНО
 
