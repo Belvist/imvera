@@ -123,11 +123,26 @@ class ConfidenceMappingTests(unittest.TestCase):
         finally:
             os.remove(p)
 
+    def test_qwen_host_long_text_trusts_vocab(self):
+        """Live 9b01: VAD window << utterance must not pin conf to 0.35."""
+        text = (
+            "Привет, чувствую себя сейчас хорошо, "
+            "до этого чувствовал себя плохо"
+        )
+        p = _tmp_wav(8000)
+        try:
+            res = _FakeResult(text=text, speech_s=1.76, segments=())
+            conf = confidence_from_result(p, res)
+            self.assertGreaterEqual(conf, 0.78)
+        finally:
+            os.remove(p)
+
 
 class _FakeResult:
-    def __init__(self, segments, text=""):
+    def __init__(self, segments, text="", speech_s=None):
         self.segments = segments
         self.text = text
+        self.speech_s = speech_s
 
 
 class _FakeModel:

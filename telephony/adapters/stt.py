@@ -112,14 +112,29 @@ def confidence_from_result(wav_path, result):
     speech_s = getattr(result, "speech_s", None)
     if speech_s and speech_s > 0.2:
         import re
+        from core.vocab import contains_real_word
         toks = [t for t in re.findall(r"[а-яёa-z]+", text.lower()) if len(t) >= 2]
+        # Qwen host: VAD window << utterance on long phone turns (live
+        # 9b01: 68 chars / 1.76s → rate 17 → 0.35 → generic). Trust vocab.
+        if contains_real_word(text) and len(toks) >= 2:
+            if len(toks) >= 8:
+                return 0.88
+            if len(toks) >= 4:
+                return 0.82
+            return 0.78
         rate = len(toks) / speech_s if speech_s else 0
-        # human 1.5-4 w/s is normal telephone speech (measured: p50 0.4s pause)
         if 1.2 <= rate <= 5.0:
             return 0.82
         if 0.8 <= rate <= 6.0:
             return 0.68
         return 0.35
+    if text:
+        try:
+            from core.vocab import contains_real_word
+            if contains_real_word(text):
+                return 0.72
+        except Exception:
+            pass
     return 0.65
 
 

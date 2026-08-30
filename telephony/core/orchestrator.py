@@ -783,11 +783,14 @@ class Serve:
             pass  # tracing never breaks the turn
 
     def _warm_greeting(self):
-        def _warm():
-            print("[call-agent] pre-warming greeting...", flush=True)
+        if os.environ.get("MOSS_NO_WARMUP"):
+            return
+        print("[call-agent] pre-warming greeting...", flush=True)
+        try:
             self.greeting_wav(DEFAULT_GREETING)
             print("[call-agent] greeting ready", flush=True)
-        threading.Thread(target=_warm, daemon=True).start()
+        except Exception as e:  # noqa: BLE001
+            print(f"[call-agent] greeting warmup failed: {e}", flush=True)
 
     # Backchannel phrases ("ага, услышала вас"): pre-rendered at startup so
     # the dialplan can play one INSTANTLY while the LLM is still thinking —

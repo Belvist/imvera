@@ -591,6 +591,11 @@ class DialogueFSM:
     def _a_uncertain(self, agent, ev):
         agent._note("самочувствие не подтверждено")
         agent.status = "attention"
+        text = agent._fsm._last_text or ""
+        # After an open symptom question, never «Не буду настаивать…» —
+        # re-ask about the body (live 8f650 «Супер, спасибо»).
+        if agent._clearing or agent._mentions_symptom(text):
+            return self._a_symptom(agent, ev)
         q = agent._pick_not_repeated(agent.STAY_OBSERVANT_ACKS)
         agent._last_question = q
         return {"text": agent._fsm._last_text,
@@ -732,6 +737,14 @@ class DialogueFSM:
     def _a_unknown(self, agent, ev):
         agent._extract_facts(agent._fsm._last_text)
         text = agent._fsm._last_text or ""
+        # Open control question + non-answer (thanks/backchannel) → re-ask
+        # the body, not a generic ack (live 8f650 «Супер, спасибо»).
+        if agent._clearing:
+            return self._a_symptom(agent, ev)
+        # Symptom anywhere in the turn beats agenda topic (live 9b01:
+        # «голова болела» on «передать родным» must ask about the head).
+        if agent._mentions_symptom(text):
+            return self._a_symptom(agent, ev)
         topic = agent._agenda_topic()
         # Done → close, not generic ack (fixes postmortem no-goodbye)
         if getattr(agent, "_agenda_done", False) or topic is None:
@@ -1643,6 +1656,16 @@ class Agent:
         if any(w in low for w in OK_WORDS) or any(w in low for w in BAD_WORDS):
             return True
         return self._matches_topic(text)
+
+    def _mentions_symptom(self, text):
+        """True when the caller names a body complaint (any agenda topic)."""
+        if not (text or "").strip():
+            return False
+        low = text.lower()
+        return bool(re.search(
+            r"голов|болит|болел|болела|болеет|тошн|круж|давлен|"
+            r"температур|слабост|недомог|ноет|колет|шумит|"
+            r"сердц|дыш|кашл", low))
 
     # ---- facts (compact cross-in memory, 2026-08-25) -----------------------
     # Extracted from caller turns so the model gets the ESSENCE of the call
