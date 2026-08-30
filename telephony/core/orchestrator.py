@@ -18,7 +18,8 @@ import uuid
 
 from core.state import CallContext, CallBusyError, AdmissionError, \
     SESSION_TTL_SEC, DEFAULT_GREETING
-from core.dialogue import Agent, reply_looks_broken, reply_looks_hallucinated
+from core.dialogue import Agent, _clean_llm, reply_looks_broken, \
+    reply_looks_hallucinated
 from core.vocab import looks_like_garbage
 from core.events import StreamingSTT, reply_segments
 from adapters.audio import wav_to_pcm, pcm_to_wav, parse_multipart_wav
@@ -1444,6 +1445,10 @@ class Serve:
                 print(f"[call-agent] hallucination guard: {segment[:60]}",
                       flush=True)
                 segment = (plan.get("fallback") or segment)
+            if plan is not None and plan.get("intent") and segment:
+                cleaned = _clean_llm(segment)
+                if cleaned:
+                    segment = cleaned
             response_parts.append(segment)
             seg_sid = f"{sid}-{seg_no}"
             seg_no += 1
@@ -1500,6 +1505,10 @@ class Serve:
                 break
 
         reply = " ".join(response_parts).strip()
+        if plan is not None and plan.get("intent") and reply:
+            cleaned = _clean_llm(reply)
+            if cleaned:
+                reply = cleaned
         meta = meta_now()
 
         # The model produced nothing usable: speak the canned fallback so the
@@ -1571,7 +1580,9 @@ class Serve:
                              upload=False,
                              call_id=ctx.call_id, turn_id=user_turn_no)
         with ctx.lock:
-            if plan is not None and plan.get("intent"):
+            # Canned and LLM replies must both land in llm_history / _last_reply
+            # so echo-guard and the cloud LLM see what Vera actually said.
+            if reply:
                 agent.commit_reply(reply)
             # read.md rev-3 G1: assistant-turn PG INSERT + MinIO go through
             # the background persistence worker, never the hot path.

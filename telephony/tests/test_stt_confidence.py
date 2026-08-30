@@ -372,5 +372,25 @@ class BlankTurnDiagTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class CloudSttConfidenceTests(unittest.TestCase):
+    def test_cloud_adapter_exposes_transcribe_with_confidence(self):
+        from adapters.cloud import CloudSTTAdapter
+
+        class _Prov:
+            def transcribe(self, wav):
+                return "да всё хорошо"
+
+            def ready(self):
+                return True
+
+        p = _tmp_wav(8000)
+        try:
+            res = CloudSTTAdapter(_Prov()).transcribe_with_confidence(p)
+            self.assertEqual(res.text, "да всё хорошо")
+            self.assertIsNotNone(res.confidence)
+        finally:
+            os.remove(p)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
