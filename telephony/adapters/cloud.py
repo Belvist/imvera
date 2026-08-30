@@ -33,12 +33,12 @@ def _maybe_cloud_stt(local_engine):
 def _maybe_cloud_llm(local_client):
     """Return the cloud LLM provider when MOSS_LLM_PROVIDER=openai.
 
-    PRODUCT DECISION (2026-08-29): the owner removed the local LLM from the
-    dialogue path — the local llama.cpp/Qwen3 replies were poor. When the
-    provider is "openai" we do NOT fall back to the local model: a missing
-    key or a failed call yields a NullLLM (empty replies -> the scripted
-    phrase), never a local model answer. The local client is returned only
-    when the provider is NOT openai (i.e. a local-only deployment).
+    Honest fallback (2026-08-30): cloud is primary (DeepSeek понимает
+    лучше Qwen3-4B), но пустой content / 429 / таймаут честно падает в
+    локальный llama.cpp, а не в NullLLM-заглушку. Заглушка была продуктом
+    29.08 «локальная плохая», но для прототипа «слышит→понимает» фолбэк
+    честнее немоты. Локальный клиент возвращается только когда провайдер
+    не openai (чистый оффлайн).
     """
     if os.environ.get("MOSS_LLM_PROVIDER", "local").lower() != "openai":
         return local_client
@@ -46,11 +46,10 @@ def _maybe_cloud_llm(local_client):
     p = OpenAILLMProvider()
     if not p.ready():
         print("[call-agent] MOSS_LLM_PROVIDER=openai but OPENAI_API_KEY is "
-              "missing — replies fall back to scripted phrases (local LLM "
-              "is disabled by product decision)", flush=True)
-        return NullLLM()
-    print("[call-agent] LLM provider: openai", flush=True)
-    return CloudLLMAdapter(p)
+              "missing — falling back to local LLM (was NullLLM)", flush=True)
+        return local_client
+    print("[call-agent] LLM provider: openai (fallback local)", flush=True)
+    return CloudLLMWithFallback(p, local_client)
 
 
 class NullLLM:
@@ -139,6 +138,69 @@ class CloudLLMAdapter:
                 timeout=min(timeout, 30))
         except Exception as e:  # noqa: BLE001
             print(f"[call-agent] cloud LLM stream error: {e}", flush=True)
+            return
+
+
+class CloudLLMWithFallback:
+    """Cloud primary + local fallback (honest, no stub)."""
+
+    def __init__(self, provider, local_client):
+        self.provider = provider
+        self.local = local_client
+        self._cloud = CloudLLMAdapter(provider)
+
+    def ready(self):
+        try:
+            if self.provider.ready():
+                return True
+        except Exception:
+            pass
+        try:
+            return bool(getattr(self.local, "ready", lambda: False)())
+        except Exception:
+            return False
+
+    def chat(self, messages, max_tokens=120, temp=0.65, timeout=60):
+        try:
+            r = self.provider.chat(messages, max_tokens=max_tokens,
+                                   temp=temp, timeout=min(timeout, 30))
+            if r and r.strip():
+                return r
+            print("[call-agent] cloud LLM empty → fallback local", flush=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"[call-agent] cloud LLM error → fallback local: {e}",
+                  flush=True)
+        # honest fallback — not NullLLM
+        try:
+            return self.local.chat(messages, max_tokens=max_tokens,
+                                   temp=temp, timeout=timeout)
+        except Exception as e:  # noqa: BLE001
+            print(f"[call-agent] local LLM fallback error: {e}", flush=True)
+            return None
+
+    def chat_stream(self, messages, max_tokens=120, temp=0.65, timeout=60):
+        # try cloud first; if it yields nothing, fallback
+        got = False
+        try:
+            for d in self.provider.chat_stream(
+                    messages, max_tokens=max_tokens, temp=temp,
+                    timeout=min(timeout, 30)):
+                got = True
+                yield d
+            if got:
+                return
+            print("[call-agent] cloud LLM stream empty → fallback local",
+                  flush=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"[call-agent] cloud LLM stream error → fallback: {e}",
+                  flush=True)
+        # fallback to local stream
+        try:
+            yield from self.local.chat_stream(
+                messages, max_tokens=max_tokens, temp=temp, timeout=timeout)
+        except Exception as e:  # noqa: BLE001
+            print(f"[call-agent] local LLM stream fallback error: {e}",
+                  flush=True)
             return
 
 

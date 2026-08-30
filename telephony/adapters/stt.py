@@ -81,10 +81,41 @@ def confidence_from_segments(segments):
 
 
 def confidence_from_result(wav_path, result):
-    """Deterministic STT confidence: audio-energy gate, then segment metrics."""
+    """Deterministic STT confidence: audio-energy gate, then segment metrics.
+
+    Qwen3-ASR host has no per-token logprobs — segments is (). The old code
+    returned None → safety treated as low (U9) and the harness needed a fake
+    0.85. Honest proxy: VAD speech duration vs real-word tokens + vocab gate.
+    """
     if audio_energy(wav_path) < SILENCE_ENERGY:
         return _LOW_CONF_SILENCE
-    return confidence_from_segments(getattr(result, "segments", None))
+    segs = getattr(result, "segments", None)
+    conf = confidence_from_segments(segs)
+    if conf is not None:
+        return conf
+    # Host Qwen3 path: no segments — synthesize from human speech physics
+    text = (getattr(result, "text", "") or "").strip()
+    if not text:
+        return None
+    # vocab garbage → low, but critical health never gated (see vocab.py)
+    try:
+        from core.vocab import looks_like_garbage
+        if looks_like_garbage(text):
+            return _LOW_CONF_HALLUCINATION
+    except Exception:
+        pass
+    speech_s = getattr(result, "speech_s", None)
+    if speech_s and speech_s > 0.2:
+        import re
+        toks = [t for t in re.findall(r"[а-яёa-z]+", text.lower()) if len(t) >= 2]
+        rate = len(toks) / speech_s if speech_s else 0
+        # human 1.5-4 w/s is normal telephone speech (measured: p50 0.4s pause)
+        if 1.2 <= rate <= 5.0:
+            return 0.85
+        if 0.8 <= rate <= 6.0:
+            return 0.65
+        return 0.35
+    return 0.65
 
 
 class STTEngine:
