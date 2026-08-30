@@ -20,7 +20,7 @@ from core.state import CallContext, CallBusyError, AdmissionError, \
     SESSION_TTL_SEC, DEFAULT_GREETING
 from core.dialogue import Agent, _clean_llm, reply_looks_broken, \
     reply_looks_hallucinated
-from core.vocab import looks_like_garbage
+from core.stt_gates import gate_stt_transcript
 from core.events import StreamingSTT, reply_segments
 from adapters.audio import wav_to_pcm, pcm_to_wav, parse_multipart_wav
 from adapters.moss_tts import TTSClient
@@ -1036,13 +1036,20 @@ class Serve:
             tci = getattr(self.stt, "transcribe_with_confidence", None)
             if tci is not None:
                 res = tci(wav_path)
-                transcript, confidence = res.text, res.confidence
+                transcript, _stt_reason = gate_stt_transcript(
+                    res.text, res.confidence)
+                confidence = res.confidence
             else:
-                transcript = self.stt.transcribe_clean(wav_path)
+                raw = self.stt.transcribe_clean(wav_path)
+                transcript, _stt_reason = gate_stt_transcript(raw, None)
                 confidence = None
 
-            if transcript is None:
-                reply = "Повторите, пожалуйста."
+            if not transcript:
+                plan = agent.plan_reply("", reason=_stt_reason or None)
+                reply = plan.get("fallback") or "Повторите, пожалуйста."
+            elif _stt_reason == "stt_uncertain":
+                plan = agent.plan_reply(transcript, reason="stt_uncertain")
+                reply = plan.get("fallback") or "Повторите, пожалуйста."
             else:
                 # U9: pass the STT confidence (0..1 | None) so low-confidence
                 # transcripts cannot fabricate a GREEN or confirm a RED.
@@ -1055,12 +1062,12 @@ class Serve:
             # script plays reply_wav_path. Keeping it only wasted bandwidth.
             reply_wav = self._phone_wav(self.tts.generate(reply))
             saved = None
-            user_turn_no = len(rec.call["turns"]) + 1 if transcript is not None else None
+            user_turn_no = len(rec.call["turns"]) + 1 if transcript else None
             if reply_wav:
                 saved = save_wav(self.outdir, reply_wav, upload=False,
                                  call_id=ctx.call_id, turn_id=user_turn_no)
 
-            if transcript is not None:
+            if transcript:
                 saved_user = save_user_wav(self.outdir, wav_path, upload=False,
                                            call_id=ctx.call_id,
                                            turn_id=user_turn_no)
@@ -1259,6 +1266,7 @@ class Serve:
         # (begin_turn/turn_in_progress) still makes this safe per call.
         transcript = None
         stream_confidence = None
+        stt_reason = None
         pcm, sample_rate = None, None
         # PHONE PATH (segment_dir set) uses ONE-SHOT STT: the hop-by-hop
         # incremental decode exists for live captions and is ~3x slower
@@ -1266,29 +1274,9 @@ class Serve:
         try:
             if segment_dir:
                 res = self.stt.transcribe_with_confidence(wav_path)
-                transcript = res.text
                 stream_confidence = res.confidence
-                # GARBAGE GATE: whisper-tiny on real phone audio sometimes
-                # produces confident-looking NONSENSE ("Сам оттвыж") that the
-                # LLM then echoes back verbatim. Real recognition scores
-                # 0.85+; garbage scores 0.4-0.5. Below the bar -> treat as
-                # no speech ("Повторите, пожалуйста"), never feed the LLM.
-                if transcript and stream_confidence is not None \
-                        and stream_confidence < 0.55:
-                    print(f"[call-agent] low-conf transcript "
-                          f"({stream_confidence:.2f}) -> repeat request",
-                          flush=True)
-                    transcript = ""
-                # VOCAB GATE (FIXES_PLAN P1b, 2026-08-29): confidence alone
-                # cannot stop CONFIDENT nonsense ("Торатичина" scored 0.614
-                # and "Лоха!" 0.763 on a live call — both fed the LLM/agenda).
-                # A transcript with no recognizable word (and no critical
-                # health entity like "упал"/"удар") is routed to the low-conf
-                # anchor, never to the model.
-                if transcript and looks_like_garbage(transcript):
-                    print(f"[call-agent] vocab-gate: no recognizable word "
-                          f"({stream_confidence:.2f}) -> anchor", flush=True)
-                    transcript = ""
+                transcript, stt_reason = gate_stt_transcript(
+                    res.text, res.confidence)
             else:
                 with open(wav_path, "rb") as wf:
                     wav_bytes = wf.read()
@@ -1314,6 +1302,8 @@ class Serve:
             # U9: the stream path exposes the fresh-decode confidence (None
             # when the turn came from hop concatenation only).
             stream_confidence = stream_stt.confidence
+            transcript, stt_reason = gate_stt_transcript(
+                transcript, stream_confidence)
         _t_stt = time.time()
 
         # Dialogue-state mutations run under the per-call lock. Only the
@@ -1354,16 +1344,13 @@ class Serve:
                 transcript = None
             else:
                 agent.observe_confidence(stream_confidence)
-                # LOW_CONF reason (2026-08-25): real speech scored below the
-                # gate — route through the yes/no ANCHOR in the empty-turn
-                # ladder (a productive question) instead of a blind
-                # «Повторите». Only the phone path blanks the transcript here;
-                # an empty stream transcript also gets the anchor.
-                reason = "low_conf" if transcript == "" else None
-                if segment_dir and transcript == "":
+                reason = stt_reason
+                if not transcript and not reason:
+                    reason = "low_conf"
+                if segment_dir and not transcript:
                     self._blank_turn_diag(wav_path, ctx.call_id,
                                           stream_confidence, transcript)
-                plan = agent.plan_reply(transcript, reason=reason)
+                plan = agent.plan_reply(transcript or "", reason=reason)
                 agent.last_intent = plan.get("intent") or ""
                 canned_reply = None if plan.get("intent") \
                     else (plan.get("fallback") or "")
@@ -1373,11 +1360,11 @@ class Serve:
             # copy the caller's audio into the archive while the temp upload
             # still exists — LOCAL only (upload is handed to the worker below);
             # read.md rev-3 G1 removes MinIO/PG from before-first-audio.
-            user_turn_no = len(rec.call["turns"]) + 1 if transcript is not None else None
+            user_turn_no = len(rec.call["turns"]) + 1 if transcript else None
             saved_user = save_user_wav(self.outdir, wav_path, upload=False,
                                        call_id=ctx.call_id, turn_id=user_turn_no) \
-                if transcript is not None else None
-            if transcript is not None:
+                if transcript else None
+            if transcript:
                 self._persist_turn(
                     ctx, "user", transcript, source="stt",
                     confidence=stream_confidence, audio_path=saved_user,

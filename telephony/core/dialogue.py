@@ -1524,6 +1524,7 @@ class Agent:
             None       no speech / VAD silence / STT failure
             "low_conf" real speech existed but scored below the gate
             "echo"     transcript looked like Vera's own words
+            "stt_uncertain" mid-confidence speech — ask caller to confirm
         Only the empty-turn ladder reads it (see _silence_flow)."""
         # ECHO MUTE (2026-08-25): an "echo" reason means the transcript IS
         # Vera's own words coming back from the mixed recording. Blank the
@@ -1532,6 +1533,18 @@ class Agent:
         # her own phrase.
         if reason == "echo":
             caller_text = ""
+        if reason == "stt_uncertain" and (caller_text or "").strip():
+            short = caller_text.strip()
+            if len(short) > 80:
+                short = short[:77] + "..."
+            return {
+                "text": caller_text,
+                "intent": None,
+                "fallback": (
+                    f"Я правильно услышала: «{short}»? "
+                    "Скажите да или повторите, пожалуйста."
+                ),
+            }
         # TERMINAL GUARD (S24) is handled inside the FSM (E_DONE -> terminal
         # goodbye): after done, late/duplicate turns cannot mutate the
         # verdict, the history or the engine state.

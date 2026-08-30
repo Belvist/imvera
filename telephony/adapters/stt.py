@@ -48,6 +48,7 @@ def audio_energy(wav_path):
     """
     try:
         with wave.open(wav_path, "rb") as w:
+            ch = w.getnchannels()
             frames = w.readframes(w.getnframes())
             if not frames:
                 return 0.0
@@ -55,6 +56,10 @@ def audio_energy(wav_path):
             samples.frombytes(frames)
             if not samples:
                 return 0.0
+            if ch > 1:
+                # Stereo mix: LEFT = caller (matches vad_speech_seconds).
+                left = [samples[i] for i in range(0, len(samples), ch)]
+                samples = array.array("h", left)
             total = 0
             for s in samples:
                 total += abs(s)
