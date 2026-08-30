@@ -486,11 +486,9 @@ class SttHostAdapter:
             print("[stt-host] error: %s" % e, flush=True)
             return r
         r.text = (obj.get("text") or "").strip()
-        # a synthetic segment keeps confidence_from_segments working (Qwen
-        # reports no per-segment logprobs; audio-energy gate already ran).
-        if r.text:
-            r.segments = ({"no_speech_prob": 0.0, "compression_ratio": 0.0,
-                           "avg_logprob": -0.4},)
+        # Честно: у Qwen3-ASR нет per-token logprob — segments остаётся (),
+        # confidence синтезирует stt.py: VAD speech_s vs токены + vocab.
+        # Не фейкуем 1.0 здесь.
         return r
 
 

@@ -170,6 +170,13 @@ def _plan(agent, text, reason):
 def _run_turns(agent, turns, problems, metrics):
     for text, reason, checks in turns:
         before_idx = getattr(agent, "_agenda_idx", 0)
+        # Qwen3 honest: None -> low (U9). Harness must set high explicitly
+        # for normal turns; low_conf scenario stays low.
+        if reason == "low_conf":
+            agent.observe_confidence(0.2)
+        else:
+            # empty/no_speech and normal high both advance only on high
+            agent.observe_confidence(0.85)
         plan = _plan(agent, text, reason)
         agent.last_intent = plan.get("intent") or ""
         # с llm=None итоговый сказанный текст = фолбэк плана
@@ -197,11 +204,11 @@ def _run_turns(agent, turns, problems, metrics):
                                 f"{before_idx}->{agent._agenda_idx}")
             if check == "no_repeat" and _REPEAT_RE.search(reply):
                 problems.append(f"  {text!r}: похоже на повтор: {reply!r}")
-            if check == "contains" and arg not in reply:
+            if check == "contains" and arg.lower() not in reply.lower():
                 problems.append(f"  {text!r}: нет {arg!r} в {reply!r}")
-            if check == "not_contains" and arg in reply:
+            if check == "not_contains" and arg.lower() in reply.lower():
                 problems.append(f"  {text!r}: не должно быть {arg!r} в "
-                                f"{reply!r}")
+                                 f"{reply!r}")
             if check == "not_push" and ("?" in reply or _REPEAT_RE.search(
                     reply)):
                 problems.append(f"  {text!r}: отказ встречен вопросом/"

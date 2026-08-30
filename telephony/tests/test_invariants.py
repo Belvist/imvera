@@ -72,7 +72,7 @@ class InvariantTests(unittest.TestCase):
     # I1: a confirmed-red phrase never yields ok / GREEN.
     def test_I1_red_never_green(self):
         for phrase in RED_PHRASES:
-            ev = SafetyEngine().observe(Observation(raw_text=phrase))
+            ev = SafetyEngine().observe(Observation(raw_text=phrase, confidence=0.85))
             self.assertNotIn(ev.kind, ("ok", "unknown"),
                              f"{phrase!r} must never be GREEN")
 
@@ -80,38 +80,38 @@ class InvariantTests(unittest.TestCase):
     #     escalate to at least attention (possible_red or higher).
     def test_I2_red_escalates(self):
         for phrase in RED_PHRASES:
-            ev = SafetyEngine().observe(Observation(raw_text=phrase))
+            ev = SafetyEngine().observe(Observation(raw_text=phrase, confidence=0.85))
             self.assertIn(ev.kind, ("confirmed_red", "possible_red"),
                           f"{phrase!r} must escalate, got {ev.kind}")
 
     # I3: negated distress never yields confirmed_red.
     def test_I3_negation_never_red(self):
         for phrase in NEGATED_PHRASES:
-            ev = SafetyEngine().observe(Observation(raw_text=phrase))
+            ev = SafetyEngine().observe(Observation(raw_text=phrase, confidence=0.85))
             self.assertNotEqual(ev.kind, "confirmed_red",
                                 f"negation {phrase!r} fired RED")
 
     # I4: third-person signals never yield caller RED.
     def test_I4_third_person_never_red(self):
         for phrase in THIRD_PHRASES:
-            ev = SafetyEngine().observe(Observation(raw_text=phrase))
+            ev = SafetyEngine().observe(Observation(raw_text=phrase, confidence=0.85))
             self.assertNotEqual(ev.kind, "confirmed_red",
                                 f"third-person {phrase!r} fired RED")
 
     # I5: inanimate object falls never yield caller RED.
     def test_I5_object_fall_never_red(self):
         for phrase in OBJECT_FALLS:
-            ev = SafetyEngine().observe(Observation(raw_text=phrase))
+            ev = SafetyEngine().observe(Observation(raw_text=phrase, confidence=0.85))
             self.assertNotEqual(ev.kind, "confirmed_red",
                                 f"object fall {phrase!r} fired RED")
 
     # I6: CONFIRMED_RED is latched — no later observation downgrades it.
     def test_I6_confirmed_red_latched(self):
         eng = SafetyEngine()
-        eng.observe(Observation(raw_text="скорая"))
+        eng.observe(Observation(raw_text="скорая", confidence=0.85))
         for _ in range(20):
             t = random.choice(POOL)
-            ev = eng.observe(Observation(raw_text=t))
+            ev = eng.observe(Observation(raw_text=t, confidence=0.85))
             self.assertEqual(ev.kind, "confirmed_red",
                              f"confirmed RED downgraded to {ev.kind} by {t!r}")
 
@@ -122,20 +122,20 @@ class InvariantTests(unittest.TestCase):
     # mortem: 47/100 synthetic calls never finished).
     def test_I7_uncertain_not_downgraded_by_negatives(self):
         eng = SafetyEngine()
-        eng.observe(Observation(raw_text="плохо"))
-        eng.observe(Observation(raw_text="не знаю"))
+        eng.observe(Observation(raw_text="плохо", confidence=0.85))
+        eng.observe(Observation(raw_text="не знаю", confidence=0.85))
         self.assertEqual(eng.state, "UNCERTAIN_RED")
         for t in POOL:
-            ev = eng.observe(Observation(raw_text=t))
+            ev = eng.observe(Observation(raw_text=t, confidence=0.85))
             self.assertNotEqual(ev.kind, "ok",
                                 f"uncertain downgraded by {t!r}")
 
     def test_I7_uncertain_recovered_by_positive(self):
         eng = SafetyEngine()
-        eng.observe(Observation(raw_text="плохо"))
-        eng.observe(Observation(raw_text="не знаю"))
+        eng.observe(Observation(raw_text="плохо", confidence=0.85))
+        eng.observe(Observation(raw_text="не знаю", confidence=0.85))
         self.assertEqual(eng.state, "UNCERTAIN_RED")
-        ev = eng.observe(Observation(raw_text="уже отпустило"))
+        ev = eng.observe(Observation(raw_text="уже отпустило", confidence=0.85))
         self.assertEqual(ev.kind, "ok")
         self.assertEqual(eng.state, "OK")
 
@@ -162,12 +162,12 @@ class InvariantTests(unittest.TestCase):
     def test_I10_freeze_is_terminal(self):
         for seed_text in ("скорая", "плохо", "всё хорошо"):
             eng = SafetyEngine()
-            eng.observe(Observation(raw_text=seed_text))
+            eng.observe(Observation(raw_text=seed_text, confidence=0.85))
             before_state = eng.state
             eng.freeze()
             for _ in range(10):
                 t = random.choice(POOL)
-                ev = eng.observe(Observation(raw_text=t))
+                ev = eng.observe(Observation(raw_text=t, confidence=0.85))
                 self.assertEqual(ev.kind, "frozen")
                 self.assertEqual(eng.state, before_state,
                                  "frozen engine mutated state")
@@ -176,14 +176,14 @@ class InvariantTests(unittest.TestCase):
     def test_I11_deterministic(self):
         texts = ("плохо", "скорая", "бабушка упала", "всё хорошо", "")
         for text in texts:
-            e1 = SafetyEngine().observe(Observation(raw_text=text))
-            e2 = SafetyEngine().observe(Observation(raw_text=text))
+            e1 = SafetyEngine().observe(Observation(raw_text=text, confidence=0.85))
+            e2 = SafetyEngine().observe(Observation(raw_text=text, confidence=0.85))
             self.assertEqual(e1.kind, e2.kind)
             self.assertEqual(e1.notes, e2.notes)
         eng = SafetyEngine()
-        eng.observe(Observation(raw_text="плохо"))
-        a = eng.observe(Observation(raw_text="да"))
-        b = eng.observe(Observation(raw_text="да"))
+        eng.observe(Observation(raw_text="плохо", confidence=0.85))
+        a = eng.observe(Observation(raw_text="да", confidence=0.85))
+        b = eng.observe(Observation(raw_text="да", confidence=0.85))
         self.assertEqual(a.kind, b.kind)
 
     # I12: events carry valid kinds, source, confidence and observed text.
@@ -202,14 +202,14 @@ class InvariantTests(unittest.TestCase):
     def test_I13_rising_is_normal_not_distress(self):
         for phrase in ("встала", "встал утром", "я встала с кровати",
                        "поднялась на второй этаж", "могла встать"):
-            ev = SafetyEngine().observe(Observation(raw_text=phrase))
+            ev = SafetyEngine().observe(Observation(raw_text=phrase, confidence=0.85))
             self.assertNotEqual(ev.kind, "confirmed_red",
                                 f"normal rising {phrase!r} fired an emergency")
 
     def test_I14_cannot_get_up_is_distress(self):
         for phrase in ("не встаю", "не могу встать", "не могу подняться",
                        "я не смогла встать", "не поднялась"):
-            ev = SafetyEngine().observe(Observation(raw_text=phrase))
+            ev = SafetyEngine().observe(Observation(raw_text=phrase, confidence=0.85))
             self.assertIn(ev.kind, ("confirmed_red", "possible_red"),
                           f"'cannot get up' {phrase!r} did not escalate")
 
@@ -220,7 +220,7 @@ class InvariantTests(unittest.TestCase):
                        "сходила в магазин", "позвонила дочери",
                        "передала родным", "принесла хлеб", "принёс хлеб",
                        "я встала с кровати", "на кровати лежала"):
-            ev = SafetyEngine().observe(Observation(raw_text=phrase))
+            ev = SafetyEngine().observe(Observation(raw_text=phrase, confidence=0.85))
             self.assertNotEqual(ev.kind, "help_request",
                                 f"past statement {phrase!r} fired help")
 
@@ -231,7 +231,7 @@ class InvariantTests(unittest.TestCase):
                        "хлеб кончился, в магазин надо сходить",
                        "продукты кончились",
                        "сходи за хлебом, я купила молоко"):
-            ev = SafetyEngine().observe(Observation(raw_text=phrase))
+            ev = SafetyEngine().observe(Observation(raw_text=phrase, confidence=0.85))
             self.assertEqual(ev.kind, "help_request",
                              f"real request {phrase!r} did not fire help")
 
@@ -239,7 +239,7 @@ class InvariantTests(unittest.TestCase):
     def test_I17_burns_are_distress(self):
         for phrase in ("я обварилась", "обварилась, помогите",
                        "обожглась", "обожгла палец", "ожог на руке"):
-            ev = SafetyEngine().observe(Observation(raw_text=phrase))
+            ev = SafetyEngine().observe(Observation(raw_text=phrase, confidence=0.85))
             self.assertIn(ev.kind, ("confirmed_red", "possible_red"),
                           f"burn {phrase!r} did not escalate")
 

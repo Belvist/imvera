@@ -452,8 +452,11 @@ class SafetyEngine:
         """Single-utterance classification (pure). Returns a dict with
         kind, affirmative, denial, low_conf and notes."""
         text = (obs.raw_text or "").strip()
-        low_conf = (obs.confidence is not None
-                    and obs.confidence < CONFIDENCE_THRESHOLD)
+        # Qwen3-ASR не даёт реального сигнала уверенности -> confidence
+        # чаще всего None. Неизвестная уверенность = трактуем как
+        # низкую (U9): без этого защита не срабатывает вообще.
+        low_conf = (obs.confidence is None
+                    or obs.confidence < CONFIDENCE_THRESHOLD)
         if not text:
             return {"kind": "no_speech", "affirmative": False,
                     "denial": False, "low_conf": low_conf, "notes": ()}
