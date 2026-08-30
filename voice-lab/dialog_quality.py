@@ -204,11 +204,11 @@ def _run_turns(agent, turns, problems, metrics):
                                 f"{before_idx}->{agent._agenda_idx}")
             if check == "no_repeat" and _REPEAT_RE.search(reply):
                 problems.append(f"  {text!r}: похоже на повтор: {reply!r}")
-            if check == "contains" and arg not in reply:
+            if check == "contains" and arg.lower() not in reply.lower():
                 problems.append(f"  {text!r}: нет {arg!r} в {reply!r}")
-            if check == "not_contains" and arg in reply:
+            if check == "not_contains" and arg.lower() in reply.lower():
                 problems.append(f"  {text!r}: не должно быть {arg!r} в "
-                                f"{reply!r}")
+                                 f"{reply!r}")
             if check == "not_push" and ("?" in reply or _REPEAT_RE.search(
                     reply)):
                 problems.append(f"  {text!r}: отказ встречен вопросом/"

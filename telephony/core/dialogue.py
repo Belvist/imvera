@@ -470,6 +470,12 @@ class DialogueFSM:
                              verdict=self._last_verdict, append=False)
 
     def _a_side_start(self, agent, ev):
+        # Done → any question after wrap-up is actually closing, not side
+        if getattr(agent, "_agenda_done", False):
+            agent._finish()
+            return {"text": agent._fsm._last_text, "terminal": True,
+                    "intent": "тепло попрощаться и сообщить итог",
+                    "fallback": agent._goodbye_report()}
         agent._interrupt = {
             "resume_mode": "check_in",
             "agenda_asked": agent._agenda_asked,
@@ -482,6 +488,11 @@ class DialogueFSM:
                 "fallback": agent._pick_not_repeated(agent.GENERIC_ACKS)}
 
     def _a_side_answer(self, agent, ev):
+        if getattr(agent, "_agenda_done", False):
+            agent._finish()
+            return {"text": agent._fsm._last_text, "terminal": True,
+                    "intent": "тепло попрощаться и сообщить итог",
+                    "fallback": agent._goodbye_report()}
         agent._interrupt = dict(agent._interrupt, phase="answer")
         agent._agenda_asked = False
         return {"text": agent._fsm._last_text,
@@ -706,6 +717,12 @@ class DialogueFSM:
             else:
                 goal = "порадоваться и откликнуться на детали сказанного"
             return {"text": text, "intent": goal, "fallback": q}
+        # Agenda done → next turn must close with report, not generic ack
+        if getattr(agent, "_agenda_done", False) or topic is None:
+            agent._finish()
+            return {"text": text, "terminal": True,
+                    "intent": "тепло попрощаться и коротко сообщить итог",
+                    "fallback": agent._goodbye_report()}
         fb = "{} {}".format(
             agent._pick_not_repeated(agent.GENERIC_ACKS),
             agent._pick_not_repeated(agent.WRAP_OPENERS))
@@ -716,8 +733,15 @@ class DialogueFSM:
         agent._extract_facts(agent._fsm._last_text)
         text = agent._fsm._last_text or ""
         topic = agent._agenda_topic()
+        # Done → close, not generic ack (fixes postmortem no-goodbye)
+        if getattr(agent, "_agenda_done", False) or topic is None:
+            agent._finish()
+            return {"text": text, "terminal": True,
+                    "intent": "тепло попрощаться и коротко сообщить итог",
+                    "fallback": agent._goodbye_report()}
         words = len(text.split())
-        if words >= 4:
+        on_table = agent._agenda_asked and topic is not None
+        if not on_table and words >= 4:
             agent._agenda_asked = False
             if words >= 6:
                 return {"text": text,
@@ -738,6 +762,49 @@ class DialogueFSM:
                 g = ("откликнуться на детали и задать один уточняющий "
                      "вопрос по теме")
             return {"text": text, "intent": g, "fallback": q}
+        # On-table answer even if verdict unknown → advance agenda ONLY when
+        # it looks like an answer to the current question (matches topic) OR
+        # when the topic is "передать родным" (any answer counts as
+        # "не хочу передавать" and must advance to wrap-up, otherwise
+        # "Ну, две недели" (answer to a follow-up about внук) would stall
+        # forever — postmortem 1e13). Long off-topic narrative ("Внучка
+        # приезжала...") for "настроение" must NOT force — agenda stays.
+        if on_table:
+            is_match = agent._matches_topic(text)
+            # "передать родным" is an offer: any answer advances
+            is_offer = topic == "передать родным"
+            if is_match or is_offer:
+                finished = agent._agenda_advance(text)
+                if finished:
+                    fb = agent._wrap_up_question()
+                    agent._last_question = fb
+                    return {"text": text,
+                            "intent": "тёпло подвести итог: всё записала "
+                                      "для близких; спросить, не хочет ли "
+                                      "человек что-то ещё добавить",
+                            "fallback": fb}
+                nxt = agent._agenda_topic()
+                q = agent._ask_task() or agent._wrap_up_question()
+                agent._last_question = q
+                if agent._current_is_family():
+                    goal = ("тёпло откликнуться на сказанное, затем передать "
+                            "вопрос от близких дословно: "
+                            f"«{agent._agenda_question()}» — только этот один "
+                            "вопрос")
+                elif nxt:
+                    goal = (f"порадоваться, откликнуться на детали сказанного "
+                            f"и одним естественным вопросом перейти к теме "
+                            f"«{nxt}»")
+                else:
+                    goal = "порадоваться и откликнуться на детали сказанного"
+                return {"text": text, "intent": goal, "fallback": q}
+            # off-topic (even short "да, всё хорошо" for mood) → keep topic
+            agent._agenda_asked = False
+            return {"text": text,
+                    "intent": "тепло откликнуться на рассказ человека и "
+                              "задать один короткий вопрос по его "
+                              "содержанию",
+                    "fallback": agent._pick_not_repeated(agent.GENERIC_ACKS)}
         if topic is not None and not agent._agenda_asked:
             q = agent._ask_task()
             agent._last_question = q
