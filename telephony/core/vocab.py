@@ -20,6 +20,8 @@ at least one word from it. Noise like "Торатичина" / "Лоха" / "п�
 carries none.
 """
 
+import re
+
 # Roots that must ALWAYS survive the gate: health/safety-critical content.
 # "у палок не ударилось" (a real fall miscue) keeps its ход because «удар»
 # is critical; gating it away would silently lose a fall.
@@ -163,3 +165,18 @@ def looks_like_garbage(text):
     if not text or not text.strip():
         return False  # empty is handled elsewhere (silence/echo path)
     return not contains_real_word(text)
+
+
+def repair_fall_miscue(text):
+    """Restore fall hints when STT mangles «упал» into «у палок не ударилось».
+
+    Real call ca81bc3ac2c7: vocab kept «удар» but SafetyEngine needs «упал».
+    """
+    if not text:
+        return text
+    low = text.lower()
+    if re.search(r"упа|пада", low):
+        return text
+    if re.search(r"пал\w*", low) and re.search(r"удар", low):
+        return text + " упал"
+    return text

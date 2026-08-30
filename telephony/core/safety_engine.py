@@ -178,6 +178,23 @@ COMPLAINT_PHRASES = ("не очень хорошо", "не очень", "не х
 # confirmation and escalated to alert.
 _LEADING_DENIALS = ("нет", "неа", "нету")
 
+_GRATITUDE_TOKENS = frozenset((
+    "спасибо", "благодарю", "супер", "отлично", "хорошо", "ладно",
+    "понятно", "ясно", "замечательно", "прекрасно", "класс",
+))
+
+
+def _is_gratitude_backchannel(tokens):
+    """Short thanks/praise — not a yes/no answer to a control question."""
+    if not tokens or len(tokens) > 5:
+        return False
+    skip = frozenset(("но", "да", "ну", "вот", "э", "а"))
+    meaningful = [t for t in tokens if t not in skip]
+    if not meaningful or len(meaningful) > 3:
+        return False
+    return all(t in _GRATITUDE_TOKENS or t.startswith("спасиб")
+               for t in meaningful)
+
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -355,6 +372,11 @@ class SafetyEngine:
         # While a control question is pending, only the ANSWER matters.
         if self._awaiting:
             if p["low_conf"]:
+                # «спасибо»/«супер» on an open symptom question is a
+                # backchannel, NOT an unconfirmed emergency (live 8f650).
+                if _is_gratitude_backchannel(_tokens(obs.raw_text or "")):
+                    self._awaiting = False
+                    return self._event("unknown", obs, p)
                 # U9: low STT confidence can neither confirm RED nor clear to
                 # GREEN — even an explicit "да"/"нет" is untrusted when the
                 # transcript itself may be a hallucination. Escalate as an
@@ -767,6 +789,13 @@ class SafetyEngine:
 
         # ---- 7. short standalone answers ---------------------------------
         if _has_phrase(tokens, "не знаю") or _has_phrase(tokens, "не помню"):
+            # «не знаю, но голова болела» — symptom wins (live 9b01).
+            if any(any(tok.startswith(r) for r in MED_ROOTS)
+                   for tok in tokens):
+                notes.append("недомогание несмотря на не знаю")
+                return {"kind": "possible_red", "affirmative": True,
+                        "denial": False, "low_conf": low_conf,
+                        "notes": tuple(notes)}
             # "не знаю" is a NON-answer, not a denial of distress.
             return {"kind": "unknown", "affirmative": False, "denial": False,
                     "low_conf": low_conf, "notes": ()}

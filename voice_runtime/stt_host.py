@@ -125,8 +125,7 @@ class _Handler(BaseHTTPRequestHandler):
         if not res.get("text"):
             self._json(400, {"error": "no speech recognized", **res})
             return
-        # duration of recognized payload (approx: 16k mono -> /16000)
-        dur_s = round(len(payload) / (16000 * 2), 2)
+        dur_s = self._wav_duration_s(payload)
         self._json(200, {"text": res["text"], "language": "ru",
                          "dur_s": dur_s, "latency_ms": res["latency_ms"]})
 
@@ -147,6 +146,23 @@ class _Handler(BaseHTTPRequestHandler):
                 k, _, v = p.partition("=")
                 params[k.strip()] = v.strip().strip('"')
         return name, params
+
+    @staticmethod
+    def _wav_duration_s(payload):
+        """Duration in seconds from a WAV byte payload (mono/stereo aware)."""
+        import struct
+        import wave
+        import io
+        try:
+            with wave.open(io.BytesIO(payload), "rb") as w:
+                rate = w.getframerate() or 16000
+                ch = w.getnchannels() or 1
+                frames = w.getnframes()
+                if rate <= 0:
+                    return 0.0
+                return round(frames / float(rate), 2)
+        except Exception:  # noqa: BLE001
+            return round(len(payload) / (16000 * 2), 2)
 
     def _extract_file(self, body, boundary):
         """Return (payload_bytes, filename) of the first named file part."""

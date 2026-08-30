@@ -35,11 +35,15 @@ try:
     from .esl_client import EslClient
     from .media_tap import LiveWavReader, write_wav, SAMPLE_RATE
     from .vad import VAD, MIN_TURN_SAMPLES
+    from .turn_fsm import TurnFSM
+    from .call_fsm import CallFSM
 except ImportError:  # run as a plain script (python3 voice_runtime/...py)
     from agent_http import AgentClient, AgentError
     from esl_client import EslClient
     from media_tap import LiveWavReader, write_wav, SAMPLE_RATE
     from vad import VAD, MIN_TURN_SAMPLES
+    from turn_fsm import TurnFSM
+    from call_fsm import CallFSM
 
 DEFAULT_GREETING = "Здравствуйте! Это Имвэра. Как вы себя чувствуете?"
 VAD_STEP = int(SAMPLE_RATE * 0.03)  # ~480 samples = 30 ms per VAD feed
@@ -59,26 +63,49 @@ class CallSession:
         self.reader = None
         self.vad = VAD()
         self.turn_no = 0
-        self.playing = False          # a file is currently audible on the leg
-        self.current_file = None
-        self.streaming = False        # turn_stream POST is in flight
-        self.suppress = False         # cancelled gen: do not start new segs
+        self._turn = TurnFSM(log=self.log)
+        self.call_fsm = CallFSM(log=self.log)
         self.segdir = None
         self.next_seg = 1
         self.seg_files = set()
         self.started = time.monotonic()
         self.greeting_attempted = False
         self._play_end = None
+        self.current_file = None
+
+    @property
+    def playing(self):
+        return self._turn.playing
+
+    @playing.setter
+    def playing(self, value):
+        self._turn.playing = bool(value)
+
+    @property
+    def streaming(self):
+        return self._turn.streaming
+
+    @streaming.setter
+    def streaming(self, value):
+        self._turn.streaming = bool(value)
+
+    @property
+    def suppress(self):
+        return self._turn.suppress
+
+    @suppress.setter
+    def suppress(self, value):
+        self._turn.suppress = bool(value)
 
     # ---- lifecycle ------------------------------------------------------
     def start(self):
-        # CALLER_ID (2026-08-29, FIXES_PLAN P2): the agent's new_call()
-        # enables the 5-topic check-in agenda and the family-questions
-        # snapshot ONLY when caller_id is present. Without it the realtime
-        # path was a chatbot with no agenda and family questions stuck
-        # pending forever.
+        # CHECK_IN (2026-08-30): phone + runtime paths must arm the wellness
+        # agenda before the first caller turn; mode is explicit, caller_id
+        # enables family questions when registered.
         try:
-            payload = {"caller_id": self.caller_id} if self.caller_id else {}
+            payload = {"mode": "check_in"}
+            if self.caller_id:
+                payload["caller_id"] = self.caller_id
             self.call_id = self.agent.create_call(payload)
         except AgentError as e:
             self.log("create_call failed: %s" % e)
@@ -132,6 +159,7 @@ class CallSession:
             return False
         self.log("tap OK channels=%d rate=%d" %
                  (self.reader.channels, self.reader.rate))
+        self.call_fsm.admit()
         self._greet()
         return True
 
@@ -157,7 +185,7 @@ class CallSession:
     def handle_event(self, ev):
         name = ev.get("Event-Name")
         if name == "PLAYBACK_STOP":
-            self.playing = False
+            self._turn.on_playback_stop()
             self.current_file = None
             self._play_end = None
         elif name == "CHANNEL_HANGUP" or name == "DESTROY":
@@ -192,14 +220,14 @@ class CallSession:
                 self.esl.api_break(self.fs_uuid)
             except Exception as e:  # noqa: BLE001
                 self.log("  uuid_break failed: %s" % e)
-            self.playing = False      # optimistic; PLAYBACK_STOP confirms
             self.current_file = None
             self._play_end = None
+        self._turn.on_barge_in()
         if self.streaming:
             self._cancel_stream()
 
     def _cancel_stream(self):
-        self.suppress = True          # old gen: never start its segments
+        self._turn.on_stream_cancel()
         try:
             self.agent.stream_cancel(self.call_id)
             self.log("  stream-cancel posted")
@@ -217,9 +245,9 @@ class CallSession:
                 self.esl.api_break(self.fs_uuid)
             except Exception as e:  # noqa: BLE001
                 self.log("  uuid_break failed: %s" % e)
-            self.playing = False
             self.current_file = None
             self._play_end = None
+            self._turn.on_barge_in()
         if self.streaming:
             self._cancel_stream()
         self.turn_no += 1
@@ -231,8 +259,8 @@ class CallSession:
         self.segdir = segdir
         self.next_seg = 1
         self.seg_files = set()
-        self.suppress = False
-        self.streaming = True
+        self._turn.on_user_turn_complete()
+        self._turn.on_turn_submitted()
         self.agent.turn_stream(
             self.call_id, [wav], segdir,
             on_done=lambda ok, info, _t=my_turn:
@@ -254,8 +282,7 @@ class CallSession:
         # turn — a stale callback from an older turn must not kill a
         # newer submission.
         if self.turn_no == turn_no:
-            self.streaming = False
-            self.suppress = False
+            self._turn.on_stream_failed()
             self.segdir = None
             self.log("turn %d stream FAILED -> session unblocked" % turn_no)
 
@@ -279,7 +306,7 @@ class CallSession:
         except Exception as e:  # noqa: BLE001
             self.log("playback failed %s: %s" % (path, e))
             return False
-        self.playing = True
+        self._turn.on_playback_start()
         self.current_file = path
         # WATCHDOG (2026-08-29, FIXES_PLAN P3): a lost PLAYBACK_STOP used to
         # leave playing=True forever, so _pump_segments never started the
@@ -300,7 +327,7 @@ class CallSession:
                 and now >= self._play_end:
             self.log("   PLAYBACK_STOP watchdog: %s exceeded nominal "
                      "duration" % os.path.basename(self.current_file or "?"))
-            self.playing = False
+            self._turn.on_playback_watchdog()
             self.current_file = None
             self._play_end = None
 
@@ -328,14 +355,14 @@ class CallSession:
                     self.next_seg += 1
                     self._play(nxt)
                     return
-                self.streaming = False
-                self.suppress = False
+                self._turn.on_stream_finished()
                 self.log("turn %d stream finished" % self.turn_no)
                 return
             return  # no new seg yet; poll again next tick
 
     # ---- teardown ---------------------------------------------------------
     def stop(self):
+        self.call_fsm.end()
         try:
             self.esl.uuid_record_stop(self.fs_uuid)
         except Exception:  # noqa: BLE001
@@ -347,4 +374,5 @@ class CallSession:
                 self.log("end_call failed: %s" % e)
         if os.path.isdir(self.workdir):
             shutil.rmtree(self.workdir, ignore_errors=True)
+        self.call_fsm.close()
         self.log("session stopped (%.1fs)" % (time.monotonic() - self.started))

@@ -213,8 +213,14 @@ function main()
         return
     end
 
-    -- create an isolated session for THIS call
-    local data = http_post("/calls", [[{}]], "")
+    -- create an isolated session for THIS call (check_in arms the wellness
+    -- agenda; caller_id enables family questions when registered).
+    local caller = session:getVariable("caller_id_number") or ""
+    local body = [[{"mode":"check_in"}]]
+    if caller ~= "" then
+        body = string.format([[{"mode":"check_in","caller_id":%q}]], caller)
+    end
+    local data = http_post("/calls", body, "")
     local call_id = safe_id(json_get(data, "call_id"))
     if not call_id or call_id == "" then
         return

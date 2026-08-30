@@ -314,7 +314,15 @@ def load_stt(model_id=DEFAULT_STT_MODEL):
     """
     if STT_HOST:
         try:
-            return SttHostAdapter()
+            host = SttHostAdapter()
+            try:
+                fb = FasterWhisperAdapter(os.environ.get(
+                    "MOSS_STT_TRANSFORMERS_MODEL",
+                    "openai/whisper-large-v3-turbo",
+                ))
+                return SttHostWithFallback(host, fb)
+            except Exception:
+                return host
         except Exception:
             pass
     try:
@@ -490,6 +498,32 @@ class SttHostAdapter:
         # confidence синтезирует stt.py: VAD speech_s vs токены + vocab.
         # Не фейкуем 1.0 здесь.
         return r
+
+
+class SttHostWithFallback:
+    """Qwen host primary; faster-whisper when the host errors or returns empty."""
+
+    def __init__(self, host_adapter, fallback_adapter):
+        self._host = host_adapter
+        self._fallback = fallback_adapter
+        self._id = getattr(host_adapter, "_id", "qwen3-asr-host") + "+fallback"
+
+    def generate(self, path, verbose=False, task="transcribe", language="ru",
+                 **kwargs):
+        r = self._host.generate(path, verbose=verbose, task=task,
+                                language=language, **kwargs)
+        if (getattr(r, "text", "") or "").strip():
+            return r
+        vad_speech = vad_speech_seconds(path)
+        if vad_speech is not None and vad_speech < 0.15:
+            return r
+        print("[stt-host] host empty/error -> whisper fallback", flush=True)
+        try:
+            return self._fallback.generate(path, verbose=verbose, task=task,
+                                           language=language, **kwargs)
+        except Exception as e:  # noqa: BLE001
+            print("[stt-host] fallback error: %s" % e, flush=True)
+            return r
 
 
 class FasterWhisperAdapter:

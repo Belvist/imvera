@@ -591,6 +591,11 @@ class DialogueFSM:
     def _a_uncertain(self, agent, ev):
         agent._note("самочувствие не подтверждено")
         agent.status = "attention"
+        text = agent._fsm._last_text or ""
+        # After an open symptom question, never «Не буду настаивать…» —
+        # re-ask about the body (live 8f650 «Супер, спасибо»).
+        if agent._clearing or agent._mentions_symptom(text):
+            return self._a_symptom(agent, ev)
         q = agent._pick_not_repeated(agent.STAY_OBSERVANT_ACKS)
         agent._last_question = q
         return {"text": agent._fsm._last_text,
@@ -682,7 +687,7 @@ class DialogueFSM:
         is_short = bool(short_real_answer(text)) and len(text.split()) <= 3
         on_table = agent._agenda_asked and topic is not None
         reached = not on_table and topic is not None \
-            and agent._matches_topic(text)
+            and agent._answers_wellness(text)
         if on_table or reached:
             finished = agent._agenda_advance(text)
             if finished:
@@ -732,6 +737,14 @@ class DialogueFSM:
     def _a_unknown(self, agent, ev):
         agent._extract_facts(agent._fsm._last_text)
         text = agent._fsm._last_text or ""
+        # Open control question + non-answer (thanks/backchannel) → re-ask
+        # the body, not a generic ack (live 8f650 «Супер, спасибо»).
+        if agent._clearing:
+            return self._a_symptom(agent, ev)
+        # Symptom anywhere in the turn beats agenda topic (live 9b01:
+        # «голова болела» on «передать родным» must ask about the head).
+        if agent._mentions_symptom(text):
+            return self._a_symptom(agent, ev)
         topic = agent._agenda_topic()
         # Done → close, not generic ack (fixes postmortem no-goodbye)
         if getattr(agent, "_agenda_done", False) or topic is None:
@@ -771,6 +784,8 @@ class DialogueFSM:
         # приезжала...") for "настроение" must NOT force — agenda stays.
         if on_table:
             is_match = agent._matches_topic(text)
+            if topic == "самочувствие":
+                is_match = is_match or agent._answers_wellness(text)
             # "передать родным" is an offer: any answer advances
             is_offer = topic == "передать родным"
             if is_match or is_offer:
@@ -1524,6 +1539,7 @@ class Agent:
             None       no speech / VAD silence / STT failure
             "low_conf" real speech existed but scored below the gate
             "echo"     transcript looked like Vera's own words
+            "stt_uncertain" mid-confidence speech — ask caller to confirm
         Only the empty-turn ladder reads it (see _silence_flow)."""
         # ECHO MUTE (2026-08-25): an "echo" reason means the transcript IS
         # Vera's own words coming back from the mixed recording. Blank the
@@ -1532,6 +1548,21 @@ class Agent:
         # her own phrase.
         if reason == "echo":
             caller_text = ""
+        if reason == "stt_uncertain" and (caller_text or "").strip():
+            if short_real_answer(caller_text.strip()):
+                reason = None
+            else:
+                short = caller_text.strip()
+                if len(short) > 80:
+                    short = short[:77] + "..."
+                return {
+                    "text": caller_text,
+                    "intent": None,
+                    "fallback": (
+                        f"Я правильно услышала: «{short}»? "
+                        "Скажите да или повторите, пожалуйста."
+                    ),
+                }
         # TERMINAL GUARD (S24) is handled inside the FSM (E_DONE -> terminal
         # goodbye): after done, late/duplicate turns cannot mutate the
         # verdict, the history or the engine state.
@@ -1571,7 +1602,12 @@ class Agent:
         n = self._fsm._empty_turns + 1
         self._fsm._empty_turns = n
         if n == 1:
-            fb = self._pick_not_repeated(self.ANCHORS)
+            # Greeting already asked «как себя чувствуете?» — don't re-ask
+            # the yes/no anchor; ask to repeat instead.
+            if self._agenda_asked and self._agenda_topic() == "самочувствие":
+                fb = self._pick_not_repeated(self.REPEAT_REQUESTS)
+            else:
+                fb = self._pick_not_repeated(self.ANCHORS)
         elif n == 2:
             fb = "Алло, вы меня слышите?"
         elif n == 3:
@@ -1609,6 +1645,27 @@ class Agent:
             return False
         low = text.lower()
         return any(k in low for k in keys)
+
+    def _answers_wellness(self, text):
+        """Answer to «как себя чувствуете?» — short or explicit good/bad."""
+        if not (text or "").strip():
+            return False
+        if short_real_answer(text):
+            return True
+        low = text.lower()
+        if any(w in low for w in OK_WORDS) or any(w in low for w in BAD_WORDS):
+            return True
+        return self._matches_topic(text)
+
+    def _mentions_symptom(self, text):
+        """True when the caller names a body complaint (any agenda topic)."""
+        if not (text or "").strip():
+            return False
+        low = text.lower()
+        return bool(re.search(
+            r"голов|болит|болел|болела|болеет|тошн|круж|давлен|"
+            r"температур|слабост|недомог|ноет|колет|шумит|"
+            r"сердц|дыш|кашл", low))
 
     # ---- facts (compact cross-in memory, 2026-08-25) -----------------------
     # Extracted from caller turns so the model gets the ESSENCE of the call

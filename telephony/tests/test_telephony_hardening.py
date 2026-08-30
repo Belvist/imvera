@@ -288,6 +288,59 @@ class GenerationIdentityTest(unittest.TestCase):
             shutil.rmtree(seg_dir, ignore_errors=True)
             serve.end_turn(ctx)
 
+    def test_canned_stream_commits_last_reply(self):
+        """Canned phone-path replies must update _last_reply (echo-guard/memory)."""
+        import tempfile
+
+        serve = self._serve()
+
+        class _FakeSTT:
+            def transcribe_with_confidence(self, _path):
+                return type("R", (), {"text": "неразборчиво",
+                                     "confidence": 0.30})()
+
+        class _FakeTTS:
+            def cancel_stream_by_id(self, _sid):
+                pass
+
+            def stream(self, text, cancel_event=None, stream_id=None):
+                import base64
+                import io
+                import struct
+                import wave
+                buf = io.BytesIO()
+                with wave.open(buf, "wb") as w:
+                    w.setnchannels(1)
+                    w.setsampwidth(2)
+                    w.setframerate(16000)
+                    w.writeframes(struct.pack("<800h", *([1200] * 800)))
+                yield {"i": 0, "wav_b64": base64.b64encode(buf.getvalue()).decode()}
+                yield {"done": True}
+
+        cid = serve.new_call(caller_id="+79001234567")
+        agent = serve.get_call(cid).agent
+        serve.stt = _FakeSTT()
+        serve.tts = _FakeTTS()
+        ctx = serve.begin_turn(cid)
+
+        fd, wav = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        with open(wav, "wb") as f:
+            f.write(_wav_bytes32())
+        seg_dir = tempfile.mkdtemp()
+        try:
+            list(serve.process_turn_stream(wav, call_id=cid, segment_dir=seg_dir))
+            self.assertTrue(agent._last_reply,
+                            "canned stream must commit spoken reply")
+            self.assertTrue(any(r == "assistant" and txt == agent._last_reply
+                                for r, txt in agent.llm_history),
+                            "canned reply must be in llm_history")
+        finally:
+            os.remove(wav)
+            import shutil
+            shutil.rmtree(seg_dir, ignore_errors=True)
+            serve.end_turn(ctx)
+
 
 class GenerationDiscardTest(unittest.IsolatedAsyncioTestCase):
     """ARCHITECTURE 2026-08-27: a frame tagged with a stale generation_id

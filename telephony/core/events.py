@@ -251,15 +251,15 @@ def reply_segments(agent, plan, cancel_event=None,
         # preposition ("Ой, как неприятно, что | голова").
         if emitted == 0:
             words = buffer.split()
-            if len(words) >= 6:
+            if len(words) >= 8:
                 cut = -1
-                for marker in (" , ", ", "):
+                for marker in (". ", "! ", "? ", ", "):
                     i = buffer.find(marker)
                     if 0 < i < len(buffer) - len(marker):
                         head = buffer[:i].strip()
                         hw = head.split()
-                        if len(hw) >= 4 and cut < i:
-                            cut = i
+                        if len(hw) >= 6 and cut < i:
+                            cut = i + len(marker) - 1
                 if cut > 0:
                     seg = buffer[:cut].strip()
                     if not _is_dup(seg):

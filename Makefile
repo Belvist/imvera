@@ -97,3 +97,6 @@ clean:
 
 release:
 	bash scripts/make_release.sh
+
+verify-phone:
+	bash scripts/verify_phone_deploy.sh

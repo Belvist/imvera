@@ -14,6 +14,7 @@ import io
 import os
 import wave
 
+from adapters.stt import STTResult, audio_energy, confidence_from_result
 from core.dialogue import clean_transcript
 
 
@@ -100,6 +101,15 @@ class CloudSTTAdapter:
 
     def transcribe_clean(self, wav_path):
         return clean_transcript(self.transcribe(wav_path))
+
+    def transcribe_with_confidence(self, wav_path):
+        """Phone path contract: same surface as STTEngine."""
+        raw = self.transcribe(wav_path)
+        text = clean_transcript(raw) if raw else None
+        if not text:
+            return STTResult(None, None)
+        result = type("R", (), {"text": text, "segments": (), "speech_s": 0.0})()
+        return STTResult(text, confidence_from_result(wav_path, result))
 
     def ready(self):
         try:

@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -246,6 +247,47 @@ class PlaybackWatchdogTests(unittest.TestCase):
         s.handle_event({"Event-Name": "PLAYBACK_STOP"})
         self.assertFalse(s.playing)
         self.assertIsNone(s._play_end)
+
+
+class CallSessionStartTests(unittest.TestCase):
+    def test_start_passes_check_in_mode(self):
+        created = {}
+
+        class _Agent:
+            def create_call(self, payload):
+                created.update(payload or {})
+                return "call-abc"
+
+            def say(self, text):
+                return "/tmp/greet.wav"
+
+            def end_call(self, call_id):
+                pass
+
+        class _Esl:
+            def uuid_setvar(self, *a, **k):
+                return True
+
+            def uuid_record_start(self, *a, **k):
+                return "+OK"
+
+            def uuid_broadcast(self, *a, **k):
+                return "+OK"
+
+        work = tempfile.mkdtemp()
+        reader = mock.Mock()
+        reader.broken = False
+        reader.channels = 1
+        reader.rate = 8000
+        reader.size = 1000
+        reader.audio_bytes.return_value = 1000
+        s = CallSession("uuid", _Esl(), _Agent(), work,
+                        caller_id="+79001234567", log=lambda m: None)
+        with mock.patch("call_session.LiveWavReader", return_value=reader):
+            ok = s.start()
+        self.assertTrue(ok)
+        self.assertEqual(created.get("mode"), "check_in")
+        self.assertEqual(created.get("caller_id"), "+79001234567")
 
 
 if __name__ == "__main__":

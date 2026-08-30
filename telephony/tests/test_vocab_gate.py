@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.vocab import (  # noqa: E402
-    looks_like_garbage, contains_real_word)
+    looks_like_garbage, contains_real_word, repair_fall_miscue)
 
 
 class VocabGateTests(unittest.TestCase):
@@ -63,6 +63,9 @@ class VocabGateTests(unittest.TestCase):
         self.assertFalse(looks_like_garbage(""))
         self.assertFalse(looks_like_garbage(None))
         self.assertFalse(looks_like_garbage("   "))
+
+    def test_fall_miscue_repair(self):
+        self.assertIn("упал", repair_fall_miscue("у палок не ударилось"))
 
 
 if __name__ == "__main__":

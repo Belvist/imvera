@@ -123,11 +123,26 @@ class ConfidenceMappingTests(unittest.TestCase):
         finally:
             os.remove(p)
 
+    def test_qwen_host_long_text_trusts_vocab(self):
+        """Live 9b01: VAD window << utterance must not pin conf to 0.35."""
+        text = (
+            "Привет, чувствую себя сейчас хорошо, "
+            "до этого чувствовал себя плохо"
+        )
+        p = _tmp_wav(8000)
+        try:
+            res = _FakeResult(text=text, speech_s=1.76, segments=())
+            conf = confidence_from_result(p, res)
+            self.assertGreaterEqual(conf, 0.78)
+        finally:
+            os.remove(p)
+
 
 class _FakeResult:
-    def __init__(self, segments, text=""):
+    def __init__(self, segments, text="", speech_s=None):
         self.segments = segments
         self.text = text
+        self.speech_s = speech_s
 
 
 class _FakeModel:
@@ -370,6 +385,26 @@ class BlankTurnDiagTests(unittest.TestCase):
             os.environ.pop("MOSS_RETAIN_BLANK_AUDIO", None)
             import shutil
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class CloudSttConfidenceTests(unittest.TestCase):
+    def test_cloud_adapter_exposes_transcribe_with_confidence(self):
+        from adapters.cloud import CloudSTTAdapter
+
+        class _Prov:
+            def transcribe(self, wav):
+                return "да всё хорошо"
+
+            def ready(self):
+                return True
+
+        p = _tmp_wav(8000)
+        try:
+            res = CloudSTTAdapter(_Prov()).transcribe_with_confidence(p)
+            self.assertEqual(res.text, "да всё хорошо")
+            self.assertIsNotNone(res.confidence)
+        finally:
+            os.remove(p)
 
 
 if __name__ == "__main__":

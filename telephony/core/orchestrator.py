@@ -18,8 +18,9 @@ import uuid
 
 from core.state import CallContext, CallBusyError, AdmissionError, \
     SESSION_TTL_SEC, DEFAULT_GREETING
-from core.dialogue import Agent, reply_looks_broken, reply_looks_hallucinated
-from core.vocab import looks_like_garbage
+from core.dialogue import Agent, _clean_llm, reply_looks_broken, \
+    reply_looks_hallucinated
+from core.stt_gates import gate_stt_transcript
 from core.events import StreamingSTT, reply_segments
 from adapters.audio import wav_to_pcm, pcm_to_wav, parse_multipart_wav
 from adapters.moss_tts import TTSClient
@@ -428,8 +429,16 @@ class Serve:
             if mode not in _valid:
                 raise ValueError(
                     f"unknown mode {mode!r}; expected one of {_valid}")
-            ctx.agent._set_mode(mode)
+            if mode == "check_in":
+                ctx.agent.start_check_in()
+            # companion / clarify / safety_* / closing: stay in IDLE until
+            # the FSM transitions on the first real turn.
         elif caller_id:
+            ctx.agent.start_check_in()
+        else:
+            # Phone dialplan (Lua): plays MVERA_GREETING then expects the
+            # wellness agenda. Without check_in, «хорошо/плохо» hit generic
+            # acks and the call felt like «она не слышит».
             ctx.agent.start_check_in()
         # Family-app questions: ONE snapshot per call (deterministic turn).
         # Fail-open: a PG hiccup must never block a live call — questions
@@ -774,11 +783,14 @@ class Serve:
             pass  # tracing never breaks the turn
 
     def _warm_greeting(self):
-        def _warm():
-            print("[call-agent] pre-warming greeting...", flush=True)
+        if os.environ.get("MOSS_NO_WARMUP"):
+            return
+        print("[call-agent] pre-warming greeting...", flush=True)
+        try:
             self.greeting_wav(DEFAULT_GREETING)
             print("[call-agent] greeting ready", flush=True)
-        threading.Thread(target=_warm, daemon=True).start()
+        except Exception as e:  # noqa: BLE001
+            print(f"[call-agent] greeting warmup failed: {e}", flush=True)
 
     # Backchannel phrases ("ага, услышала вас"): pre-rendered at startup so
     # the dialplan can play one INSTANTLY while the LLM is still thinking —
@@ -1035,13 +1047,30 @@ class Serve:
             tci = getattr(self.stt, "transcribe_with_confidence", None)
             if tci is not None:
                 res = tci(wav_path)
-                transcript, confidence = res.text, res.confidence
+                transcript, _stt_reason = gate_stt_transcript(
+                    res.text, res.confidence)
+                confidence = res.confidence
             else:
-                transcript = self.stt.transcribe_clean(wav_path)
+                raw = self.stt.transcribe_clean(wav_path)
+                transcript, _stt_reason = gate_stt_transcript(raw, None)
                 confidence = None
 
-            if transcript is None:
-                reply = "Повторите, пожалуйста."
+            if not transcript:
+                plan = agent.plan_reply("", reason=_stt_reason or None)
+                reply = plan.get("fallback") or "Повторите, пожалуйста."
+                agent.commit_reply(reply)
+            elif self._looks_like_echo(transcript,
+                                       getattr(agent, "_last_reply", None)):
+                print("[call-agent] echo-guard: transcript matches "
+                      "Vera's last reply -> repeat request", flush=True)
+                plan = agent.plan_reply("", reason="echo")
+                reply = plan.get("fallback") or "Повторите, пожалуйста."
+                agent.commit_reply(reply)
+                transcript = None
+            elif _stt_reason == "stt_uncertain":
+                plan = agent.plan_reply(transcript, reason="stt_uncertain")
+                reply = plan.get("fallback") or "Повторите, пожалуйста."
+                agent.commit_reply(reply)
             else:
                 # U9: pass the STT confidence (0..1 | None) so low-confidence
                 # transcripts cannot fabricate a GREEN or confirm a RED.
@@ -1054,12 +1083,12 @@ class Serve:
             # script plays reply_wav_path. Keeping it only wasted bandwidth.
             reply_wav = self._phone_wav(self.tts.generate(reply))
             saved = None
-            user_turn_no = len(rec.call["turns"]) + 1 if transcript is not None else None
+            user_turn_no = len(rec.call["turns"]) + 1 if transcript else None
             if reply_wav:
                 saved = save_wav(self.outdir, reply_wav, upload=False,
                                  call_id=ctx.call_id, turn_id=user_turn_no)
 
-            if transcript is not None:
+            if transcript:
                 saved_user = save_user_wav(self.outdir, wav_path, upload=False,
                                            call_id=ctx.call_id,
                                            turn_id=user_turn_no)
@@ -1195,6 +1224,11 @@ class Serve:
         her question's words ("таблетка помогла") still pass."""
         if not transcript or not last_reply:
             return False
+        # Canonical one-word wellness answers must never be dropped as echo
+        # of the greeting («хорошо», «плохо») — live calls stalled here.
+        from core.dialogue import short_real_answer
+        if short_real_answer(transcript):
+            return False
 
         def _tok(s):
             return [w for w in re.findall(r"[а-яёa-z0-9]+", s.lower())
@@ -1258,6 +1292,7 @@ class Serve:
         # (begin_turn/turn_in_progress) still makes this safe per call.
         transcript = None
         stream_confidence = None
+        stt_reason = None
         pcm, sample_rate = None, None
         # PHONE PATH (segment_dir set) uses ONE-SHOT STT: the hop-by-hop
         # incremental decode exists for live captions and is ~3x slower
@@ -1265,29 +1300,9 @@ class Serve:
         try:
             if segment_dir:
                 res = self.stt.transcribe_with_confidence(wav_path)
-                transcript = res.text
                 stream_confidence = res.confidence
-                # GARBAGE GATE: whisper-tiny on real phone audio sometimes
-                # produces confident-looking NONSENSE ("Сам оттвыж") that the
-                # LLM then echoes back verbatim. Real recognition scores
-                # 0.85+; garbage scores 0.4-0.5. Below the bar -> treat as
-                # no speech ("Повторите, пожалуйста"), never feed the LLM.
-                if transcript and stream_confidence is not None \
-                        and stream_confidence < 0.55:
-                    print(f"[call-agent] low-conf transcript "
-                          f"({stream_confidence:.2f}) -> repeat request",
-                          flush=True)
-                    transcript = ""
-                # VOCAB GATE (FIXES_PLAN P1b, 2026-08-29): confidence alone
-                # cannot stop CONFIDENT nonsense ("Торатичина" scored 0.614
-                # and "Лоха!" 0.763 on a live call — both fed the LLM/agenda).
-                # A transcript with no recognizable word (and no critical
-                # health entity like "упал"/"удар") is routed to the low-conf
-                # anchor, never to the model.
-                if transcript and looks_like_garbage(transcript):
-                    print(f"[call-agent] vocab-gate: no recognizable word "
-                          f"({stream_confidence:.2f}) -> anchor", flush=True)
-                    transcript = ""
+                transcript, stt_reason = gate_stt_transcript(
+                    res.text, res.confidence)
             else:
                 with open(wav_path, "rb") as wf:
                     wav_bytes = wf.read()
@@ -1313,6 +1328,8 @@ class Serve:
             # U9: the stream path exposes the fresh-decode confidence (None
             # when the turn came from hop concatenation only).
             stream_confidence = stream_stt.confidence
+            transcript, stt_reason = gate_stt_transcript(
+                transcript, stream_confidence)
         _t_stt = time.time()
 
         # Dialogue-state mutations run under the per-call lock. Only the
@@ -1353,16 +1370,13 @@ class Serve:
                 transcript = None
             else:
                 agent.observe_confidence(stream_confidence)
-                # LOW_CONF reason (2026-08-25): real speech scored below the
-                # gate — route through the yes/no ANCHOR in the empty-turn
-                # ladder (a productive question) instead of a blind
-                # «Повторите». Only the phone path blanks the transcript here;
-                # an empty stream transcript also gets the anchor.
-                reason = "low_conf" if transcript == "" else None
-                if segment_dir and transcript == "":
+                reason = stt_reason
+                if not transcript and not reason:
+                    reason = "low_conf"
+                if segment_dir and not transcript:
                     self._blank_turn_diag(wav_path, ctx.call_id,
                                           stream_confidence, transcript)
-                plan = agent.plan_reply(transcript, reason=reason)
+                plan = agent.plan_reply(transcript or "", reason=reason)
                 agent.last_intent = plan.get("intent") or ""
                 canned_reply = None if plan.get("intent") \
                     else (plan.get("fallback") or "")
@@ -1372,11 +1386,11 @@ class Serve:
             # copy the caller's audio into the archive while the temp upload
             # still exists — LOCAL only (upload is handed to the worker below);
             # read.md rev-3 G1 removes MinIO/PG from before-first-audio.
-            user_turn_no = len(rec.call["turns"]) + 1 if transcript is not None else None
+            user_turn_no = len(rec.call["turns"]) + 1 if transcript else None
             saved_user = save_user_wav(self.outdir, wav_path, upload=False,
                                        call_id=ctx.call_id, turn_id=user_turn_no) \
-                if transcript is not None else None
-            if transcript is not None:
+                if transcript else None
+            if transcript:
                 self._persist_turn(
                     ctx, "user", transcript, source="stt",
                     confidence=stream_confidence, audio_path=saved_user,
@@ -1444,6 +1458,10 @@ class Serve:
                 print(f"[call-agent] hallucination guard: {segment[:60]}",
                       flush=True)
                 segment = (plan.get("fallback") or segment)
+            if plan is not None and plan.get("intent") and segment:
+                cleaned = _clean_llm(segment)
+                if cleaned:
+                    segment = cleaned
             response_parts.append(segment)
             seg_sid = f"{sid}-{seg_no}"
             seg_no += 1
@@ -1500,6 +1518,10 @@ class Serve:
                 break
 
         reply = " ".join(response_parts).strip()
+        if plan is not None and plan.get("intent") and reply:
+            cleaned = _clean_llm(reply)
+            if cleaned:
+                reply = cleaned
         meta = meta_now()
 
         # The model produced nothing usable: speak the canned fallback so the
@@ -1571,7 +1593,9 @@ class Serve:
                              upload=False,
                              call_id=ctx.call_id, turn_id=user_turn_no)
         with ctx.lock:
-            if plan is not None and plan.get("intent"):
+            # Canned and LLM replies must both land in llm_history / _last_reply
+            # so echo-guard and the cloud LLM see what Vera actually said.
+            if reply:
                 agent.commit_reply(reply)
             # read.md rev-3 G1: assistant-turn PG INSERT + MinIO go through
             # the background persistence worker, never the hot path.

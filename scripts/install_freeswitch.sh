@@ -62,6 +62,17 @@ else
   say "dialplan installed -> $DIALPLAN_DIR/mossvoice.xml"
 fi
 
+# --- 1b. Lua agent script (legacy 4400->lua route; harmless if unused) ------
+FS_SCRIPTS="$FS_ETC/scripts"
+if [ -f "$REPO/telephony/moss_agent.lua" ]; then
+  if [ "$DRY_RUN" = "1" ]; then
+    say "[dry-run] would install moss_agent.lua -> $FS_SCRIPTS/"
+  else
+    install -m 0644 "$REPO/telephony/moss_agent.lua" "$FS_SCRIPTS/moss_agent.lua"
+    say "moss_agent.lua installed -> $FS_SCRIPTS/moss_agent.lua"
+  fi
+fi
+
 # 4400 must NOT be reachable from the public profile (G6: external users never
 # see the internal app route). Ensure no public dialplan routes 4400.
 if [ -d "$PUBLIC_DIR" ]; then

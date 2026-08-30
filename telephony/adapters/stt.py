@@ -48,6 +48,7 @@ def audio_energy(wav_path):
     """
     try:
         with wave.open(wav_path, "rb") as w:
+            ch = w.getnchannels()
             frames = w.readframes(w.getnframes())
             if not frames:
                 return 0.0
@@ -55,6 +56,10 @@ def audio_energy(wav_path):
             samples.frombytes(frames)
             if not samples:
                 return 0.0
+            if ch > 1:
+                # Stereo mix: LEFT = caller (matches vad_speech_seconds).
+                left = [samples[i] for i in range(0, len(samples), ch)]
+                samples = array.array("h", left)
             total = 0
             for s in samples:
                 total += abs(s)
@@ -107,14 +112,29 @@ def confidence_from_result(wav_path, result):
     speech_s = getattr(result, "speech_s", None)
     if speech_s and speech_s > 0.2:
         import re
+        from core.vocab import contains_real_word
         toks = [t for t in re.findall(r"[а-яёa-z]+", text.lower()) if len(t) >= 2]
+        # Qwen host: VAD window << utterance on long phone turns (live
+        # 9b01: 68 chars / 1.76s → rate 17 → 0.35 → generic). Trust vocab.
+        if contains_real_word(text) and len(toks) >= 2:
+            if len(toks) >= 8:
+                return 0.88
+            if len(toks) >= 4:
+                return 0.82
+            return 0.78
         rate = len(toks) / speech_s if speech_s else 0
-        # human 1.5-4 w/s is normal telephone speech (measured: p50 0.4s pause)
         if 1.2 <= rate <= 5.0:
-            return 0.85
+            return 0.82
         if 0.8 <= rate <= 6.0:
-            return 0.65
+            return 0.68
         return 0.35
+    if text:
+        try:
+            from core.vocab import contains_real_word
+            if contains_real_word(text):
+                return 0.72
+        except Exception:
+            pass
     return 0.65
 
 
@@ -142,12 +162,35 @@ class STTEngine:
             import tts_common
 
             self._model = tts_common.load_stt(tts_common.DEFAULT_STT_MODEL)
+            self._probe_stt_host(self._model)
             self._ready = True
         except Exception as e:  # noqa: BLE001
             print(f"[call-agent] STT load failed: {e}", flush=True)
             self._failed = True
             self._model = None
         return self._model
+
+    @staticmethod
+    def _probe_stt_host(model):
+        """Log host /ready status; whisper fallback handles a cold host."""
+        host_url = None
+        if hasattr(model, "_host"):
+            inner = model._host
+            host_url = getattr(inner, "_host", inner)
+        if not host_url or not isinstance(host_url, str):
+            return
+        try:
+            import json
+            import urllib.request
+            url = host_url.rstrip("/") + "/ready"
+            with urllib.request.urlopen(url, timeout=2) as resp:
+                obj = json.loads(resp.read().decode("utf-8"))
+            if not obj.get("ready"):
+                print("[call-agent] STT host not warm yet (%s) — "
+                      "whisper fallback active" % url, flush=True)
+        except Exception as e:  # noqa: BLE001
+            print("[call-agent] STT host /ready probe failed (%s): %s"
+                  % (host_url, e), flush=True)
 
     def ready(self):
         """True when the STT model is actually loaded and usable."""
