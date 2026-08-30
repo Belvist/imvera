@@ -1047,9 +1047,11 @@ class Serve:
             if not transcript:
                 plan = agent.plan_reply("", reason=_stt_reason or None)
                 reply = plan.get("fallback") or "Повторите, пожалуйста."
+                agent.commit_reply(reply)
             elif _stt_reason == "stt_uncertain":
                 plan = agent.plan_reply(transcript, reason="stt_uncertain")
                 reply = plan.get("fallback") or "Повторите, пожалуйста."
+                agent.commit_reply(reply)
             else:
                 # U9: pass the STT confidence (0..1 | None) so low-confidence
                 # transcripts cannot fabricate a GREEN or confirm a RED.
