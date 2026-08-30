@@ -429,8 +429,16 @@ class Serve:
             if mode not in _valid:
                 raise ValueError(
                     f"unknown mode {mode!r}; expected one of {_valid}")
-            ctx.agent._set_mode(mode)
+            if mode == "check_in":
+                ctx.agent.start_check_in()
+            # companion / clarify / safety_* / closing: stay in IDLE until
+            # the FSM transitions on the first real turn.
         elif caller_id:
+            ctx.agent.start_check_in()
+        else:
+            # Phone dialplan (Lua): plays MVERA_GREETING then expects the
+            # wellness agenda. Without check_in, «хорошо/плохо» hit generic
+            # acks and the call felt like «она не слышит».
             ctx.agent.start_check_in()
         # Family-app questions: ONE snapshot per call (deterministic turn).
         # Fail-open: a PG hiccup must never block a live call — questions
@@ -1048,6 +1056,14 @@ class Serve:
                 plan = agent.plan_reply("", reason=_stt_reason or None)
                 reply = plan.get("fallback") or "Повторите, пожалуйста."
                 agent.commit_reply(reply)
+            elif self._looks_like_echo(transcript,
+                                       getattr(agent, "_last_reply", None)):
+                print("[call-agent] echo-guard: transcript matches "
+                      "Vera's last reply -> repeat request", flush=True)
+                plan = agent.plan_reply("", reason="echo")
+                reply = plan.get("fallback") or "Повторите, пожалуйста."
+                agent.commit_reply(reply)
+                transcript = None
             elif _stt_reason == "stt_uncertain":
                 plan = agent.plan_reply(transcript, reason="stt_uncertain")
                 reply = plan.get("fallback") or "Повторите, пожалуйста."
@@ -1204,6 +1220,11 @@ class Serve:
         caller. Long overlap required so genuine short answers that reuse
         her question's words ("таблетка помогла") still pass."""
         if not transcript or not last_reply:
+            return False
+        # Canonical one-word wellness answers must never be dropped as echo
+        # of the greeting («хорошо», «плохо») — live calls stalled here.
+        from core.dialogue import short_real_answer
+        if short_real_answer(transcript):
             return False
 
         def _tok(s):

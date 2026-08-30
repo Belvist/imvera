@@ -99,13 +99,13 @@ class CallSession:
 
     # ---- lifecycle ------------------------------------------------------
     def start(self):
-        # CALLER_ID (2026-08-29, FIXES_PLAN P2): the agent's new_call()
-        # enables the 5-topic check-in agenda and the family-questions
-        # snapshot ONLY when caller_id is present. Without it the realtime
-        # path was a chatbot with no agenda and family questions stuck
-        # pending forever.
+        # CHECK_IN (2026-08-30): phone + runtime paths must arm the wellness
+        # agenda before the first caller turn; mode is explicit, caller_id
+        # enables family questions when registered.
         try:
-            payload = {"caller_id": self.caller_id} if self.caller_id else {}
+            payload = {"mode": "check_in"}
+            if self.caller_id:
+                payload["caller_id"] = self.caller_id
             self.call_id = self.agent.create_call(payload)
         except AgentError as e:
             self.log("create_call failed: %s" % e)

@@ -682,7 +682,7 @@ class DialogueFSM:
         is_short = bool(short_real_answer(text)) and len(text.split()) <= 3
         on_table = agent._agenda_asked and topic is not None
         reached = not on_table and topic is not None \
-            and agent._matches_topic(text)
+            and agent._answers_wellness(text)
         if on_table or reached:
             finished = agent._agenda_advance(text)
             if finished:
@@ -771,6 +771,8 @@ class DialogueFSM:
         # приезжала...") for "настроение" must NOT force — agenda stays.
         if on_table:
             is_match = agent._matches_topic(text)
+            if topic == "самочувствие":
+                is_match = is_match or agent._answers_wellness(text)
             # "передать родным" is an offer: any answer advances
             is_offer = topic == "передать родным"
             if is_match or is_offer:
@@ -1534,17 +1536,20 @@ class Agent:
         if reason == "echo":
             caller_text = ""
         if reason == "stt_uncertain" and (caller_text or "").strip():
-            short = caller_text.strip()
-            if len(short) > 80:
-                short = short[:77] + "..."
-            return {
-                "text": caller_text,
-                "intent": None,
-                "fallback": (
-                    f"Я правильно услышала: «{short}»? "
-                    "Скажите да или повторите, пожалуйста."
-                ),
-            }
+            if short_real_answer(caller_text.strip()):
+                reason = None
+            else:
+                short = caller_text.strip()
+                if len(short) > 80:
+                    short = short[:77] + "..."
+                return {
+                    "text": caller_text,
+                    "intent": None,
+                    "fallback": (
+                        f"Я правильно услышала: «{short}»? "
+                        "Скажите да или повторите, пожалуйста."
+                    ),
+                }
         # TERMINAL GUARD (S24) is handled inside the FSM (E_DONE -> terminal
         # goodbye): after done, late/duplicate turns cannot mutate the
         # verdict, the history or the engine state.
@@ -1584,7 +1589,12 @@ class Agent:
         n = self._fsm._empty_turns + 1
         self._fsm._empty_turns = n
         if n == 1:
-            fb = self._pick_not_repeated(self.ANCHORS)
+            # Greeting already asked «как себя чувствуете?» — don't re-ask
+            # the yes/no anchor; ask to repeat instead.
+            if self._agenda_asked and self._agenda_topic() == "самочувствие":
+                fb = self._pick_not_repeated(self.REPEAT_REQUESTS)
+            else:
+                fb = self._pick_not_repeated(self.ANCHORS)
         elif n == 2:
             fb = "Алло, вы меня слышите?"
         elif n == 3:
@@ -1622,6 +1632,17 @@ class Agent:
             return False
         low = text.lower()
         return any(k in low for k in keys)
+
+    def _answers_wellness(self, text):
+        """Answer to «как себя чувствуете?» — short or explicit good/bad."""
+        if not (text or "").strip():
+            return False
+        if short_real_answer(text):
+            return True
+        low = text.lower()
+        if any(w in low for w in OK_WORDS) or any(w in low for w in BAD_WORDS):
+            return True
+        return self._matches_topic(text)
 
     # ---- facts (compact cross-in memory, 2026-08-25) -----------------------
     # Extracted from caller turns so the model gets the ESSENCE of the call

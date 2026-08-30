@@ -11,9 +11,18 @@ from core.vocab import repair_fall_miscue  # noqa: E402
 
 class SttGatesTests(unittest.TestCase):
     def test_low_conf_blank(self):
-        text, reason = gate_stt_transcript("привет", 0.40)
+        text, reason = gate_stt_transcript("тортичина", 0.40)
         self.assertEqual(text, "")
         self.assertEqual(reason, "low_conf")
+
+    def test_short_wellness_survives_low_conf(self):
+        text, reason = gate_stt_transcript("хорошо", 0.12)
+        self.assertEqual(text, "хорошо")
+        self.assertIsNone(reason)
+
+        text, reason = gate_stt_transcript("плохо", 0.05)
+        self.assertEqual(text, "плохо")
+        self.assertIsNone(reason)
 
     def test_garbage_blank(self):
         text, reason = gate_stt_transcript("Торатичина", 0.90)
@@ -49,6 +58,14 @@ class SttUncertainPlanTests(unittest.TestCase):
         plan = agent.plan_reply("может быть", reason="stt_uncertain")
         self.assertIn("услышала", (plan.get("fallback") or "").lower())
         self.assertIsNone(plan.get("intent"))
+
+    def test_plan_reply_short_wellness_skips_confirm(self):
+        from core.dialogue import Agent
+
+        agent = Agent(llm=None)
+        agent.start_check_in()
+        plan = agent.plan_reply("хорошо", reason="stt_uncertain")
+        self.assertNotIn("услышала", (plan.get("fallback") or "").lower())
 
 
 if __name__ == "__main__":
