@@ -159,7 +159,8 @@ class CorpusTests(unittest.TestCase):
     def test_single_utterance_corpus(self):
         fails = []
         for text, expected in CORPUS.items():
-            ev = SafetyEngine().observe(Observation(raw_text=text))
+            ev = SafetyEngine().observe(
+                Observation(raw_text=text, confidence=0.7))
             if ev.kind != expected:
                 fails.append((text, expected, ev.kind))
         self.assertEqual([], fails, "corpus mismatches")
@@ -181,6 +182,28 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual(ev.observed, "плохо")
         self.assertFalse(ev.low_confidence)
 
+    def test_none_confidence_treated_as_low(self):
+        """Regression for 2026-08-29 Qwen3-ASR bug: confidence=None (no
+        per-token logprobs) must behave as low (U9) — cannot confirm RED
+        nor clear to GREEN. The fake 1.0 segment previously masked this."""
+        # "всё хорошо" with unknown confidence cannot become ok/GREEN
+        ev = SafetyEngine().observe(
+            Observation(raw_text="всё хорошо", confidence=None))
+        self.assertEqual(ev.kind, "unknown")
+        self.assertTrue(ev.low_confidence)
+        # confirmed-red phrase with unknown confidence must not latch as
+        # confirmed_red — downgrades to possible_red
+        ev2 = SafetyEngine().observe(
+            Observation(raw_text="скорая", confidence=None))
+        self.assertEqual(ev2.kind, "possible_red")
+        self.assertTrue(ev2.low_confidence)
+        # sequential: possible_red with None cannot be confirmed by "да"
+        # with None — must go to uncertain_red, not confirmed_red
+        eng = SafetyEngine()
+        eng.observe(Observation(raw_text="плохо", confidence=None))
+        ev3 = eng.observe(Observation(raw_text="да", confidence=None))
+        self.assertEqual(ev3.kind, "uncertain_red")
+
 
 # ---------------------------------------------------------------------------
 # State machine sequences (the POSSIBLE_RED -> CONTROL -> verdict ladder)
@@ -193,39 +216,44 @@ class MachineTests(unittest.TestCase):
                 for t in steps]
 
     def test_possible_red_confirmed_by_affirmative(self):
-        self.assertEqual(self._seq("плохо", "да"),
+        # Qwen3-ASR: confidence is None (unknown) -> treated as low_conf
+        # (U9). None cannot confirm RED: use explicit high confidence.
+        self.assertEqual(self._seq("плохо", "да", conf=0.7),
                          ["possible_red", "confirmed_red"])
 
     def test_possible_red_confirmed_by_repeat_distress(self):
-        self.assertEqual(self._seq("плохо", "плохо"),
+        self.assertEqual(self._seq("плохо", "плохо", conf=0.7),
                          ["possible_red", "confirmed_red"])
 
     def test_possible_red_cleared_by_denial(self):
-        self.assertEqual(self._seq("плохо", "нет"),
+        # With None confidence -> low_conf, possible_red cannot be cleared
+        # by denial (needs explicit high confidence to be safe).
+        self.assertEqual(self._seq("плохо", "нет", conf=0.7),
                          ["possible_red", "ok"])
-        self.assertEqual(self._seq("плохо", "всё хорошо"),
+        self.assertEqual(self._seq("плохо", "всё хорошо", conf=0.7),
                          ["possible_red", "ok"])
-        self.assertEqual(self._seq("плохо", "уже лучше"),
+        self.assertEqual(self._seq("плохо", "уже лучше", conf=0.7),
                          ["possible_red", "ok"])
 
     def test_possible_red_to_uncertain_on_non_answer(self):
-        self.assertEqual(self._seq("плохо", "не знаю"),
+        # None confidence -> low_conf -> non-answer is uncertain_red
+        self.assertEqual(self._seq("плохо", "не знаю", conf=None),
                          ["possible_red", "uncertain_red"])
 
     def test_possible_red_to_help_request(self):
-        self.assertEqual(self._seq("плохо", "помощь нужна"),
+        self.assertEqual(self._seq("плохо", "помощь нужна", conf=0.7),
                          ["possible_red", "help_request"])
 
     def test_possible_red_to_third_person_is_uncertain(self):
-        self.assertEqual(self._seq("плохо", "бабушка упала"),
+        self.assertEqual(self._seq("плохо", "бабушка упала", conf=0.7),
                          ["possible_red", "uncertain_red"])
 
     def test_confirmed_red_is_latched(self):
         eng = SafetyEngine()
-        eng.observe(Observation(raw_text="скорая"))
+        eng.observe(Observation(raw_text="скорая", confidence=0.7))
         for t in ("всё хорошо", "нет", "неплохо"):
             self.assertEqual(
-                eng.observe(Observation(raw_text=t)).kind,
+                eng.observe(Observation(raw_text=t, confidence=0.7)).kind,
                 "confirmed_red", f"latch broken by {t!r}")
             self.assertTrue(eng.last_event.latched)
 
@@ -239,8 +267,8 @@ class MachineTests(unittest.TestCase):
         eng.observe(Observation(raw_text="плохо"))
         eng.observe(Observation(raw_text="не знаю"))
         self.assertEqual(eng.state, "UNCERTAIN_RED")
-        # a clear positive recovers (no latch)
-        ev = eng.observe(Observation(raw_text="всё хорошо"))
+        # a clear positive recovers (no latch) — explicit high confidence
+        ev = eng.observe(Observation(raw_text="всё хорошо", confidence=0.7))
         self.assertEqual(ev.kind, "ok")
         self.assertEqual(eng.state, "OK")
 
@@ -274,9 +302,13 @@ class MachineTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class AgentFlowTests(unittest.TestCase):
-    def _agent(self, *turns):
+    def _agent(self, *turns, conf=0.7):
+        # Qwen3-ASR: None confidence is treated as low_conf (U9) — these
+        # dialogue-flow tests use explicit high confidence so the U9 gate
+        # does not interfere with the normal flow assertions.
         a = Agent(llm=None)
         for t in turns:
+            a._last_confidence = conf
             a.plan_reply(t)
         return a
 
@@ -347,12 +379,14 @@ class FallAsymmetryAndContextualEmergencyTests(unittest.TestCase):
     """2026-08-29 fixes: falls survive a trailing intensifier, and routine
     "врач/срочно" mentions never confirm a red alert."""
 
-    def _ev(self, text):
-        return SafetyEngine().observe(Observation(raw_text=text))
+    def _ev(self, text, conf=0.7):
+        # Qwen3-ASR: None confidence treated as low_conf (U9).
+        # These tests use explicit high confidence.
+        return SafetyEngine().observe(Observation(raw_text=text, confidence=conf))
 
     def test_real_fall_with_intensifier_still_red(self):
         # "не" AFTER the verb is an intensifier, not a denial
-        for t in ("я упал, но не сильно", "упал, но не ударилась",
+        for t in ("я упал, но не сильно", "упал, но не ударился",
                   "упала, не сильно"):
             self.assertEqual(self._ev(t).kind, "confirmed_red", t)
 
@@ -386,8 +420,11 @@ class FallMetricVsPersonTests(unittest.TestCase):
     «что-то упало» are NOT a person falling — they must not alarm the
     family as confirmed_red. Bare «упал/упала» (dropped «я») is a person."""
 
-    def _ev(self, text):
-        return SafetyEngine().observe(Observation(raw_text=text))
+    def _ev(self, text, conf=0.7):
+        # Qwen3-ASR: None confidence is treated as low_conf (U9) — use
+        # explicit high confidence for these phrase tests.
+        return SafetyEngine().observe(Observation(raw_text=text,
+                                                   confidence=conf))
 
     def test_metric_fall_is_possible_red(self):
         for t in ("настроение упало",

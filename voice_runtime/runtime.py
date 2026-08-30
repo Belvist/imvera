@@ -33,13 +33,10 @@ except ImportError:  # run as a plain script (python3 voice_runtime/...py)
     from call_session import CallSession
     from esl_client import EslClient, ESLProtocolError
 
-# DEV-ONLY until the G1 production cutover is verified live (P4): the live
-# FreeSWITCH dialplan still routes 4400 -> Lua (moss_agent.lua). If the
-# runtime matched 4400 now it would double-drive every real call (Lua +
-# uuid_record tap). Only the loopback self-test extension (4402) is ours
-# while 4400=Lua. On cutover (install_freeswitch.sh applied), set this to
-# ^44(00|02)$ — see FIXES_PLAN P5.
-RUNTIME_EXTENSIONS = re.compile(r"^4402$")
+# G1 cutover 2026-08-30 (P5): live dialplan now routes 4400 -> park
+# (mossvoice.xml), Lua retired. Runtime drives both 4400 (production) and
+# 4402 (loopback self-test). See scripts/install_freeswitch.sh.
+RUNTIME_EXTENSIONS = re.compile(r"^44(00|02)$")
 SERVICE_NAME = "mossvoice-runtime"
 PROTOCOL_VERSION = 1
 TICK = 0.05            # main-loop cadence (s): tap drain + segment poll

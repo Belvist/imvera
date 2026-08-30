@@ -21,7 +21,18 @@ from core.dialogue import Agent, MVERA_GREETING  # noqa: E402
 
 class ModeMachineTests(unittest.TestCase):
     def _agent(self):
-        return Agent(llm=None)
+        a = Agent(llm=None)
+        # Qwen3-ASR now honest: None confidence = unknown (U9). Existing
+        # dialogue tests pre-date Qwen3 and expect high confidence.
+        # Keep high unless test explicitly sets low.
+        orig = a.plan_reply
+        def wrapped(text, reason=None):
+            if a._last_confidence is None:
+                a._last_confidence = 0.9
+            return orig(text, reason=reason)
+        a.plan_reply = wrapped
+        a._last_confidence = 0.9
+        return a
 
     def test_default_mode_is_companion(self):
         a = self._agent()

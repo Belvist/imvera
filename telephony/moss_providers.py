@@ -503,6 +503,11 @@ class OpenAILLMProvider(LLMProvider):
         try:
             text = obj["choices"][0]["message"]["content"].strip()
             self._breaker.succeeded()
+            if not text:
+                print(f"[call-agent] LLM 200 OK but EMPTY content "
+                      f"(model={self.model}, max_tokens={max_tokens}) — "
+                      f"reasoning-burn suspected, falling back to canned",
+                      flush=True)
             return text or None
         except Exception as e:  # noqa: BLE001
             self._breaker.failed()

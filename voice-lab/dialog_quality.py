@@ -170,6 +170,13 @@ def _plan(agent, text, reason):
 def _run_turns(agent, turns, problems, metrics):
     for text, reason, checks in turns:
         before_idx = getattr(agent, "_agenda_idx", 0)
+        # Qwen3 honest: None -> low (U9). Harness must set high explicitly
+        # for normal turns; low_conf scenario stays low.
+        if reason == "low_conf":
+            agent.observe_confidence(0.2)
+        else:
+            # empty/no_speech and normal high both advance only on high
+            agent.observe_confidence(0.85)
         plan = _plan(agent, text, reason)
         agent.last_intent = plan.get("intent") or ""
         # с llm=None итоговый сказанный текст = фолбэк плана

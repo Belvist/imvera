@@ -18,23 +18,27 @@ class TaskAgendaTests(unittest.TestCase):
         self.agent = Agent(llm=None)
         self.agent.start_check_in()
 
+    def _reply(self, a, text, conf=0.85, reason=None):
+        a.observe_confidence(conf)
+        return a.plan_reply(text, reason=reason)
+
     def test_agenda_walks_in_order_and_notes_topics(self):
         a = self.agent
         # greeting = topic 0 on the table -> a short OK closes it and asks
         # the NEXT topic («настроение»), instantly, no LLM.
-        p = a.plan_reply("да, всё хорошо")
+        p = self._reply(a, "да, всё хорошо")
         self.assertIn("настроение", p["fallback"].lower())
-        p = a.plan_reply("настроение хорошее, спасибо")
+        p = self._reply(a, "настроение хорошее, спасибо")
         self.assertTrue("сон" in p["fallback"].lower()
                         or "спал" in p["fallback"].lower())
-        p = a.plan_reply("спала хорошо")
+        p = self._reply(a, "спала хорошо")
         self.assertTrue(any(w in p["fallback"].lower() for w in
                             ("план", "займётес", "делать", "проведёте")))
-        p = a.plan_reply("всё хорошо, буду ещё читать")
+        p = self._reply(a, "всё хорошо, буду ещё читать")
         fb = p["fallback"].lower()
         self.assertTrue(any(w in fb for w in
                             ("родн", "передать", "записать")))
-        p = a.plan_reply("хорошо, запишите для них пару слов")
+        p = self._reply(a, "хорошо, запишите для них пару слов")
         self.assertIn("записа", p["fallback"].lower())
         for topic in ("самочувствие", "настроение", "сон", "планы",
                       "передать родным"):
@@ -42,13 +46,13 @@ class TaskAgendaTests(unittest.TestCase):
 
     def test_safety_interjection_pauses_then_resumes(self):
         a = self.agent
-        p = a.plan_reply("да, всё хорошо")          # closes самочувствие
+        p = self._reply(a, "да, всё хорошо")          # closes самочувствие
         self.assertIn("настроение", p["fallback"].lower())
         # symptom mid-agenda: safety control question PAUSES the agenda
         # (pool wording rotates — match any of its symptom-ask phrasings;
         # 2026-08-29: pool reworded to ask about the named symptom instead
         # of abstract «записать для близких» — see SYMPTOM_CHECKS).
-        p = a.plan_reply("голова болит и кружится")
+        p = self._reply(a, "голова болит и кружится")
         self.assertTrue(any(w in p["fallback"].lower() for w in
                             ("плохо", "нехорошо", "недомогание",
                              "неважно", "помощь", "что именно",
@@ -57,7 +61,7 @@ class TaskAgendaTests(unittest.TestCase):
         # Pool wording rotates via _pick_not_repeated — accept ANY member of
         # FALSE_ALARM_ACKS (2026-08-24: pool grew 2→4, matching only the
         # first two phrasings made this test flaky ~50% of runs).
-        p = a.plan_reply("нет, не сейчас хорошо, отпустило")
+        p = self._reply(a, "нет, не сейчас хорошо, отпустило")
         fb = p["fallback"].lower()
         self.assertTrue(any(w in fb for w in (
             "перестраховалась", "извините за тревогу",
@@ -65,16 +69,16 @@ class TaskAgendaTests(unittest.TestCase):
             f"not a false-alarm ack: {p['fallback']!r}")
         # next short OK RESUMES the agenda where it paused — now «сон»,
         # NOT a restart from «самочувствие»
-        p = a.plan_reply("да, всё хорошо")
+        p = self._reply(a, "да, всё хорошо")
         self.assertTrue("сон" in p["fallback"].lower()
                         or "спал" in p["fallback"].lower())
 
     def test_empty_turns_do_not_advance_agenda(self):
         a = self.agent
         for _ in range(3):
-            a.plan_reply("")
+            self._reply(a, "")
         self.assertEqual(a._agenda_idx, 0)
-        p = a.plan_reply("да, всё хорошо")
+        p = self._reply(a, "да, всё хорошо")
         self.assertIn("настроение", p["fallback"].lower())
 
 
@@ -86,11 +90,14 @@ class VarietyTests(unittest.TestCase):
     def _run_call():
         a = Agent(llm=None)
         a.start_check_in()
+        def _r(t):
+            a.observe_confidence(0.85)
+            return a.plan_reply(t)
         asked = []
-        asked.append(a.plan_reply("да, всё хорошо")["fallback"])    # mood
-        asked.append(a.plan_reply("настроение хорошее")["fallback"])  # sleep
-        asked.append(a.plan_reply("спала хорошо")["fallback"])      # plans
-        asked.append(a.plan_reply("всё хорошо, буду читать")["fallback"])
+        asked.append(_r("да, всё хорошо")["fallback"])    # mood
+        asked.append(_r("настроение хорошее")["fallback"])  # sleep
+        asked.append(_r("спала хорошо")["fallback"])      # plans
+        asked.append(_r("всё хорошо, буду читать")["fallback"])
         return asked
 
     def test_two_calls_no_repeated_canned_questions(self):

@@ -441,6 +441,10 @@ class CheckInInterruptTest(unittest.TestCase):
     interrupt — the agenda never advances mid-question, and the next
     non-question turn resumes check_in at the SAME position."""
 
+    def _reply(self, ag, text, conf=0.85, reason=None):
+        ag.observe_confidence(conf)
+        return ag.plan_reply(text, reason=reason)
+
     def _new_check_in(self):
         from core.dialogue import Agent
         ag = Agent()
@@ -455,7 +459,7 @@ class CheckInInterruptTest(unittest.TestCase):
 
         # a direct caller question -> temporary interrupt, not a permanent
         # flip to companion, and the topic is deferred (never advanced)
-        plan = ag.plan_reply("какое сегодня число?")
+        plan = self._reply(ag, "какое сегодня число?")
         self.assertEqual(ag.mode, "companion")
         self.assertIsNotNone(plan.get("intent"))
         self.assertEqual(ag._agenda_idx, idx0)
@@ -465,7 +469,7 @@ class CheckInInterruptTest(unittest.TestCase):
         self.assertTrue(ag._interrupt["agenda_asked"])
 
         # a follow-up question stays interrupted at the same position
-        ag.plan_reply("а завтра какой день недели?")
+        self._reply(ag, "а завтра какой день недели?")
         self.assertEqual(ag.mode, "companion")
         self.assertEqual(ag._agenda_idx, idx0)
 
@@ -473,7 +477,7 @@ class CheckInInterruptTest(unittest.TestCase):
         # TRANSITION: Vera re-asks the pending agenda question. The agenda
         # flag is restored only on RESUME DONE, so the answer right after
         # the transition is the one that closes the topic.
-        plan = ag.plan_reply("спасибо")
+        plan = self._reply(ag, "спасибо")
         self.assertIn("Возвращаясь к нашему разговору", plan["fallback"])
         self.assertEqual(ag._interrupt["phase"], "resume")
         self.assertFalse(ag._agenda_asked)
@@ -482,7 +486,7 @@ class CheckInInterruptTest(unittest.TestCase):
         # a real answer AFTER the transition -> RESUME DONE: check_in at the
         # SAME position, and this reply closes topic 0 exactly as if no
         # question had interrupted it (position was preserved).
-        ag.plan_reply("да всё хорошо")
+        self._reply(ag, "да всё хорошо")
         self.assertEqual(ag.mode, "check_in")
         self.assertIsNone(ag._interrupt)
         self.assertEqual(ag._agenda_idx, idx0 + 1)
@@ -490,15 +494,15 @@ class CheckInInterruptTest(unittest.TestCase):
     def test_interrupt_empty_turn_keeps_interrupt(self):
         ag = self._new_check_in()
         idx0 = ag._agenda_idx
-        ag.plan_reply("а сколько сейчас времени?")
+        self._reply(ag, "а сколько сейчас времени?")
         # a no-speech turn mid-interrupt: the silence ladder runs; the
         # interrupt stays ACTIVE (no resume consumed), position untouched.
-        ag.plan_reply("", reason="no_speech")
+        self._reply(ag, "", reason="no_speech")
         self.assertEqual(ag._agenda_idx, idx0)
         self.assertIsNotNone(ag._interrupt)
         self.assertEqual(ag._interrupt["phase"], "answer")
         # the question is still open: answering it later resumes normally
-        ag.plan_reply("спасибо, подождите")
+        self._reply(ag, "спасибо, подождите")
         self.assertEqual(ag._interrupt["phase"], "resume")
 
     def test_hyphen_boundary_is_not_a_question(self):

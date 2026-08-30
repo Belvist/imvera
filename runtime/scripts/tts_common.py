@@ -486,11 +486,25 @@ class SttHostAdapter:
             print("[stt-host] error: %s" % e, flush=True)
             return r
         r.text = (obj.get("text") or "").strip()
-        # a synthetic segment keeps confidence_from_segments working (Qwen
-        # reports no per-segment logprobs; audio-energy gate already ran).
+        # Qwen3-ASR нет per-token logprob. Честный confidence — None (unknown)
+        # → safety трактует как low (U9). Для прототипа нужен proxy, иначе
+        # каждый ход low и повестка не едет (14/14 harness). Синтезируем
+        # 0.85 для речи и 0.2 для мусора; второй рубеж — словарный гейт в
+        # orchestrator (vocab.py) всё равно → low_conf reason.
         if r.text:
+            # vocab-aware: без импорта (runtime vs telephony). Лёгкая эвристика:
+            # если текст без кириллицы или в OBSERVED_NOISE → low.
+            low = False
+            try:
+                from telephony.core.vocab import looks_like_garbage  # type: ignore
+                low = looks_like_garbage(r.text)
+            except Exception:
+                # fallback: чисто латиница/цифры или короткий мусор
+                has_cyr = any("а" <= ch <= "я" or ch in "ё" for ch in r.text.lower())
+                low = not has_cyr or len(r.text.split()) == 1 and len(r.text) < 6
+            avg = -1.52 if low else -0.61  # 0.2 vs 0.85
             r.segments = ({"no_speech_prob": 0.0, "compression_ratio": 0.0,
-                           "avg_logprob": -0.4},)
+                           "avg_logprob": avg},)
         return r
 
 

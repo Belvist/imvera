@@ -48,6 +48,13 @@ class FamilyUtilsTests(unittest.TestCase):
 class FamilyAgendaTests(unittest.TestCase):
     """The call walks 5 standard topics, then delivers family questions."""
 
+    def _reply(self, a, text, conf=0.85, reason=None):
+        # Qwen3 honest: None -> low (U9). Legacy agenda tests expect high
+        # confidence to advance topics; set explicitly so default None
+        # (fail-safe) does not mask missing observe_confidence in tests.
+        a.observe_confidence(conf)
+        return a.plan_reply(text, reason=reason)
+
     def _agent_with_questions(self):
         a = Agent(llm=None)
         a.set_family_questions([
@@ -61,14 +68,14 @@ class FamilyAgendaTests(unittest.TestCase):
     def test_family_question_asked_verbatim_after_standard_topics(self):
         a = self._agent_with_questions()
         # Walk the 5 standard topics exactly like test_task_agenda does.
-        p = a.plan_reply("да, всё хорошо")                 # -> настроение
+        p = self._reply(a, "да, всё хорошо")                 # -> настроение
         self.assertIn("настроение", p["fallback"].lower())
-        p = a.plan_reply("настроение хорошее, спасибо")    # -> сон
+        p = self._reply(a, "настроение хорошее, спасибо")    # -> сон
         self.assertTrue("сон" in p["fallback"].lower()
                         or "спал" in p["fallback"].lower())
-        p = a.plan_reply("спала хорошо")                   # -> планы
-        p = a.plan_reply("всё хорошо, буду ещё читать")    # -> передать родн.
-        p = a.plan_reply("хорошо, запишите для них пару слов")
+        p = self._reply(a, "спала хорошо")                   # -> планы
+        p = self._reply(a, "всё хорошо, буду ещё читать")    # -> передать родн.
+        p = self._reply(a, "хорошо, запишите для них пару слов")
         # NOW the family question is on the table — VERBATIM.
         fb = p["fallback"]
         self.assertIn("Вопрос от родных (дочь)", fb)
@@ -84,9 +91,9 @@ class FamilyAgendaTests(unittest.TestCase):
         for phrase in ("да, всё хорошо", "настроение хорошее, спасибо",
                        "спала хорошо", "всё хорошо, буду ещё читать",
                        "хорошо, запишите для них пару слов"):
-            a.plan_reply(phrase)
+            self._reply(a, phrase)
         answer = "всё хорошо, буду ещё читать"
-        p = a.plan_reply(answer)
+        p = self._reply(a, answer)
         q = a.family_questions[0]
         self.assertEqual(q["status"], "asked")
         self.assertEqual(q["answer"], answer)
@@ -99,18 +106,18 @@ class FamilyAgendaTests(unittest.TestCase):
         a = self._agent_with_questions()
         for phrase in ("да, всё хорошо", "настроение хорошее, спасибо",
                        "спала хорошо", "всё хорошо, буду ещё читать"):
-            a.plan_reply(phrase)
+            self._reply(a, phrase)
         self.assertEqual(a.family_questions[0]["status"], "pending")
 
     def test_no_questions_keeps_base_agenda(self):
         a = Agent(llm=None)
         a.start_check_in()
-        p = a.plan_reply("да, всё хорошо")
+        p = self._reply(a, "да, всё хорошо")
         self.assertIn("настроение", p["fallback"].lower())
-        p = a.plan_reply("нормально")
-        p = a.plan_reply("нормально")
-        p = a.plan_reply("нормально")
-        p = a.plan_reply("нормально")
+        p = self._reply(a, "нормально")
+        p = self._reply(a, "нормально")
+        p = self._reply(a, "нормально")
+        p = self._reply(a, "нормально")
         # fifth topic closed -> straight to wrap-up, no family entries
         self.assertTrue(any(w in p["fallback"].lower() for w in
                             ("записа", "доба")))

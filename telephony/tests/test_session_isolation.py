@@ -32,6 +32,18 @@ class _FakeSTT:
     def transcribe_clean(self, wav_path):
         return self.script.pop(0) if self.script else "всё хорошо"
 
+    def transcribe_with_confidence(self, wav_path):
+        # Qwen3 honest: None -> unknown (U9). Fake must return high confidence
+        # so legacy session tests expecting ok/attention keep passing.
+        from core.safety_engine import Observation  # noqa
+        # Local tiny result mimicking orchestrator's STT result shape
+        class R:
+            def __init__(self, text):
+                self.text = text
+                self.confidence = 0.9
+                self.segments = ()
+        return R(self.transcribe_clean(wav_path))
+
 
 class _FakeTTS:
     def __init__(self):

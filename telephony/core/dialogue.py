@@ -637,16 +637,18 @@ class DialogueFSM:
                 or getattr(agent, "_closing_confirmed", False):
             agent._finish()
             return {"text": agent._fsm._last_text, "intent": None,
-                    "fallback": agent._goodbye(), "terminal": True}
+                    "fallback": agent._goodbye_report(), "terminal": True}
         return agent._silence_flow(agent._fsm._last_text,
                                    agent._fsm._last_reason)
 
     def _a_close(self, agent, ev):
         agent._finish()
         return {"text": agent._fsm._last_text, "terminal": True,
-                "intent": "тепло попрощаться: короткое пожелание "
-                          "(«Берегите себя», «Всего доброго»)",
-                "fallback": agent._goodbye()}
+                "intent": "тепло попрощаться и коротко сообщить итог: что "
+                          "записала для близких (или что сегодня записей нет, "
+                          "но отметила что всё хорошо) — без обещаний, одно "
+                          "предложение отчёта + тёплое пожелание",
+                "fallback": agent._goodbye_report()}
 
     def _a_ok(self, agent, ev):
         agent._extract_facts(agent._fsm._last_text)
@@ -1238,7 +1240,7 @@ class Agent:
         # Stage 0A: safety decisions live in their own deterministic machine.
         self.safety = SafetyEngine()
         self._last_question = None       # what we asked before this turn
-        self._last_confidence = None     # STT confidence (None = unknown)
+        self._last_confidence = None     # STT confidence (None = unknown → low per U9)
         self._clearing = False           # control question pending: OK clears
         self._help_pending = False       # a help question is on the table
         self._interrupt = None           # read.md #16: pending question-over-check-in
@@ -1882,6 +1884,49 @@ class Agent:
         "Спасибо за этот разговор! Я всё сохранила для семьи. "
         "Будьте здоровы, до свидания!",
     )
+
+    # Продуманный диалог от и до (2026-08-30): закрытие ОБЯЗАТЕЛЬНО сообщает
+    # что записано, а не просто "до свидания" — иначе звонок ощущается как
+    # сброс. Если есть факты/жалобы/ответы родным — называем, если всё
+    # спокойно — говорим прямо что записей нет.
+    GOODBYE_TAILS = (
+        "Берегите себя, всего доброго!",
+        "До свидания, здоровья вам!",
+        "Всего доброго, до скорой связи!",
+        "Берегите себя, пусть день будет спокойным!",
+        "До свидания, была рада слышать ваш голос!",
+    )
+
+    def _closing_report(self):
+        """Короткий отчёт для прощания: что записала vs прямо что нечего."""
+        has_family = any(q.get("status") == "asked"
+                         for q in getattr(self, "family_questions", []))
+        has_health = any(f in ("недомогание",) for f in self.facts) \
+            or self.status in ("attention", "alert")
+        # notes like "обсуждено: ..." are not a record by themselves
+        meaningful_notes = [n for n in self.notes
+                            if not n.startswith("обсуждено:")]
+        has_record = has_family or has_health or bool(meaningful_notes)
+        if has_record:
+            # детали — из фактов или первой meaningful note, но коротко
+            detail = ""
+            if "недомогание" in self.facts:
+                detail = "самочувствие"
+            elif has_family:
+                detail = "ваши слова для родных"
+            elif meaningful_notes:
+                detail = meaningful_notes[0].lower()
+            else:
+                detail = "важные моменты"
+            # не дублировать "записала" дважды — GOODBYE_TAILS без неё
+            tail = self._pick_not_repeated(self.GOODBYE_TAILS)
+            return f"Я всё записала — {detail}, близкие это увидят. {tail}"
+        # ничего тревожного — говорим прямо
+        tail = self._pick_not_repeated(self.GOODBYE_TAILS)
+        return f"Сегодня всё спокойно, отдельных записей не делала, но отметила что вы в порядке. {tail}"
+
+    def _goodbye_report(self):
+        return self._closing_report()
 
     def _ask(self, text):
         """One conversational turn (blocking). Backwards-compatible wrapper
