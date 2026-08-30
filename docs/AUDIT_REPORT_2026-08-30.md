@@ -511,6 +511,17 @@ P2 (2–4 недели):
 1. **Разрыв памяти** между canned и LLM path (DIA-01)
 2. **Хрупкая STT-цепочка** без fallback и с синтетической confidence (STT-01, STT-02)
 3. **Media layer** (mono mix) отравляет оба модуля (STT-05)
-4. **Call/Turn FSM** запланированы, но не реализованы — boolean flags создают operational bugs
+4. **Call/Turn FSM** — реализованы в `voice_runtime` (`343ecb6`); Lua mono mix на legacy FS остаётся с echo-guard
 
-**DialogueFSM уже есть** и работает (92% fuzz finish). Следующий шаг — **Turn FSM + media split + commit_reply fix** — даст наибольший ROI для стабилизации STT и диалогов без полного переписывания архитектуры.
+**DialogueFSM уже есть** и работает (92% fuzz finish). Коммиты `643b01e`, `74b29c0`, `343ecb6` закрывают P0/P1 из аудита.
+
+---
+
+## 9. Статус внедрения (2026-08-30)
+
+| Пункт | Коммит |
+|-------|--------|
+| commit_reply, STT fallback, cloud STT, _clean_llm | `643b01e` |
+| stt_gates, fall miscue, mid-conf confirm, stereo energy | `74b29c0` |
+| Turn FSM, Call FSM, host /ready probe, batch commit | `343ecb6` |
+| SafetyEngine → core/fsm, VAD pool, P6 prod stream | отложено (infra) |
