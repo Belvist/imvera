@@ -19,16 +19,31 @@ from core.dialogue import clean_transcript
 
 
 def _maybe_cloud_stt(local_engine):
-    if os.environ.get("MOSS_STT_PROVIDER", "local").lower() != "openai":
-        return local_engine
-    from moss_providers import OpenAISTTProvider
-    p = OpenAISTTProvider()
-    if not p.ready():
-        print("[call-agent] MOSS_STT_PROVIDER=openai but OPENAI_API_KEY is "
-              "missing — using local STT", flush=True)
-        return local_engine
-    print("[call-agent] STT provider: openai (whisper API)", flush=True)
-    return CloudSTTAdapter(p)
+    """Return a cloud STT provider when MOSS_STT_PROVIDER is set
+    to a non-local backend (openai, nemotron)."""
+    want = os.environ.get("MOSS_STT_PROVIDER", "local").lower()
+    if want == "openai":
+        from moss_providers import OpenAISTTProvider
+        p = OpenAISTTProvider()
+        if not p.ready():
+            print("[call-agent] MOSS_STT_PROVIDER=openai but "
+                  "OPENAI_API_KEY is missing — using local STT",
+                  flush=True)
+            return local_engine
+        print("[call-agent] STT provider: openai (whisper API)",
+              flush=True)
+        return CloudSTTAdapter(p)
+    if want == "nemotron":
+        from moss_providers import NemotronSTTProvider
+        p = NemotronSTTProvider()
+        if not p.ready():
+            print("[call-agent] MOSS_STT_PROVIDER=nemotron but "
+                  "host not ready — using local STT", flush=True)
+            return local_engine
+        print("[call-agent] STT provider: nemotron "
+              "(streaming ASR)", flush=True)
+        return CloudSTTAdapter(p)
+    return local_engine
 
 
 def _maybe_cloud_llm(local_client):
@@ -71,17 +86,30 @@ class NullLLM:
 
 
 def _maybe_cloud_tts(local_client):
-    if os.environ.get("MOSS_TTS_PROVIDER", "local").lower() != "elevenlabs":
-        return local_client
-    from moss_providers import ElevenLabsTTSProvider
-    p = ElevenLabsTTSProvider()
-    if not p.ready():
-        print("[call-agent] MOSS_TTS_PROVIDER=elevenlabs but "
-              "ELEVENLABS_API_KEY/MOSS_TTS_ELEVEN_VOICE missing — using "
-              "local MOSS TTS", flush=True)
-        return local_client
-    print("[call-agent] TTS provider: elevenlabs", flush=True)
-    return CloudTTSAdapter(p)
+    """Return a cloud TTS provider when MOSS_TTS_PROVIDER is set
+    to a non-local backend (elevenlabs, qwen3)."""
+    want = os.environ.get("MOSS_TTS_PROVIDER", "local").lower()
+    if want == "elevenlabs":
+        from moss_providers import ElevenLabsTTSProvider
+        p = ElevenLabsTTSProvider()
+        if not p.ready():
+            print("[call-agent] MOSS_TTS_PROVIDER=elevenlabs but "
+                  "ELEVENLABS_API_KEY/MOSS_TTS_ELEVEN_VOICE missing — "
+                  "using local MOSS TTS", flush=True)
+            return local_client
+        print("[call-agent] TTS provider: elevenlabs", flush=True)
+        return CloudTTSAdapter(p)
+    if want == "qwen3":
+        from moss_providers import Qwen3TTSProvider
+        p = Qwen3TTSProvider()
+        if not p.ready():
+            print("[call-agent] MOSS_TTS_PROVIDER=qwen3 but "
+                  "host not ready — using local TTS", flush=True)
+            return local_client
+        print("[call-agent] TTS provider: qwen3 "
+              "(Qwen3-TTS 0.6B Base)", flush=True)
+        return CloudTTSAdapter(p)
+    return local_client
 
 
 class CloudSTTAdapter:

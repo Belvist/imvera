@@ -47,6 +47,7 @@ __all__ = [
     "STTProvider", "LLMProvider", "TTSProvider",
     "AudioTransport", "SessionStore", "ToolProvider",
     "LocalSTTProvider", "LocalLLMProvider", "LocalTTSProvider",
+    "NemotronSTTProvider", "Qwen3TTSProvider",
     "OpenAISTTProvider", "OpenAILLMProvider", "ElevenLabsTTSProvider",
     "MemorySessionStore", "RedisSessionStore",
     "build_stt", "build_llm", "build_tts", "build_session_store",
@@ -415,6 +416,151 @@ class LocalTTSProvider(TTSProvider):
 # ----------------------------------------------------------------------------
 # Cloud backends (Stage 5 fast path) — enabled only when keys are present
 # ----------------------------------------------------------------------------
+class NemotronSTTProvider(STTProvider):
+    """NVIDIA Nemotron 3.5 ASR Streaming via host HTTP service.
+
+    Host service (voice_runtime/nemotron_host.py) wraps the
+    Transformers ``AutoModelForSpeechSeq2Seq`` chunked encoder and
+    exposes ``POST /transcribe`` (multipart WAV) +
+    ``POST /stream`` (true streaming).  ``transcribe`` follows the
+    same multipart contract as the existing ``SttHostAdapter`` so
+    ``StreamingSTT`` and the dialogue engine work unchanged.
+    """
+
+    name = "stt-nemotron"
+    DEFAULT_HOST = "127.0.0.1"
+    DEFAULT_PORT = 9710
+    BOUNDARY = "mossnemotron"
+
+    def __init__(self, host=None, port=None):
+        self.host = host or os.environ.get("MOSS_NEMOTRON_HOST",
+                                           self.DEFAULT_HOST)
+        self.port = int(port or os.environ.get("MOSS_NEMOTRON_PORT",
+                                                self.DEFAULT_PORT))
+        self._breaker = _Breaker()
+
+    def ready(self):
+        try:
+            obj = _http_json("GET",
+                             f"http://{self.host}:{self.port}/ready",
+                             timeout=3)
+            return bool(obj.get("ready"))
+        except ProviderError:
+            return False
+
+    def transcribe(self, wav_bytes, language="ru"):
+        self._breaker.guard()
+        try:
+            for attempt in (0, 1):
+                try:
+                    body = self._multipart(wav_bytes)
+                    req = urllib.request.Request(
+                        f"http://{self.host}:{self.port}/transcribe",
+                        data=body,
+                        headers={
+                            "Content-Type":
+                            "multipart/form-data; "
+                            "boundary=%s" % self.BOUNDARY},
+                        method="POST")
+                    with urllib.request.urlopen(
+                            req, timeout=120) as resp:
+                        obj = json.loads(
+                            resp.read().decode("utf-8", "replace"))
+                    self._breaker.succeeded()
+                    return (obj.get("text") or "").strip() or None
+                except ProviderError:
+                    if attempt == 0:
+                        continue
+                    raise
+        except ProviderError as e:
+            self._breaker.failed()
+            raise e
+        return None
+
+    @staticmethod
+    def _multipart(wav_bytes):
+        delim = b"--" + NemotronSTTProvider.BOUNDARY.encode("utf-8")
+        header = (delim
+                  + b'Content-Disposition: form-data; name="file"; '
+                  b'filename="turn.wav"\r\nContent-Type: audio/wav\r\n'
+                  b'\r\n')
+        footer = b"\r\n" + delim + b"--\r\n"
+        return header + wav_bytes + footer
+
+
+class Qwen3TTSProvider(TTSProvider):
+    """Qwen3-TTS 12Hz 0.6B Base via host HTTP service.
+
+    The host service (voice_runtime/qwen3_tts_host.py) wraps the
+    ``qwen-tts`` package and exposes ``POST /synthesize`` (full WAV)
+    + ``POST /stream`` (base64 frames).  ``stream`` honours
+    ``cancel_event`` for barge-in.
+    """
+
+    name = "tts-qwen3"
+    DEFAULT_HOST = "127.0.0.1"
+    DEFAULT_PORT = 9711
+
+    def __init__(self, host=None, port=None, voice_id=None):
+        self.host = host or os.environ.get("MOSS_QWEN3_TTS_HOST",
+                                           self.DEFAULT_HOST)
+        self.port = int(port or os.environ.get("MOSS_QWEN3_TTS_PORT",
+                                                self.DEFAULT_PORT))
+        self.voice_id = voice_id or os.environ.get(
+            "MOSS_QWEN3_VOICE", "vera")
+        self._breaker = _Breaker()
+
+    def ready(self):
+        try:
+            obj = _http_json("GET",
+                             f"http://{self.host}:{self.port}/ready",
+                             timeout=3)
+            return bool(obj.get("ready"))
+        except ProviderError:
+            return False
+
+    def synthesize(self, text):
+        self._breaker.guard()
+        try:
+            obj = _http_json(
+                "POST",
+                f"http://{self.host}:{self.port}/synthesize",
+                body={"text": text, "voice_id": self.voice_id},
+                timeout=120)
+            if obj.get("error"):
+                raise ProviderError(
+                    "qwen3-tts: " + obj["error"])
+            wav_b64 = obj.get("wav_b64")
+            if not wav_b64:
+                return None
+            return base64.b64decode(wav_b64)
+        except ProviderError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            raise ProviderError(f"qwen3-tts: {e}") from e
+
+    def stream(self, text, cancel_event=None, stream_id=None):
+        self._breaker.guard()
+        try:
+            obj = _http_json(
+                "POST",
+                f"http://{self.host}:{self.port}/stream",
+                body={"text": text, "voice_id": self.voice_id,
+                      "stream_id": stream_id or ""},
+                timeout=120)
+            if obj.get("error"):
+                raise ProviderError("qwen3-tts stream: " + obj["error"])
+            frames = obj.get("frames", [])
+            for frame in frames:
+                if cancel_event and cancel_event.is_set():
+                    return
+                yield frame
+        except ProviderError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            raise ProviderError(f"qwen3-tts stream: {e}") from e
+
+
 class OpenAISTTProvider(STTProvider):
     """OpenAI /v1/audio/transcriptions (whisper-1)."""
 
@@ -625,9 +771,18 @@ def _fallback(kind, want, err):
 
 
 def build_stt(prefer=None):
-    """Pick the STT backend. MOSS_STT_PROVIDER=openai requests the cloud
-    path; anything else (or missing keys) uses the local daemon."""
+    """Pick the STT backend.
+
+    MOSS_STT_PROVIDER=nemotron  -> NVIDIA Nemotron 3.5 ASR Streaming 0.6B
+    MOSS_STT_PROVIDER=openai    -> OpenAI whisper-1
+    anything else (or missing) -> local (host-side Qwen3-ASR via /transcribe)
+    """
     want = (prefer or os.environ.get("MOSS_STT_PROVIDER", "local")).lower()
+    if want == "nemotron":
+        p = NemotronSTTProvider()
+        if p.ready():
+            return p
+        _fallback("stt", want, "host not ready")
     if want == "openai":
         p = OpenAISTTProvider()
         if p.ready():
@@ -647,7 +802,18 @@ def build_llm(prefer=None, url=None):
 
 
 def build_tts(prefer=None, refs=None, reference_text=""):
+    """Pick the TTS backend.
+
+    MOSS_TTS_PROVIDER=qwen3    -> Qwen3-TTS 12Hz 0.6B Base
+    MOSS_TTS_PROVIDER=elevenlabs -> ElevenLabs
+    anything else (or missing) -> local (Silero via :9600)
+    """
     want = (prefer or os.environ.get("MOSS_TTS_PROVIDER", "local")).lower()
+    if want == "qwen3":
+        p = Qwen3TTSProvider()
+        if p.ready():
+            return p
+        _fallback("tts", want, "host not ready")
     if want == "elevenlabs":
         p = ElevenLabsTTSProvider()
         if p.ready():

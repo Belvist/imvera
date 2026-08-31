@@ -9,6 +9,8 @@ import sys
 import threading
 import time
 import unittest
+import json
+import urllib.request
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, ".."))
@@ -272,6 +274,197 @@ class SessionStoreTests(unittest.TestCase):
         self.assertIsInstance(store, mp.MemorySessionStore)
         self.assertFalse(store.degraded)
         self.assertFalse(store.redis_requested)
+
+
+class NemotronSTTProviderTests(unittest.TestCase):
+    def _fake_http(self, status_code=200, obj=None):
+        class _FakeResponse:
+            def __init__(self):
+                self._data = json.dumps(obj or {}).encode()
+            def read(self):
+                return self._data
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+        self._fake_resp = _FakeResponse()
+
+        def _urlopen(req, timeout=None):
+            return self._fake_resp
+        return _urlopen
+
+    def setUp(self):
+        import urllib.request
+        self._orig_urlopen = urllib.request.urlopen
+
+    def tearDown(self):
+        urllib.request.urlopen = self._orig_urlopen
+
+    def test_name_and_defaults(self):
+        p = mp.NemotronSTTProvider()
+        self.assertEqual(p.name, "stt-nemotron")
+        self.assertEqual(p.host, "127.0.0.1")
+        self.assertEqual(p.port, 9710)
+
+    def test_ready_when_host_ready(self):
+        p = mp.NemotronSTTProvider()
+        import urllib.request, json
+        def _urlopen(req, timeout=None):
+            class R:
+                def read(self):
+                    return json.dumps({"ready": True}).encode()
+                def __enter__(self):
+                    return self
+                def __exit__(self, *a):
+                    pass
+            return R()
+        urllib.request.urlopen = _urlopen
+        self.assertTrue(p.ready())
+
+    def test_ready_when_host_not_ready(self):
+        p = mp.NemotronSTTProvider()
+        import urllib.request, json
+        def _urlopen(req, timeout=None):
+            class R:
+                def read(self):
+                    return json.dumps({"ready": False}).encode()
+                def __enter__(self):
+                    return self
+                def __exit__(self, *a):
+                    pass
+            return R()
+        urllib.request.urlopen = _urlopen
+        self.assertFalse(p.ready())
+
+    def test_transcribe_returns_text(self):
+        p = mp.NemotronSTTProvider()
+        import urllib.request, json
+        def _urlopen(req, timeout=None):
+            class R:
+                def read(self):
+                    return json.dumps(
+                        {"text": "привет"}).encode()
+                def __enter__(self):
+                    return self
+                def __exit__(self, *a):
+                    pass
+            return R()
+        urllib.request.urlopen = _urlopen
+        text = p.transcribe(b"RIFF" + b"\x00" * 44)
+        self.assertEqual(text, "привет")
+
+    def test_transcribe_returns_none_when_empty(self):
+        p = mp.NemotronSTTProvider()
+        import urllib.request, json
+        def _urlopen(req, timeout=None):
+            class R:
+                def read(self):
+                    return json.dumps(
+                        {"text": ""}).encode()
+                def __enter__(self):
+                    return self
+                def __exit__(self, *a):
+                    pass
+            return R()
+        urllib.request.urlopen = _urlopen
+        text = p.transcribe(b"RIFF" + b"\x00" * 44)
+        self.assertIsNone(text)
+
+    def test_multipart_format(self):
+        p = mp.NemotronSTTProvider()
+        data = p._multipart(b"RIFF" + b"\x00" * 10)
+        self.assertTrue(data.startswith(b"--mossnemotron"))
+        self.assertIn(b'filename="turn.wav"', data)
+        self.assertIn(b"RIFF", data)
+
+
+class Qwen3TTSProviderTests(unittest.TestCase):
+    def setUp(self):
+        import urllib.request
+        self._orig_urlopen = urllib.request.urlopen
+
+    def tearDown(self):
+        urllib.request.urlopen = self._orig_urlopen
+
+    def test_name_and_defaults(self):
+        p = mp.Qwen3TTSProvider()
+        self.assertEqual(p.name, "tts-qwen3")
+        self.assertEqual(p.host, "127.0.0.1")
+        self.assertEqual(p.port, 9711)
+
+    def test_ready_when_host_ready(self):
+        p = mp.Qwen3TTSProvider()
+        import urllib.request, json
+        def _urlopen(req, timeout=None):
+            class R:
+                def read(self):
+                    return json.dumps({"ready": True}).encode()
+                def __enter__(self):
+                    return self
+                def __exit__(self, *a):
+                    pass
+            return R()
+        urllib.request.urlopen = _urlopen
+        self.assertTrue(p.ready())
+
+    def test_synthesize_returns_wav_bytes(self):
+        p = mp.Qwen3TTSProvider()
+        import urllib.request, json, base64
+        wav = b"RIFF" + b"\x00" * 44
+        wav_b64 = base64.b64encode(wav).decode("ascii")
+        def _urlopen(req, timeout=None):
+            class R:
+                def read(self):
+                    return json.dumps(
+                        {"wav_b64": wav_b64}).encode()
+                def __enter__(self):
+                    return self
+                def __exit__(self, *a):
+                    pass
+            return R()
+        urllib.request.urlopen = _urlopen
+        got = p.synthesize("привет")
+        self.assertEqual(got, wav)
+
+    def test_stream_yields_frames(self):
+        p = mp.Qwen3TTSProvider()
+        import urllib.request, json
+        frames_sent = []
+        def _urlopen(req, timeout=None):
+            frames = [{"i": 0, "wav_b64": "QUJD",
+                       "done": False},
+                      {"done": True}]
+            class R:
+                def read(self):
+                    return json.dumps(
+                        {"frames": frames}).encode()
+                def __enter__(self):
+                    return self
+                def __exit__(self, *a):
+                    pass
+            return R()
+        urllib.request.urlopen = _urlopen
+        yielded = list(p.stream("привет"))
+        self.assertEqual(len(yielded), 2)
+        self.assertFalse(yielded[0]["done"])
+        self.assertTrue(yielded[1]["done"])
+
+    def test_synthesize_raises_on_error(self):
+        p = mp.Qwen3TTSProvider()
+        import urllib.request, json
+        def _urlopen(req, timeout=None):
+            class R:
+                def read(self):
+                    return json.dumps(
+                        {"error": "boom"}).encode()
+                def __enter__(self):
+                    return self
+                def __exit__(self, *a):
+                    pass
+            return R()
+        urllib.request.urlopen = _urlopen
+        with self.assertRaises(mp.ProviderError):
+            p.synthesize("привет")
 
 
 if __name__ == "__main__":
