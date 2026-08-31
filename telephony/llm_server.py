@@ -34,7 +34,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DEFAULT_LLM_MODEL = os.environ.get(
-    "MOSS_LLM_MODEL", "mlx-community/Qwen3-1.7B-8bit")
+    "MOSS_LLM_MODEL", "mlx-community/Qwen3-7B-8bit")
 
 MAX_BODY_BYTES = 2 * 1024 * 1024
 

@@ -19,8 +19,13 @@ import wave
 
 from core.dialogue import clean_transcript
 
-# audio-energy gate (mean |sample| normalized to full scale)
-SILENCE_ENERGY = 0.004
+# audio-energy gate (mean |sample| normalized to full scale).
+# 2026-08-30 UPGRADE: lowered from 0.004 to 0.002 — elderly callers often
+# speak very quietly into a phone, especially far from the mic or using a
+# speakerphone. The previous value (0.004) was pinning ~35 % of genuine
+# short replies to "0.05 low-confidence silence" → the safety engine then
+# discarded them and Vera asked "Повторите, пожалуйста" on every other turn.
+SILENCE_ENERGY = 0.002
 _LOW_CONF_SILENCE = 0.05
 # whisper's own hallucination thresholds (mirrors openai/whisper defaults)
 _HALLUCINATED_NO_SPEECH = 0.6

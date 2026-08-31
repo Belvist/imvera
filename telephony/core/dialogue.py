@@ -60,9 +60,11 @@ def _is_repetition(text):
 # so a canonical short answer is recovered here instead of being dropped.
 _SHORT_ANSWER_MAP = {
     "да": "да", "ага": "да", "угу": "да", "конечно": "да", "есть": "да",
-    "окей": "да", "ок": "да", "давай": "да",
+    "окей": "да", "ок": "да", "давай": "да", "ус": "да", "ас": "да",
+    "естественно": "да", "разумеется": "да", "точно": "да",
     "нет": "нет", "неа": "нет", "не нужно": "помощь не нужна",
     "не надо": "помощь не нужна", "нет спасибо": "помощь не нужна",
+    "не хочу": "не хочу", "не стоит": "не стоит",
     "хорошо": "всё хорошо", "всё хорошо": "всё хорошо", "все хорошо": "всё хорошо",
     "нормально": "всё нормально", "норм": "всё нормально",
     "все нормально": "всё нормально", "всё нормально": "всё нормально",
@@ -71,13 +73,16 @@ _SHORT_ANSWER_MAP = {
     "неважно": "неважно", "ничего": "ничего не нужно",
     "помощь": "нужна помощь", "помощь нужна": "нужна помощь",
     "помощь требуется": "нужна помощь", "нужна помощь": "нужна помощь",
-    # polite/greeting phrases that were being eaten by the junk filter:
-    # they are REAL turns (goodbye must reach the goodbye flow!)
+    "помогите": "нужна помощь", "спасите": "нужна помощь",
+    "больно": "мне больно", "болит": "что-то болит",
     "до свидания": "до свидания", "пока": "до свидания",
     "пока пока": "до свидания", "всего доброго": "до свидания",
     "спасибо": "спасибо", "большое спасибо": "спасибо",
+    "благодарю": "спасибо", "спс": "спасибо",
     "здравствуйте": "здравствуйте", "привет": "привет",
     "алло": "алло", "да да": "да", "ну да": "да",
+    "здорово": "здорово", "отлично": "всё отлично",
+    "супер": "всё отлично", "классно": "всё хорошо",
 }
 
 _SHORT_ANSWER_WORDS = frozenset((
@@ -87,6 +92,13 @@ _SHORT_ANSWER_WORDS = frozenset((
     "нет", "нет спасибо", "не нужно", "не надо", "ничего", "спасибо",
     "есть", "конечно", "неа", "до", "свидания", "пока", "всего",
     "доброго", "большое", "здравствуйте", "привет", "алло", "ну",
+    "ус", "ас", "естественно", "разумеется", "точно",
+    "не хочу", "не стоит", "больно", "болит", "помогите", "спасите",
+    "здорово", "отлично", "супер", "классно", "благодарю", "спс",
+    "та", "даа", "дад", "ка", "дау", "дат", "таа", "неет", "нету",
+    "ока", "ог", "уга", "гм", "мм", "хорош", "нормал", "помог",
+    "приве", "драстуйте", "драствуйте", "дравствуйте", "зравствуйте",
+    "спасиб", "спасиба", "болшой", "окй", "оке",
 ))
 
 
@@ -94,8 +106,8 @@ def short_real_answer(raw):
     """Return the canonical form of a short real answer, or None.
 
     Only applies to very short (<=3 words) utterances where EVERY word is a
-    known answer word — filters hallucinated fragments out while keeping
-    "нет спасибо" intact.
+    known answer word (or a known homophone of one). Filters hallucinated
+    fragments out while keeping "нет спасибо" and its mishears intact.
     """
     if not raw:
         return None
@@ -107,12 +119,53 @@ def short_real_answer(raw):
     words = t.split()
     if len(words) > 3:
         return None
-    if not all(w in _SHORT_ANSWER_WORDS for w in words):
+    # Always try a homophone-rewrite pass FIRST: on 8 kHz PSTN audio the
+    # canonical word (\"да\") may not even reach us, only the mishear
+    # (\"та\" / \"не\"). Rewrite order is: for EACH word apply the
+    # homophone table, producing a candidate rewritten phrase; we try that
+    # and the original, whichever yields a map hit wins.
+    rewritten = [_HOMOPHONE.get(w, w) for w in words]
+    canon_t = " ".join(rewritten)
+    # Fast path: exact dictionary match on original or rewritten form.
+    direct = _SHORT_ANSWER_MAP.get(t) or _SHORT_ANSWER_MAP.get(canon_t)
+    if direct:
+        return direct
+    # Slow path: verify every original/rewritten word is in the known set;
+    # this prevents non-words from sneaking through as "short answers".
+    allowed = _SHORT_ANSWER_WORDS
+    if not all((w in allowed or _HOMOPHONE.get(w) in allowed) for w in words):
         return None
-    return _SHORT_ANSWER_MAP.get(t)
+    return _SHORT_ANSWER_MAP.get(canon_t) or _SHORT_ANSWER_MAP.get(t)
+
+
+# 2026-08-30 UPGRADE: Russian telephone homophone rewrite table. Whisper
+# (even large-v3-turbo) on 8 kHz PSTN audio systematically mishears short
+# high-frequency Russian words — these cause Vera to hear the wrong intent
+# and reply with "Повторите" / go down the wrong branch. Applies ONLY inside
+# short_real_answer (short utterances, 1-3 words) where the ambiguity set is
+# small enough that a deterministic rewrite is safe.
+_HOMOPHONE = {
+    "та": "да", "даа": "да", "дад": "да", "дадт": "да",
+    "ка": "да", "дау": "да", "дат": "да", "таа": "да",
+    "не": "нет", "нету": "нет", "неет": "нет", "неаа": "нет",
+    "ока": "ага", "ог": "угу", "агаа": "ага", "уга": "угу",
+    "угуу": "угу", "гм": "угу", "мм": "ага",
+    "хорош": "хорошо", "хорошо": "хорошо",
+    "нормал": "нормально", "нормально": "нормально",
+    "помощ": "помощь", "помог": "помощь",
+    "приве": "привет", "привет": "привет",
+    "драстуйте": "здравствуйте", "драствуйте": "здравствуйте",
+    "дравствуйте": "здравствуйте", "зравствуйте": "здравствуйте",
+    "спасиб": "спасибо", "спасиба": "спасибо", "болшой": "большое",
+    "спокойной": "до свидания", "всегдоброго": "всего доброго",
+    "ок": "ок", "окй": "окей", "оке": "окей",
+    "пжалста": "пожалуйста",
+}
 
 
 def clean_transcript(text):
+    """Clean an STT result: strip junk/hallucinations, recover short real
+    answers, return a usable string or None."""
     if not text:
         return None
     t = text.strip()
@@ -121,10 +174,6 @@ def clean_transcript(text):
         return None
     # drop whisper filler/hallucination phrases
     if _JUNK_RE.match(t):
-        # CONVERSATION FIX: keep genuine short answers — the junk regex
-        # intentionally overlaps them ("всё", "хорошо", "да", "нет"), yet a
-        # VAD/endpoint-gated utterance that transcribes to exactly one of
-        # them is a real reply, not hallucination.
         short = short_real_answer(t)
         if short:
             return short
@@ -132,6 +181,14 @@ def clean_transcript(text):
     # drop repeating-word hallucinations ("Next Next Next...")
     if _is_repetition(t):
         return None
+    # Homophone post-pass for short real answers: even when an utterance
+    # is technically multi-word (\"да да\", \"ок спасибо\"), recover intent
+    # before a multi-word branch consumes it.
+    words = re.findall(r"[а-яёa-z0-9]+", t.lower())
+    if 1 <= len(words) <= 3:
+        short = short_real_answer(t)
+        if short:
+            return short
     # keep multi-word spoken turns
     return t
 
@@ -568,6 +625,18 @@ class DialogueFSM:
         agent._note("плохое самочувствие")
         agent.status = "attention"
         agent._clearing = True
+        # Wellness advance only on positive signals — BAD_WORDS
+        # ("плохо" and similar) must still trigger the symptom follow-up.
+        # Also require an explicit improvement cue (not just any symptom
+        # mention) so "отлично, но болела голова" stays in symptom mode.
+        _improves = any(w in agent._fsm._last_text.lower()
+                        for w in ("легче", "лучше", "помогло", "ушло",
+                                  "исчез", "прошла", "ушёл", "стало"))
+        if agent._answers_wellness(agent._fsm._last_text) \
+                and not any(w in agent._fsm._last_text.lower()
+                            for w in BAD_WORDS) \
+                and _improves:
+            return self._a_ok(agent, ev)
         q = agent._pick_not_repeated(agent.SYMPTOM_CHECKS)
         agent._last_question = q
         # SYMPTOM GOAL (2026-08-29): the caller named a concrete problem
@@ -606,7 +675,18 @@ class DialogueFSM:
     def _a_false_alarm(self, agent, ev):
         agent.status = "ok"
         agent._clearing = False
-        fb = agent._pick_not_repeated(agent.FALSE_ALARM_ACKS)
+        # Do NOT advance agenda here — keep the paused topic (e.g. mood) so
+        # the next positive "да, всё хорошо" can resume it to sleep. Just
+        # acknowledge the clearing and re-ask the CURRENT agenda question
+        # instead of re-asking the same symptom "Как она сейчас?" which
+        # caused the 3× repeat in live call 57a80279cbe8.
+        base_ack = agent._pick_not_repeated(agent.FALSE_ALARM_ACKS)
+        if "?" in base_ack:
+            base_ack = base_ack.split("?")[0].split("Как")[0].strip()
+            if not base_ack.endswith("."):
+                base_ack += "."
+        q = agent._ask_task() or agent._wrap_up_question()
+        fb = f"{base_ack} {q}" if q else base_ack
         agent._last_question = fb
         return {"text": agent._fsm._last_text, "intent": None, "fallback": fb}
 
@@ -687,7 +767,8 @@ class DialogueFSM:
         is_short = bool(short_real_answer(text)) and len(text.split()) <= 3
         on_table = agent._agenda_asked and topic is not None
         reached = not on_table and topic is not None \
-            and agent._answers_wellness(text)
+            and agent._answers_wellness(text) \
+            and len(text.split()) <= 2
         if on_table or reached:
             finished = agent._agenda_advance(text)
             if finished:
@@ -928,7 +1009,8 @@ MVERA_GREETING = "Здравствуйте! Это Имвэра. Как вы с�
 
 OK_WORDS = ("хорош", "нормал", "порядк", "отлично", "прекрас", "замечатель",
             "неплохо", "бодр", "здоров", "всё ок", "в порядке", "не жал",
-            "приемле", "норм")
+            "приемле", "норм", "полегча", "полегче", "легче", "лучше",
+            "супер", "класс", "шикарно", "весел", "бодряч", "неплох", "окей", "ок")
 BAD_WORDS = ("плохо", "не очень", "слабо", "устал", "устала", "худо",
              "нездор", "подавле", "груст", "тревожно", "сильно устал",
              "неважно", "не важ", "хуже", "тяжел", "тревог", "сильно плохо")
@@ -951,36 +1033,58 @@ HELP_WORDS = ("помощь", "помогите", "помочь", "купить"
 # also fails the agent degrades to scripted canned phrases. Either way a
 # call never stalls.
 # ----------------------------------------------------------------------------
-VERA_LLM_ID = os.environ.get("MOSS_LLM_MODEL", "mlx-community/Qwen3-1.7B-8bit")
+VERA_LLM_ID = os.environ.get("MOSS_LLM_MODEL", "mlx-community/Qwen3-7B-8bit")
 VERA_LLM_URL = os.environ.get("MOSS_LLM_URL", "http://127.0.0.1:9500")
 
 VERA_SYSTEM_PROMPT = (
-    "Ты — Вера, молодая девушка, тёплая заботливая помощница службы Имвэра (IMVERA). "
-    "Говоришь по телефону с пожилым человеком.\n"
-    "ОТВЕЧАЙ ЖИВО, не кивай: откликайся на детали сказанного и почти в каждом "
-    "ответе задавай ОДИН естественный вопрос по теме (самочувствие, болит ли, "
-    "таблетки, сон, аппетит, настроение, планы, близкие). Если человек упомянул "
-    "симптом или лекарство — обязательно уточни про него: «Как голова сейчас? "
-    "Таблетка помогла?»\n"
-    "Формат: ОДНА короткая фраза, 6–15 слов, РОВНО ОДИН вопросительный знак, "
-    "только русский, без латиницы. Начинай коротким тёплым откликом («Рада "
-    "слышать», «Как хорошо»), НЕ пересказывай слова человека.\n"
-    "О себе — только женский род: «я рада», «я поняла», «я записала». "
-    "Обращайся на «вы», никогда на «ты».\n"
-    "НЕ выдумывай: не оценивай внешность, не придумывай события. Отвечай только "
-    "на сказанное.\n"
-    "ЗАПРЕЩЕНО: вопросы про местонахождение, адрес, личные данные, деньги. "
-    "Если человек спрашивает, зачем — извинись коротко и вернись к самочувствию.\n"
-    "НЕ повторяй вопросы: то, что уже спрашивала (видно в истории), не "
-    "переспрашивай. Не спрашивай «как вы себя чувствуете?» дважды. Если цель "
-    "ответа — уточнить — только один прямой вопрос.\n"
-    "НИКОГДА не обещай действий: не «вызову», не «позвоню», не «отправлю». "
-    "Только записываешь: «я записала», «близкие это увидят». Можно спросить, "
-    "нужна ли скорая или помощь, но не обещать вызвать.\n"
-    "Без медицинских советов и диагнозов. При жалобах на здоровье — "
-    "«я рядом», «я записываю».\n"
-    "Если прощается — тепло попрощайся и закончи.\n"
-    "Пиши только сам ответ — его прочитают вслух. Без кавычек, без подписей."
+    "Ты — Вера, молодая тёплая русскоязычная ассистентка службы Имвэра (IMVERA). "
+    "Звонишь пожилому человеку чтобы поинтересоваться самочувствием и просто "
+    "побеседовать. Говоришь по телефону, голосом, без экрана.\n"
+    "---\n"
+    "ТВОЙ ХАРАКТЕР: живая, естественная, как родная внучка по телефону. Не "
+    "робот, не оператор. Не формальна, не читает по бумажке. Сочувствуешь, "
+    "поддерживаешь, улыбаешься в голос. Реагируешь на то, что человек "
+    "сказал — ПРЕЖДЕ чем задавать новый вопрос.\n"
+    "СТРУКТУРА ОТВЕТА (одна-две короткие фразы, общий размер — не длиннее "
+    "трёх секунд речи вслух):\n"
+    "  1. СНАЧАЛА короткий естественный отклик на сказанное человеком.\n"
+    "     • хорошие новости — «Как здорово!», «Рада слышать», «Вот это да!»\n"
+    "     • жалобы/боль — «Ой, как неприятно», «Понимаю, сочувствую»,\n"
+    "       «Держитесь, я рядом», «Побольше отдыхайте»\n"
+    "     • обычное — «Поняла», «Хорошо», «Ага, я вас слушаю», «Интересно»\n"
+    "     • спрашивают у тебя — «Спасибо, у меня всё отлично! А как вы?»\n"
+    "  2. ПОТОМ ОДИН уточняющий вопрос ПО ТЕМЕ сказанного — чтобы разговор "
+    "продолжался, а не спрашивал «как самочувствие» ради галочки. Если "
+    "человек сказал про сон — про сон; про внуков — про внуков; про таблетки "
+    "— про таблетки. НЕ перескакивай на другую тему.\n"
+    "Вопросов в каждом ответе — ТОЧНО ОДИН (не больше, не меньше). "
+    "Исключение: если человек явно прощается или жалуется на острую боль — "
+    "тогда вопрос можно не задавать.\n"
+    "---\n"
+    "О СЕБЕ: всегда женский род. «Я рада», «я поняла», «я записала», «я "
+    "сочувствую». Обращайся к человеку НА «ВЫ», с уважением, но без "
+    "формальности. Никогда на «ты».\n"
+    "ЧТО НЕЛЬЗЯ:\n"
+    "  • НЕ выдумывай ничего. Не говори «вы сегодня отлично выглядите» — "
+    "    ты же по телефону, не видишь человека.\n"
+    "  • НЕ пересказывай его же слова своими фразами («Правильно, вы сказали "
+    "    что голова болит...») — это выглядит как эхо.\n"
+    "  • НЕ задавай один и тот же вопрос дважды за разговор. То, о чём "
+    "    уже спрашивала и получила ответ — не спрашивай снова.\n"
+    "  • НЕ давай медицинских советов и диагнозов («попейте парацетамол»). "
+    "    При жалобах: «Понимаю, записываю. Как давно это беспокоит?»\n"
+    "  • НИКОГДА не обещай позвонить/вызвать/отправить. Максимум: «Я записала "
+    "    — ваши близкие это увидят». Можно спросить, нужна ли помощь, но не "
+    "    обещать организовать её.\n"
+    "  • НЕ спрашивай про адрес, деньги, паспортные данные, местонахождение.\n"
+    "---\n"
+    "РЕАЛЬНОСТЬ: у тебя есть контекст предыдущих реплик этой беседы (включая "
+    "то, о чём ты уже спросила) и ИЗВЕСТНЫЕ ФАКТЫ о человеке в скобках "
+    "(ИМЯ, возраст, чем обычно занимается, что беспокоило раньше). "
+    "ПОМНИ о них и ссылайся там где уместно — так разговор станет живым.\n"
+    "Если человек прощается — тепло попрощайся в ответ и закончи. "
+    "Формат: пиши ТОЛЬКО саму фразу-ответ, без кавычек, без заголовков, "
+    "без перевода строк. Голос сразу начнёт её читать."
 )
 
 # Conversation scenarios (editable without a rebuild): a plain-text file
@@ -1602,12 +1706,7 @@ class Agent:
         n = self._fsm._empty_turns + 1
         self._fsm._empty_turns = n
         if n == 1:
-            # Greeting already asked «как себя чувствуете?» — don't re-ask
-            # the yes/no anchor; ask to repeat instead.
-            if self._agenda_asked and self._agenda_topic() == "самочувствие":
-                fb = self._pick_not_repeated(self.REPEAT_REQUESTS)
-            else:
-                fb = self._pick_not_repeated(self.ANCHORS)
+            fb = self._pick_not_repeated(self.ANCHORS)
         elif n == 2:
             fb = "Алло, вы меня слышите?"
         elif n == 3:
@@ -1624,15 +1723,20 @@ class Agent:
     # «всё хорошо» matches nothing.
     _TOPIC_KEYS = {
         "самочувствие": ("самочув", "чувству", "здоров", "болит", "болеет",
-                         "голов", "давлен", "таблет", "лекар"),
+                         "голов", "давлен", "таблет", "лекар", "полегча",
+                         "отпуст", "температур", "тошн", "кружится", "бодр"),
         "настроение": ("настроени", "груст", "весел", "бодр", "радост",
-                       "тоск"),
+                       "тоск", "тревож", "депресс", "апати", "скучно",
+                       "одиноко", "волнуе"),
         "сон": ("сон", "спал", "поспал", "выспал", "уснул", "снился",
-                "ночь", "ночью"),
+                "ночь", "ночью", "дрых", "кемар", "вздрем", "бессон",
+                "просыпа", "храп", "кошмар", "выспа"),
         "планы": ("план", "соберусь", "хочу сегодня", "планиру",
-                  "собираюсь"),
+                  "собираюсь", "гулять", "прогулка", "магазин", "готовить",
+                  "уборка", "внук", "внучк", "внуч", "гости", "дела"),
         "передать родным": ("передать", "передайте", "записать", "запис",
-                            "запиш", "родным", "близким", "семье"),
+                            "запиш", "родным", "близким", "семье", "детям",
+                            "доч", "сын"),
     }
 
     def _matches_topic(self, text):
@@ -1863,12 +1967,13 @@ class Agent:
         history = [{"role": "system", "content": system}]
         # LATENCY TRACE (route step 6) showed the LLM is NOT the bottleneck
         # (30-85 ms per reply); TTS dominates only under concurrent-call
-        # contention on the single slot. 2026-08-30: with the CLOUD LLM
-        # (DeepSeek/OpenRouter) the prompt length directly adds prefill
-        # latency (first token went 1.2s->3s as history grew). 4 turns is
-        # enough for the wellness thread; the window is kept short so the
-        # first sound stays low.
-        for role, txt in self.llm_history[-4:]:
+        # contention on the single slot. 2026-08-30 UPGRADE: Qwen3-7B has a
+        # much larger KV cache and needs MORE context to stay coherent —
+        # 8 turns (4 full question-answer pairs) gives the model enough
+        # thread to remember check-in status, answered questions, caller's
+        # own factoids. The earlier 4-turn window kept forgetting that the
+        # caller already confirmed "всё хорошо" and repeated the same ask.
+        for role, txt in self.llm_history[-8:]:
             history.append({"role": "user" if role == "user" else "assistant",
                             "content": txt})
         # CONVERSATION FIX A: the current user turn is ALREADY in

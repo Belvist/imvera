@@ -8,6 +8,14 @@
     uuid_broadcast playback, uuid_break barge-in). No Lua involved.
 -->
 <include>
+  <extension name="mossvoice_runtime_4401">
+    <!-- 4401 backwards-compat alias for existing SIP phones that still
+         dial 4401. Identical behaviour to 4400. -->
+    <condition field="destination_number" expression="^4401$">
+      <action application="answer"/>
+      <action application="park"/>
+    </condition>
+  </extension>
   <extension name="mossvoice_runtime">
     <!-- G1: 4400 is the SINGLE production application extension. The leg is
          ONLY answered + parked; VoiceRuntime attaches via ESL and drives the

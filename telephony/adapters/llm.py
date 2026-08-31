@@ -176,7 +176,7 @@ class LLMClient:
             return None
         return cleaned
 
-    def chat(self, messages, max_tokens=150, temp=0.4, timeout=60):
+    def chat(self, messages, max_tokens=220, temp=0.75, timeout=60):
         """Generate a reply for chat-style ``messages``. Returns cleaned text
         or None on any failure/timeout. Tries the remote/cloud LLM first;
         in-process generation is a staging-only tier

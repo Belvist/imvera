@@ -16,6 +16,7 @@ RUNTIME="$HOME/Library/Application Support/MossVoice/runtime"
 PY="$RUNTIME/qwen-venv/bin/python"
 FS_BIN="/opt/homebrew/opt/freeswitch/bin/freeswitch"
 FS_CLI="/opt/homebrew/opt/freeswitch/bin/fs_cli"
+export MOSS_ESL_PASSWORD="c864dbaf8393145ff78cdd1dd1fc9fdc"
 
 log() { echo "[moss] $*"; }
 
@@ -54,6 +55,6 @@ log "Голос (voice)       : http://127.0.0.1:9600"
 log "Генерация (answers) : http://127.0.0.1:9500"
 log "Телефония (agent)   : http://127.0.0.1:9400"
 if [[ -x "$FS_CLI" ]]; then
-  log "SIP: номер агента 4401; тест: $FS_CLI -x \"originate loopback/4402/default &echo\""
+  log "SIP: номер агента 4400 (алиас 4401); тест: $FS_CLI -x \"originate loopback/4402/default &echo\""
 fi
 log "Остановка: $(dirname "$0")/moss_supervisor.py stop"

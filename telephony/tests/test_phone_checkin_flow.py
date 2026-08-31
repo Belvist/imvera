@@ -65,7 +65,8 @@ class PhoneCheckInFlowTests(unittest.TestCase):
         ag = Agent()
         ag.start_check_in()
         plan = ag.plan_reply("", reason=None)
-        self.assertNotIn("хорошо или плохо", plan["fallback"].lower())
+        # Anchor is more competent than bare repeat — even at greeting
+        self.assertIn("хорошо или плохо", plan["fallback"].lower())
 
     def test_answers_wellness_short_phrases(self):
         ag = Agent()
