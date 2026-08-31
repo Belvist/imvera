@@ -899,3 +899,23 @@ Piper — `~/tts-arena`. Сэмплы голоса — `~/Downloads/imvera_sampl
 2. Закончил значимую работу → обновил «Текущее состояние» и, если принято
    новое решение, раздел «Ключевые решения». Дата обязательна.
 3. Владелец сменил приоритет → обнови «Единый маршрут» и заморозки.
+
+## Модельный стек v1 — Nemotron 3.5 ASR + Qwen3-TTS 0.6B (2026-08-31)
+
+Реализовано (полный implementation):
+
+- **STT: `NemotronSTTProvider`** (`moss_providers.py`) → `CloudSTTAdapter` → HTTP `host.docker.internal:9710`
+  - multipart/form-data `file=turn.wav` (тот же контракт, что `SttHostAdapter` → `stt_host.py`)
+  - Host service `voice_runtime/nemotron_host.py` — Transformers `AutoModelForSpeechSeq2Seq`
+  - `/ready`, `/transcribe`, `/stream`
+- **TTS: `Qwen3TTSProvider`** (`moss_providers.py`) → `CloudTTSAdapter` → HTTP `host.docker.internal:9711`
+  - Host service `voice_runtime/qwen3_tts_host.py` — `qwen-tts` пакет
+  - `/ready`, `/synthesize`, `/stream`
+- **Фабрики**: `build_stt()`/`build_tts()` поддерживают `nemotron`/`qwen3`; fallback → local
+- **`cloud.py`**: `_maybe_cloud_stt`/`_maybe_cloud_tts` обрабатывают `nemotron`/`qwen3`
+- **`docker/.env`**: `MOSS_STT_PROVIDER=nemotron`, `MOSS_TTS_PROVIDER=qwen3` (закомментированы)
+- **Тесты**: 11 новых = 299 OK
+
+Порты: Nemotron 9710 · Qwen3-TTS 9711 · STT-хост Qwen3-ASR 9705 · Silero TTS 9600.
+Установка: `pip install transformers accelerate soundfile numpy` (Nemotron) / `pip install qwen-tts`.
+Перед production: A/B Nemotron vs Qwen3-ASR и Qwen3-TTS vs Silero на реальных SIP-записях.
