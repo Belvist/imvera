@@ -202,6 +202,15 @@ services:
       # preferred (better RU accuracy), whisper fallback otherwise.
       MOSS_STT_TRANSFORMERS_MODEL: ${MOSS_STT_MODEL:-openai/whisper-small}
       MOSS_STT_HOST: ${MOSS_STT_HOST:-http://host.docker.internal:9705}
+      # MossVoice v1 stack: Nemotron 3.5 ASR Streaming + Qwen3-TTS 0.6B Base.
+      # Uncomment and set MOSS_STT_HOST to :9710 to switch STT to Nemotron.
+      # MOSS_STT_PROVIDER: ${MOSS_STT_PROVIDER:-local}
+      # MOSS_NEMOTRON_HOST: ${MOSS_NEMOTRON_HOST:-127.0.0.1}
+      # MOSS_NEMOTRON_PORT: ${MOSS_NEMOTRON_PORT:-9710}
+      # MOSS_TTS_PROVIDER: ${MOSS_TTS_PROVIDER:-local}
+      # MOSS_QWEN3_TTS_HOST: ${MOSS_QWEN3_TTS_HOST:-127.0.0.1}
+      # MOSS_QWEN3_TTS_PORT: ${MOSS_QWEN3_TTS_PORT:-9711}
+      # MOSS_QWEN3_VOICE: ${MOSS_QWEN3_VOICE:-vera}
       # Business processing (outbox/incidents) runs in the `workflow`
       # deployment, NOT in the realtime call process.
       MOSS_OUTBOX_INPROCESS: "0"

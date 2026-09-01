@@ -17,8 +17,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from core.state import CallBusyError, AdmissionError
 from core.family import (FamilyAccessError, FamilyAuthError,
-                         FamilyValidationError)
+                          FamilyValidationError)
 from adapters.pg import PgUnavailable
+from adapters.esl import originate_call, kill_call
 
 # Upper bound for any request body (audio turn chunks are ~128 KB; JSON
 # turn_stream bodies carry base64 audio — MBs at worst). 8 MB is generous.
@@ -104,10 +105,62 @@ class Handler(BaseHTTPRequestHandler):
                             else "degraded" if ready else "down",
                     "components": comps,
                     "error": None if ready else tts_err},
-                   status=200 if ready else 503)
+                    status=200 if ready else 503)
+
+    @staticmethod
+    def _call_page():
+        return """<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>IMVERA — Зво́нок</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+background:#0d1117;color:#e6edf3;min-height:100vh;display:flex;
+align-items:center;justify-content:center}
+.card{background:#161b22;border:1px solid #30363d;border-radius:16px;
+padding:40px;max-width:420px;width:90%;text-align:center}
+h1{font-size:1.4rem;margin-bottom:8px;color:#58a6ff}
+p{color:#8b949e;margin-bottom:24px;font-size:.95rem;line-height:1.5}
+.btn{background:#238636;color:#fff;border:none;border-radius:10px;
+padding:16px 40px;font-size:1.1rem;cursor:pointer;
+transition:background .2s,transform .1s;width:100%}
+.btn:hover{background:#2ea043}
+.btn:active{transform:scale(.97)}
+.btn:disabled{background:#30363d;cursor:not-allowed}
+.status{margin-top:16px;font-size:.85rem;min-height:1.4em}
+.ok{color:#3fb950}.err{color:#f85149}
+</style></head><body>
+<div class="card">
+<h1>🟢 IMVERA</h1>
+<p>Нажмите кнопку, чтобы позвонить на свой Mac.</p>
+<button class="btn" id="btn" onclick="callMac()">Позвонить на Mac</button>
+<div class="status" id="status"></div>
+</div>
+<script>
+async function callMac(){
+const btn=document.getElementById('btn');
+const st=document.getElementById('status');
+btn.disabled=true;st.className='status';st.textContent='Звоним…';
+try{
+const r=await fetch('/call',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({})});
+const d=await r.json();
+if(d.ok){st.className='status ok';st.textContent='✅ Звонок идёт! Можете говорить.'}
+else{st.className='status err';st.textContent='❌ '+d.error+(d.hint?' ('+d.hint+')':'')}
+}catch(e){st.className='status err';st.textContent='❌ Ошибка сети: '+e.message}
+btn.disabled=false;
+}
+</script></body></html>"""
 
     def do_GET(self):
         serve = self.server.serve
+        # Web "call my Mac" page
+        if self.path == "/" or self.path == "/index.html":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(self._call_page().encode())
+            return
         # TRUTHFUL READINESS (2026-08-27): /live only proves the process is
         # alive; /ready aggregates the ACTUAL realtime components (STT/LLM/TTS)
         # so a container is never "healthy" while the voice pipeline is broken
@@ -269,6 +322,10 @@ class Handler(BaseHTTPRequestHandler):
                 except KeyError:
                     self._json({"ok": False, "error": "call not found"}, 404)
                     return
+                self._json(result)
+                return
+            if action == "hangup":
+                result = kill_call(call_id)
                 self._json(result)
                 return
             if action in ("turn", None):
@@ -443,6 +500,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/turn_stream":
             self._handle_turn_stream()
+            return
+        # ---- CALL MY MAC (web button) -----------------------------------------
+        if path == "/call":
+            payload = self._read_json_body() or {}
+            extension = payload.get("extension")
+            result = originate_call(extension=extension)
+            if result["ok"]:
+                self._json({"ok": True, "call_id": result["uuid"],
+                            "extension": extension or "brian"})
+            else:
+                self._json({"ok": False, "error": result["message"],
+                            "hint": "Zoiper must be registered to FreeSWITCH"},
+                           status=503)
             return
         self._json({"ok": False, "error": "not found"}, 404)
 
