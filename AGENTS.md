@@ -46,7 +46,7 @@ VeraVoice. Не трогать без прямого указания владе
 - **Базовая линия голоса:** `voice-bench/` — Silero RTF 0.015 / round-trip
   WER 0.269 (500 фраз); Piper RTF 0.026 / WER 0.285. CosyVoice 300M —
   живее, но RTF 3.3 на CPU (заморожен до x86/GPU-пула).
-- **Тесты:** `make test-fast` (169 OK).
+ - **Тесты:** `make test-fast` (303 OK, 28 skip).
 - **Аудит кода 2026-08-21:** полный ревью (72 py-файла + Lua + compose),
   исправлены все критичные/major дефекты №1–17 (стабильность, безопасность,
   корректность) — см. «Ключевые решения». Minor не тронуты.
@@ -487,6 +487,15 @@ VeraVoice. Не трогать без прямого указания владе
   архитектуры (no TurnAnalyzer/IntentResolver фантов) — ядро деградировало
   не из схем, а из монолитной ok/unknown-ветки; хватило детерминированных
   гардиров + измеримого харнесса.
+- **ДИАЛОГИ 2.0, фаза 5 — LLM-driven OK + D2 variety (2026-09-01):**
+  D1 **done**: `_build_history()` заменил жёсткий `Цель ответа: {last_intent}`
+  на мягкий `Контекст разговора: тема — {...}; ты только что сказала «{last_reply}»`.
+  `VERA_SYSTEM_PROMPT` обновлён с мягким контекстом. `_agenda_advance()`
+  остаётся детерминированным. D2 **done**: `_RECENT_SPOKEN` переведён в
+  per-call deque (maxlen=20), глобальный — как backup (maxlen=60). Добавлен
+  `_asked_questions` deque (maxlen=20). Тесты: 303 OK (28 skip).
+  D6 **verified**: fallback в `reply_stream()` — ровно 1 synthesised phrase,
+  double-emit отсутствует.
 
 - **Шаг 5, модуль 2026-08-21 (ESL stream bridge):** создан настоящий
   ESL-медиа-мост `telephony/esl_stream.py` — ES-коннектор (inbound, auth),
