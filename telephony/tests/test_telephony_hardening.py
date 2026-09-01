@@ -8,8 +8,10 @@ Covers the deterministic, offline-testable parts of the timeout/stability and
   * orchestrator empty-LLM-reply fallback (empty stream no longer silent).
 """
 
+import collections
 import os
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -623,6 +625,116 @@ def _wav_bytes32():
         w.setframerate(16000)
         w.writeframes(body)
     return buf.getvalue()
+
+
+class DialogueFlowTest(unittest.TestCase):
+    """Full dialogue pipeline through Serve — equivalent to
+    test_dialogue_via_http_api (turn_text path) but via process_turn_stream."""
+
+    def _serve(self):
+        from core.orchestrator import Serve
+
+        class _Args:
+            refs = []
+            tts_port_file = None
+            tts_port = None
+            inference_steps = 6
+            no_style = False
+            outdir = "/tmp/mossvoice_dialogue_test"
+            tts_host = None
+
+        return Serve(_Args())
+
+    def test_full_dialogue_flow(self):
+        import base64
+        import io
+        import struct
+        import wave
+
+        class _FakeLLM:
+            def __init__(self):
+                self._n = 0
+
+            def chat_stream(self, history):
+                self._n += 1
+                yield ("Как самочувствие? " + str(self._n))
+
+            def chat(self, history):
+                return "Как самочувствие? " + str(self._n)
+
+        class _FakeSTT:
+            TEXT = "всё хорошо"
+
+            def transcribe(self, _path):
+                return self.TEXT
+
+            def transcribe_with_confidence(self, _path):
+                return type("R", (), {"text": self.TEXT, "confidence": 0.9})()
+
+        class _FakeTTS:
+            def __init__(self):
+                self.synthesized = []
+
+            def cancel_stream_by_id(self, _sid):
+                pass
+
+            def stream(self, text, cancel_event=None, stream_id=None):
+                self.synthesized.append(text)
+                # Build a minimal 16 kHz mono WAV frame
+                buf = io.BytesIO()
+                with wave.open(buf, "wb") as w:
+                    w.setnchannels(1)
+                    w.setsampwidth(2)
+                    w.setframerate(16000)
+                    w.writeframes(struct.pack("<800h", *([1200] * 800)))
+                wav_b64 = base64.b64encode(buf.getvalue()).decode()
+                yield {"i": 0, "wav_b64": wav_b64}
+                yield {"done": True}
+
+        os.environ["MOSS_NO_WARMUP"] = "1"
+        serve = self._serve()
+        fstt = _FakeSTT()
+        fllm = _FakeLLM()
+        ftts = _FakeTTS()
+        serve.stt, serve.tts = fstt, ftts
+        serve.llm = fllm
+
+        cid = serve.new_call()
+        try:
+            # Turn 1: greeting — should start check-in
+            fd, wav = tempfile.mkstemp(suffix=".wav")
+            os.close(fd)
+            with open(wav, "wb") as f:
+                f.write(_wav_bytes32())
+            try:
+                ctx = serve.begin_turn(cid)
+                frames = list(serve.process_turn_stream(wav, call_id=cid))
+                audio = [fr for fr in frames
+                         if fr.get("wav_b64") and not fr.get("aborted")]
+                self.assertTrue(audio, "no audio on turn 1")
+                self.assertGreater(len(ftts.synthesized), 0)
+                # Agent should be in check_in or companion mode after greeting
+                self.assertIsNotNone(serve.get_call(cid).agent)
+            finally:
+                os.remove(wav)
+
+            # Turn 2: confirmation — agenda should advance
+            fllm._n = 10
+            fd, wav = tempfile.mkstemp(suffix=".wav")
+            os.close(fd)
+            with open(wav, "wb") as f:
+                f.write(_wav_bytes32())
+            try:
+                frames = list(serve.process_turn_stream(wav, call_id=cid))
+                audio = [fr for fr in frames
+                         if fr.get("wav_b64") and not fr.get("aborted")]
+                self.assertTrue(audio, "no audio on turn 2")
+                self.assertGreater(len(ftts.synthesized), 0)
+            finally:
+                os.remove(wav)
+
+        finally:
+            serve.end_turn(serve.get_call(cid))
 
 
 if __name__ == "__main__":

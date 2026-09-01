@@ -17,8 +17,8 @@ from core.safety_engine import Observation, SafetyEngine  # noqa: E402
 # so a per-instance "last question" memory repeated the same phrases every
 # call. This process-level ring remembers recently SPOKEN canned phrases for
 # the lifetime of the telephony container and steers _pick_not_repeated away
-# from them. maxlen 40 ~= two full calls' worth of canned lines.
-_RECENT_SPOKEN = collections.deque(maxlen=40)
+# from them. maxlen 60 ~= three full calls' worth of canned lines (backup).
+_RECENT_SPOKEN = collections.deque(maxlen=60)
 _RECENT_LOCK = threading.Lock()
 
 
@@ -1437,6 +1437,8 @@ class Agent:
         self._interrupt = None           # read.md #16: pending question-over-check-in
         self._closing_confirm_pending = False   # "Вы прощаетесь?" is pending
         self._closing_confirmed = False  # the close was confirmed once
+        self._recent_spoken = collections.deque(maxlen=20)  # per-call variety ring
+        self._asked_questions = collections.deque(maxlen=20)  # questions asked this call
         # Family-app questions for THIS call (see set_family_questions).
         self.family_questions = []
         # Facts (cross-turn memory) extracted from caller turns — see
@@ -2075,19 +2077,20 @@ class Agent:
 
     def _pick_not_repeated(self, variants):
         """Pick a phrase that differs from the last asked question AND from
-        anything spoken in RECENT calls (process-level ring). Falls back to
-        the full pool when everything was recently used — variety degrades
-        gracefully instead of breaking."""
-        pool = [v for v in variants if v != getattr(self, "_last_question",
-                                                    None)]
+        anything spoken recently (per-call ring, then process-level ring).
+        Falls back to the full pool when everything was recently used —
+        variety degrades gracefully instead of breaking."""
+        last_q = getattr(self, "_last_question", None)
+        pool = [v for v in variants if v != last_q]
         with _RECENT_LOCK:
             fresh = [v for v in (pool or variants)
-                     if v not in _RECENT_SPOKEN]
+                     if v not in self._recent_spoken
+                     and v not in self._asked_questions
+                     and v not in _RECENT_SPOKEN]
             pick = random.choice(fresh or pool or variants)
-            # appendleft: the pick must NOT be the first thing evicted by its
-            # own selection (a full call's worth of lines used to push the
-            # goodbye out of the maxlen window before the next call read it
-            # — so consecutive calls could still get the same close).
+            if last_q:
+                self._asked_questions.appendleft(last_q)
+            self._recent_spoken.appendleft(pick)
             _RECENT_SPOKEN.appendleft(pick)
         return pick
 

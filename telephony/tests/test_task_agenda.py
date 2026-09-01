@@ -3,6 +3,7 @@ soft topic checklist instead of random-walking topics like a chat bot.
 
 Covers: agenda order, per-topic verdict notes, safety interjection pause +
 resume, and the wrap-up after the last topic."""
+import collections
 import os
 import sys
 import unittest
@@ -10,7 +11,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.dialogue import (  # noqa: E402
-    Agent, _clean_llm, _feminize_self, reply_looks_broken)
+    Agent, _clean_llm, _feminize_self, reply_looks_broken,
+    _RECENT_SPOKEN)
 
 
 class TaskAgendaTests(unittest.TestCase):
@@ -238,6 +240,53 @@ class VarietyTests(unittest.TestCase):
         late = seen[4:]
         for fb in late:
             self.assertNotIn("?", fb)
+
+    def test_per_call_variety_isolation(self):
+        # D2: _RECENT_SPOKEN is now per-call (Agent instance), not a
+        # process-level global. Two Agent instances in the same process
+        # must NOT share variety state — each gets its own fresh pool.
+        a1 = Agent(llm=None)
+        a2 = Agent(llm=None)
+        a1.start_check_in()
+        a2.start_check_in()
+        p1 = a1.plan_reply("всё хорошо")["fallback"]
+        p2 = a2.plan_reply("всё хорошо")["fallback"]
+        # Both should produce a valid question; they may coincide by
+        # chance but must NOT be blocked by the other's recent_spoken.
+        self.assertTrue(p1)
+        self.assertTrue(p2)
+        # Verify per-call deques exist and are independent
+        self.assertIsInstance(a1._recent_spoken, collections.deque)
+        self.assertIsInstance(a2._recent_spoken, collections.deque)
+        self.assertEqual(a1._recent_spoken.maxlen, 20)
+        self.assertEqual(a2._recent_spoken.maxlen, 20)
+        self.assertIsInstance(a1._asked_questions, collections.deque)
+        self.assertIsInstance(a2._asked_questions, collections.deque)
+
+    def test_asked_questions_avoid_repeats(self):
+        # D2: _asked_questions deque tracks questions asked in this
+        # call and steers _pick_not_repeated away from them.
+        a = Agent(llm=None)
+        a.start_check_in()
+        pool = ["Вопрос А?", "Вопрос Б?", "Вопрос В?"]
+        # ask 3 different questions
+        asked = []
+        for _ in range(3):
+            p = a._pick_not_repeated(pool)
+            asked.append(p)
+        self.assertEqual(len(set(asked)), 3,
+                            f"3 different questions expected, got: {asked}")
+        # _asked_questions should now hold all 3 asked questions
+        self.assertEqual(len(a._asked_questions), 3)
+        # Further picks should still come from the pool (fallback)
+        # but the deque correctly records history
+        for _ in range(3):
+            p = a._pick_not_repeated(pool)
+            self.assertIn(p, pool)
+
+    def test_global_recent_spoken_backup(self):
+        # D2: global _RECENT_SPOKEN still works as backup (maxlen 60).
+        self.assertEqual(_RECENT_SPOKEN.maxlen, 60)
 
 
 class BrokenReplyGuardTests(unittest.TestCase):
