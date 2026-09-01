@@ -15,6 +15,11 @@ import tempfile
 import unittest
 from unittest import mock
 
+try:
+    from core.orchestrator import Serve
+except Exception:  # noqa: BLE001
+    Serve = None
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, ".."))
 sys.path.insert(0, os.path.join(_HERE, "..", "tg"))
@@ -735,6 +740,84 @@ class DialogueFlowTest(unittest.TestCase):
 
         finally:
             serve.end_turn(serve.get_call(cid))
+
+    @unittest.skipIf(Serve is None, "core.orchestrator.Serve not available")
+    def test_dialogue_via_http_api(self):
+        """Full dialogue through HTTP POST /calls/$CID/turn_text (phase 2.4)."""
+        import json as _json
+        import threading
+        import time
+        import urllib.request
+        import urllib.error
+        from api.http import QuietHTTPServer, Handler
+
+        class _FakeLLM:
+            def __init__(self):
+                self._n = 0
+
+            def chat_stream(self, history):
+                self._n += 1
+                yield ("Ох, как приятно! " + str(self._n))
+
+            def chat(self, history):
+                return "Ох, как приятно! " + str(self._n)
+
+        class _Args:
+            refs = []
+            tts_port_file = None
+            tts_port = None
+            inference_steps = 6
+            no_style = False
+            outdir = "/tmp/mossvoice_dialogue_test"
+            tts_host = None
+            host = "127.0.0.1"
+            port = 0  # OS picks free port
+
+        serve = Serve(_Args())
+        serve.llm = _FakeLLM()
+        httpd = QuietHTTPServer((serve.args.host, 0), Handler)
+        httpd.serve = serve
+        port = httpd.server_address[1]
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+        time.sleep(0.2)
+        base = "http://127.0.0.1:%d" % port
+        try:
+            # Create a call
+            req = urllib.request.Request(base + "/calls",
+                data=_json.dumps({}).encode(),
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req) as resp:
+                body = _json.loads(resp.read())
+            cid = body["call_id"]
+            # Turn 1: greeting
+            req = urllib.request.Request(base + "/calls/" + cid + "/turn_text",
+                data=_json.dumps({"text": "всё хорошо"}).encode(),
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req) as resp:
+                body = _json.loads(resp.read())
+            self.assertTrue(body.get("reply"), "reply should not be empty")
+            self.assertFalse(body.get("finished"), "should not finish after greeting")
+            # Turn 2: topic advance
+            req = urllib.request.Request(base + "/calls/" + cid + "/turn_text",
+                data=_json.dumps({"text": "спала хорошо"}).encode(),
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req) as resp:
+                body = _json.loads(resp.read())
+            self.assertTrue(body.get("reply"), "reply should not be empty")
+            # End call
+            req = urllib.request.Request(base + "/calls/" + cid + "/end",
+                data=_json.dumps({}).encode(),
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req) as resp:
+                body = _json.loads(resp.read())
+            self.assertTrue(body.get("ok"))
+        finally:
+            httpd.shutdown()
+            try:
+                serve.end_turn(serve.get_call(cid))
+            except Exception:  # noqa: BLE001
+                pass
 
 
 if __name__ == "__main__":

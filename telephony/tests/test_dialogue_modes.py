@@ -269,6 +269,34 @@ class ModeMachineTests(unittest.TestCase):
         self.assertTrue(len(combined) > 0, "fallback reply should not be empty")
         self.assertNotIn("нужна ли помощь", combined.lower())
 
+    # ---- Phase 3.2: variety tests ----
+
+    def test_variety_no_repeat(self):
+        """20 confirmation turns → low repeat rate (pool rotation)."""
+        a = self._agent()
+        questions = []
+        for _ in range(20):
+            plan = a.plan_reply("всё хорошо")
+            fb = plan.get("fallback") or ""
+            questions.append(fb)
+        repeats = len(questions) - len(set(questions))
+        self.assertLessEqual(repeats, 3,
+                             f"too many repeats: {repeats}/20")
+
+    def test_variety_within_call(self):
+        """10 turns in one call → questions stay fresh."""
+        a = Agent(llm=None)
+        a.start_check_in()
+        a._last_confidence = 0.9
+        questions = []
+        for _ in range(10):
+            plan = a.plan_reply("всё хорошо")
+            fb = plan.get("fallback") or ""
+            questions.append(fb)
+        repeats = len(questions) - len(set(questions))
+        self.assertLessEqual(repeats, 2,
+                             f"too many repeats in one call: {repeats}/10")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
