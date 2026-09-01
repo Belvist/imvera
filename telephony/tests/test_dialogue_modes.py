@@ -189,6 +189,86 @@ class ModeMachineTests(unittest.TestCase):
         self.assertFalse(a.done)
         self.assertEqual(a.status, "ok")
 
+    # ---- D2: LLM-driven _a_ok (phase 2) ----
+
+    def test_llm_driven_ok_variety(self):
+        """Same confirmation → LLM-formulated replies, not identical canned."""
+        _n = [0]
+        _variants = [
+            "Ох, как приятно! А как сон пошёл?",
+            "Рада это слышать! А давайте поговорим о сне?",
+            "Замечательно! А как прошла ночь?",
+            "Отлично! И что насчёт сна — всё ли хорошо?",
+            "Приятно! Перейдём к вопросу о сне?",
+        ]
+
+        class _MockLLM:
+            def chat_stream(self, history):
+                _n[0] += 1
+                yield _variants[(_n[0] - 1) % len(_variants)]
+
+            def chat(self, history):
+                return _variants[(_n[0] - 1) % len(_variants)]
+
+        a = Agent(llm=_MockLLM())
+        a.start_check_in()
+        a._last_confidence = 0.9
+        replies = []
+        for _ in range(5):
+            plan = a.plan_reply("всё хорошо")
+            streamed = list(a.reply_stream(plan))
+            reply = "".join(streamed) if streamed else plan.get("fallback", "")
+            a.commit_reply(reply)
+            replies.append(reply)
+        # All replies should be different (LLM-driven variety)
+        self.assertEqual(len(set(replies)), len(replies),
+                         "LLM should produce varied answers for same input")
+        # None should be a canned fallback
+        for r in replies:
+            self.assertNotIn("нужна ли помощь", r.lower())
+
+    def test_llm_remembers_topic(self):
+        """LLM reply includes the current topic context."""
+        class _MockLLM:
+            def chat_stream(self, history):
+                # Last user msg should contain the topic context
+                last_user = ""
+                for m in reversed(history):
+                    if m["role"] == "user":
+                        last_user = m["content"]
+                        break
+                # The context note should mention the topic
+                yield "Хорошо! Про сон — а как вы спите?"
+
+            def chat(self, history):
+                return "Хорошо! Про сон — а как вы спите?"
+
+        a = Agent(llm=_MockLLM())
+        a.start_check_in()
+        a._last_confidence = 0.9
+        # Advance to topic "сон"
+        plan = a.plan_reply("всё хорошо")
+        a.reply_stream(plan)
+        a.commit_reply(plan.get("fallback", ""))
+        plan2 = a.plan_reply("всё хорошо")
+        history = a._build_history()
+        topic_in_context = any("сон" in (m.get("content") or "")
+                               for m in history)
+        self.assertTrue(topic_in_context,
+                        "topic should appear in LLM context")
+
+    def test_null_llm_fallback(self):
+        """When LLM is None, reply_stream yields meaningful fallback, not empty."""
+        a = Agent(llm=None)
+        a.start_check_in()
+        a._last_confidence = 0.9
+        plan = a.plan_reply("всё хорошо")
+        replies = list(a.reply_stream(plan))
+        self.assertTrue(replies, "reply_stream should yield something")
+        combined = "".join(replies)
+        self.assertTrue(len(combined) > 0, "fallback reply should not be empty")
+        self.assertNotIn("нужна ли помощь", combined.lower())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

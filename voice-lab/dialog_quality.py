@@ -8,8 +8,11 @@ INTENDED content-first behaviour and the run collects global quality metrics:
     repeat_rate   доля реплик типа «Повторите»/пустых-ходов
     forced_topic  число интентов, форсирующих тему повестки поверх нарратива
     double_q      реплик с >1 вопросительным знаком
-    promises      реплик с обещаниями «вызову/позвоню/...»
+    promise_count реплик с обещаниями «вызову/позвоню/...»
     guards        замен сегментов гвардами (mirror/latin/haluc)
+    intent_repetition_rate доля реплик, где intent повторяет предыдущий
+    question_per_reply_ratio   среднее число вопросов на реплику
+    topic_drift_rate   доля ходов со сдвигом темы назад/вправо
 
 Run:
     python3 voice-lab/dialog_quality.py            # печать сводки, exit 0
@@ -168,6 +171,8 @@ def _plan(agent, text, reason):
 
 
 def _run_turns(agent, turns, problems, metrics):
+    last_intent = None
+    last_topic = None
     for text, reason, checks in turns:
         before_idx = getattr(agent, "_agenda_idx", 0)
         # Qwen3 honest: None -> low (U9). Harness must set high explicitly
@@ -185,13 +190,27 @@ def _run_turns(agent, turns, problems, metrics):
             intent = plan.get("intent") or ""
             if _FORCE_RE.search(intent) and len(text.split()) > 4:
                 metrics["forced_topic"] += 1
+            # intent_repetition_rate: same intent as previous turn
+            if last_intent and intent == last_intent:
+                metrics["intent_repetitions"] += 1
+            last_intent = intent
         # ---- метрики по тексту ----
         if _REPEAT_RE.search(reply):
             metrics["repeat_rate"] += 1
-        if reply.count("?") > 1:
+        n_q = reply.count("?")
+        metrics["total_questions"] += n_q
+        if n_q > 1:
             metrics["double_q"] += 1
         if _PROMISE_RE.search(reply):
-            metrics["promises"] += 1
+            metrics["promise_count"] += 1
+        # topic_drift: topic index changed unexpectedly when it shouldn't
+        current_topic = getattr(agent, "_agenda_idx", 0)
+        if last_topic is not None and current_topic != last_topic:
+            # topic advanced naturally (within agenda) — not a drift
+            # drift = jumped back or skipped
+            if current_topic < last_topic:
+                metrics["topic_drifts"] += 1
+        last_topic = current_topic
         # ---- проверки сценария ----
         for check, arg in checks.items():
             if check == "not_force_topic" and _FORCE_RE.search(
@@ -208,7 +227,7 @@ def _run_turns(agent, turns, problems, metrics):
                 problems.append(f"  {text!r}: нет {arg!r} в {reply!r}")
             if check == "not_contains" and arg.lower() in reply.lower():
                 problems.append(f"  {text!r}: не должно быть {arg!r} в "
-                                 f"{reply!r}")
+                                  f"{reply!r}")
             if check == "not_push" and ("?" in reply or _REPEAT_RE.search(
                     reply)):
                 problems.append(f"  {text!r}: отказ встречен вопросом/"
@@ -236,7 +255,9 @@ def main():
         return 0
 
     metrics = {"repeat_rate": 0, "forced_topic": 0, "double_q": 0,
-               "promises": 0, "guards": 0, "turns": 0}
+               "promise_count": 0, "guards": 0, "turns": 0,
+               "intent_repetitions": 0, "total_questions": 0,
+               "topic_drifts": 0}
     results = []
 
     for name, turns in SCENARIOS:
@@ -260,13 +281,18 @@ def main():
     if total:
         repeat = metrics["repeat_rate"]
     print("\n--- МЕТРИКИ ---")
-    print(f"ходов              {total}")
-    print(f"повторов           {metrics['repeat_rate']}"
+    print(f"ходов                 {total}")
+    print(f"повторов              {metrics['repeat_rate']}"
           f" ({repeat / total:.0%} ходов)")
-    print(f"форсированных тем  {metrics['forced_topic']}")
-    print(f"двойных вопросов   {metrics['double_q']}")
-    print(f"обещаний           {metrics['promises']}")
-    print(f"ходов за гвардами  {metrics['guards']}")
+    print(f"форсированных тем    {metrics['forced_topic']}")
+    print(f"двойных вопросов     {metrics['double_q']}")
+    print(f"обещаний             {metrics['promise_count']}")
+    print(f"ходов за гвардами    {metrics['guards']}")
+    print(f"повтор интентов      {metrics['intent_repetitions']}"
+          f" ({metrics['intent_repetitions'] / total:.0%} ходов)")
+    qpr = (metrics["total_questions"] / total) if total else 0
+    print(f"вопросов на реплику   {qpr:.2f}")
+    print(f"сдвигов темы         {metrics['topic_drifts']}")
 
     failures = [n for n, ok, _ in results if not ok]
     print(f"\nсценариев: {len(results) - len(failures)}/{len(results)} PASS")
