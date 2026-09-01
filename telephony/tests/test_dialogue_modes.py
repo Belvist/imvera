@@ -56,16 +56,16 @@ class ModeMachineTests(unittest.TestCase):
         hist = a._build_history()
         # NEW CONTRACT (prompt-cache): the system prompt is CONSTANT (no
         # per-turn objective — that invalidated the llama.cpp KV cache every
-        # turn, +1-2 s). The objective rides on the CURRENT user message as
+        # turn, +1-2 s). The context note rides on the CURRENT user message as
         # a bracketed note.
         sys_msgs = [m for m in hist if m["role"] == "system"]
         self.assertEqual(len(sys_msgs), 1)
         self.assertNotIn("Цель текущего ответа", sys_msgs[0]["content"])
         user_msgs = [m for m in hist if m["role"] == "user"]
-        self.assertTrue(any("(Цель ответа:" in m["content"]
+        self.assertTrue(any("Контекст разговора:" in m["content"]
                             for m in user_msgs),
-                        "objective must ride on the current user turn")
-        # the objective is a bracketed note, not the message body start
+                        "conversation context must ride on the current user turn")
+        # the context note is a labeled block, not the message body start
         for m in user_msgs:
             self.assertFalse(m["content"].startswith("("))
 
