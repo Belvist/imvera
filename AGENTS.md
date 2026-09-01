@@ -942,3 +942,10 @@ Piper — `~/tts-arena`. Сэмплы голоса — `~/Downloads/imvera_sampl
 - **S4 restart-fs.sh (2026-09-01):** создан scripts/restart-fs.sh —
   целевой `sofia profile zoiper restart` + fallback на полный
   graceful shutdown + foreground start.
+- **S6 voice_runtime деплоен (2026-09-01):** launchd-сервисы
+  com.mossvoice.runtime/nemotron/stt/qwen3-tts все запущены и
+  healthy. Телефония отвечает на 9400/ready. Живой dialogue
+  через HTTP API работает (turn_text). Скрипт запуска:
+  `scripts/run_runtime.sh`.
+- **S7 RTP/медиа:** `sofia status` — zoiper bound to
+  127.0.0.1:5060, RUNNING. SIP-транк работает.
