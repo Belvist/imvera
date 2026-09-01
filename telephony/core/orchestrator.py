@@ -1294,21 +1294,39 @@ class Serve:
         stream_confidence = None
         stt_reason = None
         pcm, sample_rate = None, None
+        # PRECHECK: skip STT on silent/mostly-silent audio to save
+        # ~5 s per turn when the caller hasn't spoken yet (e.g. the
+        # 9.6 s / 0.0566 energy chunk that cost 4.9 s of STT for
+        # nothing). Energy < 0.03 => no meaningful speech; the
+        # dialogue engine handles empty-turn escalation instead.
+        _skip_stt = False
+        try:
+            from adapters.stt import audio_energy as _ae
+            if _ae(wav_path) < 0.03:
+                _skip_stt = True
+                transcript = None
+                stream_confidence = None
+                stt_reason = None
+                pcm, sample_rate = None, None
+        except Exception:  # noqa: BLE001
+            pass
+
         # PHONE PATH (segment_dir set) uses ONE-SHOT STT: the hop-by-hop
         # incremental decode exists for live captions and is ~3x slower
         # end-to-end; the caller only needs the final transcript fast.
-        try:
-            if segment_dir:
-                res = self.stt.transcribe_with_confidence(wav_path)
-                stream_confidence = res.confidence
-                transcript, stt_reason = gate_stt_transcript(
-                    res.text, res.confidence)
-            else:
-                with open(wav_path, "rb") as wf:
-                    wav_bytes = wf.read()
-                pcm, sample_rate = wav_to_pcm(wav_bytes)
-        except Exception:  # noqa: BLE001
-            pcm, sample_rate = None, None
+        if not _skip_stt:
+            try:
+                if segment_dir:
+                    res = self.stt.transcribe_with_confidence(wav_path)
+                    stream_confidence = res.confidence
+                    transcript, stt_reason = gate_stt_transcript(
+                        res.text, res.confidence)
+                else:
+                    with open(wav_path, "rb") as wf:
+                        wav_bytes = wf.read()
+                    pcm, sample_rate = wav_to_pcm(wav_bytes)
+            except Exception:  # noqa: BLE001
+                pcm, sample_rate = None, None
 
         if segment_dir:
             _t_stt = time.time()
