@@ -14,18 +14,18 @@ FS="${MOSS_FS:-/opt/homebrew/bin/freeswitch}"
 FS_CLI="${MOSS_FS_CLI:-fs_cli}"
 PROFILE="${MOSS_FS_PROFILE:-zoiper}"
 
-_got_call() {
-    "$FS_CLI" -x "sofia status" 2>/dev/null | grep -q "sip:$PROFILE" || true
-}
-
 # 1. Targeted profile restart (preserves other profiles + active calls).
 echo "restart-fs: sofia profile $PROFILE restart ..."
 if "$FS_CLI" -x "sofia profile $PROFILE restart" 2>/dev/null; then
-    sleep 1
-    if "$FS_CLI" -x "sofia status" 2>/dev/null | grep -q "sip:$PROFILE.*RUNNING"; then
-        echo "restart-fs: $PROFILE profile restarted successfully"
-        exit 0
-    fi
+    # Wait up to 5 s for the profile to come back RUNNING.
+    for _i in 1 2 3 4 5; do
+        sleep 1
+        if "$FS_CLI" -x "sofia status" 2>/dev/null \
+               | grep -qE "^\\s*${PROFILE}\\s+profile.*RUNNING"; then
+            echo "restart-fs: $PROFILE profile restarted successfully"
+            exit 0
+        fi
+    done
 fi
 echo "restart-fs: targeted restart did not apply — full restart required"
 
