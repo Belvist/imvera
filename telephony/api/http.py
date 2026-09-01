@@ -19,7 +19,7 @@ from core.state import CallBusyError, AdmissionError
 from core.family import (FamilyAccessError, FamilyAuthError,
                           FamilyValidationError)
 from adapters.pg import PgUnavailable
-from adapters.esl import originate_call, kill_call
+from adapters.esl import originate_call, originate_to_number, kill_call
 
 # Upper bound for any request body (audio turn chunks are ~128 KB; JSON
 # turn_stream bodies carry base64 audio — MBs at worst). 8 MB is generous.
@@ -132,8 +132,31 @@ transition:background .2s,transform .1s;width:100%}
 </style></head><body>
 <div class="card">
 <h1>🟢 IMVERA</h1>
-<p>Нажмите кнопку, чтобы позвонить на свой Mac.</p>
-<button class="btn" id="btn" onclick="callMac()">Позвонить на Mac</button>
+<p>Введите номер для звонка (например, 89274685381):</p>
+<input id="phone" type="tel" value="89274685381" style="padding:10px;font-size:1rem;border:1px solid #30363d;border-radius:8px;width:80%;margin-bottom:16px;background:#0d1117;color:#e6edf3;" />
+<br/>
+<button class="btn" id="btn" onclick="callPhone()">Позвонить</button>
+<div class="status" id="status"></div>
+<script>
+async function callPhone(){
+const btn=document.getElementById('btn');
+const st=document.getElementById('status');
+const phone=document.getElementById('phone').value;
+btn.disabled=true;st.className='status';st.textContent='Звоним на ' + phone + '…';
+try{
+const r=await fetch('/call/phone',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({phone})});
+const d=await r.json();
+if(d.ok){st.className='status ok';st.textContent='✅ Звонок на ' + phone + ' идёт! Можете говорить.'}
+else{st.className='status err';st.textContent='❌ '+d.error+(d.hint?' ('+d.hint+')':'')}
+}catch(e){st.className='status err';st.textContent='❌ Ошибка сети: '+e.message}
+btn.disabled=false;
+}
+function callMac(){
+const st=document.getElementById('status');
+st.className='status';st.textContent='Используйте поле выше для звонков на телефоны';
+}
+</script>
 <div class="status" id="status"></div>
 </div>
 <script>
@@ -501,6 +524,23 @@ btn.disabled=false;
         if path == "/turn_stream":
             self._handle_turn_stream()
             return
+        # ---- CALL TO PHONE NUMBER (web button) --------------------------------
+        if path == "/call/phone":
+            payload = self._read_json_body() or {}
+            phone = payload.get("phone", "")
+            if not phone:
+                self._json({"ok": False, "error": "phone number required"}, 400)
+                return
+            result = originate_to_number(phone)
+            if result["ok"]:
+                self._json({"ok": True, "call_id": result["uuid"],
+                            "phone": phone})
+            else:
+                self._json({"ok": False, "error": result["message"],
+                            "hint": "Check SIP gateway credentials in FreeSWITCH"},
+                           status=503)
+            return
+
         # ---- CALL MY MAC (web button) -----------------------------------------
         if path == "/call":
             payload = self._read_json_body() or {}

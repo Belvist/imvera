@@ -119,6 +119,43 @@ def originate_call(extension=None):
         return {"ok": False, "uuid": None, "message": str(e)}
 
 
+
+def originate_to_number(phone_number: str, caller_id: str = "IMVERA") -> dict:
+    """Originate a call to an external phone number via FreeSWITCH ESL.
+
+    Uses sofia/gateway/ru_provider/{number} to route through the configured SIP gateway.
+    Returns dict with 'ok', 'uuid', and 'message' keys.
+    """
+    try:
+        sock = socket.create_connection((ESL_HOST, ESL_PORT), timeout=ESL_TIMEOUT)
+        _auth(sock)
+
+        dest = f"sofia/gateway/ru_provider/{phone_number}"
+        cmd = f'bgapi originate {{ignore_early_media=true,prefix_code=}}{dest} &park()'
+        sock.sendall((cmd + "\n\n").encode())
+        resp = _recv_until(sock, b"\n\n")
+        _drain_events(sock)
+        sock.close()
+
+        text = resp.decode("utf-8", errors="replace")
+        m = re.search(r"Job-UUID:\s*([a-f0-9\-]+)", text)
+        if m:
+            return {"ok": True, "uuid": m.group(1),
+                    "message": f"Call originated to {phone_number}"}
+        err = re.search(r"-ERR\s+(.*)", text)
+        if err:
+            return {"ok": False, "uuid": None,
+                    "message": err.group(1).strip()}
+        return {"ok": False, "uuid": None,
+                "message": f"Unexpected response: {text[:100]}"}
+
+    except socket.timeout:
+        return {"ok": False, "uuid": None, "message": "ESL connection timed out"}
+    except ESLConnectionError as e:
+        return {"ok": False, "uuid": None, "message": str(e)}
+    except Exception as e:
+        return {"ok": False, "uuid": None, "message": str(e)}
+
 def kill_call(uuid_or_ext):
     """Kill a FreeSWITCH call channel.
 
