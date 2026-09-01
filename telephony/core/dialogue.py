@@ -1078,14 +1078,19 @@ VERA_SYSTEM_PROMPT = (
     "    обещать организовать её.\n"
     "  • НЕ спрашивай про адрес, деньги, паспортные данные, местонахождение.\n"
     "---\n"
-    "РЕАЛЬНОСТЬ: у тебя есть контекст предыдущих реплик этой беседы (включая "
-    "то, о чём ты уже спросила) и ИЗВЕСТНЫЕ ФАКТЫ о человеке в скобках "
-    "(ИМЯ, возраст, чем обычно занимается, что беспокоило раньше). "
-    "ПОМНИ о них и ссылайся там где уместно — так разговор станет живым.\n"
-    "Если человек прощается — тепло попрощайся в ответ и закончи. "
-    "Формат: пиши ТОЛЬКО саму фразу-ответ, без кавычек, без заголовков, "
-    "без перевода строк. Голос сразу начнёт её читать."
-)
+     "РЕАЛЬНОСТЬ: у тебя есть контекст предыдущих реплик этой беседы (включая "
+     "то, о чём ты уже спросила) и ИЗВЕСТНЫЕ ФАКТЫ о человеке в скобках "
+     "(ИМЯ, возраст, чем обычно занимается, что беспокоило раньше). "
+     "ПОМНИ о них и ссылайся там где уместно — так разговор станет живым.\n"
+     "КОНТЕКСТ: тема и предыдущий твой вопрос передаются каждый ход — "
+     "используй их как мягкую подсказку, формулируй ответ свободно, "
+     "естественно и заботливо. Не повторяй свои же предыдущие вопросы, "
+     "но если человек дал короткий ответ на контрольный вопрос — "
+     "подтверди его скриптово (да/хорошо/спасибо).\n"
+     "Если человек прощается — тепло попрощайся в ответ и закончи. "
+     "Формат: пиши ТОЛЬКО саму фразу-ответ, без кавычек, без заголовков, "
+     "без перевода строк. Голос сразу начнёт её читать."
+ )
 
 # Conversation scenarios (editable without a rebuild): a plain-text file
 # appended to the system prompt. Missing file -> no scenario block.
@@ -1980,25 +1985,24 @@ class Agent:
         # llm_history (added by plan_reply) — never append it a second time.
         # CONVERSATION FIX B: the reply objective is part of the SYSTEM
         # context, never smuggled in as a fake user message.
-        if self.last_intent:
-            # PROMPT-CACHE: the intent rides on the CURRENT USER message (new
-            # every turn anyway), so the system+history prefix stays stable
-            # and llama.cpp reuses its KV cache. The intent-in-system variant
-            # invalidated the cache every turn (+1-2 s prompt processing).
+        if self.last_intent or getattr(self, "_last_reply", None):
             last = history[-1]
-            note = f"(Цель ответа: {self.last_intent}"
+            topic = self._agenda_topic()
             last_reply = getattr(self, "_last_reply", None)
+            parts = []
+            if topic:
+                parts.append("текущая тема — «{}»".format(topic))
             if last_reply:
-                note += (f"; твой предыдущий ответ был «{last_reply}» — "
-                         "не повторяй его вопрос, спроси о другом")
+                parts.append("ты только что сказала «{}»".format(last_reply))
             facts_note = self._facts_note()
             if facts_note:
-                note += f"; {facts_note}"
-            note += ")"
-            if last["role"] == "user":
-                last["content"] = last["content"] + "\n" + note
-            else:
-                history.append({"role": "user", "content": note})
+                parts.append(facts_note)
+            if parts:
+                note = "Контекст разговора: " + "; ".join(parts) + "."
+                if last["role"] == "user":
+                    last["content"] = last["content"] + "\n" + note
+                else:
+                    history.append({"role": "user", "content": note})
         return history
 
     def _finish(self):
@@ -2045,6 +2049,11 @@ class Agent:
                 out = None
             if out:
                 yield out
+            else:
+                # D6: LLM returned nothing → yield plan fallback
+                fb = plan.get("fallback")
+                if fb:
+                    yield fb
             return
         try:
             for delta in streamer(history):
@@ -2052,6 +2061,10 @@ class Agent:
                     yield delta
         except Exception as e:  # noqa: BLE001
             print(f"[call-agent] reply stream error: {e}", flush=True)
+            # D6: stream error → yield plan fallback
+            fb = plan.get("fallback")
+            if fb:
+                yield fb
 
     def commit_reply(self, reply_text):
         """Record the final assistant reply in the dialogue history (call

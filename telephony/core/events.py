@@ -172,15 +172,16 @@ _SENT_BOUND = re.compile(r"(?<=[.!?…])(?=\S|\s)")
 
 
 def reply_segments(agent, plan, cancel_event=None,
-                   max_segments=2, max_chars=380):
+                    max_segments=2, max_chars=380):
     """Streaming reply producer (REALTIME FIX, Stage 5).
 
     Consumes the LLM's token deltas and yields ONE COMPLETE SENTENCE at a
     time, so the first sentence is synthesised and begins playing while the
     model is still generating the rest of the reply. Output is capped to
     the same rules as ``_clean_llm`` (``max_segments`` sentences, up to
-    ``max_chars`` characters). Yields nothing when the model produces no
-    usable text — the caller then falls back to the canned phrase.
+    ``max_chars`` characters). If the LLM produces no usable text at all
+    (empty stream / exception), falls back to the canned phrase from the
+    plan so the caller never produces silence (D6).
     ``cancel_event`` aborts between segments (barge-in).
 
     DUPLICATE-SEGMENT GUARD (2026-08-29): Qwen sometimes repeats the SAME
