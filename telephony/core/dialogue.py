@@ -10,6 +10,7 @@ import os
 import random
 import re
 import threading
+from dataclasses import dataclass, field
 
 from core.safety_engine import Observation, SafetyEngine  # noqa: E402
 
@@ -1004,6 +1005,79 @@ class DialogueFSM:
         add("*", "*", None, self._a_unhandled, name="any/any (catch-all)")
 
 
+# ============================================================================
+# SKILL.state — compact structured state for the LLM context.
+#
+# Instead of tailing the full dialogue window (llm_history[-8:] ≈
+# 3-6k tokens per call) we pass only a structured snapshot: what
+# matters for the NEXT step.  The raw memory/llm_history lists are
+# still kept for persistence/auditing; the LLM receives the compact
+# form only.  This is the implementation of the SKILL.state
+# approach (Google/Purdue) — ~50× token reduction, same accuracy.
+# ============================================================================
+@dataclass
+class SkillState:
+    """Compact structured state replacing raw conversation history for the LLM."""
+    current_topic: str = ""
+    topic_index: int = 0
+    topics_covered: list[str] = field(default_factory=list)
+    facts: list[str] = field(default_factory=list)
+    last_question: str = ""
+    last_reply: str = ""
+    safety_status: str = "unknown"
+    safety_notes: list[str] = field(default_factory=list)
+    help_pending: bool = False
+    closing_confirmed: bool = False
+    agenda_done: bool = False
+    conversation_summary: str = ""
+
+    def update(self, agent: "Agent") -> None:
+        """Snapshot the Agent's current state into this compact form."""
+        self.current_topic = agent._agenda_topic() or ""
+        self.topic_index = agent._agenda_idx
+        all_topics = agent._agenda_all()
+        self.topics_covered = [a[0] for a in all_topics[: agent._agenda_idx]]
+        self.facts = list(agent.facts)
+        self.last_question = getattr(agent, "_last_question", "") or ""
+        self.last_reply = getattr(agent, "_last_reply", "") or ""
+        self.safety_status = agent.status
+        self.safety_notes = list(agent.notes[-5:])
+        self.help_pending = getattr(agent, "_help_pending", False)
+        self.closing_confirmed = getattr(agent, "_closing_confirmed", False)
+        self.agenda_done = getattr(agent, "_agenda_done", False)
+        self.conversation_summary = self._build_summary(agent)
+
+    def _build_summary(self, agent: "Agent") -> str:
+        """Natural-language summary of what happened so far (no raw turns)."""
+        parts: list[str] = []
+        if self.topics_covered:
+            parts.append(
+                "уже обсуждено: " + ", ".join(self.topics_covered))
+        if self.facts:
+            parts.append("факты: " + "; ".join(self.facts))
+        if self.safety_notes:
+            parts.append("заметки: " + "; ".join(self.safety_notes))
+        return ". ".join(parts)
+
+    def to_context_lines(self) -> list[str]:
+        """Render as context lines injected into the LLM prompt."""
+        lines: list[str] = []
+        if self.current_topic:
+            lines.append("текущая тема — «{}»".format(self.current_topic))
+        if self.topics_covered:
+            lines.append(
+                "уже обсуждено: " + ", ".join(self.topics_covered))
+        if self.last_question:
+            lines.append("последний вопрос: {}".format(self.last_question))
+        if self.last_reply:
+            lines.append("ты только что сказала «{}»".format(self.last_reply))
+        if self.facts:
+            lines.append("факты: " + "; ".join(self.facts))
+        if self.conversation_summary:
+            lines.append(self.conversation_summary)
+        return lines
+
+
 # ----------------------------------------------------------------------------
 # Agent logic — MVERA wellness-check call
 # ----------------------------------------------------------------------------
@@ -1460,6 +1534,10 @@ class Agent:
         # lives in its transition table; the Agent is the extended-state holder.
         self._fsm = DialogueFSM()
         self._init_agenda()
+        # SKILL.state: compact structured state for the LLM context
+        # (replaces passing the full llm_history window).  See module
+        # docstring for the rationale.
+        self.skill_state = SkillState()
 
     # ---- state accessors (delegated to the FSM) --------------------------
     @property
@@ -1606,6 +1684,7 @@ class Agent:
         self.facts = []
         self._fsm.reset(self)
         self._init_agenda()
+        self.skill_state = SkillState()
 
     def start_check_in(self):
         """Service-initiated call: open with the routine greeting question.
@@ -1614,13 +1693,16 @@ class Agent:
         greeting question is forced — the conversation just happens."""
         self._fsm.sm.state = self._fsm.CHECKIN
         self._last_question = MVERA_GREETING
-        # ECHO GUARD (2026-08-23): the recording is a MONO MIX, so the tail of
-        # this greeting ("Здравствуйте!") lands in turn-1 audio and tiny used
+        # ECHO GUARD (2026-08-23): the recording is a MONO MIX, so the
+        # tail of this greeting ("Здравствуйте!") lands in turn-1 audio and tiny used
         # to transcribe it as the CALLER's words. Seeding _last_reply lets
         # orchestrator._looks_like_echo catch that echo on the first turn.
         self._last_reply = MVERA_GREETING
         # the greeting IS agenda topic 0 («самочувствие») on the table
         self._agenda_asked = True
+        # SKILL.state: snapshot the initial state so the first
+        # user turn gets context about the greeting.
+        self.skill_state.update(self)
         return MVERA_GREETING
 
     def observe_confidence(self, confidence):
@@ -1689,7 +1771,9 @@ class Agent:
         # TERMINAL GUARD (S24) is handled inside the FSM (E_DONE -> terminal
         # goodbye): after done, late/duplicate turns cannot mutate the
         # verdict, the history or the engine state.
-        return self._fsm.dispatch(self, caller_text, reason)
+        plan = self._fsm.dispatch(self, caller_text, reason)
+        self.skill_state.update(self)
+        return plan
 
 
     # ---- silence / no-speech ladder (2026-08-25) --------------------------
@@ -1980,43 +2064,26 @@ class Agent:
         # variants degraded Qwen3 (latency up to 3.3-6s, «ты» вместо «вы»,
         # выдуманные детали). The intent lives in the system prompt; the
         # measured end-to-end cost is acceptable (~2.5s to first sound).
+        #
+        # SKILL.state (2026-09-01): instead of tailing the full
+        # llm_history[-8:] window (≈ 3-6k tokens per call) we pass
+        # only a compact structured snapshot — what matters for the
+        # NEXT step.  Raw turns stay in memory/llm_history for
+        # persistence and auditing; the LLM receives the compact
+        # form only.
         system = VERA_SYSTEM_PROMPT
         if VERA_SCENARIOS:
             system = f"{system}\n\n{VERA_SCENARIOS}"
         history = [{"role": "system", "content": system}]
-        # LATENCY TRACE (route step 6) showed the LLM is NOT the bottleneck
-        # (30-85 ms per reply); TTS dominates only under concurrent-call
-        # contention on the single slot. 2026-08-30 UPGRADE: Qwen3-7B has a
-        # much larger KV cache and needs MORE context to stay coherent —
-        # 8 turns (4 full question-answer pairs) gives the model enough
-        # thread to remember check-in status, answered questions, caller's
-        # own factoids. The earlier 4-turn window kept forgetting that the
-        # caller already confirmed "всё хорошо" and repeated the same ask.
-        for role, txt in self.llm_history[-8:]:
-            history.append({"role": "user" if role == "user" else "assistant",
-                            "content": txt})
-        # CONVERSATION FIX A: the current user turn is ALREADY in
-        # llm_history (added by plan_reply) — never append it a second time.
-        # CONVERSATION FIX B: the reply objective is part of the SYSTEM
-        # context, never smuggled in as a fake user message.
-        if self.last_intent or getattr(self, "_last_reply", None):
-            last = history[-1]
-            topic = self._agenda_topic()
-            last_reply = getattr(self, "_last_reply", None)
-            parts = []
-            if topic:
-                parts.append("текущая тема — «{}»".format(topic))
-            if last_reply:
-                parts.append("ты только что сказала «{}»".format(last_reply))
-            facts_note = self._facts_note()
-            if facts_note:
-                parts.append(facts_note)
-            if parts:
-                note = "Контекст разговора: " + "; ".join(parts) + "."
-                if last["role"] == "user":
-                    last["content"] = last["content"] + "\n" + note
-                else:
-                    history.append({"role": "user", "content": note})
+        # SKILL.state context: structured snapshot instead of raw turns.
+        for line in self.skill_state.to_context_lines():
+            history.append({"role": "user", "content": line})
+        # The CURRENT user turn (just appended in dispatch()) — the
+        # skill_state above captures the PREVIOUS assistant reply only.
+        # Read it from memory (not llm_history) to avoid re-sending
+        # raw history; this is the one user message the model needs now.
+        if self.memory:
+            history.append({"role": "user", "content": self.memory[-1]})
         return history
 
     def _finish(self):
@@ -2081,11 +2148,12 @@ class Agent:
                 yield fb
 
     def commit_reply(self, reply_text):
-        """Record the final assistant reply in the dialogue history (call
-        AFTER generation finished; never before it starts)."""
+        """Record the final assistant reply in the dialogue history
+        (call AFTER generation finished; never before it starts)."""
         if reply_text:
             self.llm_history.append(("assistant", reply_text))
             self._last_reply = reply_text
+            self.skill_state.update(self)
 
     def _pick_not_repeated(self, variants):
         """Pick a phrase that differs from the last asked question AND from
