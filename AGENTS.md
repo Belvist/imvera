@@ -928,3 +928,17 @@ Piper — `~/tts-arena`. Сэмплы голоса — `~/Downloads/imvera_sampl
 Порты: Nemotron 9710 · Qwen3-TTS 9711 · STT-хост Qwen3-ASR 9705 · Silero TTS 9600.
 Установка: `pip install transformers accelerate soundfile numpy` (Nemotron) / `pip install qwen-tts`.
 Перед production: A/B Nemotron vs Qwen3-ASR и Qwen3-TTS vs Silero на реальных SIP-записях.
+
+- **ДИАЛОГИ 2.0, фаза 2 (2026-09-01):** VERA_SYSTEM_PROMPT получила
+  явную свободу формулировки ("формулируй ответ СВОБОДНО... не
+  следуй букве букве"). Добавлены 3 теста: test_llm_driven_ok_variety
+  (20 ходов — все ответы уникальны), test_llm_remembers_topic (тема в
+  контексте), test_null_llm_fallback (llm=None → осмысленный fallback).
+  make test-fast = **306 OK (28 skip)**. Коммит 3047103.
+- **ДИАЛОГИ 2.0, фаза 3 (2026-09-01):** voice-lab/dialog_quality.py
+  расширен метриками: intent_repetition_rate, question_per_reply_ratio,
+  promise_count (переименовано из promises), topic_drift_rate.
+  14/14 сценариев PASS.
+- **S4 restart-fs.sh (2026-09-01):** создан scripts/restart-fs.sh —
+  целевой `sofia profile zoiper restart` + fallback на полный
+  graceful shutdown + foreground start.
