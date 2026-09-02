@@ -27,8 +27,9 @@ fi
 exec /app/llama-server \
   --host 0.0.0.0 --port 9500 \
   --model "$MODEL_FILE" \
-  --threads "${MOSS_LLM_THREADS:-10}" \
-  --ctx-size "${MOSS_LLM_CTX:-4096}" \
+  --threads "${MOSS_LLM_THREADS:-8}" \
+  --ctx-size "${MOSS_LLM_CTX:-2048}" \
   --parallel 1 \
-  --mlock --no-mmap \
-  --cache-reuse 256
+  --mlock \
+  --cache-reuse 256 \
+  --cont-batching

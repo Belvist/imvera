@@ -38,6 +38,11 @@ __MACOSX/
 #   python3 scripts/download_models.py
 runtime/models/
 voice-bench/out/
+asset/
+*.safetensors
+voice_runtime/piper_voices/
+voice-bench/arena_out/
+voice-bench/arena_quick/
 
 # agent session artifacts (not for repo)
 .tmp_postfix_check.py

@@ -92,7 +92,14 @@ class StateMachine:
     # ---- matching ------------------------------------------------------
     def _candidates(self, event):
         st = self.state
-        # order: exact (state,event) -> any-state (state,*) -> (any,event) -> any
+        # Priority:
+        #   1. exact local transition
+        #   2. local fallback for any event
+        #   3. cross-cutting any-state event (danger/done/repair)
+        #   4. total-machine catch-all
+        #
+        # A local wildcard is more specific than a global event transition;
+        # cross-cutting events still beat the final catch-all.
         out = []
         for key in ((st, event), (st, "*"), ("*", event), ("*", "*")):
             out.extend(self._index.get(key, ()))

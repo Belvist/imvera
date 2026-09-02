@@ -1,7 +1,6 @@
 """2026-08-29 dialogue regressions (FIXES_PLAN P1):
   * help confirmation: a bare «да» right after a help question must be
-    recorded as help, not bounced into a generic ack (the _help_pending flag
-    was cleared in plan_reply before _plan_mode could consume it);
+    recorded as help, not bounced into a generic ack;
   * closing loop: a second short goodbye after the confirmation question is
     the confirmation itself — no infinite re-asking (the flag was never set);
   * agenda bounds: reaching the agenda-question helper with the agenda
@@ -13,7 +12,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.dialogue import Agent  # noqa: E402
+from core.dialogue import Agent, reply_looks_broken  # noqa: E402
 
 
 def _run(a, *texts):
@@ -189,6 +188,126 @@ class FSMCloseAndRefusalTests(unittest.TestCase):
         p2 = a.plan_reply("", reason="low_conf")  # silence during confirm
         self.assertTrue(p2.get("terminal"))
         self.assertNotIn("хорошо или плохо", (p2.get("fallback") or ""))
+
+
+class DialogueSafetyRecoveryTests(unittest.TestCase):
+    """The dialogue FSM must recover together with the SafetyEngine.
+
+    UNCERTAIN_RED is deliberately recoverable. Keeping the qualitative FSM
+    state at SAFETY_ACTIVE after SafetyEngine returns OK suppresses the LLM
+    for every later turn and makes the rest of the call scripted.
+    """
+
+    def setUp(self):
+        self.agent = Agent(llm=None)
+        self.agent.start_check_in()
+        self.agent._last_confidence = 0.9
+
+    def test_uncertain_red_positive_returns_to_checkin(self):
+        a = self.agent
+        a.plan_reply("плохо")
+        a.plan_reply("не знаю")
+        self.assertEqual(a.mode, "safety_confirm")
+
+        plan = a.plan_reply("всё хорошо")
+
+        self.assertEqual(a.mode, "check_in")
+        self.assertEqual(a.status, "ok")
+        self.assertFalse(plan.get("terminal"))
+
+    def test_uncertain_symptom_stays_in_confirmation_not_active(self):
+        a = self.agent
+        a.plan_reply("плохо")
+
+        plan = a.plan_reply("не знаю")
+
+        self.assertEqual(a.mode, "safety_confirm")
+        self.assertEqual(a.status, "attention")
+        self.assertTrue(a._clearing)
+        self.assertTrue(plan.get("fallback"))
+
+    def test_danger_interrupts_side_question_immediately(self):
+        a = self.agent
+        a.plan_reply("А как у вас дела?")
+        self.assertEqual(a._fsm.state, a._fsm.SIDE_QUESTION)
+
+        plan = a.plan_reply("вызовите скорую")
+
+        self.assertTrue(plan.get("terminal"))
+        self.assertEqual(a._fsm.state, a._fsm.SIDE_QUESTION)
+        self.assertEqual(a.status, "alert")
+        self.assertTrue(a.done)
+        self.assertEqual(a.safety.state, "CONFIRMED_RED")
+
+    def test_question_mark_cannot_bypass_safety_classification(self):
+        for text in (
+                "У меня сильно болит грудь, что делать?",
+                "Я упала, что теперь делать?",
+                "Мне нужен врач, что делать?"):
+            a = Agent(llm=None)
+            a.start_check_in()
+            a._last_confidence = 0.9
+
+            plan = a.plan_reply(text)
+
+            self.assertEqual(a._fsm.state, a._fsm.SAFETY_ACTIVE, text)
+            self.assertEqual(a.status, "alert", text)
+            self.assertTrue(plan.get("terminal"), text)
+            self.assertTrue(plan.get("fallback"), text)
+
+
+class DialoguePhaseExitTests(unittest.TestCase):
+    def setUp(self):
+        self.agent = Agent(llm=None)
+        self.agent.start_check_in()
+        self.agent._last_confidence = 0.9
+
+    def test_positive_after_clarify_returns_to_checkin(self):
+        a = self.agent
+        a.plan_reply("")
+        self.assertEqual(a.mode, "clarify")
+
+        a.plan_reply("всё хорошо")
+
+        self.assertEqual(a.mode, "check_in")
+
+    def test_unrelated_wellness_answer_leaves_help_phase(self):
+        a = self.agent
+        a.plan_reply("мне нужна помощь")
+        self.assertEqual(a._fsm.state, a._fsm.HELP)
+
+        a.plan_reply("спала хорошо")
+
+        self.assertEqual(a.mode, "check_in")
+        self.assertNotEqual(a._fsm.state, a._fsm.HELP)
+
+
+class PromiseGuardTests(unittest.TestCase):
+    def test_first_person_action_promises_are_rejected(self):
+        for text in (
+                "Я позвоню вашей дочери.",
+                "Сейчас вызову врача.",
+                "Я отправлю сообщение родным.",
+                "Я предупрежу близких.",
+                "Я организую помощь."):
+            self.assertTrue(reply_looks_broken(text), text)
+
+    def test_record_only_language_is_allowed(self):
+        self.assertFalse(reply_looks_broken(
+            "Я всё записала, близкие это увидят."))
+
+    def test_blocking_reply_falls_back_before_commit(self):
+        class _PromiseLLM:
+            def chat_stream(self, history):
+                yield "Я позвоню вашей дочери."
+
+        a = Agent(llm=_PromiseLLM())
+        a.start_check_in()
+        a._last_confidence = 0.9
+        reply = a.reply("Сегодня всё хорошо")
+
+        self.assertNotIn("позвоню", reply.lower())
+        self.assertEqual(a._last_reply, reply)
 
 
 if __name__ == "__main__":

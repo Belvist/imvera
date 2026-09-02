@@ -310,6 +310,9 @@ class DataCoreDrillTests(unittest.TestCase):
         serve = Serve(_Args())
         serve.stt = _FakeSilentSTT()
         serve.tts = _FakeTTS()
+        webhook_secret = "test-webhook-secret"
+        old_webhook_secret = os.environ.get("MOSS_WEBHOOK_SECRET")
+        os.environ["MOSS_WEBHOOK_SECRET"] = webhook_secret
         try:
             self.assertTrue(serve.pg_available)
             serve.pg.new_call("c-http")
@@ -326,12 +329,17 @@ class DataCoreDrillTests(unittest.TestCase):
                 "attempt_id": "a-http",
                 "payload": {"duration_seconds": 15},
             }).encode()
+            import hashlib
+            import hmac
+            signature = hmac.new(
+                webhook_secret.encode(), body, hashlib.sha256).hexdigest()
             ok = 0
             for _ in range(100):
                 req = urllib.request.Request(
                     f"http://127.0.0.1:{port}/webhook/provider",
                     data=body,
-                    headers={"Content-Type": "application/json"})
+                    headers={"Content-Type": "application/json",
+                             "X-Moss-Signature": signature})
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     if resp.status == 200:
                         ok += 1
@@ -346,6 +354,10 @@ class DataCoreDrillTests(unittest.TestCase):
                 "WHERE dedup_key='provider:wh-dup'", fetch="val"), 1)
             srv.shutdown()
         finally:
+            if old_webhook_secret is None:
+                os.environ.pop("MOSS_WEBHOOK_SECRET", None)
+            else:
+                os.environ["MOSS_WEBHOOK_SECRET"] = old_webhook_secret
             if serve.outbox is not None:
                 serve.outbox.stop()
             serve.pg.close()

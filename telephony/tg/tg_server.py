@@ -231,16 +231,23 @@ class AgentBridge:
         self.call_id = None
         self._conn_lock = threading.Lock()
         self._active_conns = []          # for abort_all() on barge-in/disconnect
+        self._agent_token = os.environ.get("MOSS_INTERNAL_API_TOKEN", "")
         os.makedirs(tmpdir, exist_ok=True)
 
     def _url(self, path):
         return self.agent_url + path
 
+    def _agent_headers(self):
+        headers = {"Content-Type": "application/json"}
+        if self._agent_token:
+            headers["Authorization"] = "Bearer " + self._agent_token
+        return headers
+
     def _post(self, path, payload, timeout=CONTROL_TIMEOUT):
         req = urllib.request.Request(
             self._url(path),
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=self._agent_headers(),
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -337,7 +344,7 @@ class AgentBridge:
             path = f"/calls/{self.call_id}/turn_stream" if self.call_id \
                 else "/turn_stream"
             conn.request("POST", path, body=body,
-                         headers={"Content-Type": "application/json"})
+                         headers=self._agent_headers())
             resp = conn.getresponse()
             if resp.status >= 400:
                 # e.g. 429 call busy, 404 call gone — surface as an error frame

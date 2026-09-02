@@ -31,13 +31,18 @@
 local agent_host = "127.0.0.1"
 local agent_port = "9400"
 local tmpdir = "/tmp/mossvoice"
+local api_token = os.getenv("MOSS_INTERNAL_API_TOKEN") or ""
+if api_token ~= "" and not string.match(api_token, "^[%w_%-]+$") then
+    session:consoleLog("err", "MOSS_INTERNAL_API_TOKEN has invalid characters\n")
+    api_token = ""
+end
 
 math.randomseed(os.time())
 
 local _seq = 0
 
 function mkdirs()
-    os.execute("mkdir -p " .. tmpdir)
+    os.execute("install -d -m 700 " .. tmpdir)
 end
 
 -- unique temp filename per request. `salt` is an opaque unique-ish extra
@@ -47,6 +52,19 @@ function unique_id(salt)
     local s = (salt and salt ~= "" and "_" .. salt) or ""
     return tostring(os.time()) .. "_" .. tostring(_seq) .. "_"
         .. tostring(math.random(1000000, 9999999)) .. s
+end
+
+-- Put the bearer header in a mode-0600 temp file. Passing a secret in curl's
+-- argv would expose it to local process listings during every request.
+function auth_header_file(salt)
+    if api_token == "" then return nil end
+    local path = tmpdir .. "/auth_" .. unique_id(salt) .. ".txt"
+    local f = io.open(path, "wb")
+    if not f then return nil end
+    f:write("Authorization: Bearer " .. api_token .. "\n")
+    f:close()
+    os.execute("chmod 600 " .. string.format("%q", path))
+    return path
 end
 
 -- HTTP POST with the JSON body passed via a temp file (AUDIT FIX): `-d @file`
@@ -59,12 +77,16 @@ function http_post(path, body, salt)
     if not bf then return nil end
     bf:write(body or "{}")
     bf:close()
+    os.execute("chmod 600 " .. string.format("%q", bodyf))
+    local authf = auth_header_file(salt)
+    local autharg = authf and (" -H @" .. string.format("%q", authf)) or ""
     local cmd = string.format(
-        "curl -s -m 300 -X POST 'http://%s:%s%s' -H 'Content-Type: application/json' -d %s -o %s",
-        agent_host, agent_port, path,
+        "curl -s -m 300 -X POST 'http://%s:%s%s' -H 'Content-Type: application/json'%s -d %s -o %s",
+        agent_host, agent_port, path, autharg,
         "@" .. string.format("%q", bodyf), string.format("%q", fn))
     os.execute(cmd)
     os.remove(bodyf)
+    if authf then os.remove(authf) end
     local f = io.open(fn, "rb")
     if not f then return nil end
     local data = f:read("*a")
@@ -141,11 +163,14 @@ function do_turn_stream(call_id, chunks, segdir)
     bf:write("{\"audio\": " .. audio_json ..
              ", \"segment_dir\": " .. string.format("%q", segdir) .. "}")
     bf:close()
+    os.execute("chmod 600 " .. string.format("%q", bodyf))
+    local authf = auth_header_file(call_id)
+    local autharg = authf and (" -H @" .. string.format("%q", authf)) or ""
     local respf = tmpdir .. "/resp_" .. unique_id(call_id) .. ".json"
     local cmd = string.format(
         "curl -s -m 300 -X POST 'http://%s:%s/calls/%s/turn_stream' " ..
-        "-H 'Content-Type: application/json' -d @'%s' -o '%s' &",
-        agent_host, agent_port, call_id, bodyf, respf)
+        "-H 'Content-Type: application/json'%s -d @'%s' -o '%s' &",
+        agent_host, agent_port, call_id, autharg, bodyf, respf)
     os.execute(cmd)
 
     -- poll & play: seg-NNNN.wav appears atomically (tmp -> rename)
@@ -193,6 +218,7 @@ function do_turn_stream(call_id, chunks, segdir)
         end
     end
     os.remove(bodyf)
+    if authf then os.remove(authf) end
     os.remove(respf)
 
     -- final flags: finished -> the call ends after this turn

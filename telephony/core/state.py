@@ -33,6 +33,8 @@ class CallContext:
     created_at: float = field(default_factory=time.time)
     last_seen: float = field(default_factory=time.time)
     caller_id: str | None = None
+    person_id: str | None = None  # elders.person_id when resolved (consent/E5)
+    household_id: str | None = None
     finished: bool = False
     safety_state: dict = field(default_factory=dict)
     dialogue_state: dict = field(default_factory=dict)

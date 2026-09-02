@@ -158,7 +158,7 @@ class CloudLLMAdapter:
         except Exception:  # noqa: BLE001
             return False
 
-    def chat(self, messages, max_tokens=120, temp=0.65, timeout=60):
+    def chat(self, messages, max_tokens=100, temp=0.65, timeout=15):
         try:
             return self.provider.chat(messages, max_tokens=max_tokens,
                                       temp=temp, timeout=min(timeout, 30))
@@ -166,7 +166,7 @@ class CloudLLMAdapter:
             print(f"[call-agent] cloud LLM error: {e}", flush=True)
             return None
 
-    def chat_stream(self, messages, max_tokens=120, temp=0.65, timeout=60):
+    def chat_stream(self, messages, max_tokens=100, temp=0.65, timeout=15):
         """Yield text deltas from the cloud provider (OpenAI-compatible SSE).
         Never raises: on failure the dialogue layer falls back to scripted
         phrases via the canned `fallback`."""
@@ -198,7 +198,7 @@ class CloudLLMWithFallback:
         except Exception:
             return False
 
-    def chat(self, messages, max_tokens=120, temp=0.65, timeout=60):
+    def chat(self, messages, max_tokens=100, temp=0.65, timeout=15):
         try:
             r = self.provider.chat(messages, max_tokens=max_tokens,
                                    temp=temp, timeout=min(timeout, 30))
@@ -216,7 +216,7 @@ class CloudLLMWithFallback:
             print(f"[call-agent] local LLM fallback error: {e}", flush=True)
             return None
 
-    def chat_stream(self, messages, max_tokens=120, temp=0.65, timeout=60):
+    def chat_stream(self, messages, max_tokens=100, temp=0.65, timeout=15):
         # try cloud first; if it yields nothing, fallback
         got = False
         try:
@@ -232,6 +232,11 @@ class CloudLLMWithFallback:
         except Exception as e:  # noqa: BLE001
             print(f"[call-agent] cloud LLM stream error → fallback: {e}",
                   flush=True)
+            if got:
+                # PARTIAL-STREAM GUARD: deltas may already be playing over
+                # TTS. Starting a fresh local answer now would make Vera say
+                # two overlapping/duplicated replies.
+                return
         # fallback to local stream
         try:
             yield from self.local.chat_stream(

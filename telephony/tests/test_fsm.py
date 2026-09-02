@@ -74,6 +74,21 @@ class StateMachineContractTests(unittest.TestCase):
         m.handle(c, "stop")         # stop from running via *
         self.assertEqual(c.log[n:], [("go", "go"), ("stop", "stop")])
 
+    def test_local_wildcard_is_more_specific_than_global_event(self):
+        """A state's own "*" fallback is more specific than a global event.
+
+        This keeps an active side-question's resume/reask logic intact while
+        the total-machine catch-all still guarantees every event is handled.
+        """
+        m, c = self._machine(), _Ctx()
+        m.add("idle", "*", "idle",
+              action=lambda ctx, event: ctx.log.append(("local", event)))
+
+        m.handle(c, "panic")
+
+        self.assertEqual(m.state, "idle")
+        self.assertEqual(c.log, [("local", "panic")])
+
 
 class DialogueMachineTotalityTests(unittest.TestCase):
     """The dialogue FSM must be TOTAL: every (state, event) pair either has

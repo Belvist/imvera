@@ -52,13 +52,21 @@ class PgRecorder:
             "audio_key": audio_key, "turn_id": turn_id,
         })
 
-    def finalize(self, verdict, confidence=None, notes=None):
-        """Persist the verdict + close the session (Phase 2)."""
+    def finalize(self, verdict, confidence=None, notes=None,
+                 family_status=None, reasons=None, summary_for_family=None,
+                 scenario_version=None, safety_rules_version=None,
+                 technical_error=None):
+        """Persist the verdict + close the session (Phase 2 / E2)."""
         self._guard()
         if self.call is None:
             return
-        self.pg.finalize_call(self.call["id"], verdict,
-                              confidence=confidence, notes=notes)
+        self.pg.finalize_call(
+            self.call["id"], verdict, confidence=confidence, notes=notes,
+            family_status=family_status, reasons=reasons,
+            summary_for_family=summary_for_family,
+            scenario_version=scenario_version,
+            safety_rules_version=safety_rules_version,
+            technical_error=technical_error)
 
     def summary_path(self):
         """Summary is derived in Postgres/UI; kept for interface parity."""

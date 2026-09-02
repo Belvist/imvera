@@ -44,6 +44,25 @@ PYEOF
   export MOSS_ESL_PASSWORD="$PW"
 fi
 
+# --- agent control-plane token -----------------------------------------------
+# Docker Compose reads docker/.env automatically; the host VoiceRuntime does
+# not. Load only this exact key (never source the whole file as shell code).
+if [ -z "${MOSS_INTERNAL_API_TOKEN:-}" ] && [ -r "$REPO/docker/.env" ]; then
+  API_TOKEN="$(python3 - "$REPO/docker/.env" <<'PYEOF'
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as config:
+    match = re.search(r"^MOSS_INTERNAL_API_TOKEN=(\S+)\s*$",
+                      config.read(), re.M)
+print(match.group(1) if match else "")
+PYEOF
+)"
+  if [ -n "$API_TOKEN" ]; then
+    export MOSS_INTERNAL_API_TOKEN="$API_TOKEN"
+  fi
+fi
+
 # --- interpreter --------------------------------------------------------------
 PY="${MOSS_PY:-}"
 if [ -z "$PY" ]; then

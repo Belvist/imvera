@@ -11,7 +11,7 @@ import time
 
 ESL_HOST = os.environ.get("MOSS_ESL_HOST", "host.docker.internal")
 ESL_PORT = int(os.environ.get("MOSS_ESL_PORT", "8021"))
-ESL_PASSWORD = os.environ.get("MOSS_ESL_PASSWORD", "c864dbaf8393145ff78cdd1dd1fc9fdc")
+ESL_PASSWORD = os.environ.get("MOSS_ESL_PASSWORD", "")
 ESL_TIMEOUT = int(os.environ.get("MOSS_ESL_TIMEOUT", "10"))
 
 DEFAULT_EXTENSION = os.environ.get("MOSS_CALL_EXTENSION", "brian")
@@ -47,6 +47,9 @@ def _drain_events(sock, timeout=0.3):
 
 
 def _auth(sock):
+    if not ESL_PASSWORD:
+        raise ESLConnectionError(
+            "MOSS_ESL_PASSWORD is required; no insecure default is available")
     data = _recv_until(sock, b"\n\n")
     welcome = data.split(b"\n")[0].decode("utf-8", errors="replace")
     if "auth/request" not in welcome:
@@ -56,6 +59,47 @@ def _auth(sock):
     text = data.decode("utf-8", errors="replace")
     if "+OK" not in text and "accepted" not in text:
         raise ESLConnectionError(f"ESL auth failed: {text[:100]}")
+
+
+def _connect():
+    """Open and authenticate one ESL socket without leaking failed sockets."""
+    if not ESL_PASSWORD:
+        raise ESLConnectionError(
+            "MOSS_ESL_PASSWORD is required; no insecure default is available")
+    sock = socket.create_connection((ESL_HOST, ESL_PORT), timeout=ESL_TIMEOUT)
+    try:
+        _auth(sock)
+        return sock
+    except Exception:
+        sock.close()
+        raise
+
+
+def _safe_extension(value):
+    """Return a command-safe SIP extension or raise a validation error."""
+    text = str(value or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", text):
+        raise ESLConnectionError("invalid SIP extension")
+    return text
+
+
+def _safe_phone(value):
+    """Normalize an E.164-like phone number without ESL metacharacters."""
+    text = re.sub(r"[\s()\-]", "", str(value or ""))
+    if text.startswith("+"):
+        digits = text[1:]
+    else:
+        digits = text
+    if not digits.isdigit() or not 7 <= len(digits) <= 15:
+        raise ESLConnectionError("invalid phone number")
+    return digits
+
+
+def _safe_channel_id(value):
+    text = str(value or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", text):
+        raise ESLConnectionError("invalid call identifier")
+    return text
 
 
 def _get_channel_uuid_by_dest(sock):
@@ -87,10 +131,12 @@ def originate_call(extension=None):
 
     Returns dict with 'ok', 'uuid', and 'message' keys.
     """
-    ext = extension or DEFAULT_EXTENSION
     try:
-        sock = socket.create_connection((ESL_HOST, ESL_PORT), timeout=ESL_TIMEOUT)
-        _auth(sock)
+        ext = _safe_extension(extension or DEFAULT_EXTENSION)
+    except ESLConnectionError as e:
+        return {"ok": False, "uuid": None, "message": str(e)}
+    try:
+        sock = _connect()
 
         dest = f"user/{ext}"
         cmd = f"bgapi originate {{ignore_early_media=true}}{dest} &park()"
@@ -127,8 +173,8 @@ def originate_to_number(phone_number: str, caller_id: str = "IMVERA") -> dict:
     Returns dict with 'ok', 'uuid', and 'message' keys.
     """
     try:
-        sock = socket.create_connection((ESL_HOST, ESL_PORT), timeout=ESL_TIMEOUT)
-        _auth(sock)
+        phone_number = _safe_phone(phone_number)
+        sock = _connect()
 
         dest = f"sofia/gateway/ru_provider/{phone_number}"
         cmd = f'bgapi originate {{ignore_early_media=true,prefix_code=}}{dest} &park()'
@@ -164,9 +210,9 @@ def kill_call(uuid_or_ext):
     extension number (e.g. '1000').
     """
     try:
+        uuid_or_ext = _safe_channel_id(uuid_or_ext)
         # First try direct uuid_kill
-        sock = socket.create_connection((ESL_HOST, ESL_PORT), timeout=ESL_TIMEOUT)
-        _auth(sock)
+        sock = _connect()
         cmd = f"api uuid_kill {uuid_or_ext}"
         sock.sendall((cmd + "\n\n").encode())
         data = _recv_until(sock, b"\n\n")
@@ -178,14 +224,12 @@ def kill_call(uuid_or_ext):
             return {"ok": True, "message": f"Killed call {uuid_or_ext}"}
 
         # Fallback: search for Zoiper channel by destination
-        sock = socket.create_connection((ESL_HOST, ESL_PORT), timeout=ESL_TIMEOUT)
-        _auth(sock)
+        sock = _connect()
         channel_uuid = _get_channel_uuid_by_dest(sock)
         sock.close()
 
         if channel_uuid:
-            sock = socket.create_connection((ESL_HOST, ESL_PORT), timeout=ESL_TIMEOUT)
-            _auth(sock)
+            sock = _connect()
             cmd = f"api uuid_kill {channel_uuid}"
             sock.sendall((cmd + "\n\n").encode())
             data = _recv_until(sock, b"\n\n")

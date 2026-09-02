@@ -39,10 +39,15 @@ class IncidentEngine:
     # ------------------------------------------------------------------ #
     # Opening: RED verdict -> incident + escalation plan.
 
-    def maybe_open(self, call_id, verdict, notes=None, contacts=None):
+    def maybe_open(self, call_id, verdict, notes=None, contacts=None,
+                   household_id=None, elder_id=None):
         """Create an incident from a RED verdict (idempotent). Returns the
         incident id, or None when the verdict is not RED."""
-        if verdict not in INCIDENT_VERDICTS:
+        # Accept family_status "red" as well as legacy agent "alert".
+        v = (verdict or "").strip().lower()
+        if v in ("red", "alert"):
+            v = "alert"
+        if v not in INCIDENT_VERDICTS:
             return None
         # Idempotency by CALL, not by random id: outbox delivery is
         # at-least-once, so a replayed call.result (crash between dispatch
@@ -53,22 +58,53 @@ class IncidentEngine:
         if existing is not None:
             return existing["id"]
         incident_id = "inc-" + uuid.uuid4().hex[:12]
-        self.pg.open_incident(incident_id, call_id, verdict,
+        self.pg.open_incident(incident_id, call_id, v,
                               notes=notes or [])
-        self._build_plan(incident_id, contacts=contacts)
+        if household_id and hasattr(self.pg, "set_incident_household"):
+            try:
+                self.pg.set_incident_household(
+                    incident_id, household_id, elder_id=elder_id)
+            except Exception:  # noqa: BLE001
+                pass
+        if contacts is None:
+            contacts = self._load_contacts(household_id=household_id,
+                                           elder_id=elder_id)
+        planned = self._build_plan(incident_id, contacts=contacts)
         self.pg.audit("incident.opened", "safety_engine", "incident",
-                      incident_id, {"call_id": call_id, "verdict": verdict,
+                      incident_id, {"call_id": call_id, "verdict": v,
                                     "notes": notes or []})
+        if planned == 0:
+            # Never manufacture a fake "telegram/unset" action: it looks
+            # routable but can never notify anyone. Keep the incident open,
+            # mark it escalated, and leave an explicit durable audit event for
+            # operator alerting/observability.
+            self.pg.bump_escalation(incident_id)
+            self.pg.audit("incident.notify.unroutable", "delivery",
+                          "incident", incident_id,
+                          {"reason": "no configured family contact"})
         first = self.pg.next_queued_action(incident_id)
         if first is not None:
             self._enqueue_deliver(incident_id, first["id"])
         return incident_id
 
+    def _load_contacts(self, household_id=None, elder_id=None):
+        """Load contacts from PG when available; else empty → ENV fallback."""
+        rows = []
+        if household_id and hasattr(self.pg, "list_contacts"):
+            try:
+                rows = self.pg.list_contacts(household_id,
+                                             elder_id=elder_id) or []
+            except Exception:  # noqa: BLE001
+                rows = []
+        if hasattr(self.router, "contacts_dict"):
+            return self.router.contacts_dict(rows)
+        return {}
+
     def _build_plan(self, incident_id, contacts=None):
         """Ordered escalation plan from configured channels + contacts.
 
-        Contacts come from the family/household domain (Phase 4); until then
-        env defaults are used (MOSS_FAMILY_CHAT_ID / MOSS_FAMILY_PHONE).
+        Contacts: dict channel→address from household DB (E6) or ENV
+        defaults (MOSS_FAMILY_CHAT_ID / MOSS_FAMILY_PHONE).
         """
         contacts = contacts or {}
         order = 0
@@ -78,8 +114,7 @@ class IncidentEngine:
                 continue
             self.pg.queue_action(incident_id, ch, contact, order)
             order += 1
-        if order == 0:
-            self.pg.queue_action(incident_id, "telegram", "unset", order)
+        return order
 
     def _enqueue_deliver(self, incident_id, action_id):
         self.pg.enqueue(

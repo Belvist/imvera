@@ -197,11 +197,15 @@ class PgStore:
             (call_id,), fetch="all")
 
     def finalize_call(self, call_id, verdict, confidence=None, notes=None,
+                      family_status=None, reasons=None,
+                      summary_for_family=None, scenario_version=None,
+                      safety_rules_version=None, technical_error=None,
                       conn=None):
         """Upsert the verdict and mark the session complete atomically."""
         notes = notes or []
         if isinstance(notes, str):
             notes = [notes]
+        reasons = reasons if reasons is not None else []
         own = conn is None
         if own:
             conn = self._conn()
@@ -209,23 +213,147 @@ class PgStore:
             with conn.cursor() as cur:
                 cur.execute(
                     "INSERT INTO call_results (call_id, verdict, confidence, "
-                    "notes) VALUES (%s, %s, %s, %s) "
+                    "notes, family_status, reasons, summary_for_family, "
+                    "scenario_version, safety_rules_version, technical_error) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                     "ON CONFLICT (call_id) DO UPDATE SET "
                     "verdict = EXCLUDED.verdict, "
                     "confidence = EXCLUDED.confidence, "
-                    "notes = EXCLUDED.notes",
+                    "notes = EXCLUDED.notes, "
+                    "family_status = EXCLUDED.family_status, "
+                    "reasons = EXCLUDED.reasons, "
+                    "summary_for_family = EXCLUDED.summary_for_family, "
+                    "scenario_version = EXCLUDED.scenario_version, "
+                    "safety_rules_version = EXCLUDED.safety_rules_version, "
+                    "technical_error = EXCLUDED.technical_error",
                     (call_id, verdict, confidence,
-                     json.dumps(notes, ensure_ascii=False)))
+                     json.dumps(notes, ensure_ascii=False),
+                     family_status,
+                     json.dumps(reasons, ensure_ascii=False),
+                     summary_for_family, scenario_version,
+                     safety_rules_version, technical_error))
+                result_payload = {
+                    "verdict": verdict,
+                    "notes": notes,
+                    "family_status": family_status,
+                    "summary_for_family": summary_for_family,
+                }
                 cur.execute(
                     "UPDATE call_sessions SET status = 'completed', "
                     "ended_at = now(), result = %s WHERE call_id = %s",
-                    (json.dumps({"verdict": verdict, "notes": notes},
-                                ensure_ascii=False), call_id))
+                    (json.dumps(result_payload, ensure_ascii=False), call_id))
             if own:
                 conn.commit()
         finally:
             if own:
                 self.release(conn)
+
+    # ------------------------------------------------------------------ #
+    # Consent (ROADMAP E3)
+    # ------------------------------------------------------------------ #
+    def grant_consent(self, consent_id, person_id, method="voice",
+                      kind="voice", proof_audio_key=None, proof_hash=None,
+                      script_version=None, household_id=None, conn=None):
+        self._exec(
+            "INSERT INTO consents (id, person_id, kind, method, "
+            "proof_audio_key, proof_hash, script_version, household_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+            "ON CONFLICT (id) DO NOTHING",
+            (consent_id, person_id, kind, method, proof_audio_key,
+             proof_hash, script_version, household_id), conn=conn)
+
+    def revoke_consent(self, person_id, reason=None, conn=None):
+        """Revoke all active consents for person. Returns rowcount."""
+        return self._exec(
+            "UPDATE consents SET revoked_at = now(), "
+            "scope = COALESCE(scope, '{}'::jsonb) || %s::jsonb "
+            "WHERE person_id = %s AND revoked_at IS NULL",
+            (json.dumps({"revoke_reason": reason or ""}, ensure_ascii=False),
+             person_id),
+            conn=conn)
+
+    def has_active_consent(self, person_id):
+        row = self._exec(
+            "SELECT 1 FROM consents WHERE person_id = %s "
+            "AND revoked_at IS NULL LIMIT 1",
+            (person_id,), fetch="one")
+        return row is not None
+
+    def export_consent_proof(self, person_id):
+        return self._exec(
+            "SELECT id, person_id, kind, method, proof_audio_key, "
+            "proof_hash, script_version, household_id, granted_at, "
+            "revoked_at, scope FROM consents WHERE person_id = %s "
+            "ORDER BY granted_at DESC",
+            (person_id,), fetch="all") or []
+
+    def list_contacts(self, household_id, elder_id=None):
+        """Escalation contacts for a household (ROADMAP E6)."""
+        if elder_id:
+            rows = self._exec(
+                "SELECT id, household_id, elder_id, user_id, channel, "
+                "address, escalate_order, label FROM contacts "
+                "WHERE household_id = %s AND "
+                "(elder_id IS NULL OR elder_id = %s) "
+                "ORDER BY escalate_order ASC, id ASC",
+                (household_id, elder_id), fetch="all")
+        else:
+            rows = self._exec(
+                "SELECT id, household_id, elder_id, user_id, channel, "
+                "address, escalate_order, label FROM contacts "
+                "WHERE household_id = %s "
+                "ORDER BY escalate_order ASC, id ASC",
+                (household_id,), fetch="all")
+        return rows or []
+
+    def set_incident_household(self, incident_id, household_id,
+                               elder_id=None, conn=None):
+        self._exec(
+            "UPDATE incidents SET household_id = %s, "
+            "elder_id = COALESCE(%s, elder_id) WHERE id = %s",
+            (household_id, elder_id, incident_id), conn=conn)
+
+    def household_for_call(self, call_id):
+        """Best-effort resolve household/elder for a finished call."""
+        row = self._exec(
+            "SELECT household_id, caller_id FROM call_sessions "
+            "WHERE call_id = %s",
+            (call_id,), fetch="one")
+        if not row:
+            return None, None
+        hid = row.get("household_id")
+        elder_id = None
+        phone = row.get("caller_id")
+        if phone:
+            elder = self.family_elder_by_phone(
+                "".join(c for c in str(phone) if c.isdigit()) or phone)
+            if elder:
+                elder_id = elder.get("person_id")
+                hid = hid or elder.get("household_id")
+        return hid, elder_id
+
+    def insert_no_contact_result(self, call_id, elder_id, notes=None,
+                                 summary=None):
+        """Synthetic call_results row when dialer exhausts attempts (E5)."""
+        from core.call_status import family_fields_for_finalize
+        family = family_fields_for_finalize(
+            "no_contact", notes=notes or ["недозвон"], no_contact=True)
+        if summary:
+            family["summary_for_family"] = summary
+        # Ensure a session shell exists for FK/history joins.
+        self._exec(
+            "INSERT INTO call_sessions (call_id, status, caller_id) "
+            "VALUES (%s, 'completed', %s) ON CONFLICT (call_id) DO NOTHING",
+            (call_id, elder_id))
+        self.finalize_call(
+            call_id, "no_contact",
+            notes=notes or ["недозвон"],
+            family_status=family["family_status"],
+            reasons=family["reasons"],
+            summary_for_family=family["summary_for_family"],
+            scenario_version=family["scenario_version"],
+            safety_rules_version=family["safety_rules_version"],
+            technical_error=None)
 
     # ------------------------------------------------------------------ #
     # Call attempts: guarded state machine
@@ -526,8 +654,9 @@ class PgStore:
 
     def family_elder_by_phone(self, phone_digits):
         return self._exec(
-            "SELECT person_id, phone, display_name FROM elders "
-            "WHERE phone = %s", (phone_digits,), fetch="one")
+            "SELECT person_id, phone, display_name, household_id "
+            "FROM elders WHERE phone = %s",
+            (phone_digits,), fetch="one")
 
     def family_has_access(self, account_id, person_id):
         return bool(self._exec(
@@ -578,6 +707,30 @@ class PgStore:
             "WHERE e.phone = %s ORDER BY q.created_at DESC LIMIT %s",
             (phone_digits, limit), fetch="all")
         return rows or []
+
+    # ------------------------------------------------------------------ #
+    # Schedules + call_jobs (ROADMAP E5). Heavy lease/enqueue logic lives
+    # in core/scheduler.py; these are thin reads used by product/API.
+    # ------------------------------------------------------------------ #
+    def list_enabled_schedules(self, elder_id=None):
+        if elder_id:
+            return self._exec(
+                "SELECT * FROM schedules WHERE enabled AND NOT paused "
+                "AND elder_id = %s",
+                (elder_id,), fetch="all") or []
+        return self._exec(
+            "SELECT * FROM schedules WHERE enabled AND NOT paused",
+            fetch="all") or []
+
+    def get_schedule(self, schedule_id):
+        return self._exec(
+            "SELECT * FROM schedules WHERE id = %s",
+            (schedule_id,), fetch="one")
+
+    def get_call_job(self, job_id):
+        return self._exec(
+            "SELECT * FROM call_jobs WHERE id = %s",
+            (job_id,), fetch="one")
 
     # ------------------------------------------------------------------ #
     # Retention (read.md rev-3 G8): TTL-driven, guaranteed purge.

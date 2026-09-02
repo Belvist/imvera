@@ -205,7 +205,7 @@ def clean_transcript(text):
 #
 # The conversation was previously ONE ~400-line if/elif chain in
 # Agent.plan_reply with state scattered across ad-hoc flags (_interrupt,
-# _closing_confirm_pending, _help_pending, _agenda_asked, ...). That is what
+# _closing_confirm_pending, _agenda_asked, ...). That is what
 # cracked: every new rule ("давай пока" should close, "нет спасибо" must be
 # honoured) required threading more flags through more branches.
 #
@@ -361,12 +361,6 @@ class DialogueFSM:
                 r"как вы сказали|ещё раз|еще раз|скажите снова|"
                 r"не расслышал|не понял)", text.lower()):
             return self.E_REPAIR, verdict
-        # question-over-check-in (read.md #16) is decided BEFORE the safety
-        # verdict, matching the pre-rework order. While answering a side
-        # question the caller may keep asking — stay in the answer phase.
-        if self.sm.state in (self.CHECKIN, self.SIDE_QUESTION) \
-                and _is_text_question(text):
-            return self.E_QUESTION, verdict
         if verdict is None:
             verdict = agent.safety.observe(Observation(
                 question=getattr(agent, "_last_question", None),
@@ -379,6 +373,20 @@ class DialogueFSM:
             return self.E_FROZEN, verdict
         if kind == "confirmed_red":
             return self.E_DANGER, verdict
+        # question-over-check-in (read.md #16) is a temporary interrupt, but
+        # a question mark is conversational structure, never a safety bypass.
+        # Confirmed danger above always wins; possible/uncertain danger below
+        # keeps the interrupt and asks the safety follow-up in place.
+        if self.sm.state in (self.CHECKIN, self.SIDE_QUESTION) \
+                and _is_text_question(text):
+            return self.E_QUESTION, verdict
+        # A possible/uncertain danger inside an active side question keeps the
+        # interrupt and asks the safety follow-up in place.
+        if self.sm.state == self.SIDE_QUESTION:
+            if kind == "possible_red":
+                return self.E_SYMPTOM, verdict
+            if kind == "uncertain_red":
+                return self.E_UNCERTAIN, verdict
         # GOODBYE_CONFIRM first: while we are asking «Вы прощаетесь?» ANY
         # reply is a confirmation/denial (a «нет спасибо» there means "I am
         # NOT leaving" — continue), never an offer-refusal that would arm
@@ -430,9 +438,10 @@ class DialogueFSM:
             return self.E_GOODBYE, verdict
         if self.sm.state == self.GOODBYE_CONFIRM and text:
             return self.E_CONFIRM, verdict
-        # help confirmation window: consume the armed flag once per turn
-        help_was_pending = getattr(agent, "_help_pending", False)
-        agent._help_pending = False
+        # Help confirmation is represented by the qualitative HELP state.
+        # Classification must be pure with respect to dialogue extended state;
+        # actions/transitions own all mutations.
+        help_was_pending = self.sm.state == self.HELP
         if not self._hello_back_done and text and re.search(
                 r"(здравствуйте|добрый день|доброе утро|добрый вечер)",
                 text.lower()):
@@ -486,6 +495,18 @@ class DialogueFSM:
     @staticmethod
     def _g_clearing(ctx, ev):
         return bool(getattr(ctx, "_clearing", False))
+
+    @staticmethod
+    def _g_uncertain_symptom(ctx, ev):
+        """Keep an unresolved symptom in the confirmation loop.
+
+        This is a pure guard: deciding the qualitative destination belongs
+        in the transition table, while `_a_uncertain` only builds the reply
+        and updates extended state.
+        """
+        text = getattr(ctx._fsm, "_last_text", "") or ""
+        return bool(getattr(ctx, "_clearing", False)
+                    or ctx._mentions_symptom(text))
 
     # ---- actions (mutate extended state, return the reply plan) --------
     def _a_unhandled(self, agent, ev):
@@ -607,7 +628,6 @@ class DialogueFSM:
     def _a_help(self, agent, ev):
         agent._note("требуется помощь")
         agent.status = "attention"
-        agent._help_pending = True
         q = agent._ask_help()
         agent._last_question = q
         return {"text": agent._fsm._last_text,
@@ -619,7 +639,6 @@ class DialogueFSM:
     def _a_worry(self, agent, ev):
         agent._note("беспокойство о близких")
         agent.status = "attention"
-        agent._help_pending = True
         q = agent._pick_not_repeated(agent.WORRY_FOLLOWUPS)
         agent._last_question = q
         return {"text": agent._fsm._last_text,
@@ -950,11 +969,20 @@ class DialogueFSM:
         add("*", self.E_REPAIR, None, self._a_repair, name="any/repair")
         # presence confirmation on the silence ladder -> return to the topic
         add("*", self.E_HEARD, self.CHECKIN, self._a_heard, name="any/heard")
-        # side-question interrupt (caller asks during the wellness walk)
+        # A caller question during check-in is a temporary interrupt, but it
+        # must never bypass safety classification. Confirmed danger is
+        # handled by the global transition below; possible/uncertain danger
+        # keeps the interrupt and asks the safety follow-up in place.
         add(self.CHECKIN, self.E_QUESTION, self.SIDE_QUESTION,
             self._a_side_start, name="checkin/question")
         add(self.SIDE_QUESTION, self.E_QUESTION, self.SIDE_QUESTION,
             self._a_side_answer, name="side/question")
+        add(self.SIDE_QUESTION, self.E_DANGER, self.SIDE_QUESTION,
+            self._a_danger, name="side/danger")
+        add(self.SIDE_QUESTION, self.E_SYMPTOM, self.SIDE_QUESTION,
+            self._a_symptom, name="side/symptom")
+        add(self.SIDE_QUESTION, self.E_UNCERTAIN, self.SIDE_QUESTION,
+            self._a_uncertain, name="side/uncertain")
         # an EMPTY turn mid-interrupt: the silence ladder runs but the
         # interrupt STAYS ACTIVE in "answer" phase (position untouched) —
         # the next real reply resumes it. Must precede the catch-all reask.
@@ -986,13 +1014,32 @@ class DialogueFSM:
         add("*", self.E_WORRY, self.WORRY, self._a_worry, name="any/worry")
         add("*", self.E_SYMPTOM, self.SAFETY_CONFIRM, self._a_symptom,
             name="any/symptom")
+        add("*", self.E_UNCERTAIN, self.SAFETY_CONFIRM, self._a_uncertain,
+            guard=self._g_uncertain_symptom,
+            name="any/uncertain-symptom")
         add("*", self.E_UNCERTAIN, self.SAFETY_ACTIVE, self._a_uncertain,
             name="any/uncertain")
         add(self.SAFETY_CONFIRM, self.E_OK, self.CHECKIN, self._a_false_alarm,
             guard=self._g_clearing, name="safetyconfirm/ok-clears")
+        # SafetyEngine deliberately allows UNCERTAIN_RED (unconfirmed concern)
+        # to recover on a clear positive. Mirror that recovery in the dialogue
+        # state or reply_stream keeps suppressing the LLM as "safety_active"
+        # for the remainder of the call.
+        add(self.SAFETY_ACTIVE, self.E_OK, self.CHECKIN, self._a_false_alarm,
+            name="safetyactive/ok-clears")
         add("*", self.E_EMPTY, self.CLARIFY, self._a_empty, name="any/empty")
         add("*", self.E_GREETING, self.CHECKIN, self._a_greeting,
             name="any/greeting")
+        # Temporary dialogue phases must have explicit exits on an ordinary
+        # usable answer. Leaving dst=None here made CLARIFY/HELP/WORRY sticky
+        # even though the caller had already returned to the wellness agenda.
+        for state in (self.CLARIFY, self.HELP, self.WORRY):
+            add(state, self.E_OK, self.CHECKIN, self._a_ok,
+                name="%s/ok-resumes" % state.lower())
+            add(state, self.E_UNKNOWN, self.CHECKIN, self._a_unknown,
+                name="%s/unknown-resumes" % state.lower())
+        add(self.HELP, self.E_REFUSE, self.CHECKIN, self._a_refuse,
+            name="help/refuse-resumes")
         # ordinary turns
         add("*", self.E_OK, None, self._a_ok, name="any/ok")
         add("*", self.E_UNKNOWN, None, self._a_unknown, name="any/unknown")
@@ -1042,7 +1089,7 @@ class SkillState:
         self.last_reply = getattr(agent, "_last_reply", "") or ""
         self.safety_status = agent.status
         self.safety_notes = list(agent.notes[-5:])
-        self.help_pending = getattr(agent, "_help_pending", False)
+        self.help_pending = agent._fsm.state == agent._fsm.HELP
         self.closing_confirmed = getattr(agent, "_closing_confirmed", False)
         self.agenda_done = getattr(agent, "_agenda_done", False)
         self.conversation_summary = self._build_summary(agent)
@@ -1120,63 +1167,17 @@ VERA_LLM_ID = os.environ.get("MOSS_LLM_MODEL", "mlx-community/Qwen3-7B-8bit")
 VERA_LLM_URL = os.environ.get("MOSS_LLM_URL", "http://127.0.0.1:9500")
 
 VERA_SYSTEM_PROMPT = (
-    "Ты — Вера, молодая тёплая русскоязычная ассистентка службы Имвэра (IMVERA). "
-    "Звонишь пожилому человеку чтобы поинтересоваться самочувствием и просто "
-    "побеседовать. Говоришь по телефону, голосом, без экрана.\n"
-    "---\n"
-    "ТВОЙ ХАРАКТЕР: живая, естественная, как родная внучка по телефону. Не "
-    "робот, не оператор. Не формальна, не читает по бумажке. Сочувствуешь, "
-    "поддерживаешь, улыбаешься в голос. Реагируешь на то, что человек "
-    "сказал — ПРЕЖДЕ чем задавать новый вопрос.\n"
-    "СТРУКТУРА ОТВЕТА (одна-две короткие фразы, общий размер — не длиннее "
-    "трёх секунд речи вслух):\n"
-    "  1. СНАЧАЛА короткий естественный отклик на сказанное человеком.\n"
-    "     • хорошие новости — «Как здорово!», «Рада слышать», «Вот это да!»\n"
-    "     • жалобы/боль — «Ой, как неприятно», «Понимаю, сочувствую»,\n"
-    "       «Держитесь, я рядом», «Побольше отдыхайте»\n"
-    "     • обычное — «Поняла», «Хорошо», «Ага, я вас слушаю», «Интересно»\n"
-    "     • спрашивают у тебя — «Спасибо, у меня всё отлично! А как вы?»\n"
-    "  2. ПОТОМ ОДИН уточняющий вопрос ПО ТЕМЕ сказанного — чтобы разговор "
-    "продолжался, а не спрашивал «как самочувствие» ради галочки. Если "
-    "человек сказал про сон — про сон; про внуков — про внуков; про таблетки "
-    "— про таблетки. НЕ перескакивай на другую тему.\n"
-    "Вопросов в каждом ответе — ТОЧНО ОДИН (не больше, не меньше). "
-    "Исключение: если человек явно прощается или жалуется на острую боль — "
-    "тогда вопрос можно не задавать.\n"
-    "---\n"
-    "О СЕБЕ: всегда женский род. «Я рада», «я поняла», «я записала», «я "
-    "сочувствую». Обращайся к человеку НА «ВЫ», с уважением, но без "
-    "формальности. Никогда на «ты».\n"
-    "ЧТО НЕЛЬЗЯ:\n"
-    "  • НЕ выдумывай ничего. Не говори «вы сегодня отлично выглядите» — "
-    "    ты же по телефону, не видишь человека.\n"
-    "  • НЕ пересказывай его же слова своими фразами («Правильно, вы сказали "
-    "    что голова болит...») — это выглядит как эхо.\n"
-    "  • НЕ задавай один и тот же вопрос дважды за разговор. То, о чём "
-    "    уже спрашивала и получила ответ — не спрашивай снова.\n"
-    "  • НЕ давай медицинских советов и диагнозов («попейте парацетамол»). "
-    "    При жалобах: «Понимаю, записываю. Как давно это беспокоит?»\n"
-    "  • НИКОГДА не обещай позвонить/вызвать/отправить. Максимум: «Я записала "
-    "    — ваши близкие это увидят». Можно спросить, нужна ли помощь, но не "
-    "    обещать организовать её.\n"
-    "  • НЕ спрашивай про адрес, деньги, паспортные данные, местонахождение.\n"
-    "---\n"
-     "РЕАЛЬНОСТЬ: у тебя есть контекст предыдущих реплик этой беседы (включая "
-     "то, о чём ты уже спросила) и ИЗВЕСТНЫЕ ФАКТЫ о человеке в скобках "
-     "(ИМЯ, возраст, чем обычно занимается, что беспокоило раньше). "
-     "ПОМНИ о них и ссылайся там где уместно — так разговор станет живым.\n"
-"КОНТЕКСТ: тема и предыдущий твой вопрос передаются каждый ход — "
-"используй их как мягкую подсказку. ТЫ формулируешь ответ "
-"СВОБОДНО: не следуй букве букве тому, что написано в скобках "
-"выше — твоя цель — быть тёплой, заботливой, задать один вопрос "
-"по теме. Если тему можно закрыть — закрой мягко. Если нужно "
-"уточнить — уточни. Не повторяй свои же предыдущие вопросы, "
-"но если человек дал короткий ответ на контрольный вопрос — "
-"подтверди его скриптово (да/хорошо/спасибо).\n"
-"Если человек прощается — тепло попрощайся в ответ и закончи. "
-"Формат: пиши ТОЛЬКО саму фразу-ответ, без кавычек, без заголовков, "
-"без перевода строк. Голос сразу начнёт её читать."
- )
+    "Ты — Вера, внучка-ассистент Имвэра. Звонишь пожилому по телефону (голос, без экрана). "
+    "Живая, тёплая, как родная. Не робот.\n"
+    "ОТВЕТ: 1-2 короткие фразы (≤3 сек речи). СНАЧАЛА отклик на сказанное, "
+    "ПОТОМ ОДИН вопрос по той же теме. Вопросов — ровно один.\n"
+    "Стиль: женский род, «вы». Реагируй на ЧТО СКАЗАЛ человек ПРЕЖДЕ нового вопроса.\n"
+    "НЕЛЬЗЯ: выдумки (не видишь человека), эхо слов, повтор вопросов, "
+    "медсоветы, обещания позвонить/вызвать, спрашивать адрес/деньги/паспорт.\n"
+    "Факты и контекст передаются — используй. Формулируй свободно, не по букве.\n"
+    "Если тема закрыта — закрой. Если прощается — тепло попрощайся.\n"
+    "Формат: ТОЛЬКО фраза-ответ, без кавычек и заголовков."
+)
 
 # Conversation scenarios (editable without a rebuild): a plain-text file
 # appended to the system prompt. Missing file -> no scenario block.
@@ -1291,15 +1292,21 @@ _MIRROR_OPENERS_RE = re.compile(
     r"вы спрашиваете|как приятно,?\s+что вы|рад[аы]?,?\s+что вы "
     r"(хорошо|нормально))", re.I)
 _LATIN_WORD_RE = re.compile(r"[A-Za-z]")
+_ACTION_PROMISE_RE = re.compile(
+    r"\b(позвоню|вызову|отправлю|предупрежу|передам|организую|"
+    r"закажу|сообщу|напишу)\b", re.I)
 
 
 def reply_looks_broken(reply: str) -> bool:
     """True when the segment must be replaced by a scripted line BEFORE it
-    is spoken: mirror-parroting of the caller's words or code-switching to
-    english ('Как вы спать tonight' — seen live 2026-08-23)."""
+    is spoken: mirror-parroting, code-switching to English, or a first-person
+    promise to perform an external action. Vera may only record information;
+    she cannot truthfully promise that she called, sent, or organised help."""
     if not reply:
         return False
     if _MIRROR_OPENERS_RE.match(reply):
+        return True
+    if _ACTION_PROMISE_RE.search(reply):
         return True
     letters = _LATIN_WORD_RE.findall(reply)
     # a couple of stray latin chars can slip; a real english word cannot
@@ -1519,7 +1526,6 @@ class Agent:
         self._last_question = None       # what we asked before this turn
         self._last_confidence = None     # STT confidence (None = unknown → low per U9)
         self._clearing = False           # control question pending: OK clears
-        self._help_pending = False       # a help question is on the table
         self._interrupt = None           # read.md #16: pending question-over-check-in
         self._closing_confirm_pending = False   # "Вы прощаетесь?" is pending
         self._closing_confirmed = False  # the close was confirmed once
@@ -1530,6 +1536,13 @@ class Agent:
         # Facts (cross-turn memory) extracted from caller turns — see
         # _extract_facts/_facts_note.
         self.facts = []
+        # ROADMAP E2/E3: hard service failure + consent-call flags.
+        self.technical_error = None
+        self._consent_call = False
+        self._consent_empty = 0
+        self._consent_granted = False
+        self._consent_declined = False
+        self._dtmf_offered = False
         # The formal dialogue state machine (2026-08-29): all control flow
         # lives in its transition table; the Agent is the extended-state holder.
         self._fsm = DialogueFSM()
@@ -1676,7 +1689,6 @@ class Agent:
         self._last_question = None
         self._last_confidence = None
         self._clearing = False
-        self._help_pending = False
         self._interrupt = None
         self._closing_confirm_pending = False
         self._closing_confirmed = False
@@ -1715,6 +1727,54 @@ class Agent:
         if text not in self.notes:
             self.notes.append(text)
 
+    def mark_technical(self, reason):
+        """Record a hard STT/LLM/TTS failure. Forces TECHNICAL on finalize."""
+        reason = str(reason or "unknown").strip() or "unknown"
+        self.technical_error = reason
+        # Never leave a green-looking status after a hard failure.
+        if self.status in ("ok", "unknown", ""):
+            self.status = "technical"
+        self._note(f"ошибка: {reason}")
+
+    def start_consent_call(self):
+        """First-call consent mode (ROADMAP E3). ESL wiring optional."""
+        from core.consent import CONSENT_VOICE_SCRIPT
+        self._consent_call = True
+        self._consent_empty = 0
+        self._consent_granted = False
+        self._consent_declined = False
+        self.status = "unknown"
+        return CONSENT_VOICE_SCRIPT
+
+    def handle_dtmf(self, digit):
+        """Stub-ready DTMF entry (full ESL wiring later). Returns a plan."""
+        from core.dtmf import interpret_dtmf, DtmfEvent
+        from core.consent import (
+            classify_consent_reply, apply_consent_outcome,
+        )
+
+        if self._consent_call:
+            decision, reply = classify_consent_reply(
+                digit=digit, empty_turns=self._consent_empty)
+            apply_consent_outcome(
+                self, decision,
+                pg=getattr(self, "_pg", None),
+                person_id=getattr(self, "_person_id", None),
+                method="dtmf",
+                household_id=getattr(self, "_household_id", None))
+            if decision == "granted":
+                self._finish()
+            return {"text": f"dtmf:{digit}", "intent": None,
+                    "fallback": reply, "terminal": decision != "pending"}
+
+        ev = interpret_dtmf(digit)
+        if ev is DtmfEvent.OK:
+            return self.plan_reply("да, всё хорошо")
+        if ev is DtmfEvent.HELP:
+            return self.plan_reply("нужна помощь")
+        return {"text": f"dtmf:{digit}", "intent": None,
+                "fallback": "Нажмите 1 если всё хорошо, или 2 если нужна помощь."}
+
     # ---- reply planning + token streaming (REALTIME FIX, Stage 4+5) -------
     # plan_reply() runs the DETERMINISTIC mode machine only (fast, under the
     # per-call lock): it decides the mode, the verdict notes, the intent for
@@ -1746,6 +1806,8 @@ class Agent:
             "echo"     transcript looked like Vera's own words
             "stt_uncertain" mid-confidence speech — ask caller to confirm
         Only the empty-turn ladder reads it (see _silence_flow)."""
+        if self._consent_call and not self.done:
+            return self._plan_consent_reply(caller_text, reason)
         # ECHO MUTE (2026-08-25): an "echo" reason means the transcript IS
         # Vera's own words coming back from the mixed recording. Blank the
         # text so it never pollutes memory/history and route it through the
@@ -1775,6 +1837,32 @@ class Agent:
         self.skill_state.update(self)
         return plan
 
+    def _plan_consent_reply(self, caller_text, reason=None):
+        from core.consent import (
+            classify_consent_reply, apply_consent_outcome, CONSENT_VOICE_SCRIPT,
+        )
+        text = (caller_text or "").strip()
+        if not text or reason in ("low_conf", "echo", "stt_uncertain"):
+            self._consent_empty += 1
+            empty = self._consent_empty
+            text_for_class = ""
+        else:
+            empty = self._consent_empty
+            text_for_class = text
+        decision, reply = classify_consent_reply(
+            text=text_for_class, empty_turns=empty)
+        apply_consent_outcome(
+            self, decision,
+            pg=getattr(self, "_pg", None),
+            person_id=getattr(self, "_person_id", None),
+            method="voice",
+            household_id=getattr(self, "_household_id", None))
+        if decision == "pending" and empty == 0 and not text_for_class:
+            reply = CONSENT_VOICE_SCRIPT
+        if decision != "pending":
+            self._finish()
+        return {"text": caller_text or "", "intent": None,
+                "fallback": reply, "terminal": decision != "pending"}
 
     # ---- silence / no-speech ladder (2026-08-25) --------------------------
     # The 1st empty turn is NO LONGER a blind «Повторите» — it asks a
@@ -1795,7 +1883,10 @@ class Agent:
           * None /      real silence OR speech below the confidence gate —
                         "low_conf"    the yes/no anchor on the FIRST empty turn;
                         next steps go up the calm tapered ladder.
+                        After 2+ empty turns offer DTMF 1/2 (ROADMAP E2).
         """
+        from core.dtmf import DTMF_PROMPT, should_offer_dtmf
+
         if reason == "echo":
             n = self._fsm._echo_turns + 1
             self._fsm._echo_turns = n
@@ -1810,12 +1901,16 @@ class Agent:
         self._fsm._empty_turns = n
         if n == 1:
             fb = self._pick_not_repeated(self.ANCHORS)
-        elif n == 2:
-            fb = "Алло, вы меня слышите?"
-        elif n == 3:
-            fb = "Если вам удобно, скажите «да» — я рядом и вас слушаю."
-        elif n == 4:
-            fb = "Я подожду. Скажите, когда будете готовы говорить."
+        elif should_offer_dtmf(n):
+            self._dtmf_offered = True
+            if n == 2:
+                fb = DTMF_PROMPT
+            elif n == 3:
+                fb = "Если вам удобно — " + DTMF_PROMPT
+            elif n == 4:
+                fb = "Я подожду. " + DTMF_PROMPT
+            else:
+                fb = self._pick_not_repeated(self.QUIET_HOLDS)
         else:
             fb = self._pick_not_repeated(self.QUIET_HOLDS)
         return {"text": caller_text, "intent": None, "fallback": fb}
@@ -2075,9 +2170,11 @@ class Agent:
         if VERA_SCENARIOS:
             system = f"{system}\n\n{VERA_SCENARIOS}"
         history = [{"role": "system", "content": system}]
-        # SKILL.state context: structured snapshot instead of raw turns.
+        # SKILL.state context: structured snapshot as assistant knowledge.
+        # Using "assistant" role so the model treats these as its own
+        # context/memory, not as things the user said.
         for line in self.skill_state.to_context_lines():
-            history.append({"role": "user", "content": line})
+            history.append({"role": "assistant", "content": line})
         # The CURRENT user turn (just appended in dispatch()) — the
         # skill_state above captures the PREVIOUS assistant reply only.
         # Read it from memory (not llm_history) to avoid re-sending
@@ -2263,8 +2360,10 @@ class Agent:
             chunks.append(delta)
         reply = _clean_llm(("".join(chunks)).strip()) if plan.get("intent") \
             else ("".join(chunks)).strip()
-        if plan.get("intent") and (not reply or len(reply) < 4
-                                   or len(reply) > 400):
+        if plan.get("intent") and (
+                not reply or len(reply) < 4 or len(reply) > 400
+                or reply_looks_hallucinated(reply, text or "")
+                or reply_looks_broken(reply)):
             reply = plan["fallback"]
         self.commit_reply(reply)
         return reply

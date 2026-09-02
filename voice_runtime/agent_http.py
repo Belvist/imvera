@@ -30,6 +30,7 @@ import urllib.request
 
 AGENT_HOST = os.environ.get("MOSS_AGENT_HOST", "127.0.0.1")
 AGENT_PORT = int(os.environ.get("MOSS_AGENT_PORT", "9400"))
+AGENT_TOKEN = os.environ.get("MOSS_INTERNAL_API_TOKEN", "")
 
 
 class AgentError(RuntimeError):
@@ -37,16 +38,25 @@ class AgentError(RuntimeError):
 
 
 class AgentClient:
-    def __init__(self, host=AGENT_HOST, port=AGENT_PORT, timeout=30):
+    def __init__(self, host=AGENT_HOST, port=AGENT_PORT, timeout=30,
+                 token=AGENT_TOKEN):
         self.base = "http://%s:%d" % (host, port)
         self.timeout = timeout
+        self.token = token
+
+    def _headers(self, content_type=False):
+        headers = {}
+        if content_type:
+            headers["Content-Type"] = "application/json"
+        if self.token:
+            headers["Authorization"] = "Bearer " + self.token
+        return headers
 
     def _request(self, method, path, body=None, timeout=None):
         data = None
-        headers = {}
+        headers = self._headers(content_type=body is not None)
         if body is not None:
             data = json.dumps(body).encode("utf-8")
-            headers["Content-Type"] = "application/json"
         req = urllib.request.Request(self.base + path, data=data,
                                      headers=headers, method=method)
         with urllib.request.urlopen(req, timeout=timeout or self.timeout) as r:
@@ -71,8 +81,7 @@ class AgentClient:
         body; a mid-stream disconnect surfaces as an AgentError."""
         data = json.dumps(body).encode("utf-8")
         req = urllib.request.Request(self.base + path, data=data,
-                                     headers={"Content-Type":
-                                              "application/json"},
+                                     headers=self._headers(content_type=True),
                                      method="POST")
         try:
             with urllib.request.urlopen(

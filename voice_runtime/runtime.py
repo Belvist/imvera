@@ -36,7 +36,7 @@ except ImportError:  # run as a plain script (python3 voice_runtime/...py)
 # G1 cutover 2026-08-30 (P5): live dialplan now routes 4400 -> park
 # (mossvoice.xml), Lua retired. Runtime drives both 4400 (production) and
 # 4402 (loopback self-test). See scripts/install_freeswitch.sh.
-RUNTIME_EXTENSIONS = re.compile(r"^44(0[012])$")
+RUNTIME_EXTENSIONS = re.compile(r"^44(00|02)$")
 SERVICE_NAME = "mossvoice-runtime"
 PROTOCOL_VERSION = 1
 TICK = 0.05            # main-loop cadence (s): tap drain + segment poll

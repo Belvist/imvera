@@ -47,13 +47,15 @@ def _load():
     if _model is not None or _warm_error is not None:
         return
     try:
-        from transformers import AutoModelForSpeechSeq2Seq, \
-            AutoProcessor
+        import transformers
+        from transformers import Nemotron3_5AsrForRNNT, \
+            Nemotron3_5AsrProcessor
         import torch  # noqa: F811
         print("[nemotron] loading %s ..." % MODEL_ID,
               flush=True)
-        _processor = AutoProcessor.from_pretrained(MODEL_ID)
-        _model = AutoModelForSpeechSeq2Seq.from_pretrained(
+        _processor = Nemotron3_5AsrProcessor.from_pretrained(
+            MODEL_ID)
+        _model = Nemotron3_5AsrForRNNT.from_pretrained(
             MODEL_ID, torch_dtype=torch.float16)
         device = "cuda" if torch.cuda.is_available() else "cpu"
         _model = _model.to(device)
@@ -61,8 +63,20 @@ def _load():
         _warm = True
         print("[nemotron] ready on %s" % device, flush=True)
     except Exception as e:
-        _warm_error = e
-        print("[nemotron] load failed: %s" % e, flush=True)
+        err = str(e)
+        if "nemotron3_5_asr" in err or \
+                "Unrecognized configuration class" in err:
+            _warm_error = ("Nemotron ASR needs a Transformers "
+                             "version that registers the "
+                             "nemotron3_5_asr architecture. "
+                             "Current: %s. Fix: pip install "
+                             "transformers>=5.0 in a dedicated "
+                             "env, or use NVIDIA's nemotron-asr "
+                             "package." % transformers.__version__)
+        else:
+            _warm_error = err
+        print("[nemotron] load failed: %s" % _warm_error,
+              flush=True)
 
 
 def _transcribe(wav_bytes):
@@ -75,15 +89,26 @@ def _transcribe(wav_bytes):
     import numpy as np
     samples = np.frombuffer(raw, dtype=np.int16).astype(
         np.float32) / 32768.0
+    if rate != 16000:
+        import librosa
+        samples = librosa.resample(
+            samples, orig_sr=rate, target_sr=16000)
+        rate = 16000
     if _processor is None:
         raise RuntimeError("processor not loaded")
     inputs = _processor(samples, sampling_rate=rate,
-                        return_tensors="np")
+                        return_tensors="pt")
     import torch  # noqa: F811
+    device = next(_model.parameters()).device
+    inputs = {
+        k: v.to(device, dtype=torch.float16)
+          if hasattr(v, "to") and v.is_floating_point() else
+          v.to(device) if hasattr(v, "to") else v
+        for k, v in inputs.items()}
     with torch.no_grad():
         generated = _model.generate(**inputs)
     text = _processor.batch_decode(
-        generated, skip_special_tokens=True)[0]
+        generated.sequences, skip_special_tokens=True)[0]
     dur_s = float(len(samples)) / rate
     return {"text": text.strip(), "dur_s": round(dur_s, 3)}
 

@@ -1,0 +1,59 @@
+# Production-ish compose overlay (ROADMAP E9)
+# Usage: docker compose -f docker/docker-compose.yml -f deploy/compose.prod.yml up -d
+#
+# Bind only loopback or private network; put Caddy/Traefik in front for TLS.
+
+services:
+  telephony:
+    restart: unless-stopped
+    environment:
+      MOSS_MAX_CONCURRENT_CALLS: ${MOSS_MAX_CONCURRENT_CALLS:-8}
+      MOSS_INTERNAL_API_TOKEN: ${MOSS_INTERNAL_API_TOKEN:?set token}
+      MOSS_WEBHOOK_SECRET: ${MOSS_WEBHOOK_SECRET:?set secret}
+      MOSS_JWT_SECRET: ${MOSS_JWT_SECRET:-}
+      MOSS_OUTBOUND_KILL_SWITCH: ${MOSS_OUTBOUND_KILL_SWITCH:-0}
+      MOSS_INCIDENT_CHANNELS: ${MOSS_INCIDENT_CHANNELS:-push,telegram,sms,call}
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  workflow:
+    restart: unless-stopped
+
+  retention:
+    restart: unless-stopped
+
+  product:
+    image: mossvoice/backend:latest
+    profiles: ["product"]
+    command: ["python", "-m", "product"]
+    working_dir: /app/telephony
+    ports:
+      - "127.0.0.1:9480:9480"
+    environment:
+      MOSS_PG_URL: ${MOSS_PG_URL}
+      MOSS_REDIS_URL: ${MOSS_REDIS_URL:-}
+      MOSS_PRODUCT_PORT: "9480"
+      MOSS_JWT_SECRET: ${MOSS_JWT_SECRET:?set jwt secret}
+      MOSS_OTP_DEV_CODE: ${MOSS_OTP_DEV_CODE:-}
+      MOSS_INTERNAL_API_TOKEN: ${MOSS_INTERNAL_API_TOKEN}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["edge"]
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

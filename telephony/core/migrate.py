@@ -55,9 +55,23 @@ def apply_migrations(pg_url=None, migrations_dir=None, log=print):
                 " applied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
         conn.commit()
         done = _applied_versions(conn)
+        # ROADMAP Э0: 002_family_questions.sql renamed to 003_*. If an old
+        # DB already recorded the legacy filename, treat 003 as applied.
+        _ALIASES = {
+            "003_family_questions.sql": "002_family_questions.sql",
+        }
         for path in _migration_files(migrations_dir):
             version = os.path.basename(path)
-            if version in done:
+            legacy = _ALIASES.get(version)
+            if version in done or (legacy and legacy in done):
+                if legacy and legacy in done and version not in done:
+                    # Record the new name so future runs stay clean.
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "INSERT INTO schema_migrations (version) "
+                            "VALUES (%s) ON CONFLICT DO NOTHING",
+                            (version,))
+                    log(f"[migrate] aliased {legacy} -> {version}")
                 continue
             with open(path, encoding="utf-8") as f:
                 sql = f.read()

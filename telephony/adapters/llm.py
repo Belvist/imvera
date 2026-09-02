@@ -9,6 +9,7 @@ stalls when the LLM is unavailable.
 import http.client
 import json
 import os
+import re
 import threading
 import time
 import urllib.parse
@@ -176,7 +177,7 @@ class LLMClient:
             return None
         return cleaned
 
-    def chat(self, messages, max_tokens=220, temp=0.75, timeout=60):
+    def chat(self, messages, max_tokens=100, temp=0.65, timeout=15):
         """Generate a reply for chat-style ``messages``. Returns cleaned text
         or None on any failure/timeout. Tries the remote/cloud LLM first;
         in-process generation is a staging-only tier
@@ -192,10 +193,11 @@ class LLMClient:
             out = self._chat_local(messages, max_tokens, temp, timeout)
         return self._finish_chat(out)
 
-    def _chat_openai(self, messages, max_tokens=100, temp=0.65, timeout=60):
+    def _chat_openai(self, messages, max_tokens=100, temp=0.65, timeout=15):
         """OpenAI-compatible non-streaming chat (llama.cpp llama-server)."""
         if time.time() < self._remote_down_until:
             return None
+        conn = None
         try:
             parts = urllib.parse.urlsplit(VERA_LLM_URL.strip("/"))
             conn = http.client.HTTPConnection(
@@ -204,9 +206,13 @@ class LLMClient:
             body = {"model": "local", "messages": messages,
                     "max_tokens": max_tokens, "temperature": temp,
                     "stream": False,
-                    # Qwen3 spends the whole token budget on <think> unless
-                    # thinking is disabled -> empty replies -> canned fallback
-                    # (looked like the agent "forgot" the conversation).
+                    # Qwen3 on llama.cpp ignores enable_thinking alone:
+                    # it burns the whole budget on </think> reasoning tokens and
+                    # returns empty content -> ~9 s silence then scripted
+                    # fallback.  thinking:false + stop at double-newline
+                    # forces real content.
+                    "thinking": False,
+                    "stop": ["\n\n"],
                     "chat_template_kwargs": {"enable_thinking": False}}
             conn.request("POST", (parts.path or "") + "/v1/chat/completions",
                          body=json.dumps(body).encode(),
@@ -214,22 +220,31 @@ class LLMClient:
             resp = conn.getresponse()
             if resp.status != 200:
                 resp.read(256)
-                conn.close()
                 raise ConnectionError(f"HTTP {resp.status}")
             data = json.loads(resp.read().decode())
-            conn.close()
             out = data["choices"][0]["message"]["content"]
+            if not out:
+                rc = data["choices"][0]["message"].get("reasoning_content", "")
+                rc = re.sub(r"^</think>\s*", "", rc).strip()
+                if rc:
+                    out = rc
+            self._remote_failures = 0
+            self._remote_down_until = 0.0
+            return out
         except Exception as e:  # noqa: BLE001
             self._remote_failures += 1
             if self._remote_failures >= 3:
                 self._remote_down_until = time.time() + 60
             print(f"[call-agent] openai-llm unreachable ({e})", flush=True)
             return None
-        self._remote_failures = 0
-        self._remote_down_until = 0.0
-        return out
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:  # noqa: BLE001
+                    pass
 
-    def _chat_local(self, messages, max_tokens=100, temp=0.65, timeout=60):
+    def _chat_local(self, messages, max_tokens=100, temp=0.65, timeout=15):
         """Original in-process generation (fallback when llm-server is down)."""
         if not self._ensure_local():
             return None
@@ -259,13 +274,13 @@ class LLMClient:
     # first complete sentence to TTS while the rest is still being generated:
     #   remote llm-server /chat_stream  ->  (staging only, opt-in) in-process
     #   mlx stream  ->  empty stream -> the caller uses its scripted phrase.
-    def chat_stream(self, messages, max_tokens=150, temp=0.4, timeout=60):
+    def chat_stream(self, messages, max_tokens=100, temp=0.65, timeout=15):
         """Yield text deltas. Never raises: a failed backend silently moves
         to the next fallback tier; an empty stream means the caller uses its
         canned fallback phrase."""
         if self._openai:
             gen = self._chat_openai_stream(
-                messages, max_tokens, temp, min(timeout, 60))
+                messages, max_tokens, temp, min(timeout, 30))
             if gen is not None:
                 yielded = False
                 try:
@@ -291,7 +306,7 @@ class LLMClient:
                     yield d
             return
         gen = self._chat_stream_remote(
-            messages, max_tokens, temp, min(timeout, 60))
+            messages, max_tokens, temp, min(timeout, 30))
         if gen is not None:
             yielded = False
             try:
@@ -327,6 +342,9 @@ class LLMClient:
             body = {"model": "local", "messages": messages,
                     "max_tokens": max_tokens, "temperature": temp,
                     "stream": True,
+                    # Qwen3 on llama.cpp: see non-streaming fix above.
+                    "thinking": False,
+                    "stop": ["\n\n"],
                     "chat_template_kwargs": {"enable_thinking": False}}
             conn.request("POST", (parts.path or "") + "/v1/chat/completions",
                          body=json.dumps(body).encode(),
@@ -359,6 +377,8 @@ class LLMClient:
                             continue
                         payload = line[5:].strip()
                         if payload == b"[DONE]":
+                            self._remote_failures = 0
+                            self._remote_down_until = 0.0
                             return
                         try:
                             obj = json.loads(payload)
@@ -369,7 +389,13 @@ class LLMClient:
                         except Exception:  # noqa: BLE001
                             delta = None
                         if delta:
-                            yield delta
+                            delta = delta.replace("</think>", "")
+                            if delta.strip():
+                                yield delta
+                # A successful OpenAI stream is explicitly terminated by
+                # [DONE]. EOF without it is a truncated transport, not a
+                # complete answer.
+                raise ConnectionError("openai stream ended before [DONE]")
             finally:
                 try:
                     conn.close()
@@ -442,7 +468,7 @@ class LLMClient:
         return _frames()
 
     def _chat_stream_local(self, messages, max_tokens=100, temp=0.65,
-                           timeout=60):
+                           timeout=15):
         """In-process mlx streaming; batch generation as the last resort."""
         if not self._ensure_local():
             out = self._chat_local(messages, max_tokens, temp, timeout)

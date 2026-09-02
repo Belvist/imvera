@@ -159,8 +159,8 @@ services:
       # E-cores (live: 9–15 tok/s gen, prefill 2.4–2.7 s) vs ~19.4 tok/s on 4.
       # Was applied ad-hoc once and LOST on the next `make update`; keep the
       # working value as the default here. Override freely via MOSS_LLM_THREADS.
-      MOSS_LLM_THREADS: ${MOSS_LLM_THREADS:-4}
-      MOSS_LLM_CTX: ${MOSS_LLM_CTX:-4096}
+      MOSS_LLM_THREADS: ${MOSS_LLM_THREADS:-8}
+      MOSS_LLM_CTX: ${MOSS_LLM_CTX:-2048}
     volumes:
       - ../scripts/llama_entrypoint.sh:/app/llama_entrypoint.sh:ro
       - models:/data/models
@@ -229,6 +229,9 @@ services:
       MOSS_S3_ACCESS_KEY: ${MOSS_S3_ACCESS_KEY:-mossvoice_dev}
       MOSS_S3_SECRET_KEY: ${MOSS_S3_SECRET_KEY:-mossvoice_dev_secret}
       MOSS_S3_BUCKET: ${MOSS_S3_BUCKET:-mossvoice-recordings}
+      # Durable WAL for async PG/S3/Redis jobs. Never use /tmp here: a host
+      # reboot must replay acknowledged-but-not-applied turn persistence.
+      MOSS_PERSIST_SPOOL: /var/lib/mossvoice/persist
       # PHONE-PATH "не слышит" FORENSICS (2026-08-25): keep a copy of every
       # turn that was blanked (no usable transcript) at
       #   <outdir>/blank_audio/<call_id>_<ts>.wav
@@ -238,11 +241,33 @@ services:
       #   retention of user audio; enable per-deploy via
       #   MOSS_RETAIN_BLANK_AUDIO=1 (PII — pair with retention/cleanup).
       MOSS_RETAIN_BLANK_AUDIO: ${MOSS_RETAIN_BLANK_AUDIO:-0}
+      # Internal control-plane auth. On this single-machine deployment the
+      # published port is host-loopback only; the explicit trust flag lets
+      # host FreeSWITCH/VoiceRuntime traverse Docker's loopback proxy when no
+      # token is configured. Server deployments must set a token and remove
+      # the trust exception.
+      MOSS_INTERNAL_API_TOKEN: ${MOSS_INTERNAL_API_TOKEN:-}
+      MOSS_TRUST_LOOPBACK_PROXY: "1"
+      # Provider webhook is disabled (503) when this secret is absent.
+      MOSS_WEBHOOK_SECRET: ${MOSS_WEBHOOK_SECRET:-}
+      # Outbound call provider (Phase 4). Set MOSS_CALL_PROVIDER to
+      # a provider name (e.g. "zadarma") and MOSS_CALL_PROVIDER_URL /
+      # MOSS_CALL_PROVIDER_KEY to enable HTTP-based calls. Leave empty
+      # to fall back to the SIP gateway (needs working domain).
+      MOSS_CALL_PROVIDER: ${MOSS_CALL_PROVIDER:-}
+      MOSS_CALL_PROVIDER_URL: ${MOSS_CALL_PROVIDER_URL:-}
+      MOSS_CALL_PROVIDER_KEY: ${MOSS_CALL_PROVIDER_KEY:-}
+      MOSS_CALL_PROVIDER_USER: ${MOSS_CALL_PROVIDER_USER:-}
+      MOSS_SMS_PROVIDER: ${MOSS_SMS_PROVIDER:-}
+      MOSS_SMS_PROVIDER_URL: ${MOSS_SMS_PROVIDER_URL:-}
+      MOSS_SMS_PROVIDER_KEY: ${MOSS_SMS_PROVIDER_KEY:-}
+      MOSS_SMS_PROVIDER_USER: ${MOSS_SMS_PROVIDER_USER:-}
     volumes:
       # FreeSWITCH (host) and the agent (container) must see the SAME paths:
       # the Lua dialplan plays reply WAVs and uploads caller turns by path,
       # and both sides share /tmp/mossvoice one-to-one.
       - /tmp/mossvoice:/tmp/mossvoice
+      - persist_spool:/var/lib/mossvoice/persist
       # Conversation scenarios: edit on the host, `docker compose restart
       # telephony` picks them up — no image rebuild needed.
       - ../telephony/vera_scenarios.txt:/app/telephony/vera_scenarios.txt:ro
@@ -299,6 +324,44 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Outbound dialer (ROADMAP E5). Dry-run by default in dev.
+  scheduler:
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
+    container_name: mossvoice-scheduler
+    command: python /app/telephony/workers/scheduler_worker_main.py
+    environment:
+      MOSS_PG_URL: postgresql://${MOSS_PG_USER:-mossvoice}:${MOSS_PG_PASSWORD:-mossvoice_dev}@db:5432/${MOSS_PG_DB:-mossvoice}
+      MOSS_WORKER_ID: scheduler-1
+      MOSS_SCHEDULER_DRY_RUN: ${MOSS_SCHEDULER_DRY_RUN:-1}
+      MOSS_OUTBOUND_KILL_SWITCH: ${MOSS_OUTBOUND_KILL_SWITCH:-0}
+      MOSS_SCHEDULER_INTERVAL_SECONDS: ${MOSS_SCHEDULER_INTERVAL_SECONDS:-30}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Product API for iOS family app (ROADMAP E4). Loopback-only in dev.
+  product:
+    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
+    container_name: mossvoice-product
+    command: python -m product --host 0.0.0.0 --port 9480
+    working_dir: /app/telephony
+    environment:
+      MOSS_PG_URL: postgresql://${MOSS_PG_USER:-mossvoice}:${MOSS_PG_PASSWORD:-mossvoice_dev}@db:5432/${MOSS_PG_DB:-mossvoice}
+      MOSS_REDIS_URL: redis://cache:6379/0
+      MOSS_JWT_SECRET: ${MOSS_JWT_SECRET:-dev-jwt-secret-change-me-32}
+      MOSS_OTP_DEV_CODE: ${MOSS_OTP_DEV_CODE:-}
+      MOSS_PRODUCT_PORT: "9480"
+      PYTHONPATH: /app/telephony
+    ports:
+      - "127.0.0.1:9480:9480"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    restart: unless-stopped
+
   # Retention worker (read.md rev-3 G8): guaranteed TTL purge of expired user
   # data — PG rows + S3 objects + local WAV cache — leaving a durable audit
   # marker. SEPARATE failure domain from the realtime call process.
@@ -333,6 +396,7 @@ services:
       --web-dir /app/telephony/tg/web
     environment:
       MOSSVOICE_BOT_TOKEN: ${MOSSVOICE_BOT_TOKEN:-}
+      MOSS_INTERNAL_API_TOKEN: ${MOSS_INTERNAL_API_TOKEN:-}
     ports:
       # SECURITY: bind to loopback only. The public path is the cloudflared
       # tunnel (container -> container, no host port involved). With an
@@ -426,3 +490,4 @@ volumes:
   pgdata:
   redisdata:
   miniodata:
+  persist_spool:

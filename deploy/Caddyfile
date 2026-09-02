@@ -1,0 +1,13 @@
+# Edge TLS for Product API (ROADMAP E9)
+# Replace api.imvera.ru with real DNS + email for ACME.
+
+api.imvera.ru {
+        reverse_proxy 127.0.0.1:9480
+        encode gzip
+        header {
+                Strict-Transport-Security "max-age=31536000; includeSubDomains"
+                X-Content-Type-Options nosniff
+                X-Frame-Options DENY
+                Referrer-Policy no-referrer
+        }
+}

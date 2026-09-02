@@ -1,0 +1,15 @@
+[Unit]
+Description=MossVoice Product API
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/mossvoice
+ExecStart=/usr/bin/docker compose -f docker/docker-compose.yml -f deploy/compose.prod.yml --profile product up -d product
+ExecStop=/usr/bin/docker compose -f docker/docker-compose.yml -f deploy/compose.prod.yml stop product
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

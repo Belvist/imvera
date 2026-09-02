@@ -33,10 +33,34 @@ def _dispatch(incidents):
     def _route(topic, payload, msg_id):
         try:
             if topic == "call.result":
+                call_id = payload.get("call_id")
+                verdict = payload.get("verdict")
+                family_status = (payload.get("family_status") or "").lower()
+                # Prefer family_status when present (E2).
+                open_verdict = (
+                    "alert" if family_status == "red" else verdict)
+                household_id = payload.get("household_id")
+                elder_id = payload.get("elder_id")
+                if (not household_id) and call_id and hasattr(
+                        incidents.pg, "household_for_call"):
+                    try:
+                        household_id, elder_id = (
+                            incidents.pg.household_for_call(call_id))
+                    except Exception:  # noqa: BLE001
+                        pass
                 incidents.maybe_open(
-                    payload.get("call_id"),
-                    payload.get("verdict"),
-                    notes=payload.get("notes") or [])
+                    call_id,
+                    open_verdict,
+                    notes=payload.get("notes") or [],
+                    household_id=household_id,
+                    elder_id=elder_id)
+                # Non-RED family status: still emit a lightweight status
+                # notify when MOSS_NOTIFY_ALL_STATUSES=1 (E6).
+                if (os.environ.get("MOSS_NOTIFY_ALL_STATUSES", "").strip()
+                        in ("1", "true", "yes")
+                        and family_status
+                        and family_status != "red"):
+                    _notify_status(incidents, payload, household_id)
                 return True
             if topic == "incident.notify":
                 return bool(incidents.deliver(payload))
@@ -47,6 +71,22 @@ def _dispatch(incidents):
             print(f"[outbox] dispatch error: {e}", flush=True)
             return False
     return _route
+
+
+def _notify_status(incidents, payload, household_id):
+    """Best-effort status push/telegram after every call (optional)."""
+    summary = payload.get("summary_for_family") or ""
+    status = payload.get("family_status") or ""
+    text = f"IMVERA: статус {status.upper()}. {summary}".strip()
+    contacts = incidents._load_contacts(household_id=household_id)
+    for ch in ("push", "telegram"):
+        addr = contacts.get(ch)
+        if not addr:
+            continue
+        try:
+            incidents.router.send(ch, addr, text)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def main():

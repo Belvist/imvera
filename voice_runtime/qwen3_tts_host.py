@@ -2,17 +2,16 @@
 """MossVoice Qwen3-TTS 12Hz 0.6B Base host service.
 
 Runs on the Mac (Apple Silicon) next to FreeSWITCH. Wraps
-``Qwen/Qwen3-TTS-12Hz-0.6B-Base`` via ``qwen-tts`` / Transformers
-and exposes ``POST /synthesize`` + ``POST /stream`` so
-``CloudTTSAdapter`` works unchanged.
+``Qwen/Qwen3-TTS-12Hz-0.6B-Base`` via ``qwen-tts`` and exposes
+``POST /synthesize`` + ``POST /stream`` so ``CloudTTSAdapter``
+works unchanged.
 
 Endpoints
 ---------
 GET  /ready               -> {"ready": bool}
 POST /synthesize          {"text": str, "voice_id": str}
                             -> {"wav_b64": str, "latency_ms": int}
-POST /stream              {"text": str, "voice_id": str,
-                            "stream_id": str}
+POST /stream              {"text": str, "voice_id": str}
                             -> {"frames": [{"i": n,
                                             "wav_b64": str,
                                             "done": bool}]}
@@ -28,7 +27,7 @@ import argparse
 import base64
 import json
 import os
-import struct
+import numpy as np
 import time
 import wave
 from io import BytesIO
@@ -38,30 +37,56 @@ HOST = "127.0.0.1"
 DEFAULT_PORT = 9711
 MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 MAX_BODY = 50 * 1024 * 1024
-PCM_RATE = 22050
+PCM_RATE = 24000
 PCM_WIDTH = 2
-
-import numpy as np
+REF_AUDIO_PATH = "/tmp/mossvoice/ref_vera.wav"
 
 _model = None
+_ref_audio = None
+_ref_sr = None
 _ready = False
 _ready_error = None
 
 
+def _np_to_wav_b64(samples, rate=PCM_RATE):
+    arr = np.asarray(samples, dtype=np.int16)
+    buf = BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(PCM_WIDTH)
+        w.setframerate(rate)
+        w.writeframes(arr.tobytes())
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
 def _load():
-    global _model, _ready, _ready_error
+    global _model, _ref_audio, _ref_sr, _ready, _ready_error
     if _model is not None or _ready_error is not None:
         return
     try:
-        from qwen_tts import Qwen3TTS
-        print("[qwen3-tts] loading %s ..." % MODEL_ID,
-              flush=True)
-        _model = Qwen3TTS()
+        import wave as _w
+        from qwen_tts import Qwen3TTSModel
+        print("[qwen3-tts] loading %s (cpu, float32) ..."
+              % MODEL_ID, flush=True)
+        _model = Qwen3TTSModel.from_pretrained(MODEL_ID)
+        print("[qwen3-tts] on cpu", flush=True)
+        if os.path.exists(REF_AUDIO_PATH):
+            with _w.open(REF_AUDIO_PATH, "rb") as wf:
+                raw = wf.readframes(wf.getnframes())
+                _ref_sr = wf.getframerate()
+            _ref_audio = np.frombuffer(
+                raw, dtype=np.int16).astype(np.float32) / 32768.0
+            print("[qwen3-tts] ref audio: %s (%dHz)"
+                  % (REF_AUDIO_PATH, _ref_sr), flush=True)
+        else:
+            _ref_audio = np.zeros(16000, dtype=np.float32)
+            _ref_sr = 16000
+            print("[qwen3-tts] no ref audio, using silence",
+                  flush=True)
         _ready = True
         print("[qwen3-tts] ready", flush=True)
     except ImportError:
-        _ready_error = ("qwen-tts not installed: "
-                         "pip install qwen-tts")
+        _ready_error = "qwen-tts not installed: pip install qwen-tts"
         print("[qwen3-tts] %s" % _ready_error, flush=True)
     except Exception as e:
         _ready_error = str(e)
@@ -73,34 +98,26 @@ def _synthesize(text, voice_id):
     if _model is None:
         raise RuntimeError("model not loaded")
     t0 = time.time()
-    audio = _model.generate(text, voice_id=voice_id)
+    audios, sr = _model.generate_voice_clone(
+        text=[text], language=["russian"],
+        ref_audio=(_ref_audio, _ref_sr),
+        ref_text="Здравствуйте, я Вера. Как ваши дела?",
+        non_streaming_mode=True)
     latency_ms = int((time.time() - t0) * 1000)
-    if isinstance(audio, list):
-        samples = audio
-    elif hasattr(audio, "numpy"):
-        samples = audio.numpy()
-    else:
-        samples = audio
-    if samples.dtype != np.int16:
+    samples = audios[0]
+    if isinstance(samples, np.ndarray):
         if samples.dtype == np.float32:
             samples = (samples * 32767).astype(np.int16)
         else:
             samples = samples.astype(np.int16)
-    buf = BytesIO()
-    with wave.open(buf, "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(PCM_WIDTH)
-        w.setframerate(PCM_RATE)
-        w.writeframes(samples.tobytes())
-    wav_bytes = buf.getvalue()
-    return base64.b64encode(wav_bytes).decode("ascii"), \
-        latency_ms
+    else:
+        samples = np.asarray(samples, dtype=np.int16)
+    wav_b64 = _np_to_wav_b64(samples, sr)
+    return wav_b64, latency_ms
 
 
 def _stream_frames(text, voice_id):
-    """Yield frame dicts for a synthesis."""
-    wav_b64, latency_ms = _synthesize(text, voice_id)
-    # Split into ~20ms frames (~882 samples at 22050 Hz).
+    wav_b64, _ = _synthesize(text, voice_id)
     raw = base64.b64decode(wav_b64)
     n_frames = max(1, len(raw) // (PCM_RATE * PCM_WIDTH))
     chunk_size = max(1, len(raw) // n_frames)
@@ -157,8 +174,7 @@ class _Handler(BaseHTTPRequestHandler):
             text = req.get("text", "")
             voice_id = req.get("voice_id", "vera")
             try:
-                wav_b64, latency_ms = \
-                    _synthesize(text, voice_id)
+                wav_b64, latency_ms = _synthesize(text, voice_id)
             except Exception as e:
                 self._json(500, {"error": str(e)[:200]})
                 return
@@ -177,10 +193,8 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             text = req.get("text", "")
             voice_id = req.get("voice_id", "vera")
-            stream_id = req.get("stream_id", "")
             try:
-                frames = list(
-                    _stream_frames(text, voice_id))
+                frames = list(_stream_frames(text, voice_id))
             except Exception as e:
                 self._json(500, {"error": str(e)[:200]})
                 return

@@ -13,6 +13,25 @@ set -uo pipefail
 FS="${MOSS_FS:-/opt/homebrew/bin/freeswitch}"
 FS_CLI="${MOSS_FS_CLI:-fs_cli}"
 PROFILE="${MOSS_FS_PROFILE:-zoiper}"
+REPO="${MOSS_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
+# The Lua dialplan authenticates to telephony using the same token as Compose.
+# Read one exact key only; never source docker/.env as executable shell.
+if [ -z "${MOSS_INTERNAL_API_TOKEN:-}" ] && [ -r "$REPO/docker/.env" ]; then
+    API_TOKEN="$(python3 - "$REPO/docker/.env" <<'PYEOF'
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as config:
+    match = re.search(r"^MOSS_INTERNAL_API_TOKEN=(\S+)\s*$",
+                      config.read(), re.M)
+print(match.group(1) if match else "")
+PYEOF
+)"
+    if [ -n "$API_TOKEN" ]; then
+        export MOSS_INTERNAL_API_TOKEN="$API_TOKEN"
+    fi
+fi
 
 # 1. Targeted profile restart (preserves other profiles + active calls).
 echo "restart-fs: sofia profile $PROFILE restart ..."

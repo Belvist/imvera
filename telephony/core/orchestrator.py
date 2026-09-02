@@ -73,7 +73,11 @@ class Serve:
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                 "calls"))
         self.tmpdir = getattr(args, "tmpdir", None) or "/tmp/mossvoice_turns"
-        os.makedirs(self.tmpdir, exist_ok=True)
+        # Call audio/transcripts are sensitive PII. Shared spool directories
+        # must never inherit the process umask as world-readable.
+        for private_dir in (self.outdir, self.tmpdir):
+            os.makedirs(private_dir, mode=0o700, exist_ok=True)
+            os.chmod(private_dir, 0o700)
         self._greeting_cache = {}
         self._greeting_lock = threading.Lock()
         self.sessions = {}
@@ -416,6 +420,31 @@ class Serve:
             caller_id=caller_id,
         )
         ctx.recorder.new_call(call_id=call_id)
+        # Resolve elder + consent gate (ROADMAP E3). Without active consent
+        # the first call is a consent script — not a wellness check-in.
+        need_consent = False
+        if self.pg_available and caller_id:
+            try:
+                elder = self.pg.family_elder_by_phone(
+                    normalize_phone(caller_id))
+                if elder:
+                    ctx.person_id = elder.get("person_id")
+                    ctx.household_id = elder.get("household_id")
+                    ctx.agent._pg = self.pg
+                    ctx.agent._person_id = ctx.person_id
+                    ctx.agent._household_id = ctx.household_id
+                    from core.consent import has_active_consent
+                    if not has_active_consent(self.pg, ctx.person_id):
+                        need_consent = True
+            except Exception as e:  # noqa: BLE001
+                print(f"[call-agent] elder/consent resolve skipped: {e}",
+                      flush=True)
+        if need_consent:
+            script = ctx.agent.start_consent_call()
+            print(f"[call-agent] consent call for {ctx.person_id}",
+                  flush=True)
+            # Greeting override for Lua/runtime consumers via session emit.
+            ctx.dialogue_state["consent_script"] = script
         # Serve-initiated family call: the agent opens in check_in mode (the
         # wellbeing-question state machine). Without this the agent sits in
         # companion mode and the whole check-in flow never activates.
@@ -424,7 +453,7 @@ class Serve:
         # FIX 2026-08-27: an arbitrary string from the API must NOT reach the
         # private _set_mode (it drove the state machine into an unknown mode);
         # only the declared Modes are accepted.
-        if mode is not None:
+        elif mode is not None:
             _valid = getattr(Agent, "MODES", ())
             if mode not in _valid:
                 raise ValueError(
@@ -443,7 +472,7 @@ class Serve:
         # Family-app questions: ONE snapshot per call (deterministic turn).
         # Fail-open: a PG hiccup must never block a live call — questions
         # simply stay pending for the next one.
-        if self.pg_available and caller_id:
+        if self.pg_available and caller_id and not need_consent:
             try:
                 qs = self.pg.family_pending(normalize_phone(caller_id)) or []
                 if qs:
@@ -459,6 +488,21 @@ class Serve:
             self.sessions[call_id] = ctx
         self._emit_session(ctx)
         return call_id
+
+    def handle_dtmf(self, call_id, digit):
+        """Apply one DTMF digit to a live call (ROADMAP E2/E3)."""
+        ctx = self.get_call(call_id)
+        with ctx.lock:
+            plan = ctx.agent.handle_dtmf(digit)
+        return {
+            "ok": True,
+            "call_id": call_id,
+            "digit": str(digit),
+            "reply": (plan or {}).get("fallback") or "",
+            "terminal": bool((plan or {}).get("terminal")),
+            "done": bool(ctx.agent.done),
+            "status": ctx.agent.status,
+        }
 
     def _h_persist_turn_pg(self, payload):
         """PersistenceWorker 'turn.pg' handler (rev-4 gate B). Executes in the
@@ -533,16 +577,41 @@ class Serve:
         # Data core: persist the verdict + enqueue the downstream notify.
         if self.pg_available and isinstance(ctx.recorder, PgRecorder):
             try:
+                from core.call_status import family_fields_for_finalize
                 notes = ctx.outcome.get("notes") or []
+                tech_err = getattr(ctx.agent, "technical_error", None)
+                declined = (
+                    ctx.outcome.get("status") == "declined"
+                    or getattr(ctx.agent, "_consent_declined", False))
+                no_contact = ctx.outcome.get("status") in (
+                    "no_contact", "no_speech")
+                family = family_fields_for_finalize(
+                    ctx.outcome.get("status", "unknown"),
+                    notes=notes,
+                    facts=getattr(ctx.agent, "facts", None) or [],
+                    technical_error=tech_err,
+                    no_contact=no_contact,
+                    declined=declined,
+                )
+                # Enrich in-memory outcome for HTTP/UI consumers.
+                ctx.outcome = {**ctx.outcome, **family}
                 ctx.recorder.finalize(
                     ctx.outcome.get("status", "unknown"),
                     confidence=getattr(ctx.agent, "_last_confidence", None),
-                    notes=notes)
+                    notes=notes,
+                    family_status=family["family_status"],
+                    reasons=family["reasons"],
+                    summary_for_family=family["summary_for_family"],
+                    scenario_version=family["scenario_version"],
+                    safety_rules_version=family["safety_rules_version"],
+                    technical_error=family["technical_error"])
                 self.pg.enqueue(
                     "call.result",
                     {"call_id": call_id,
                      "verdict": ctx.outcome.get("status", "unknown"),
-                     "notes": notes},
+                     "notes": notes,
+                     "family_status": family["family_status"],
+                     "summary_for_family": family["summary_for_family"]},
                     dedup_key=f"call:{call_id}")
                 # Family questions asked during THIS call: persist status +
                 # answer snapshot (replay-safe: only 'pending' rows move).
@@ -1294,15 +1363,14 @@ class Serve:
         stream_confidence = None
         stt_reason = None
         pcm, sample_rate = None, None
-        # PRECHECK: skip STT on silent/mostly-silent audio to save
-        # ~5 s per turn when the caller hasn't spoken yet (e.g. the
-        # 9.6 s / 0.0566 energy chunk that cost 4.9 s of STT for
-        # nothing). Energy < 0.03 => no meaningful speech; the
-        # dialogue engine handles empty-turn escalation instead.
+        # PRECHECK: skip STT on truly silent audio to save ~5 s per
+        # turn when the caller hasn't spoken at all (pure silence).
+        # Threshold matches SILENCE_ENERGY in stt.py (0.002) so quiet
+        # elderly speech is never skipped — it always reaches STT.
         _skip_stt = False
         try:
             from adapters.stt import audio_energy as _ae
-            if _ae(wav_path) < 0.03:
+            if _ae(wav_path) < 0.002:
                 _skip_stt = True
                 transcript = None
                 stream_confidence = None
@@ -1314,6 +1382,7 @@ class Serve:
         # PHONE PATH (segment_dir set) uses ONE-SHOT STT: the hop-by-hop
         # incremental decode exists for live captions and is ~3x slower
         # end-to-end; the caller only needs the final transcript fast.
+        _stt_hard_fail = None
         if not _skip_stt:
             try:
                 if segment_dir:
@@ -1325,8 +1394,9 @@ class Serve:
                     with open(wav_path, "rb") as wf:
                         wav_bytes = wf.read()
                     pcm, sample_rate = wav_to_pcm(wav_bytes)
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
                 pcm, sample_rate = None, None
+                _stt_hard_fail = f"stt:{type(e).__name__}"
 
         if segment_dir:
             _t_stt = time.time()
@@ -1357,6 +1427,10 @@ class Serve:
         # the LLM is still generating the rest (Stage 5).
         with ctx.lock:
             agent, rec = ctx.agent, ctx.recorder
+
+            if _stt_hard_fail:
+                # Hard STT failure ≠ silence: family status must be TECHNICAL.
+                agent.mark_technical(_stt_hard_fail)
 
             if transcript is None:
                 # STT failure and NO-SPEECH go through the dialogue engine
@@ -1459,81 +1533,88 @@ class Serve:
         seg_no = 0
         if _t_stt is not None:
             _t_llm_first = time.time()  # start of LLM + TTS pipeline (post-STT)
-        for segment in segments:
-            if cancel_event is not None and cancel_event.is_set():
-                self.tts.cancel_stream_by_id(ctx.stream_id)
-                break
-            if not segment:
-                continue
-            # HALLUCINATION + BROKEN-REPLY GUARDS: Qwen3 sometimes asserts
-            # things the caller never said (appearance comments), parrots the
-            # caller's words («Вы говорите о…») or code-switches to english.
-            # Such a sentence is replaced with the scripted fallback BEFORE
-            # it is spoken.
-            if plan is not None and plan.get("intent") and (
-                    reply_looks_hallucinated(segment, transcript or "")
-                    or reply_looks_broken(segment)):
-                print(f"[call-agent] hallucination guard: {segment[:60]}",
-                      flush=True)
-                segment = (plan.get("fallback") or segment)
-            if plan is not None and plan.get("intent") and segment:
-                cleaned = _clean_llm(segment)
-                if cleaned:
-                    segment = cleaned
-            response_parts.append(segment)
-            seg_sid = f"{sid}-{seg_no}"
-            seg_no += 1
-            ctx.stream_id = seg_sid
-            seg_pcm = []
-            seg_done = False
-            for frame in self.tts.stream(segment, cancel_event=cancel_event,
-                                         stream_id=seg_sid):
+        try:
+            for segment in segments:
                 if cancel_event is not None and cancel_event.is_set():
-                    # barge-in: emit a single done frame with the aborted state
-                    # so the client knows the assistant stopped talking.
-                    wire = {"done": True, "aborted": True}
-                    wire.update(meta_now())
-                    yield wire
-                    sent_done = True
+                    self.tts.cancel_stream_by_id(ctx.stream_id)
                     break
-                idx = frame.get("i", idx)
-                wire = {"i": idx, "turn_id": _turn_id,
-                        "generation_id": _gen_id}
-                if frame.get("done"):
-                    seg_done = True
-                    break
-                audio = base64.b64decode(frame.get("wav_b64") or "")
-                if not audio:
+                if not segment:
                     continue
-                if _t_first_audio is None:
-                    _t_first_audio = time.time()  # first audible frame
-                got_audio = True
-                pcm, sr = wav_to_pcm(audio)
-                if pcm:
-                    sample_rate = sr or sample_rate
-                    pcm_parts.append(pcm)
-                    seg_pcm.append((pcm, sr or sample_rate or 48000))
-                wire["done"] = False
-                # LATENCY FIX: tell downstream (tg_server -> WebApp) the true
-                # sample rate of this frame so the client never resamples blindly.
-                if sr:
-                    wire["sample_rate"] = sr
-                # metadata on the first audible frame so the client can show
-                # the transcript immediately while audio keeps streaming
-                if idx == 0:
-                    wire.update(meta_now())
-                wire["wav_b64"] = frame["wav_b64"]
-                yield wire
-                idx += 1
-            # PHONE PATH: this sentence is fully synthesized — drop a 16 kHz
-            # wav into segment_dir so the dialplan can play it right away.
-            if seg_done and segment_dir and seg_pcm:
-                seg_path = self._write_segment_file(segment_dir, seg_pcm)
-                if seg_path:
-                    yield {"seg_file": seg_path, "i": idx,
-                           "turn_id": _turn_id, "generation_id": _gen_id}
-            if sent_done and cancel_event is not None and cancel_event.is_set():
-                break
+                # HALLUCINATION + BROKEN-REPLY GUARDS: Qwen3 sometimes asserts
+                # things the caller never said (appearance comments), parrots the
+                # caller's words («Вы говорите о…») or code-switches to english.
+                # Such a sentence is replaced with the scripted fallback BEFORE
+                # it is spoken.
+                if plan is not None and plan.get("intent") and (
+                        reply_looks_hallucinated(segment, transcript or "")
+                        or reply_looks_broken(segment)):
+                    print(f"[call-agent] hallucination guard: {segment[:60]}",
+                          flush=True)
+                    segment = (plan.get("fallback") or segment)
+                if plan is not None and plan.get("intent") and segment:
+                    cleaned = _clean_llm(segment)
+                    if cleaned:
+                        segment = cleaned
+                response_parts.append(segment)
+                seg_sid = f"{sid}-{seg_no}"
+                seg_no += 1
+                ctx.stream_id = seg_sid
+                seg_pcm = []
+                seg_done = False
+                for frame in self.tts.stream(segment, cancel_event=cancel_event,
+                                             stream_id=seg_sid):
+                    if cancel_event is not None and cancel_event.is_set():
+                        # barge-in: emit a single done frame with the aborted state
+                        # so the client knows the assistant stopped talking.
+                        wire = {"done": True, "aborted": True}
+                        wire.update(meta_now())
+                        yield wire
+                        sent_done = True
+                        break
+                    idx = frame.get("i", idx)
+                    wire = {"i": idx, "turn_id": _turn_id,
+                            "generation_id": _gen_id}
+                    if frame.get("done"):
+                        seg_done = True
+                        break
+                    audio = base64.b64decode(frame.get("wav_b64") or "")
+                    if not audio:
+                        continue
+                    if _t_first_audio is None:
+                        _t_first_audio = time.time()  # first audible frame
+                    got_audio = True
+                    pcm, sr = wav_to_pcm(audio)
+                    if pcm:
+                        sample_rate = sr or sample_rate
+                        pcm_parts.append(pcm)
+                        seg_pcm.append((pcm, sr or sample_rate or 48000))
+                    wire["done"] = False
+                    # LATENCY FIX: tell downstream (tg_server -> WebApp) the true
+                    # sample rate of this frame so the client never resamples blindly.
+                    if sr:
+                        wire["sample_rate"] = sr
+                    # metadata on the first audible frame so the client can show
+                    # the transcript immediately while audio keeps streaming
+                    if idx == 0:
+                        wire.update(meta_now())
+                    wire["wav_b64"] = frame["wav_b64"]
+                    yield wire
+                    idx += 1
+                # PHONE PATH: this sentence is fully synthesized — drop a 16 kHz
+                # wav into segment_dir so the dialplan can play it right away.
+                if seg_done and segment_dir and seg_pcm:
+                    seg_path = self._write_segment_file(segment_dir, seg_pcm)
+                    if seg_path:
+                        yield {"seg_file": seg_path, "i": idx,
+                               "turn_id": _turn_id, "generation_id": _gen_id}
+                if sent_done and cancel_event is not None and cancel_event.is_set():
+                    break
+        except Exception as e:  # noqa: BLE001
+            agent.mark_technical(f"tts:{type(e).__name__}")
+            if not response_parts and plan is not None:
+                fb = plan.get("fallback") or (
+                    "Сейчас помехи на линии. Повторите, пожалуйста.")
+                response_parts.append(fb)
 
         reply = " ".join(response_parts).strip()
         if plan is not None and plan.get("intent") and reply:

@@ -53,6 +53,7 @@ class _Handler(BaseHTTPRequestHandler):
         except ValueError:
             payload = {}
         cfg = self.server.cfg
+        cfg["last_authorization"] = self.headers.get("Authorization")
         if self.path == "/calls":
             cfg["last_create"] = payload
             self._send(200, json.dumps({"call_id": "call-123"}).encode())
@@ -161,6 +162,13 @@ class AgentContractTests(unittest.TestCase):
         call_id = self.client.create_call()
         self.assertEqual(call_id, "call-123")
         self.assertNotIn("caller_id", self.httpd.cfg["last_create"])
+
+    def test_configured_control_token_is_sent_as_bearer(self):
+        client = AgentClient(
+            "127.0.0.1", self.port, timeout=5, token="internal-test-token")
+        self.assertEqual(client.create_call(), "call-123")
+        self.assertEqual(self.httpd.cfg["last_authorization"],
+                         "Bearer internal-test-token")
 
 
 class StreamDoneUnblockTests(unittest.TestCase):

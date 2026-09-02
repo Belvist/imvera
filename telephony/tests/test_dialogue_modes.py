@@ -59,17 +59,20 @@ class ModeMachineTests(unittest.TestCase):
         # cache every turn, +1-2 s). The context rides on the CURRENT
         # user message as labeled lines — SKILL.state, not a raw
         # conversation dump.
+        # NEW CONTRACT (2026-09-02): SKILL.state context rides on
+        # ASSISTANT messages so the model treats it as its own memory,
+        # not as things the user said.
         sys_msgs = [m for m in hist if m["role"] == "system"]
         self.assertEqual(len(sys_msgs), 1)
         self.assertNotIn("Цель текущего ответа", sys_msgs[0]["content"])
-        user_msgs = [m for m in hist if m["role"] == "user"]
+        assistant_msgs = [m for m in hist if m["role"] == "assistant"]
         self.assertTrue(any("текущая тема" in m["content"]
                             or "уже обсуждено" in m["content"]
                             or "последний вопрос" in m["content"]
-                            for m in user_msgs),
-                        "SKILL.state context must ride on the current user turn")
+                            for m in assistant_msgs),
+                        "SKILL.state context must ride on assistant messages")
         # the context lines are labeled blocks, not the message body start
-        for m in user_msgs:
+        for m in assistant_msgs:
             self.assertFalse(m["content"].startswith("("))
 
     # ---- C: no forced question after every reply ----
@@ -131,11 +134,12 @@ class ModeMachineTests(unittest.TestCase):
         self.assertIsNone(plan.get("intent"))
         # 1st empty turn (2026-08-25): a yes/no WELLNESS ANCHOR instead of a
         # blind «Повторите» — whisper-tiny recognises «хорошо/плохо» nearly
-        # perfectly, so the call moves forward on silence; 2nd: fixed calm
-        # tapered-ladder line (drama dropped).
+        # perfectly, so the call moves forward on silence; 2nd+: DTMF 1/2
+        # fallback (ROADMAP E2) so hard-of-hearing callers can answer.
         self.assertIn(plan["fallback"], Agent.ANCHORS)
         plan2 = a.plan_reply("")
-        self.assertEqual(plan2["fallback"], "Алло, вы меня слышите?")
+        from core.dtmf import DTMF_PROMPT
+        self.assertEqual(plan2["fallback"], DTMF_PROMPT)
 
     def test_possible_red_asks_control_question(self):
         a = self._agent()

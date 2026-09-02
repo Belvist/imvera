@@ -8,6 +8,7 @@ orchestrator stays free of HTTP concerns; behaviour is identical.
 import base64
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 import sys
@@ -20,10 +21,21 @@ from core.family import (FamilyAccessError, FamilyAuthError,
                           FamilyValidationError)
 from adapters.pg import PgUnavailable
 from adapters.esl import originate_call, originate_to_number, kill_call
+from core.delivery import DeliveryRouter
+from core.rate_limit import TokenBucketLimiter
 
 # Upper bound for any request body (audio turn chunks are ~128 KB; JSON
 # turn_stream bodies carry base64 audio — MBs at worst). 8 MB is generous.
 MAX_BODY_BYTES = 8 * 1024 * 1024
+_RATE_LIMITER = TokenBucketLimiter(max_entries=10000)
+
+
+class RequestBodyError(ValueError):
+    """A client-side framing/JSON error with an explicit HTTP response."""
+
+    def __init__(self, message, status=400):
+        super().__init__(message)
+        self.status = status
 
 
 class QuietHTTPServer(ThreadingHTTPServer):
@@ -53,13 +65,82 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _json(self, obj, status=200):
+    def _json(self, obj, status=200, headers=None):
         body = json.dumps(obj, ensure_ascii=False).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, str(value))
         self.end_headers()
         self.wfile.write(body)
+
+    @staticmethod
+    def _env_true(name):
+        return os.environ.get(name, "").strip().lower() in (
+            "1", "true", "yes")
+
+    def _trusted_local_transport(self):
+        """Whether unauthenticated internal control traffic is explicitly safe.
+
+        Direct loopback-to-loopback servers (unit tests / host-only dev) are
+        intrinsically local. Docker's published port terminates on host
+        loopback but reaches a 0.0.0.0 container listener, so that topology
+        requires the explicit MOSS_TRUST_LOOPBACK_PROXY deployment flag.
+        """
+        try:
+            bind_host = self.server.server_address[0]
+            peer_host = self.client_address[0]
+            return (ipaddress.ip_address(bind_host).is_loopback
+                    and ipaddress.ip_address(peer_host).is_loopback)
+        except ValueError:
+            return False
+
+    def _require_internal_auth(self):
+        """Protect call control, transcripts, and incident mutation APIs."""
+        if not self._check_rate_limit(
+                "internal", self.client_address[0],
+                "MOSS_INTERNAL_RATE_LIMIT", 600):
+            return False
+        expected = os.environ.get("MOSS_INTERNAL_API_TOKEN", "")
+        if not expected:
+            if self._trusted_local_transport() or self._env_true(
+                    "MOSS_TRUST_LOOPBACK_PROXY"):
+                return True
+            self._json({"ok": False,
+                        "error": "internal API authentication not configured"},
+                       503)
+            return False
+        got = self.headers.get("Authorization", "")
+        prefix = "Bearer "
+        if got.startswith(prefix):
+            got = got[len(prefix):]
+        else:
+            got = self.headers.get("X-Moss-Internal-Key", "")
+        if not hmac.compare_digest(got, expected):
+            self._json({"ok": False, "error": "unauthorized"}, 401)
+            return False
+        return True
+
+    @staticmethod
+    def _credential_identity(value):
+        return hashlib.sha256((value or "").encode("utf-8")).hexdigest()[:20]
+
+    def _check_rate_limit(self, scope, identity, env_name, default):
+        try:
+            capacity = int(os.environ.get(env_name, str(default)))
+        except ValueError:
+            capacity = default
+        # Configuration cannot disable a security boundary accidentally.
+        capacity = max(1, min(capacity, 100000))
+        allowed, retry_after = _RATE_LIMITER.allow(
+            f"{scope}:{identity}", capacity, 60)
+        if allowed:
+            return True
+        self.close_connection = True
+        self._json({"ok": False, "error": "rate limit exceeded"}, 429,
+                   headers={"Retry-After": retry_after})
+        return False
 
     def _components(self):
         """Live status of the realtime components (never throws).
@@ -230,6 +311,8 @@ btn.disabled=false;
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         if path.startswith("/calls"):
+            if not self._require_internal_auth():
+                return
             if path == "/calls" or path == "/calls/":
                 self.server.serve.sweep_expired()
                 self._json({"ok": True, "calls": self.server.serve.list_calls()})
@@ -253,6 +336,8 @@ btn.disabled=false;
                 })
                 return
         if path == "/incidents":
+            if not self._require_internal_auth():
+                return
             try:
                 self._json({"ok": True,
                             "incidents": self.server.serve.list_incidents(
@@ -265,6 +350,10 @@ btn.disabled=false;
             # iPhone family app: poll question statuses / answers.
             qs = urllib.parse.parse_qs(parsed.query)
             key = self.headers.get("X-Moss-Key", "")
+            if not self._check_rate_limit(
+                    "family", self._credential_identity(key),
+                    "MOSS_FAMILY_RATE_LIMIT", 60):
+                return
             try:
                 items = self.server.serve.family_list(
                     key, (qs.get("phone") or [""])[0])
@@ -284,8 +373,23 @@ btn.disabled=false;
         self._json({"ok": False, "error": "not found"}, 404)
 
     def do_POST(self):
+        try:
+            return self._do_POST()
+        except RequestBodyError as exc:
+            # An oversized/short request body is deliberately not drained.
+            # Close this keep-alive connection so unread bytes cannot be
+            # interpreted as the next HTTP request.
+            self.close_connection = True
+            self._json({"ok": False, "error": str(exc)}, exc.status)
+
+    def _do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        # Family endpoints and provider webhooks have dedicated credentials.
+        # Every other POST controls calls, TTS, transcripts, or incidents.
+        if path not in ("/family/questions", "/webhook/provider") \
+                and not self._require_internal_auth():
+            return
 
         # ---- P0-SESSION-001 API -------------------------------------------------
         if path == "/calls" or path == "/new":
@@ -342,6 +446,22 @@ btn.disabled=false;
             if action == "end":
                 try:
                     result = self.server.serve.end_call(call_id)
+                except KeyError:
+                    self._json({"ok": False, "error": "call not found"}, 404)
+                    return
+                self._json(result)
+                return
+            if action == "dtmf":
+                # ROADMAP E2/E3: DTMF fallback (1=ok / 2=help; consent 1/2).
+                payload = self._read_json_body() or {}
+                digit = payload.get("digit")
+                if digit is None and payload.get("digits"):
+                    digit = str(payload.get("digits"))[:1]
+                if digit is None:
+                    self._json({"ok": False, "error": "digit required"}, 400)
+                    return
+                try:
+                    result = self.server.serve.handle_dtmf(call_id, digit)
                 except KeyError:
                     self._json({"ok": False, "error": "call not found"}, 404)
                     return
@@ -443,28 +563,37 @@ btn.disabled=false;
         # ---- provider webhook inbox (Phase 2, idempotent) ----------------
         if path == "/webhook/provider":
             body = self._read_body()
-            if body is None:
-                self._json({"ok": False, "error": "bad body"}, 400)
-                return
-            # AUDIT FIX: the webhook drives attempt state machines, so an
-            # unauthenticated caller could forge provider outcomes. When
-            # MOSS_WEBHOOK_SECRET is set, require HMAC-SHA256 over the raw
-            # body in X-Moss-Signature (same opt-in pattern as TG initData).
+            # Fail closed. Provider events mutate durable attempt state; an
+            # unset secret disables the integration instead of silently
+            # accepting unsigned traffic.
             secret = os.environ.get("MOSS_WEBHOOK_SECRET", "")
-            if secret:
-                expected = hmac.new(secret.encode("utf-8"), body,
-                                    hashlib.sha256).hexdigest()
-                got = self.headers.get("X-Moss-Signature", "")
-                if not hmac.compare_digest(got, expected):
-                    self._json({"ok": False, "error": "invalid signature"},
-                               401)
-                    return
+            if not secret:
+                self._json({"ok": False, "error": "webhook not configured"},
+                           503)
+                return
+            if not self._check_rate_limit(
+                    "webhook", self.client_address[0],
+                    "MOSS_WEBHOOK_RATE_LIMIT", 120):
+                return
+            # HMAC-SHA256 is calculated over the exact raw request bytes and
+            # compared in constant time. Accept an optional conventional
+            # "sha256=" prefix without weakening validation.
+            expected = hmac.new(secret.encode("utf-8"), body,
+                                hashlib.sha256).hexdigest()
+            got = self.headers.get("X-Moss-Signature", "")
+            if got.startswith("sha256="):
+                got = got[len("sha256="):]
+            if not hmac.compare_digest(got, expected):
+                self._json({"ok": False, "error": "invalid signature"}, 401)
+                return
             try:
                 payload = json.loads(body.decode("utf-8"))
-            except Exception:  # noqa: BLE001
-                payload = {}
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                raise RequestBodyError("invalid JSON body")
+            if not isinstance(payload, dict):
+                raise RequestBodyError("JSON body must be an object")
             try:
-                result = self.server.serve.handle_provider_event(payload or {})
+                result = self.server.serve.handle_provider_event(payload)
                 self._json({"ok": True, **result})
             except KeyError as e:
                 self._json({"ok": False, "error": f"missing field: {e}"}, 400)
@@ -481,6 +610,10 @@ btn.disabled=false;
             # next call to this phone. Auth via X-Moss-Key api key.
             payload = self._read_json_body() or {}
             key = self.headers.get("X-Moss-Key", "")
+            if not self._check_rate_limit(
+                    "family", self._credential_identity(key),
+                    "MOSS_FAMILY_RATE_LIMIT", 60):
+                return
             try:
                 res = self.server.serve.family_ask(
                     key, payload.get("phone"), payload.get("text"),
@@ -531,14 +664,27 @@ btn.disabled=false;
             if not phone:
                 self._json({"ok": False, "error": "phone number required"}, 400)
                 return
-            result = originate_to_number(phone)
-            if result["ok"]:
-                self._json({"ok": True, "call_id": result["uuid"],
-                            "phone": phone})
+            provider = os.environ.get("MOSS_CALL_PROVIDER", "")
+            if provider:
+                router = DeliveryRouter()
+                ok, detail = router.send("call", phone,
+                    f"Voice call from IMVERA")
+                if ok:
+                    self._json({"ok": True, "call_id": detail, "phone": phone,
+                                "provider": provider})
+                else:
+                    self._json({"ok": False, "error": detail,
+                                "hint": "Check MOSS_CALL_PROVIDER_URL and MOSS_CALL_PROVIDER_KEY"},
+                               status=503)
             else:
-                self._json({"ok": False, "error": result["message"],
-                            "hint": "Check SIP gateway credentials in FreeSWITCH"},
-                           status=503)
+                result = originate_to_number(phone)
+                if result["ok"]:
+                    self._json({"ok": True, "call_id": result["uuid"],
+                                "phone": phone})
+                else:
+                    self._json({"ok": False, "error": result["message"],
+                                "hint": "No MOSS_CALL_PROVIDER set; SIP gateway credentials needed"},
+                               status=503)
             return
 
         # ---- CALL MY MAC (web button) -----------------------------------------
@@ -557,8 +703,7 @@ btn.disabled=false;
         self._json({"ok": False, "error": "not found"}, 404)
 
     def _read_body(self):
-        """Read exactly Content-Length bytes, BOUNDED. Returns None when the
-        header is malformed or the body exceeds the cap (caller answers 400).
+        """Read exactly Content-Length bytes with a hard allocation bound.
 
         AUDIT FIX: without a cap a single huge Content-Length allocates
         unbounded memory in a handler thread; a negative length used to
@@ -567,22 +712,32 @@ btn.disabled=false;
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except (TypeError, ValueError):
-            return None
-        if length <= 0:
+            raise RequestBodyError("invalid Content-Length")
+        if length < 0:
+            raise RequestBodyError("invalid Content-Length")
+        if length == 0:
             return b""
         if length > MAX_BODY_BYTES:
-            return None
-        return self.rfile.read(length)
+            raise RequestBodyError("body too large", 413)
+        body = self.rfile.read(length)
+        if len(body) != length:
+            raise RequestBodyError("incomplete request body")
+        return body
 
     def _read_raw_body(self):
-        return self._read_body() or b""
+        return self._read_body()
 
     def _read_json_body(self):
         raw = self._read_raw_body()
-        try:
-            return json.loads(raw.decode("utf-8"))
-        except Exception:  # noqa: BLE001
+        if not raw:
             return {}
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise RequestBodyError("invalid JSON body")
+        if not isinstance(payload, dict):
+            raise RequestBodyError("JSON body must be an object")
+        return payload
 
     def _write_json(self, obj, status=200):
         body = json.dumps(obj, ensure_ascii=False).encode()
@@ -655,9 +810,12 @@ btn.disabled=false;
         sd = str(body.get("segment_dir") or "")
         try:
             base = os.path.realpath("/tmp/mossvoice")
+            resolved = os.path.realpath(sd)
             if sd.startswith("/tmp/mossvoice/") and \
-                    os.path.realpath(sd).startswith(base + os.sep):
-                segment_dir = sd
+                    resolved.startswith(base + os.sep):
+                # Use the path that was actually validated, not the original
+                # symlink-bearing spelling.
+                segment_dir = resolved
         except OSError:
             segment_dir = None
         ctx = None

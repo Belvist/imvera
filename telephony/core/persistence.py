@@ -56,6 +56,22 @@ def _now():
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def _durable_append(path, line):
+    """Append one UTF-8 line and fsync it before returning."""
+    data = line.encode("utf-8")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    try:
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise OSError("short WAL write")
+            view = view[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 class _Spool:
     """Append-only durable JSONL WAL + in-memory pending set.
 
@@ -68,12 +84,14 @@ class _Spool:
     """
 
     def __init__(self, directory):
-        os.makedirs(directory, exist_ok=True)
+        os.makedirs(directory, mode=0o700, exist_ok=True)
+        os.chmod(directory, 0o700)
         self.path = os.path.join(directory, "persistence.wal.jsonl")
         self._pending = {}
         self._written = 0
         self._lock = threading.Lock()
         if os.path.exists(self.path):
+            os.chmod(self.path, 0o600)
             try:
                 with open(self.path, "r", encoding="utf-8") as f:
                     for line in f:
@@ -88,9 +106,12 @@ class _Spool:
 
     def append(self, record):
         with self._lock:
+            line = json.dumps(record, ensure_ascii=False) + "\n"
+            # Disk first, memory second: if the filesystem refuses the write,
+            # emit() fails loudly and no phantom in-memory "durable" record is
+            # created.
+            _durable_append(self.path, line)
             self._pending[record["id"]] = record
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
             self._written += 1
 
     def ack(self, record_id):
@@ -117,7 +138,16 @@ class _Spool:
             tmp = self.path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 f.writelines(lines)
+                f.flush()
+                os.fsync(f.fileno())
+            os.chmod(tmp, 0o600)
             os.replace(tmp, self.path)
+            # Persist the rename itself across a host crash.
+            dfd = os.open(os.path.dirname(self.path), os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
             self._written = len(self._pending)
 
 
@@ -277,8 +307,9 @@ class PersistenceWorker:
 
     def _dead_letter(self, record):
         with self._dead_letter_lock:
-            with open(self._dead_letter_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            _durable_append(
+                self._dead_letter_path,
+                json.dumps(record, ensure_ascii=False) + "\n")
 
     def drain(self, timeout=30.0):
         """Block until every durably-recorded event is applied. Returns True

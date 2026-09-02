@@ -10,32 +10,83 @@
 диалог с Веры (тёплый, с памятью контекста) → вердикт безопасности →
 уведомление семьи. Полностью офлайн на CPU, в Docker-микросервисах.
 
-## ЕДИНЫЙ МАРШРУТ (директива владельца 2026-08-21 — действует, остальные планы заморожены)
+## ЕДИНЫЙ МАРШРУТ (канон с 2026-09-02)
 
-```text
-1. ВЫБРАТЬ ГОЛОС            ← МЫ ЗДЕСЬ (базовая линия снята)
-2. ПРОИЗНОШЕНИЕ             (VeraSpeechFrontend — сделан: SSML-паузы,
-                             числа/даты, ударения, мастеринг)
-3. CONTINUOUS AUDIO         (убить record→WAV→HTTP→playback)
-4. STREAMING STT            (распознавание во время речи)
-5. STREAMING TTS + BARGE-IN (100–250 мс до тишины)
-6. <1–1.5 с до первого звука (latency trace на каждую реплику)
-7. 20 × 5-мин звонков без сбоев
-8. РАЗМОРОЗКА PRODUCT CORE  (consent/schedule/UI/billing)
-9. SCALE/CELLS              (по §16 плана)
-```
+**Канонический план Э0–Э12:** [`ROADMAP.md`](ROADMAP.md).
+Архитектура v1: [`docs/ARCHITECTURE_v1.md`](docs/ARCHITECTURE_v1.md).
+Stack v1: [`docs/STACK_v1.md`](docs/STACK_v1.md).
+Хроника инцидентов/замеров: [`docs/CHRONICLE.md`](docs/CHRONICLE.md).
 
-**Заморожено до конца маршрута:** новые таблицы, billing, UI, Kubernetes,
-Temporal, cell router, новые safety-правила, новые арх-документы, обучение
-VeraVoice. Не трогать без прямого указания владельца.
+Голосовые шаги 1–7 прежнего маршрута поглощены этапами **Э0–Э1**.
+Product Core / согласие / расписание / приложение — **Э2–Э8**.
+Пилот и платный запуск — **Э11–Э12**.
 
-## Текущее состояние (обновлено 2026-08-23)
+**Заморожено до закрытия соответствующего гейта ROADMAP:** Kubernetes /
+Temporal / cell router (до Э12), обучение VeraVoice, смена stack v1 без
+бенчмарка, cutover 4400→VoiceRuntime без P4 живого Zoiper-звонка.
 
+## Текущее состояние (обновлено 2026-09-02)
+
+- **Э4 Product Core + API (skeleton 2026-09-02):** миграция
+  `telephony/migrations/006_product_core.sql` (users/households/members,
+  elders profile, contacts, schedules, device_tokens, call_jobs,
+  household_id на call_sessions/incidents). Пакет `telephony/product/` —
+  FastAPI на `MOSS_PRODUCT_PORT` (9480): OTP+JWT HS256 (`MOSS_JWT_SECRET`;
+  RS256 — next), CRUD households/elders/schedule, calls/incidents/questions/
+  consent, DELETE /me (export+revoke+audit). IDOR = membership check на
+  каждом household-scoped маршруте; rate limit через `TokenBucketLimiter`.
+  Dev OTP: `MOSS_OTP_DEV_CODE`. Запуск: `cd telephony && python -m product`.
+  Тесты: `tests/test_product_api.py` (in-memory, 7 OK).
+- **Э5 Scheduler/Dialer (2026-09-02):** `telephony/core/scheduler.py` —
+  enqueue_due_jobs (идемпотентно на elder+window), claim_jobs
+  (`FOR UPDATE SKIP LOCKED` / lease_owner), complete_job, policy_next_attempt
+  (3×15 мин → no_contact), in_quiet_hours, kill_switch
+  (`MOSS_OUTBOUND_KILL_SWITCH`), may_originate (consent + quiet + kill).
+  Worker: `telephony/workers/scheduler_worker_main.py` (dry-run /
+  `originate_to_number`). Тесты: `tests/test_scheduler.py` (14 OK + 1 skip).
+- **Э1 MediaAdapter progress (2026-09-02):** `PreRollBuffer` /
+  `GenerationGuard` / `StreamingPcmAdapter` в `voice_runtime/media_adapter.py`;
+  LiveWavReader остаётся dev-only. Offline barge-in:
+  `voice_runtime/barge_in_harness.py` (20 trials ≤300 ms PASS).
+  `moss_agent.lua` не удалён (cutover на live P4).
 - **Стек (прод, Docker):** Silero TTS ru v5 (голос kseniya, SSML-фронтенд,
-  мастеринг) · faster-whisper **tiny** fp32 (STT, Silero-VAD шумогейт) ·
-  llama.cpp + Qwen3-4B Q4_K_M (LLM, OpenAI-протокол, thinking off,
-  keep-alive) · Postgres/Redis/MinIO · workflow-worker (outbox/incidents
-  отдельно от realtime) · FreeSWITCH на хосте (ext 4400, кусочная запись).
+  мастеринг) · faster-whisper **base** fp32 (STT, dev override — small OOMs
+  на 16GB) · llama.cpp + Qwen3-4B Q4_K_M (LLM, answers:9500, OpenAI
+  протокол, thinking off, keep-alive) · Postgres/Redis/MinIO ·
+  workflow-worker (outbox/incidents) · FreeSWITCH на хосте (ext 4400).
+- **ДИАЛОГ/БЕЗОПАСНОСТЬ ФИНАЛ 2026-09-02:** DialogueFSM теперь не залипает:
+  `uncertain_red` с симптомом остаётся в `SAFETY_CONFIRM`, восстановление
+  позитивом возвращает `SAFETY_ACTIVE/SAFETY_CONFIRM -> CHECKIN`, а
+  `CLARIFY/HELP/WORRY` имеют явные выходы на обычный ответ. Вопросительный
+  знак больше не обходит safety-классификацию; в активном side-question
+  danger/symptom/uncertain обрабатываются на месте, не ломая resume.
+  Добавлен детерминированный promise-guard: «я позвоню/вызову/отправлю»
+  заменяется безопасным fallback ДО озвучки и до записи в память.
+- **LLM/HTTP Hardening 2026-09-02:** OpenAI circuit breaker сбрасывается на
+  успехе (batch и `[DONE]` stream); cloud partial-stream error больше не
+  дублирует ответ локальным fallback. `/webhook/provider` fail-closed без
+  `MOSS_WEBHOOK_SECRET` (503), HMAC обязателен при включении. Внутренние
+  control API (`/calls`, `/turn*`, `/incidents/*`, `/call*`, `/say`) имеют
+  optional bearer token `MOSS_INTERNAL_API_TOKEN`; без токена разрешены
+  только direct loopback или явный `MOSS_TRUST_LOOPBACK_PROXY=1` для текущей
+  Docker loopback-proxy топологии. Добавлен bounded token-bucket rate limit
+  для internal/family/webhook. Oversized/invalid JSON теперь явные 413/400.
+- **PERSISTENCE/PII 2026-09-02:** durable spool переведён на fsync + 0700
+  directory + 0600 WAL/dead-letter; compose хранит его в named volume
+  `persist_spool` (`/var/lib/mossvoice/persist`), не в `/tmp`. Директории
+  call audio/tmp создаются 0700. ESL-пароль полностью убран из tracked
+  launchers; `start_telephony.command` читает `~/.fs_cli_conf`, как
+  `scripts/run_runtime.sh`. ESL originate/kill валидирует extension/phone/
+  channel id и закрывает failed sockets. `asset/`, `*.safetensors`,
+  `piper_voices/`, arena WAV добавлены в `.gitignore`.
+- **ЛЛМ-ФИКС 2026-09-02:** `MOSS_LLM_PROTOCOL=openai` — адаптер ходит на
+  `/v1/chat/completions` (llama.cpp), а НЕ на несуществующий `/chat` (404).
+  `max_tokens` увеличен 70→100. SKILL.state контекст передаётся как
+  `assistant` role (а не `user`) — модель воспринимает как свою память.
+  Temperature 0.8→0.65 (предсказуемее). LLM timeout 60→15 с (не зависает).
+  Pre-STT energy gate 0.03→0.002 (тихая речь пожилых больше не режется).
+  LLM теперь отвечает осмысленно, не скриптовыми фразами.
+  Тесты: 335 OK, 28 skip.
 - **Скорость хода:** 0.5–3 с тёплый (STT 0.5–0.9 + LLM ~1 + TTS 0.15) +
   ~1 с тишины. Стриминговая выдача по предложениям (seg-файлы в
   `/tmp/mossvoice`, Lua играет сразу). Кусочная запись при шуме:
@@ -46,14 +97,14 @@ VeraVoice. Не трогать без прямого указания владе
 - **Базовая линия голоса:** `voice-bench/` — Silero RTF 0.015 / round-trip
   WER 0.269 (500 фраз); Piper RTF 0.026 / WER 0.285. CosyVoice 300M —
   живее, но RTF 3.3 на CPU (заморожен до x86/GPU-пула).
-  - **Тесты:** `make test-fast` (309 OK, 28 skip).
+  - **Тесты:** `make test-fast` (335 OK, 28 skip).
 - **SKILL.state (2026-09-01):** диалоговый контекст для LLM передан с
   полного history-окна (`llm_history[-8:]` ≈ 3-6k токенов/ход) на
   компактную структуру `SkillState` (текущая тема, факты, последний
   вопрос/ответ, safety-статус, сводка ≈ 200-500 токенов). Raw
   `memory`/`llm_history` сохранены для persistence/аудита; LLM
   получает только компактную форму. ~50× экономия токенов при той же
-  точности. `make test-fast` 309 OK, `dialog_quality.py --strict`
+  точности. `make test-fast` 335 OK, `dialog_quality.py --strict`
   14/14 PASS.
 - **Аудит кода 2026-08-21:** полный ревью (72 py-файла + Lua + compose),
   исправлены все критичные/major дефекты №1–17 (стабильность, безопасность,
@@ -816,6 +867,19 @@ State / Samek «Practical UML Statecharts» / практика Voice UI). При
 
 ## Ключевые решения (не переоткрывать)
 
+- **ЛЛМ必须用 OpenAI-протокол (2026-09-02):** `MOSS_LLM_PROTOCOL=openai`
+  — llama.cpp llama-server отвечает на `/v1/chat/completions`, а НЕ на
+  `/chat`. Без этой настройки адаптер молча ходит на несуществующий эндпоинт
+  и возвращает None → скриптовый fallback. Не путать с `MOSS_LLM_PROVIDER`.
+- **SKILL.state контекст = assistant role (2026-09-02):** контекстные строки
+  ("текущая тема — «самочувствие»") передаются как `assistant` (а не `user`),
+  чтобы модель воспринимала их как свою память, а не как ответы пользователя.
+- **max_tokens=100 (2026-09-02):** увеличен с 70 — тёплый ответ с вопросом
+  требует 80-100 токенов. Потеря ~200мс, выигрыш в качестве.
+- **Pre-STT energy gate 0.002 (2026-09-02):** понижен с 0.03 — порог 0.03
+  резал тихую речь пожилых ДО распознавания. Теперь STT работает на всей
+  речи, а не только на громкой. Совпадает с SILENCE_ENERGY в stt.py.
+
 - **Silero-VAD не потокобезопасен (2026-08-22):** TorchScript-модель хранит
   LSTM-state в себе; параллельный инференс из нескольких HTTP-потоков
   ломает state и валит процесс (`double free or corruption`). Весь инференс
@@ -964,3 +1028,14 @@ Piper — `~/tts-arena`. Сэмплы голоса — `~/Downloads/imvera_sampl
   `scripts/run_runtime.sh`.
 - **S7 RTP/медиа:** `sofia status` — zoiper bound to
   127.0.0.1:5060, RUNNING. SIP-транк работает.
+ - **ЛИБОМодель Qwen3-4B на llama.cpp: thinking глючил (2026-09-01):**
+   параметр `chat_template_kwargs: {enable_thinking: false}` **не работал** —
+   Qwen3-4B на llama.cpp-совместимом сервере всё равно генерировал токены
+   только в `reasoning_content`, `content` оставался пустым → `_finish_chat()`
+   возвращал `None` → скриптовый fallback. Причина задержки: ~220 токенов
+   reasoning за ~9 с при `max_tokens=220`. ФИКС в [llm.py](telephony/adapters/llm.py):
+   добавлены `"thinking": False` + `"stop": ["\n\n"]` в тело запроса
+   (`_chat_openai` и `_chat_openai_stream`), `re.sub` для очистки `</think>`-маркера
+   из `reasoning_content` при пустом `content`. `temperature` поднята до 0.8
+   (было 0.65/0.75/0.4) для обеспечения времени ответа ~2-3 сек (STT+LLM+TTS).
+   Тесты: curl → content за 564 мс, 34 токена, reasoning=0. `make test-fast` 309 OK.
