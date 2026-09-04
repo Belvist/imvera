@@ -1,7 +1,7 @@
 # VERIFICATION GATE REPORT
 
 Generated: 2026-09-04T00:41:37Z
-Root: `/Users/earflow/Downloads/MossVoice`
+Root: repository root (machine-specific path omitted)
 
 ## A — Stream consumption (no early break in for-delta)
 

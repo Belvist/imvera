@@ -219,7 +219,7 @@ did not inject `MOSS_BUILD_SHA` at build time.
 **Verify (owner):**
 
 ```bash
-cd /Users/earflow/Downloads/MossVoice
+cd /path/to/imvera
 export MOSS_BUILD_SHA=$(git rev-parse --short HEAD)
 export MOSS_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 docker compose -f docker/docker-compose.yml build voice   # telephony uses this image
@@ -268,7 +268,7 @@ commits or if `make up` was not run after pull.
 **Owner must do to get fresh code:**
 
 ```bash
-cd /Users/earflow/Downloads/MossVoice
+cd /path/to/imvera
 git pull   # or replace tree with this workspace
 export MOSS_BUILD_SHA=$(git rev-parse --short HEAD)
 export MOSS_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)

@@ -1,7 +1,7 @@
 # LIVE PRODUCT GATE Report
 
 **Updated (UTC):** 2026-09-04T01:00:00Z  
-**Repo:** `/Users/earflow/Downloads/MossVoice`  
+**Repo:** repository root (machine-specific path omitted)
 **GIT_SHA:** `0253ec8` (`git rev-parse --short HEAD`)  
 **Scope:** HTTP/code gates + host Metal LLM; owner SIP still open.
 
