@@ -1,0 +1,104 @@
+---
+description: Senior/Staff verification loop — never claim done without observable proof; OBSERVE→CHANGE→VERIFY→INSPECT→CORRECT→REVERIFY.
+alwaysApply: true
+---
+
+# Staff Engineer Verification Loop
+
+**Never claim "done" without observable verification.** Code that compiles is not shipped.
+If you cannot run a check, say so — do not substitute confidence for evidence.
+
+Architecture and security live in sibling rules — cross-reference, do not duplicate:
+`engineering-architecture-first.mdc`, `security-and-fail-secure.mdc`, `zero-stubs-production-code.mdc`.
+
+Full workflow detail: `.cursor/skills/staff-engineer-verification-loop/SKILL.md`.
+
+---
+
+## 1. The Loop (mandatory for non-trivial work)
+
+```
+OBSERVE → CHANGE → VERIFY → INSPECT → CORRECT → REVERIFY
+```
+
+| Phase | Agent obligation |
+|-------|------------------|
+| **OBSERVE** | Reproduce or define the failure/success signal before editing. Read logs, tests, AGENTS.md context. |
+| **CHANGE** | Minimal diff; fix root cause, not symptoms. No test weakening to get green. |
+| **VERIFY** | Run checks from the verification matrix (skill) for this change type. Capture exit codes. |
+| **INSPECT** | Read test output, lints, diff yourself — did VERIFY actually prove the acceptance criteria? |
+| **CORRECT** | If INSPECT fails intent, fix and loop. One retry with a new hypothesis beats three blind edits. |
+| **REVERIFY** | Re-run failed checks plus any regression suite touched by the fix. |
+
+Stop looping only when acceptance criteria are met **or** you report a blocker with evidence.
+
+---
+
+## 2. Mental Roles (sequential, before "done")
+
+Play each role explicitly — even solo:
+
+1. **Architect** — invariants, FSM, failure modes (`engineering-architecture` skill). Gate: design in ≤5 sentences.
+2. **Builder** — complete implementation, no stubs (`verify_no_stubs` on touched prod files).
+3. **Tester** — run matrix checks; add/adjust tests only when they prove real behavior.
+4. **Reviewer** — adversarial pass: IDOR, secrets, race conditions, "what if FS/LLM down?"
+
+Skipping a role is allowed only for trivial one-line doc fixes — state which roles you skipped.
+
+---
+
+## 3. MossVoice Definition of Done
+
+All must be true before "готово" / "done":
+
+- [ ] **Task contract** filled (Goal, Acceptance, Constraints, Verification) — see skill template.
+- [ ] **Stubs:** `make verify-stubs` or targeted `verify_no_stubs.py` on touched prod paths — exit 0.
+- [ ] **Tests:** `make test-fast` green (or targeted module tests with justification).
+- [ ] **Domain gates** (if applicable):
+  - dialogue / `conversation_system` → `dialog_quality --strict`, `synthetic_caller --strict`, `test_auto_call_scenarios`
+  - telephony / SIP path → `live_vera_conversation.py --strict` when FreeSWITCH available
+  - security / API → security rule checklist (skill Stage 3)
+- [ ] **Lint:** no new errors on edited files.
+- [ ] **Honesty block** in final message — list what was **NOT** verified (see §4).
+
+Doc-only changes: verify formatting/links; skip test matrix unless tests/docs coupling changed.
+
+---
+
+## 4. Honesty (non-negotiable)
+
+Always state explicitly what you did **not** run:
+
+| Often skipped | Say it |
+|---------------|--------|
+| Live Zoiper / RTP | "Not verified on live SIP — HTTP harness only." |
+| `make up` / container rebuild | "Not redeployed; code change only." |
+| FreeSWITCH / ESL | "FS not available in this session." |
+| OpenRouter / cloud LLM | "LLM path not exercised live." |
+
+**Forbidden:** implying prod verification from unit tests alone; hiding failed checks; weakening assertions for green CI.
+
+---
+
+## 5. Change Discipline
+
+- **Small diffs** — one logical change per loop iteration.
+- **Root cause** — if the fix needs a comment explaining a hack, redesign first.
+- **Tests are spec** — never delete/weaken tests to pass; fix product or add missing coverage.
+- **Fail secure** — on uncertainty, fail closed and report; no fake success payloads.
+
+---
+
+## 6. Final Report Shape
+
+Every substantial completion message includes:
+
+```
+Implemented: …
+Verified: … (commands + outcomes)
+Tests: … (counts / PASS-FAIL)
+Not verified: …
+Remaining risks: …
+```
+
+See skill for full template and verification matrix by change type.

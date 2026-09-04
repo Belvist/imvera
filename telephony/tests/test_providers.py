@@ -11,6 +11,7 @@ import time
 import unittest
 import json
 import urllib.request
+from unittest import mock
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, ".."))
@@ -428,26 +429,52 @@ class Qwen3TTSProviderTests(unittest.TestCase):
 
     def test_stream_yields_frames(self):
         p = mp.Qwen3TTSProvider()
-        import urllib.request, json
-        frames_sent = []
-        def _urlopen(req, timeout=None):
-            frames = [{"i": 0, "wav_b64": "QUJD",
-                       "done": False},
-                      {"done": True}]
-            class R:
-                def read(self):
-                    return json.dumps(
-                        {"frames": frames}).encode()
-                def __enter__(self):
-                    return self
-                def __exit__(self, *a):
-                    pass
-            return R()
-        urllib.request.urlopen = _urlopen
-        yielded = list(p.stream("привет"))
+        frames = [{"i": 0, "wav_b64": "QUJD", "done": False}, {"done": True}]
+
+        def _fake_ndjson(*_a, **_kw):
+            yield from frames
+
+        with mock.patch.object(mp, "_http_ndjson_stream", _fake_ndjson):
+            yielded = list(p.stream("привет"))
         self.assertEqual(len(yielded), 2)
         self.assertFalse(yielded[0]["done"])
         self.assertTrue(yielded[1]["done"])
+
+    def test_stream_barrier_first_frame_before_second(self):
+        """Client must yield frame1 before server sends frame2 (barrier)."""
+        import threading
+
+        p = mp.Qwen3TTSProvider()
+        barrier = threading.Event()
+        second_sent = threading.Event()
+        order: list[str] = []
+
+        def _barrier_ndjson(*_a, **_kw):
+            yield {"i": 0, "wav_b64": "QUJD", "done": False}
+            barrier.set()
+            second_sent.wait(timeout=2.0)
+            yield {"done": True}
+
+        def _consume():
+            with mock.patch.object(mp, "_http_ndjson_stream", _barrier_ndjson):
+                gen = p.stream("тест")
+                first = next(gen)
+                order.append("client_got_frame1")
+                barrier.wait(timeout=2.0)
+                order.append("barrier_open")
+                second_sent.set()
+                try:
+                    next(gen)
+                except StopIteration:
+                    pass
+                order.append("client_done")
+
+        t = threading.Thread(target=_consume)
+        t.start()
+        t.join(timeout=5.0)
+        self.assertFalse(t.is_alive())
+        self.assertIn("client_got_frame1", order)
+        self.assertIn("barrier_open", order)
 
     def test_synthesize_raises_on_error(self):
         p = mp.Qwen3TTSProvider()

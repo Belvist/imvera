@@ -207,6 +207,13 @@ class VADTests(unittest.TestCase):
         turns, onsets = feed(v, 1200, 200)   # cumulative ~350 ms
         self.assertGreaterEqual(len(onsets), 1)
 
+    def test_finish_turn_drops_low_energy(self):
+        v = VAD()
+        quiet = [80] * (PRE_ROLL_SAMPLES + 8000)
+        v.buffer = list(quiet)
+        v.speech_ms = 500
+        self.assertIsNone(v._finish_turn())
+
 
 class PlaybackWatchdogTests(unittest.TestCase):
     """P3 (2026-08-29): a lost PLAYBACK_STOP must not wedge the session —
@@ -288,6 +295,112 @@ class CallSessionStartTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(created.get("mode"), "check_in")
         self.assertEqual(created.get("caller_id"), "+79001234567")
+
+
+class PhantomTurnDropTests(unittest.TestCase):
+    """Phantom VAD turns (low energy) must not cancel an in-flight stream."""
+
+    class _Agent:
+        cancel_calls = 0
+        turn_calls = 0
+
+        def stream_cancel(self, call_id):
+            PhantomTurnDropTests._Agent.cancel_calls += 1
+
+        def turn_stream(self, *a, **k):
+            PhantomTurnDropTests._Agent.turn_calls += 1
+
+    class _Esl:
+        def api_break(self, *a, **k):
+            pass
+
+    def setUp(self):
+        self._Agent.cancel_calls = 0
+        self._Agent.turn_calls = 0
+
+    def test_phantom_turn_dropped_without_cancel(self):
+        from call_session import TURN_ENERGY_MIN, _turn_mean_energy
+        logs = []
+        s = CallSession("uuid", self._Esl(), self._Agent(), "/tmp/x",
+                        log=logs.append)
+        s.streaming = True
+        s.call_id = "call-1"
+        # ~1.7 s of near-silence (matches live blank chunks ~0.0026 energy)
+        n = int(16000 * 1.7)
+        turn = [50] * n
+        self.assertLess(_turn_mean_energy(turn), TURN_ENERGY_MIN)
+        s._on_turn(turn)
+        self.assertEqual(self._Agent.cancel_calls, 0)
+        self.assertEqual(self._Agent.turn_calls, 0)
+        self.assertTrue(any("phantom" in m for m in logs))
+
+    def test_real_turn_submits_and_cancels_stream(self):
+        logs = []
+        s = CallSession("uuid", self._Esl(), self._Agent(), tempfile.mkdtemp(),
+                        log=logs.append)
+        s.streaming = True
+        s.playing = True
+        s.call_id = "call-1"
+        n = int(16000 * 1.0)
+        turn = [8000] * n
+        with mock.patch("call_session.write_wav"):
+            s._on_turn(turn)
+        self.assertEqual(self._Agent.cancel_calls, 1)
+        self.assertEqual(self._Agent.turn_calls, 1)
+
+    def test_barge_ignored_while_processing_not_playing(self):
+        logs = []
+        s = CallSession("uuid", self._Esl(), self._Agent(), "/tmp/x",
+                        log=logs.append)
+        s.streaming = True
+        s.call_id = "call-1"
+        s._on_barge_in()
+        self.assertEqual(self._Agent.cancel_calls, 0)
+        self.assertFalse(s.suppress)
+        self.assertTrue(any("ignored" in m for m in logs))
+
+    def test_barge_while_playing_cancels_stream(self):
+        logs = []
+        s = CallSession("uuid", self._Esl(), self._Agent(), "/tmp/x",
+                        log=logs.append)
+        s.streaming = True
+        s.playing = True
+        s.current_file = "/tmp/mossvoice/reply-seg.wav"
+        s.call_id = "call-1"
+        s._on_barge_in()
+        self.assertEqual(self._Agent.cancel_calls, 1)
+        self.assertTrue(s.suppress)
+
+    def test_barge_during_backchannel_ack_does_not_cancel_stream(self):
+        logs = []
+        s = CallSession("uuid", self._Esl(), self._Agent(), "/tmp/x",
+                        log=logs.append)
+        s.streaming = True
+        s.playing = True
+        s.current_file = "/tmp/mossvoice/acks/ack-01.wav"
+        s.call_id = "call-1"
+        s._on_barge_in()
+        self.assertEqual(self._Agent.cancel_calls, 0)
+        self.assertFalse(s.suppress)
+        self.assertTrue(s.streaming)
+        self.assertFalse(s.playing)
+
+    def test_turn_queued_during_processing_not_playing(self):
+        logs = []
+        s = CallSession("uuid", self._Esl(), self._Agent(), tempfile.mkdtemp(),
+                        log=logs.append)
+        s.streaming = True
+        s.call_id = "call-1"
+        n = int(16000 * 1.0)
+        turn = [8000] * n
+        with mock.patch("call_session.write_wav"):
+            s._on_turn(turn)
+        self.assertEqual(self._Agent.turn_calls, 0)
+        self.assertIsNotNone(s._pending_turn)
+        s.streaming = False
+        s._maybe_flush_pending_turn()
+        self.assertEqual(self._Agent.turn_calls, 1)
+        self.assertIsNone(s._pending_turn)
 
 
 if __name__ == "__main__":

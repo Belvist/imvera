@@ -15,7 +15,6 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(_HERE))
 
 from core.safety_engine import Observation, SafetyEngine  # noqa: E402
-from core.dialogue import Agent  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -296,83 +295,6 @@ class MachineTests(unittest.TestCase):
             ev = SafetyEngine().observe(Observation(raw_text=empty))
             self.assertEqual(ev.kind, "no_speech")
 
-
-# ---------------------------------------------------------------------------
-# Agent-level flows (the dialogue machine consuming VerdictEvents)
-# ---------------------------------------------------------------------------
-
-class AgentFlowTests(unittest.TestCase):
-    def _agent(self, *turns, conf=0.7):
-        # Qwen3-ASR: None confidence is treated as low_conf (U9) — these
-        # dialogue-flow tests use explicit high confidence so the U9 gate
-        # does not interfere with the normal flow assertions.
-        a = Agent(llm=None)
-        for t in turns:
-            a._last_confidence = conf
-            a.plan_reply(t)
-        return a
-
-    def test_healthy_call_is_green(self):
-        a = self._agent("всё хорошо", "нет")
-        self.assertEqual(a.status, "ok")
-        self.assertEqual(a.outcome["status"], "ok")
-
-    def test_bad_feeling_then_confirmed_is_alert(self):
-        """2026-08-29: a bare «да»/«да плохо» on an OPEN control question
-        («Как вас сейчас самочувствие?») is NOT a danger confirmation — it
-        goes to uncertain/attention so the family is not alarmed for a
-        routine complaint. A real confirmed fall/emergency still alerts
-        (covered by the corpus: «упала»/«скорая» = confirmed_red)."""
-        a = self._agent("плохо", "да")
-        self.assertEqual(a.status, "attention")
-        self.assertIn("самочувствие не подтверждено", a.notes)
-
-    def test_bad_feeling_then_fine_is_attention_cleared(self):
-        a = self._agent("плохо", "всё хорошо", "нет")
-        self.assertEqual(a.status, "ok")
-
-    def test_bad_feeling_then_non_answer_is_attention(self):
-        a = self._agent("плохо", "не знаю")
-        self.assertEqual(a.status, "attention")
-
-    def test_help_first_is_attention(self):
-        a = self._agent("мне нужна помощь")
-        self.assertEqual(a.status, "attention")
-        self.assertIn("требуется помощь", a.outcome["notes"])
-
-    def test_third_person_is_attention_not_alert(self):
-        a = self._agent("бабушка упала", "нет")
-        self.assertEqual(a.status, "attention")
-        self.assertNotEqual(a.status, "alert")
-
-    def test_object_fall_is_not_alert(self):
-        a = self._agent("упала банка", "нет")
-        self.assertNotEqual(a.status, "alert")
-
-    def test_unknown_is_not_masked_to_attention(self):
-        a = self._agent("погода сегодня хорошая")
-        # first turn "unknown" stays its own status, never attention-masked
-        self.assertIn(a.status, ("unknown", "ok"))
-
-    def test_unknown_never_becomes_green_by_itself(self):
-        a = self._agent("ну, как-то так", "погода хорошая")
-        self.assertIn(a.status, ("unknown", "ok", "attention"))
-
-    def test_done_guard_blocks_late_turns(self):
-        a = self._agent("вызовите скорую")
-        before = (a.status, list(a.notes), len(a.memory),
-                  a.safety.state)
-        plan = a.plan_reply("всё хорошо")   # late/duplicate turn
-        self.assertTrue(plan.get("terminal"))
-        after = (a.status, list(a.notes), len(a.memory), a.safety.state)
-        self.assertEqual(before, after, "done-guard let a late turn mutate")
-
-    def test_reset_gives_fresh_safety(self):
-        a = self._agent("скорая")
-        a.reset()
-        self.assertEqual(a.status, "unknown")
-        self.assertEqual(a.safety.state, "NONE")
-        self.assertFalse(a.done)
 
 
 class FallAsymmetryAndContextualEmergencyTests(unittest.TestCase):

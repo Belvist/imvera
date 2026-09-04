@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.delivery import SmsChannel, VoiceChannel  # noqa: E402
 from core.incidents import IncidentEngine  # noqa: E402
+from adapters.esl import originate_status  # noqa: E402
 
 
 class _Response:
@@ -82,10 +83,43 @@ class DeliveryChannelTests(unittest.TestCase):
         self.assertIn("ValueError", detail)
         open_.assert_not_called()
 
+    def test_esl_failure_uses_message_not_error_key(self):
+        env = {"MOSS_CALL_VIA_ESL": "1"}
+        with mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch("adapters.esl.originate_to_number",
+                           return_value={"ok": False, "uuid": None,
+                                         "message": "USER_NOT_REGISTERED"}):
+            ok, detail = VoiceChannel().send("+79001234567", "Call")
+        self.assertFalse(ok)
+        self.assertEqual(detail, "call:esl:USER_NOT_REGISTERED")
+
+    def test_esl_success_includes_uuid(self):
+        env = {"MOSS_CALL_VIA_ESL": "1"}
+        with mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch("adapters.esl.originate_to_number",
+                           return_value={"ok": True, "uuid": "abc-123",
+                                         "message": "Call originated"}):
+            ok, detail = VoiceChannel().send("+79001234567", "Call")
+        self.assertTrue(ok)
+        self.assertEqual(detail, "call:esl:ok:abc-123")
+
+
+class EslOriginateStatusTests(unittest.TestCase):
+    def test_failure_prefers_message_over_missing_error(self):
+        ok, detail = originate_status(
+            {"ok": False, "uuid": None, "message": "USER_NOT_REGISTERED"})
+        self.assertFalse(ok)
+        self.assertEqual(detail, "USER_NOT_REGISTERED")
+
+    def test_failure_falls_back_to_error_key(self):
+        ok, detail = originate_status({"ok": False, "error": "legacy"})
+        self.assertFalse(ok)
+        self.assertEqual(detail, "legacy")
+
 
 class _Router:
     def channel_names(self):
-        return ["telegram", "sms", "call"]
+        return ["push", "sms", "call"]
 
 
 class _PG:

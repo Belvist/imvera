@@ -1,0 +1,40 @@
+---
+description: Mandatory security standards: defense-in-depth, zero-trust, fail-secure, parameterization, and least privilege.
+alwaysApply: true
+---
+
+# Security & Fail-Secure Architecture
+
+Security is not an afterthought; it is an active constraint on every architectural and implementation decision.
+
+---
+
+## 1. Core Principles
+
+1. **Least Privilege:** Services, database roles, and API tokens have only the minimal permissions required for their specific function.
+2. **Fail Secure:** On any internal error, unhandled exception, or unexpected input, the system must fail safe/closed. Never open access or proceed with sensitive operations on error.
+3. **Defense-in-Depth:** Validation at the API perimeter does not replace validation at the service, domain, and database layers.
+4. **Zero Trust:** Never trust client-supplied identifiers (`user_id`, `household_id`) without verifying ownership/membership on the server.
+
+---
+
+## 2. Hard Security Rules
+
+### A. Injection & Input Validation
+- **SQL:** Exclusively use parameterized queries (`%s`, `?`, or ORM parameter bindings). String interpolation (`f"SELECT ... WHERE id = {val}"`) is strictly prohibited.
+- **Commands / Shell:** Never construct shell command strings with user-provided parameters. Use array-based invocation (`subprocess.run(["cmd", arg1, arg2], check=True)`) or safe APIs.
+- **Input Boundaries:** Every incoming request body must be schema-validated and size-limited (`Content-Length` checks and max body read bounds) before parsing to prevent Denial-of-Service / OOM.
+
+### B. Secrets & Cryptography
+- **No Secrets in Code:** Passwords, API tokens, HMAC keys, and private keys must be loaded from environment variables or secure key vaults. Never hardcode secrets.
+- **Constant-Time Verification:** Verify authentication tokens, passwords, and webhook HMAC signatures using constant-time comparison (`hmac.compare_digest`), never standard equality (`==`).
+- **Secret Masking:** Ensure secrets and auth headers are redacted from logging, error traces, and audit logs.
+
+### C. IDOR & Access Control
+- Every household-, elder-, or call-scoped route must verify that the authenticated caller has an explicit membership or grant for that specific entity before reading or writing data.
+- Return generic `404 Not Found` or `403 Forbidden` consistently to avoid ID enumeration leaks.
+
+### D. PII & Data Minimization
+- Telephony recordings and transcripts contain sensitive medical and personal data.
+- Enforce strict filesystem permissions (`0700` directories, `0600` files).
+- Apply data retention lifecycles: purge audio and transcripts per consent and retention policies with cryptographic deletion receipts.

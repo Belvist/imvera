@@ -78,10 +78,23 @@ if not os.path.exists(REF):
 
 def services():
     py = python_bin()
+    llm_runtime = os.environ.get("MOSS_LLM_RUNTIME", "llama").strip().lower()
+    if llm_runtime in ("llama", "llama.cpp", "openai", "stage_a"):
+        answers_cmd = [
+            "bash",
+            os.path.join(REPO, "scripts", "run_llm_host.sh"),
+        ]
+    else:
+        answers_cmd = [
+            py,
+            os.path.join(TEL, "llm_server.py"),
+            "--port",
+            str(LLM_PORT),
+        ]
     return [
         {
             "name": "answers",
-            "cmd": [py, os.path.join(TEL, "llm_server.py"), "--port", str(LLM_PORT)],
+            "cmd": answers_cmd,
             "health": f"http://127.0.0.1:{LLM_PORT}/health",
             "ready_key": "ready",
             "service": SERVICE_LLM,

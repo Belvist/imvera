@@ -114,15 +114,18 @@ function safe_id(s)
     return nil
 end
 
--- Must match the MVERA greeting on the agent side (call_agent.DEFAULT_GREETING)
--- so the agent's greeting cache is hit and its dialogue engine treats turn 1
--- as the caller's wellbeing answer.
+-- Fallback only when POST /calls omits greeting. Prefer API greeting
+-- (conversation_system rotates GREETING_POOL per call).
 local GREETING_TEXT =
-    "Здравствуйте! Это Имвэра. Как вы себя чувствуете?"
+    "Здравствуйте! Это Вера из Имвера. Как вы себя чувствуете?"
 
-function get_greeting(salt)
-    local body = string.format([=[{"text": %q}]=], GREETING_TEXT)
-    local data = http_post("/say", body, salt)
+function get_greeting(call_id, greeting_text)
+    local text = greeting_text
+    if not text or text == "" then
+        text = GREETING_TEXT
+    end
+    local body = string.format([=[{"text": %q}]=], text)
+    local data = http_post("/say", body, call_id)
     local p = json_get(data, "wav_path")
     return p
 end
@@ -139,6 +142,18 @@ function play_wav(path)
         session:execute("playback", path)
     end)
     return ok and session:ready() or false
+end
+
+-- Instant backchannel while STT runs (3–4 s); avoids dead air after user speaks.
+function play_random_ack()
+    local acks = {}
+    local p = io.popen("ls " .. tmpdir .. "/acks/ack-*.wav 2>/dev/null")
+    for f in p:lines() do table.insert(acks, f) end
+    p:close()
+    if #acks > 0 then
+        math.randomseed(os.time())
+        play_wav(acks[math.random(#acks)])
+    end
 end
 
 -- Streaming turn: POST /turn_stream in the BACKGROUND, then poll the
@@ -191,13 +206,8 @@ function do_turn_stream(call_id, chunks, segdir)
             n = n + 1
             play_wav(next_seg)
         else
-            -- Backchannel: if the reply is still not ready after ~0.6 s,
-            -- play ONE pre-rendered ack ("Ага, услышала вас") instead of
-            -- silent dead air. 2026-08-23: was 12 waits (~1.2 s); live calls
-            -- showed first_audio at 4-6 s (LLM ~10 tok/s under host load),
-            -- so the ack must land EARLIER to keep the caller convinced
-            -- she is listening.
-            if not ack_played and waits >= 6 then
+            -- Backchannel: after ~0.8 s without first segment, play ONE ack.
+            if not ack_played and waits >= 8 then
                 ack_played = true
                 local acks = {}
                 local p = io.popen("ls " .. tmpdir .. "/acks/ack-*.wav 2>/dev/null")
@@ -264,9 +274,24 @@ function main()
     -- dropped). Do NOT set any record_stereo var here without a live
     -- loopback verification of chunk sizes FIRST.
 
-    play_wav(get_greeting(call_id))
+    play_wav(get_greeting(call_id, json_get(data, "greeting")))
 
-    for i = 1, 6 do
+-- Max call duration / idle guards (Phase 6 — replaces hard 6-turn cap).
+local MAX_CALL_SEC = tonumber(os.getenv("MOSS_CALL_MAX_SEC") or "1200") or 1200
+local MAX_IDLE_TURNS = tonumber(os.getenv("MOSS_CALL_MAX_IDLE") or "4") or 4
+local ACK_WAIT_MIN = 7   -- ~0.7 s (7 x 0.1 s poll)
+local ACK_WAIT_MAX = 9   -- ~0.9 s
+
+    local call_start = os.time()
+    local idle_turns = 0
+    local turn_num = 0
+
+    while session:ready() do
+        if os.time() - call_start > MAX_CALL_SEC then
+            session:consoleLog("info", "moss_agent: max call duration reached\n")
+            break
+        end
+        turn_num = turn_num + 1
         if not session:ready() then
             break
         end
@@ -282,7 +307,7 @@ function main()
         for ci = 1, 3 do
             if not session:ready() then break end
             local cw = tmpdir .. "/chunk_" .. call_id .. "_" ..
-                       tostring(i) .. "_" .. tostring(ci) .. ".wav"
+                       tostring(turn_num) .. "_" .. tostring(ci) .. ".wav"
             local cap = (ci == 1) and "4 15 2" or "2 15 2"
             local cap_s = (ci == 1) and 4 or 2
             local rok = pcall(function()
@@ -322,17 +347,24 @@ function main()
         end
         -- STREAMING turn: play each sentence as soon as it is synthesized.
         local segdir = tmpdir .. "/segs_" .. call_id .. "_" ..
-                       tostring(i) .. "_" .. tostring(os.time())
+                       tostring(turn_num) .. "_" .. tostring(os.time())
         -- call_id is validated by safe_id, quotes are pure defense-in-depth
         os.execute("mkdir -p '" .. segdir .. "'")
+        -- Backchannel only inside do_turn_stream after soft-timeout if no audio.
         local finished = do_turn_stream(call_id, chunks, segdir)
         table.insert(turn_files, segdir)
-        if finished or turn_done == false and #chunks >= 4 then
-            -- safety valve: 4 capped chunks with speech — end the turn
-        end
         if finished then
             finished_cleanly = true
             break
+        end
+        if turn_done and #chunks == 0 then
+            idle_turns = idle_turns + 1
+            if idle_turns >= MAX_IDLE_TURNS then
+                session:consoleLog("info", "moss_agent: idle turn limit reached\n")
+                break
+            end
+        else
+            idle_turns = 0
         end
     end
 

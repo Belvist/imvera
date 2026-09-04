@@ -4,9 +4,7 @@ Covers:
   * call_agent: per-call lock busy rejection (429), save_upload path
     whitelist, per-hop STT hallucination filtering;
   * tts_server: client_id sanitization, stream-cancellation registry,
-    SingleFlight reserve timeout, int16 clipping;
-  * tg_server: Telegram initData HMAC validation, VAD chunk timing,
-    TXPipeline per-generation cancel capture.
+    SingleFlight reserve timeout, int16 clipping.
 """
 import asyncio
 import json
@@ -26,13 +24,9 @@ sys.path.insert(0, _HERE)
 from conftest_or_paths import RUNTIME_SCRIPTS, SAMPLE_REF  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(_HERE))
-sys.path.insert(0, os.path.join(_HERE, "..", "tg"))
 
-# NOTE: import order matters — tts_server.py/call_agent.py insert the
-# runtime/scripts dir at sys.path[0] on import, which contains stale synced
-# copies of the other modules. Import the telephony originals FIRST.
-import tg_server  # noqa: E402
 import call_agent  # noqa: E402
+import tts_server as tts_mod  # noqa: E402
 import tts_server as tts_mod  # noqa: E402
 
 
@@ -98,6 +92,9 @@ class _GateTTS:
         return _wav_bytes()
 
     def stream(self, text, cancel_event=None, stream_id=None):
+        self.count += 1
+        self.entered.set()
+        self.block.wait(timeout=10)
         yield {"i": 0, "wav_b64": "", "done": True}
 
 
@@ -316,96 +313,6 @@ class TTSServerFixTests(unittest.TestCase):
             frames = struct.unpack("<3h", w.readframes(3))
         self.assertEqual(frames[0], 32767)
         self.assertEqual(frames[1], -32767)
-
-
-# --------------------------------------------------------------------------- #
-# tg_server
-# --------------------------------------------------------------------------- #
-class TGServerFixTests(unittest.TestCase):
-    def test_validate_init_data_valid_and_invalid(self):
-        import hashlib
-        import hmac
-        import urllib.parse
-
-        token = "12345:TEST_TOKEN"
-
-        def make_init_data(user_id=42, auth_date=1700000000, query_id="abc"):
-            fields = {"auth_date": str(auth_date), "query_id": query_id,
-                      "user": json.dumps({"id": user_id, "first_name": "A"})}
-            data_check = "\n".join(f"{k}={v}" for k, v in sorted(fields.items()))
-            secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
-            h = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
-            fields["hash"] = h
-            return urllib.parse.urlencode(fields)
-
-        good = make_init_data()
-        self.assertTrue(tg_server.validate_init_data(good, token))
-        # tampered field
-        bad = good.replace("first_name%22%3A+%22A%22", "first_name%22%3A+%22B%22")
-        self.assertFalse(tg_server.validate_init_data(bad, token))
-        self.assertFalse(tg_server.validate_init_data("", token))
-        self.assertFalse(tg_server.validate_init_data(None, token))
-        self.assertFalse(tg_server.validate_init_data("hash=deadbeef", token))
-
-    def test_vad_chunk_ms_timing(self):
-        vad = tg_server.VAD()
-        # 1s of real audio delivered as ONE 1000 ms chunk: without the
-        # chunk_ms fix the VAD would count only CHUNK_MS (30 ms) of speech.
-        speech = [3000] * 16000
-        for _ in range(3):
-            vad.feed([0] * 16000, chunk_ms=1000.0)
-        vad.feed(speech, chunk_ms=1000.0)
-        # silence tail closes the turn; speech_ms was 1000 >= MIN_SPEECH_MS
-        turn = None
-        for _ in range(5):
-            turn, _ = vad.feed([0] * 16000, chunk_ms=1000.0)
-            if turn:
-                break
-        self.assertIsNotNone(turn, "1 s of speech must close a turn")
-
-    def test_txpipeline_cancel_event_captured_per_generation(self):
-        """barge-in after start_turn must cancel the RUNNING generation via
-        the event its producer actually holds (AUDIT A2)."""
-        seen_events = []
-
-        class Bridge:
-            def cancel_stream(self):
-                pass
-
-            def turn_stream(self, pcm, rate=16000, cancel_event=None):
-                seen_events.append(cancel_event)
-                i = 0
-                while True:
-                    if cancel_event is not None and cancel_event.is_set():
-                        yield {"done": True, "aborted": True}
-                        return
-                    yield {"i": i, "wav_b64": "AAAA"}
-                    i += 1
-
-        sent = []
-
-        async def send(p):
-            sent.append(p)
-
-        tx = tg_server.TXPipeline(Bridge(), send)
-
-        async def scene():
-            tx.start_turn([31] * 100)
-            await asyncio.sleep(0.1)
-            first_ev = seen_events[0]
-            tx.barge_in()          # must set the SAME event the producer sees
-            await asyncio.sleep(0.3)
-            return first_ev
-
-        first_ev = asyncio.new_event_loop().run_until_complete(scene())
-        self.assertIsNotNone(first_ev)
-        self.assertTrue(first_ev.is_set(),
-                        "producer's captured event must be set by barge_in")
-        self.assertTrue(any(p.get("aborted") for p in sent))
-
-    def test_agent_bridge_pcm_to_wav_bytes_in_memory(self):
-        data = tg_server.pcm_to_wav_bytes([0] * 800, 16000)
-        self.assertIn(b"WAVE", data)
 
 
 if __name__ == "__main__":

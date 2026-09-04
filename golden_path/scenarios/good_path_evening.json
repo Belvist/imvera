@@ -1,0 +1,25 @@
+{
+  "id": "good_path_evening",
+  "name": "Evening check-in variant",
+  "turns": [
+    "устал немного но в целом нормально",
+    "настроение спокойное вечернее",
+    "днём дремал час",
+    "завтра поликлиника",
+    "спасибо вам",
+    "всё ясно",
+    "хорошо",
+    "до свидания"
+  ],
+  "assertions": [
+    {
+      "type": "slot_status",
+      "slot": "plans",
+      "status": "ANSWERED"
+    },
+    {
+      "type": "never_plan",
+      "slot": "wellness"
+    }
+  ]
+}

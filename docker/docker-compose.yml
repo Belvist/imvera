@@ -11,7 +11,6 @@
 #   telephony call_agent.py      9400  STT -> LLM -> TTS диалоговый движок
 #   workflow  outbox_worker      —     outbox delivery + incident escalation
 #   db/cache/storage             PostgreSQL + Redis + MinIO (data core)
-#   --profile telegram: tg (8600), cloudflared tunnel, bot
 #
 # NOTE (P8, 2026-08-29): VoiceRuntime (voice_runtime/) is intentionally NOT a
 # compose service. It drives FreeSWITCH over the ESL socket bound to the
@@ -22,6 +21,12 @@
 # launchd (com.mossvoice.runtime.plist + scripts/run_runtime.sh). The
 # voice_runtime/ sources ARE copied into this image (see Dockerfile) so the
 # whole tree ships in one artifact and host/container code stay in lockstep.
+#
+# NOTE (2026-09-04): Local LLM should run on the HOST with Metal (same pattern
+# as STT on host.docker.internal:9705). Docker `answers` is CPU-only Linux and
+# is too slow for CallMirror's stream timeout. Use scripts/run_llm_host.sh +
+# com.mossvoice.llm.plist; set MOSS_LLM_URL=http://host.docker.internal:9500
+# and do NOT start the `local-llm` profile. See docs/HOST_LLM_METAL.md.
 #
 # Usage:
 #   make up        собрать и поднять весь стек        (первый запуск скачивает
@@ -97,6 +102,9 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      args:
+        MOSS_BUILD_SHA: ${MOSS_BUILD_SHA:-dev}
+        MOSS_BUILD_TIME: ${MOSS_BUILD_TIME:-}
     image: ${MOSS_IMAGE:-mossvoice/backend:latest}
     container_name: mossvoice-voice
     # read.md rev-3: explicit exec-array form (no shell semantics), so the
@@ -159,8 +167,8 @@ services:
       # E-cores (live: 9–15 tok/s gen, prefill 2.4–2.7 s) vs ~19.4 tok/s on 4.
       # Was applied ad-hoc once and LOST on the next `make update`; keep the
       # working value as the default here. Override freely via MOSS_LLM_THREADS.
-      MOSS_LLM_THREADS: ${MOSS_LLM_THREADS:-8}
-      MOSS_LLM_CTX: ${MOSS_LLM_CTX:-2048}
+      MOSS_LLM_THREADS: ${MOSS_LLM_THREADS:-4}
+      MOSS_LLM_CTX: ${MOSS_LLM_CTX:-4096}
     volumes:
       - ../scripts/llama_entrypoint.sh:/app/llama_entrypoint.sh:ro
       - models:/data/models
@@ -175,6 +183,12 @@ services:
     restart: unless-stopped
 
   telephony:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        MOSS_BUILD_SHA: ${MOSS_BUILD_SHA:-dev}
+        MOSS_BUILD_TIME: ${MOSS_BUILD_TIME:-}
     image: ${MOSS_IMAGE:-mossvoice/backend:latest}
     container_name: mossvoice-telephony
     command: >
@@ -184,9 +198,13 @@ services:
       --outdir /tmp/mossvoice
       --ref /app/refs/ref_native_48k.wav
     environment:
-      MOSS_LLM_URL: http://answers:9500
+      # Host Metal LLM (recommended): MOSS_LLM_URL=http://host.docker.internal:9500
+      # Docker CPU fallback: docker compose --profile local-llm up -d answers
+      #   then MOSS_LLM_URL=http://answers:9500
+      MOSS_LLM_URL: ${MOSS_LLM_URL:-http://host.docker.internal:9500}
       MOSS_LLM_PROTOCOL: openai
       MOSS_LLM_BOOT_WAIT: "180"
+      MOSS_LLM_TIMEOUT_S: ${MOSS_LLM_TIMEOUT_S:-8}
       # CLOUD LLM EXPERIMENT (2026-08-25): switch the DIALOGUE to an
       # OpenAI-compatible cloud endpoint by setting, in .env:
       #   MOSS_LLM_PROVIDER=openai
@@ -262,6 +280,9 @@ services:
       MOSS_SMS_PROVIDER_URL: ${MOSS_SMS_PROVIDER_URL:-}
       MOSS_SMS_PROVIDER_KEY: ${MOSS_SMS_PROVIDER_KEY:-}
       MOSS_SMS_PROVIDER_USER: ${MOSS_SMS_PROVIDER_USER:-}
+      MOSS_DIALOGUE_LLM_CHECKIN: ${MOSS_DIALOGUE_LLM_CHECKIN:-0}
+      MOSS_DIALOGUE_LLM_SIDE_QUESTIONS: ${MOSS_DIALOGUE_LLM_SIDE_QUESTIONS:-}
+      MOSS_STT_STREAMING: ${MOSS_STT_STREAMING:-0}
     volumes:
       # FreeSWITCH (host) and the agent (container) must see the SAME paths:
       # the Lua dialplan plays reply WAVs and uploads caller turns by path,
@@ -271,6 +292,9 @@ services:
       # Conversation scenarios: edit on the host, `docker compose restart
       # telephony` picks them up — no image rebuild needed.
       - ../telephony/vera_scenarios.txt:/app/telephony/vera_scenarios.txt:ro
+      # Dev/PM hot-reload: mount conversation_system + orchestrator fixes without
+      # full image rebuild (`docker compose restart telephony` picks up changes).
+      - ../telephony:/app/telephony
       - models:/data/models
     ports:
       - "127.0.0.1:9400:9400"
@@ -382,54 +406,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    restart: unless-stopped
-
-  # ----------------------- Telegram gateway (optional) -----------------------
-  tg:
-    profiles: ["telegram"]
-    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
-    container_name: mossvoice-tg
-    command: >
-      python /app/telephony/tg/tg_server.py
-      --host 0.0.0.0 --port 8600
-      --agent http://telephony:9400
-      --web-dir /app/telephony/tg/web
-    environment:
-      MOSSVOICE_BOT_TOKEN: ${MOSSVOICE_BOT_TOKEN:-}
-      MOSS_INTERNAL_API_TOKEN: ${MOSS_INTERNAL_API_TOKEN:-}
-    ports:
-      # SECURITY: bind to loopback only. The public path is the cloudflared
-      # tunnel (container -> container, no host port involved). With an
-      # empty MOSSVOICE_BOT_TOKEN the initData HMAC check is disabled, and
-      # a 0.0.0.0 binding would expose /ws and /metrics to the LAN.
-      - "127.0.0.1:8600:8600"
-    depends_on:
-      # read.md rev-2 #13: wait for the REAL /ready gate, not just process
-      # start — TG must not talk to a telephony whose STT/TTS are broken.
-      telephony:
-        condition: service_healthy
-    restart: unless-stopped
-
-  cloudflared:
-    profiles: ["telegram"]
-    image: cloudflare/cloudflared:latest
-    container_name: mossvoice-tunnel
-    command: tunnel --no-autoupdate --url http://tg:8600
-    depends_on:
-      - tg
-    restart: unless-stopped
-
-  bot:
-    profiles: ["telegram"]
-    image: ${MOSS_IMAGE:-mossvoice/backend:latest}
-    container_name: mossvoice-bot
-    command: >
-      sh -c "python /app/telephony/tg/bot.py --webapp-url $${WEBAPP_URL}"
-    environment:
-      MOSSVOICE_BOT_TOKEN: ${MOSSVOICE_BOT_TOKEN:-}
-      WEBAPP_URL: ${WEBAPP_URL:-}
-    depends_on:
-      - cloudflared
     restart: unless-stopped
 
 # ------------------------- Avtotesty (CI stage) ----------------------------

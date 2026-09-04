@@ -8,7 +8,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.vocab import (  # noqa: E402
-    looks_like_garbage, contains_real_word, repair_fall_miscue)
+    looks_like_garbage, contains_real_word, plausible_caller_speech,
+    looks_like_stt_glue_noise, repair_fall_miscue)
 
 
 class VocabGateTests(unittest.TestCase):
@@ -66,6 +67,12 @@ class VocabGateTests(unittest.TestCase):
 
     def test_fall_miscue_repair(self):
         self.assertIn("упал", repair_fall_miscue("у палок не ударилось"))
+
+    def test_plausible_caller_speech_rejects_glue_noise(self):
+        self.assertTrue(looks_like_stt_glue_noise("Як как, у пять."))
+        self.assertFalse(looks_like_stt_glue_noise("пойду гулять"))
+        self.assertTrue(plausible_caller_speech("хорошо"))
+        self.assertTrue(plausible_caller_speech("голова болит"))
 
 
 if __name__ == "__main__":

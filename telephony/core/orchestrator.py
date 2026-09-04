@@ -7,6 +7,7 @@ rewired to the new core/adapters layout.
 """
 
 import base64
+import glob
 import json
 import os
 import re
@@ -18,10 +19,28 @@ import uuid
 
 from core.state import CallContext, CallBusyError, AdmissionError, \
     SESSION_TTL_SEC, DEFAULT_GREETING
-from core.dialogue import Agent, _clean_llm, reply_looks_broken, \
-    reply_looks_hallucinated
+from core.call_mirror import CallMirror
+from core.call_journal import record_call_end, record_call_start, record_turn
+from conversation_system.reply.prompts import _clean_llm, reply_looks_hallucinated
+from conversation_system.ledger.action_supervisor import sanitize_delivery_claim
+from conversation_system.reply.guards import sanitize_segment, reply_looks_broken
+from conversation_system.reply.spoken import resolve_spoken_reply, should_use_llm
+from conversation_system.reply.pools import GREETING_POOL, SCHEDULED_GREETING_POOL
+from core.conversation_v2_bridge import (
+    begin_v2_call,
+    commit_turn_for_call,
+    end_v2_call,
+    get_last_question_for_call,
+    get_last_input_reason_for_call,
+    get_v2_greeting,
+    get_v2_handle,
+    plan_turn_for_call,
+    start_consent_for_call,
+    v2_dialogue_step,
+)
 from core.stt_gates import gate_stt_transcript
 from core.events import StreamingSTT, reply_segments
+from core.stt_streaming_config import stt_streaming_requested
 from adapters.audio import wav_to_pcm, pcm_to_wav, parse_multipart_wav
 from adapters.moss_tts import TTSClient
 from adapters.stt import STTEngine
@@ -57,6 +76,8 @@ def env_bool(name, default=False):
 
 class Serve:
     def __init__(self, args):
+        from adapters.cloud import enforce_local_only
+        enforce_local_only()
         self.tts = _maybe_cloud_tts(TTSClient(
             ref_paths=args.refs,
             port_file=args.tts_port_file,
@@ -169,7 +190,7 @@ class Serve:
         if not os.environ.get("MOSS_NO_WARMUP"):
             def _llm_keepalive():
                 import urllib.request
-                from core.dialogue import VERA_SYSTEM_PROMPT, VERA_SCENARIOS
+                from conversation_system.reply.prompts import VERA_SYSTEM_PROMPT, VERA_SCENARIOS
                 sys_prompt = VERA_SYSTEM_PROMPT
                 if VERA_SCENARIOS:
                     sys_prompt = f"{sys_prompt}\n\n{VERA_SCENARIOS}"
@@ -255,6 +276,20 @@ class Serve:
             rec.add_turn(role, text, audio_path=audio_path,
                          source=source, confidence=confidence,
                          audio_key=audio_key)
+        turn_no = len(rec.call.get("turns") or [])
+        input_reason = ""
+        if role == "user":
+            input_reason = get_last_input_reason_for_call(ctx)
+        try:
+            record_turn(
+                self.outdir, cid, turn_no, role, text or "",
+                source=source, confidence=confidence,
+                input_reason=input_reason or None,
+                audio_key=audio_key,
+            )
+        except OSError as exc:
+            print(f"[call-agent] call_journal turn skipped: {exc}",
+                  flush=True)
 
     def _upload_turn_audio(self, audio_key, audio_path):
         """Worker-thread MinIO upload for a turn's audio.
@@ -415,7 +450,7 @@ class Serve:
         call_id = uuid.uuid4().hex[:12]
         ctx = CallContext(
             call_id=call_id,
-            agent=Agent(llm=self.llm),
+            agent=CallMirror(llm=self.llm),
             recorder=self._make_recorder(),
             caller_id=caller_id,
         )
@@ -433,6 +468,10 @@ class Serve:
                     ctx.agent._pg = self.pg
                     ctx.agent._person_id = ctx.person_id
                     ctx.agent._household_id = ctx.household_id
+                    ctx.agent.set_elder_context(
+                        display_name=elder.get("display_name"),
+                        timezone=elder.get("timezone"),
+                    )
                     from core.consent import has_active_consent
                     if not has_active_consent(self.pg, ctx.person_id):
                         need_consent = True
@@ -440,69 +479,76 @@ class Serve:
                 print(f"[call-agent] elder/consent resolve skipped: {e}",
                       flush=True)
         if need_consent:
-            script = ctx.agent.start_consent_call()
+            script = start_consent_for_call(ctx.agent)
             print(f"[call-agent] consent call for {ctx.person_id}",
                   flush=True)
-            # Greeting override for Lua/runtime consumers via session emit.
             ctx.dialogue_state["consent_script"] = script
-        # Serve-initiated family call: the agent opens in check_in mode (the
-        # wellbeing-question state machine). Without this the agent sits in
-        # companion mode and the whole check-in flow never activates.
-        # An explicit ``mode`` (e.g. "companion" from the phone dialplan)
-        # overrides it, so the phone starts free instead of a forced greeting.
-        # FIX 2026-08-27: an arbitrary string from the API must NOT reach the
-        # private _set_mode (it drove the state machine into an unknown mode);
-        # only the declared Modes are accepted.
-        elif mode is not None:
-            _valid = getattr(Agent, "MODES", ())
-            if mode not in _valid:
-                raise ValueError(
-                    f"unknown mode {mode!r}; expected one of {_valid}")
-            if mode == "check_in":
-                ctx.agent.start_check_in()
-            # companion / clarify / safety_* / closing: stay in IDLE until
-            # the FSM transitions on the first real turn.
-        elif caller_id:
-            ctx.agent.start_check_in()
-        else:
-            # Phone dialplan (Lua): plays MVERA_GREETING then expects the
-            # wellness agenda. Without check_in, «хорошо/плохо» hit generic
-            # acks and the call felt like «она не слышит».
-            ctx.agent.start_check_in()
-        # Family-app questions: ONE snapshot per call (deterministic turn).
-        # Fail-open: a PG hiccup must never block a live call — questions
-        # simply stay pending for the next one.
+        family_qs: list = []
         if self.pg_available and caller_id and not need_consent:
             try:
-                qs = self.pg.family_pending(normalize_phone(caller_id)) or []
-                if qs:
-                    ctx.agent.set_family_questions(qs)
-                    print(f"[call-agent] agenda: +{len(qs)} family "
+                family_qs = self.pg.family_pending(normalize_phone(caller_id)) or []
+                if family_qs:
+                    ctx.agent.set_family_questions(family_qs)
+                    print(f"[call-agent] agenda: +{len(family_qs)} family "
                           "question(s)", flush=True)
             except Exception as e:  # noqa: BLE001
                 print(f"[call-agent] family questions skipped: {e}",
                       flush=True)
+        v2_greeting = None
+        if not need_consent:
+            fq_payload = [
+                {
+                    "id": q.get("q_id") or q.get("id") or "",
+                    "text": q.get("text") or "",
+                    "author": q.get("author_label") or q.get("author") or "Родные",
+                }
+                for q in family_qs
+                if q.get("text")
+            ]
+            elder_ctx = {}
+            dn = getattr(ctx.agent, "_elder_display_name", None)
+            if dn:
+                elder_ctx["display_name"] = str(dn)
+            tz = getattr(ctx.agent, "_elder_timezone", None)
+            if tz:
+                elder_ctx["timezone"] = str(tz)
+            v2_greeting = begin_v2_call(
+                ctx,
+                caller_id=caller_id or "",
+                family_questions=fq_payload or None,
+                elder_context=elder_ctx or None,
+                mode=mode or "check_in",
+            )
+            from core.build_info import CONVERSATION_VERSION, get_build_sha
+            print(
+                f"[call-agent] conversation_system begin call_id={call_id} "
+                f"build_sha={get_build_sha()} "
+                f"scenario={CONVERSATION_VERSION} pid={os.getpid()} "
+                f"greeting_chars={len(v2_greeting)}",
+                flush=True,
+            )
+        try:
+            journal_dir = record_call_start(
+                self.outdir,
+                call_id,
+                caller_id=caller_id,
+                greeting=v2_greeting if not need_consent else None,
+            )
+            if journal_dir:
+                print(
+                    f"[call-agent] CALL_JOURNAL dir={journal_dir} "
+                    f"(см. также {self.outdir}/LATEST_CALL.txt)",
+                    flush=True,
+                )
+        except OSError as exc:
+            print(f"[call-agent] call_journal start skipped: {exc}",
+                  flush=True)
         if self.pg_available:
             self.pg.new_call(call_id, caller_id=caller_id)
         with self._sess_lock:
             self.sessions[call_id] = ctx
         self._emit_session(ctx)
         return call_id
-
-    def handle_dtmf(self, call_id, digit):
-        """Apply one DTMF digit to a live call (ROADMAP E2/E3)."""
-        ctx = self.get_call(call_id)
-        with ctx.lock:
-            plan = ctx.agent.handle_dtmf(digit)
-        return {
-            "ok": True,
-            "call_id": call_id,
-            "digit": str(digit),
-            "reply": (plan or {}).get("fallback") or "",
-            "terminal": bool((plan or {}).get("terminal")),
-            "done": bool(ctx.agent.done),
-            "status": ctx.agent.status,
-        }
 
     def _h_persist_turn_pg(self, payload):
         """PersistenceWorker 'turn.pg' handler (rev-4 gate B). Executes in the
@@ -542,7 +588,7 @@ class Serve:
         blocks VOICE on business infrastructure. Payload is JSON."""
         self.persist.emit("session.redis", {
             "call_id": ctx.call_id,
-            "dialogue_step": ctx.agent.step,
+            "dialogue_step": v2_dialogue_step(ctx, ctx.agent),
             "summary": " ".join(ctx.agent.notes)[-500:],
             "last_intent": getattr(ctx.agent, "last_intent", "") or "",
             "customer_id": ctx.caller_id or "",
@@ -571,8 +617,25 @@ class Serve:
 
     def end_call(self, call_id):
         """Finalize a call: produce the verdict and drop the context."""
-        ctx = self.get_call(call_id)
-        ctx.outcome = ctx.agent.outcome
+        try:
+            ctx = self.get_call(call_id)
+        except KeyError:
+            # Idempotent: runtime/Lua may POST /end twice after hangup.
+            return {
+                "ok": True,
+                "call_id": call_id,
+                "finished": True,
+                "outcome": {"status": "ok", "notes": []},
+                "already_ended": True,
+            }
+        v2_outcome = end_v2_call(ctx)
+        if v2_outcome is not None:
+            ctx.outcome = {
+                "status": v2_outcome.get("status", "ok"),
+                "notes": v2_outcome.get("notes") or [],
+            }
+        else:
+            ctx.outcome = ctx.agent.outcome
         ctx.finished = True
         # Data core: persist the verdict + enqueue the downstream notify.
         if self.pg_available and isinstance(ctx.recorder, PgRecorder):
@@ -585,6 +648,18 @@ class Serve:
                     or getattr(ctx.agent, "_consent_declined", False))
                 no_contact = ctx.outcome.get("status") in (
                     "no_contact", "no_speech")
+                wellness_band = None
+                v2_handle = get_v2_handle(ctx)
+                if v2_handle is not None:
+                    try:
+                        from conversation_system.integration.facade import (
+                            get_conversation_facade,
+                        )
+                        v2_session = get_conversation_facade()._get_session(
+                            v2_handle)  # noqa: SLF001 — finalize wiring
+                        wellness_band = v2_session.memory.wellness_band
+                    except Exception:
+                        wellness_band = None
                 family = family_fields_for_finalize(
                     ctx.outcome.get("status", "unknown"),
                     notes=notes,
@@ -592,6 +667,7 @@ class Serve:
                     technical_error=tech_err,
                     no_contact=no_contact,
                     declined=declined,
+                    wellness_band=wellness_band,
                 )
                 # Enrich in-memory outcome for HTTP/UI consumers.
                 ctx.outcome = {**ctx.outcome, **family}
@@ -615,12 +691,24 @@ class Serve:
                     dedup_key=f"call:{call_id}")
                 # Family questions asked during THIS call: persist status +
                 # answer snapshot (replay-safe: only 'pending' rows move).
-                self.pg.family_sync_asked(call_id,
-                                          ctx.agent.family_questions)
+                fq_sync = ctx.agent.family_questions
+                if v2_outcome and v2_outcome.get("family_questions"):
+                    fq_sync = v2_outcome["family_questions"]
+                self.pg.family_sync_asked(call_id, fq_sync)
             except Exception as e:  # noqa: BLE001
                 print(f"[call-agent] end_call persist failed: {e}",
                       flush=True)
         self._emit_session(ctx, ttl_seconds=60 * 60 * 24)
+        try:
+            record_call_end(
+                self.outdir,
+                call_id,
+                status=(ctx.outcome or {}).get("status"),
+                notes=(ctx.outcome or {}).get("notes"),
+            )
+        except OSError as exc:
+            print(f"[call-agent] call_journal end skipped: {exc}",
+                  flush=True)
         with self._sess_lock:
             self.sessions.pop(call_id, None)
         return {
@@ -692,7 +780,13 @@ class Serve:
     def _warm_stt(self):
         def _warm():
             print("[call-agent] pre-warming STT...", flush=True)
+            # Silence skips MLX inference on the host STT path; use a real
+            # short clip so the first phone turn is not 3–4 s cold-start.
             p = self._silence_wav()
+            acks = glob.glob(
+                os.path.join(self.outdir, "acks", "ack-*.wav"))
+            if acks:
+                p = acks[0]
             try:
                 if p:
                     try:
@@ -701,7 +795,7 @@ class Serve:
                         print(f"[call-agent] STT warmup failed: {e}",
                               flush=True)
             finally:
-                if p:
+                if p and "tmp" in p and p.endswith(".wav"):
                     try:
                         os.remove(p)
                     except OSError:
@@ -856,7 +950,8 @@ class Serve:
             return
         print("[call-agent] pre-warming greeting...", flush=True)
         try:
-            self.greeting_wav(DEFAULT_GREETING)
+            for phrase in GREETING_POOL + tuple(SCHEDULED_GREETING_POOL):
+                self.greeting_wav(phrase)
             print("[call-agent] greeting ready", flush=True)
         except Exception as e:  # noqa: BLE001
             print(f"[call-agent] greeting warmup failed: {e}", flush=True)
@@ -893,17 +988,23 @@ class Serve:
         text = (text or "").strip()
         if not text or not self.tts.ready():
             return None
-        if text == DEFAULT_GREETING:
-            # FIX: generate inside the lock so a concurrent warmup + first
-            # request never double-generate the greeting.
-            with self._greeting_lock:
-                if not self._greeting_cache:
-                    wav = self._phone_wav(self.tts.generate(text))
-                    if wav:
-                        self._greeting_cache = save_wav(self.outdir, wav)
-                return self._greeting_cache or None
-        wav = self._phone_wav(self.tts.generate(text))
-        return save_wav(self.outdir, wav) if wav else None
+        with self._greeting_lock:
+            if text not in self._greeting_cache:
+                wav = self._phone_wav(self.tts.generate(text))
+                if wav:
+                    self._greeting_cache[text] = save_wav(self.outdir, wav)
+            return self._greeting_cache.get(text)
+
+    def call_greeting(self, call_id):
+        """Rotated greeting chosen at start_check_in for this call."""
+        try:
+            ctx = self.get_call(call_id)
+            v2_g = get_v2_greeting(ctx)
+            if v2_g:
+                return v2_g
+            return getattr(ctx.agent, "_call_greeting", None) or DEFAULT_GREETING
+        except KeyError:
+            return DEFAULT_GREETING
 
     # directories whose WAV files may be referenced by {"audio": ...} JSON
     # bodies. Anything outside these prefixes is rejected — the old code
@@ -1125,34 +1226,57 @@ class Serve:
                 confidence = None
 
             if not transcript:
-                plan = agent.plan_reply("", reason=_stt_reason or None)
+                plan, spoke_via_v2 = plan_turn_for_call(
+                    ctx, agent, transcript="", reason=_stt_reason or None,
+                    stt_confidence=confidence)
                 reply = plan.get("fallback") or "Повторите, пожалуйста."
-                agent.commit_reply(reply)
+                commit_turn_for_call(
+                    ctx, agent, plan, reply, spoke_via_v2=spoke_via_v2)
             elif self._looks_like_echo(transcript,
                                        getattr(agent, "_last_reply", None)):
                 print("[call-agent] echo-guard: transcript matches "
                       "Vera's last reply -> repeat request", flush=True)
-                plan = agent.plan_reply("", reason="echo")
+                plan, spoke_via_v2 = plan_turn_for_call(
+                    ctx, agent, transcript="", reason="echo",
+                    stt_confidence=confidence)
                 reply = plan.get("fallback") or "Повторите, пожалуйста."
-                agent.commit_reply(reply)
+                commit_turn_for_call(
+                    ctx, agent, plan, reply, spoke_via_v2=spoke_via_v2)
+                transcript = None
+            elif self._looks_like_mixed_capture(
+                    transcript, get_last_question_for_call(ctx)):
+                print("[call-agent] mixed-capture: off-agenda / background "
+                      "audio -> clarify", flush=True)
+                plan, spoke_via_v2 = plan_turn_for_call(
+                    ctx, agent, transcript="", reason="off_agenda",
+                    stt_confidence=confidence)
+                reply = plan.get("fallback") or "Повторите, пожалуйста."
+                commit_turn_for_call(
+                    ctx, agent, plan, reply, spoke_via_v2=spoke_via_v2)
                 transcript = None
             elif _stt_reason == "stt_uncertain":
-                plan = agent.plan_reply(transcript, reason="stt_uncertain")
+                plan, spoke_via_v2 = plan_turn_for_call(
+                    ctx, agent, transcript=transcript, reason="stt_uncertain",
+                    stt_confidence=confidence)
                 reply = plan.get("fallback") or "Повторите, пожалуйста."
-                agent.commit_reply(reply)
+                commit_turn_for_call(
+                    ctx, agent, plan, reply, spoke_via_v2=spoke_via_v2)
             else:
-                # U9: pass the STT confidence (0..1 | None) so low-confidence
-                # transcripts cannot fabricate a GREEN or confirm a RED.
                 agent.observe_confidence(confidence)
-                reply = agent.reply(transcript)
-            finished = agent.finished
+                plan, spoke_via_v2 = plan_turn_for_call(
+                    ctx, agent, transcript=transcript, reason=_stt_reason,
+                    stt_confidence=confidence)
+                reply = plan.get("fallback") or "Повторите, пожалуйста."
+                commit_turn_for_call(
+                    ctx, agent, plan, reply, spoke_via_v2=spoke_via_v2)
+            finished = agent.finished or bool(plan.get("terminal"))
 
             # AUDIT FIX: the reply audio used to be embedded as base64 in the
             # JSON response (~1 MB per turn). No consumer reads it — the Lua
             # script plays reply_wav_path. Keeping it only wasted bandwidth.
             reply_wav = self._phone_wav(self.tts.generate(reply))
             saved = None
-            user_turn_no = len(rec.call["turns"]) + 1 if transcript else None
+            user_turn_no = len(rec.call["turns"]) + 1
             if reply_wav:
                 saved = save_wav(self.outdir, reply_wav, upload=False,
                                  call_id=ctx.call_id, turn_id=user_turn_no)
@@ -1201,8 +1325,12 @@ class Serve:
         try:
             with ctx.lock:
                 agent, rec = ctx.agent, ctx.recorder
-                reply = agent.reply(text)
-                finished = agent.finished
+                plan, spoke_via_v2 = plan_turn_for_call(
+                    ctx, agent, transcript=text, stt_confidence=1.0)
+                reply = plan.get("fallback") or ""
+                commit_turn_for_call(
+                    ctx, agent, plan, reply, spoke_via_v2=spoke_via_v2)
+                finished = agent.finished or bool(plan.get("terminal"))
                 user_turn_no = len(rec.call["turns"]) + 1
                 self._persist_turn(ctx, "user", text, source="text",
                                    confidence=1.0, audio_key=self._audio_key(
@@ -1281,6 +1409,15 @@ class Serve:
             pass
 
     @staticmethod
+    def _looks_like_mixed_capture(transcript: str, last_question: str) -> bool:
+        """TV/YouTube/room audio or off-topic monologue — not caller→Vera."""
+        from conversation_system.turn.dialogue_relevance import (
+            should_reject_mixed_capture,
+        )
+        return should_reject_mixed_capture(
+            transcript, last_question=last_question or "")
+
+    @staticmethod
     def _looks_like_echo(transcript, last_reply):
         """True when the transcript is (mostly) Vera's own recent words.
 
@@ -1295,8 +1432,8 @@ class Serve:
             return False
         # Canonical one-word wellness answers must never be dropped as echo
         # of the greeting («хорошо», «плохо») — live calls stalled here.
-        from core.dialogue import short_real_answer
-        if short_real_answer(transcript):
+        from conversation_system.turn._cleaners import wellness_short_answer
+        if wellness_short_answer(transcript):
             return False
 
         def _tok(s):
@@ -1382,6 +1519,10 @@ class Serve:
         # PHONE PATH (segment_dir set) uses ONE-SHOT STT: the hop-by-hop
         # incremental decode exists for live captions and is ~3x slower
         # end-to-end; the caller only needs the final transcript fast.
+        if segment_dir and stt_streaming_requested():
+            print("[call-agent] MOSS_STT_STREAMING=1: phone path still "
+                  "uses batch STT until Stage D audio fork lands "
+                  "(docs/STT_STREAMING_SPIKE.md)", flush=True)
         _stt_hard_fail = None
         if not _skip_stt:
             try:
@@ -1425,6 +1566,7 @@ class Serve:
         # model is NEVER run under the lock. The reply itself is produced by
         # TOKEN STREAMING below: the first finished sentence goes to TTS while
         # the LLM is still generating the rest (Stage 5).
+        spoke_via_v2 = False
         with ctx.lock:
             agent, rec = ctx.agent, ctx.recorder
 
@@ -1442,9 +1584,11 @@ class Serve:
                 if segment_dir:
                     self._blank_turn_diag(wav_path, ctx.call_id,
                                           stream_confidence, transcript)
-                plan = agent.plan_reply("")
+                plan, spoke_via_v2 = plan_turn_for_call(
+                    ctx, agent, transcript="", reason=None,
+                    stt_confidence=stream_confidence)
                 agent.last_intent = plan.get("intent") or ""
-                canned_reply = None if plan.get("intent") \
+                canned_reply = None if should_use_llm(plan, agent) \
                     else (plan.get("fallback") or "")
             elif self._looks_like_echo(transcript,
                                        getattr(agent, "_last_reply", None)):
@@ -1455,9 +1599,22 @@ class Serve:
                 # she asks the caller to repeat.
                 print("[call-agent] echo-guard: transcript matches "
                       "Vera's last reply -> repeat request", flush=True)
-                plan = agent.plan_reply("", reason="echo")
+                plan, spoke_via_v2 = plan_turn_for_call(
+                    ctx, agent, transcript="", reason="echo",
+                    stt_confidence=stream_confidence)
                 agent.last_intent = plan.get("intent") or ""
-                canned_reply = None if plan.get("intent") \
+                canned_reply = None if should_use_llm(plan, agent) \
+                    else (plan.get("fallback") or "")
+                transcript = None
+            elif self._looks_like_mixed_capture(
+                    transcript, get_last_question_for_call(ctx)):
+                print("[call-agent] mixed-capture: off-agenda / background "
+                      "audio -> clarify", flush=True)
+                plan, spoke_via_v2 = plan_turn_for_call(
+                    ctx, agent, transcript="", reason="off_agenda",
+                    stt_confidence=stream_confidence)
+                agent.last_intent = plan.get("intent") or ""
+                canned_reply = None if should_use_llm(plan, agent) \
                     else (plan.get("fallback") or "")
                 transcript = None
             else:
@@ -1468,17 +1625,19 @@ class Serve:
                 if segment_dir and not transcript:
                     self._blank_turn_diag(wav_path, ctx.call_id,
                                           stream_confidence, transcript)
-                plan = agent.plan_reply(transcript or "", reason=reason)
+                plan, spoke_via_v2 = plan_turn_for_call(
+                    ctx, agent, transcript=transcript or "", reason=reason,
+                    stt_confidence=stream_confidence)
                 agent.last_intent = plan.get("intent") or ""
-                canned_reply = None if plan.get("intent") \
+                canned_reply = None if should_use_llm(plan, agent) \
                     else (plan.get("fallback") or "")
 
-            finished = agent.finished
+            finished = agent.finished or bool(plan.get("terminal"))
 
             # copy the caller's audio into the archive while the temp upload
             # still exists — LOCAL only (upload is handed to the worker below);
             # read.md rev-3 G1 removes MinIO/PG from before-first-audio.
-            user_turn_no = len(rec.call["turns"]) + 1 if transcript else None
+            user_turn_no = len(rec.call["turns"]) + 1
             saved_user = save_user_wav(self.outdir, wav_path, upload=False,
                                        call_id=ctx.call_id, turn_id=user_turn_no) \
                 if transcript else None
@@ -1540,21 +1699,23 @@ class Serve:
                     break
                 if not segment:
                     continue
-                # HALLUCINATION + BROKEN-REPLY GUARDS: Qwen3 sometimes asserts
-                # things the caller never said (appearance comments), parrots the
-                # caller's words («Вы говорите о…») or code-switches to english.
-                # Such a sentence is replaced with the scripted fallback BEFORE
-                # it is spoken.
-                if plan is not None and plan.get("intent") and (
-                        reply_looks_hallucinated(segment, transcript or "")
-                        or reply_looks_broken(segment)):
-                    print(f"[call-agent] hallucination guard: {segment[:60]}",
+                # OUTPUT GUARDS (2026-09-03): ALL segments — scripted check-in
+                # speaks fallback with intent=None; old guard only ran when
+                # intent was truthy and never caught «Понятно…» in pools.
+                fb = (plan.get("fallback") or "") if plan else ""
+                llm_gen = bool(plan and plan.get("allow_llm"))
+                guarded = sanitize_segment(
+                    segment,
+                    fallback=fb,
+                    transcript=transcript or "",
+                    llm_generated=llm_gen,
+                    clean_llm=_clean_llm if llm_gen else None,
+                )
+                guarded = sanitize_delivery_claim(guarded, fallback=fb)
+                if guarded != segment:
+                    print(f"[call-agent] output guard: {segment[:60]}",
                           flush=True)
-                    segment = (plan.get("fallback") or segment)
-                if plan is not None and plan.get("intent") and segment:
-                    cleaned = _clean_llm(segment)
-                    if cleaned:
-                        segment = cleaned
+                segment = guarded
                 response_parts.append(segment)
                 seg_sid = f"{sid}-{seg_no}"
                 seg_no += 1
@@ -1605,6 +1766,23 @@ class Serve:
                 if seg_done and segment_dir and seg_pcm:
                     seg_path = self._write_segment_file(segment_dir, seg_pcm)
                     if seg_path:
+                        from core.conversation_v2_bridge import (
+                            mark_segment_played_for_call,
+                        )
+                        slot = ""
+                        if plan:
+                            agenda_ctx = plan.get("agenda_context") or {}
+                            slot = str(
+                                agenda_ctx.get("current_slot")
+                                or plan.get("current_slot")
+                                or ""
+                            )
+                        mark_segment_played_for_call(
+                            ctx,
+                            generation_id=_gen_id,
+                            segment_id=os.path.basename(seg_path),
+                            slot=slot,
+                        )
                         yield {"seg_file": seg_path, "i": idx,
                                "turn_id": _turn_id, "generation_id": _gen_id}
                 if sent_done and cancel_event is not None and cancel_event.is_set():
@@ -1617,11 +1795,22 @@ class Serve:
                 response_parts.append(fb)
 
         reply = " ".join(response_parts).strip()
-        if plan is not None and plan.get("intent") and reply:
+        if plan is not None and plan.get("allow_llm") and reply:
             cleaned = _clean_llm(reply)
             if cleaned:
                 reply = cleaned
-        meta = meta_now()
+        if plan is not None and reply:
+            reply = resolve_spoken_reply(
+                agent, plan, reply,
+                transcript=transcript or "",
+                clean_llm=_clean_llm,
+            )
+        meta = {
+            **meta_base,
+            "reply": reply,
+            "finished": agent.finished,
+            "outcome": agent.outcome,
+        }
 
         # The model produced nothing usable: speak the canned fallback so the
         # caller is never left without an answer (Stage 9 requirement).
@@ -1676,6 +1865,8 @@ class Serve:
         ctx.stream_id = ""
 
         if cancel_event is not None and cancel_event.is_set():
+            from core.conversation_v2_bridge import on_generation_cancelled_for_call
+            on_generation_cancelled_for_call(ctx, generation_id=_gen_id)
             # CANCELLED (barge-in): nothing to persist, but the consumer
             # (VoiceRuntime/Lua) still needs the done.json marker — without
             # it the session would sit in streaming=True forever. Written
@@ -1694,8 +1885,9 @@ class Serve:
         with ctx.lock:
             # Canned and LLM replies must both land in llm_history / _last_reply
             # so echo-guard and the cloud LLM see what Vera actually said.
-            if reply:
-                agent.commit_reply(reply)
+            if reply and plan is not None:
+                commit_turn_for_call(
+                    ctx, agent, plan or {}, reply, spoke_via_v2=spoke_via_v2)
             # read.md rev-3 G1: assistant-turn PG INSERT + MinIO go through
             # the background persistence worker, never the hot path.
             self._persist_turn(

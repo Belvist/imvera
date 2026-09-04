@@ -12,7 +12,7 @@ services:
       MOSS_WEBHOOK_SECRET: ${MOSS_WEBHOOK_SECRET:?set secret}
       MOSS_JWT_SECRET: ${MOSS_JWT_SECRET:-}
       MOSS_OUTBOUND_KILL_SWITCH: ${MOSS_OUTBOUND_KILL_SWITCH:-0}
-      MOSS_INCIDENT_CHANNELS: ${MOSS_INCIDENT_CHANNELS:-push,telegram,sms,call}
+      MOSS_INCIDENT_CHANNELS: ${MOSS_INCIDENT_CHANNELS:-push,sms,call}
     logging:
       driver: json-file
       options:

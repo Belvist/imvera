@@ -1,0 +1,62 @@
+---
+description: Absolute prohibition of stubs, pseudocode, placeholders, and dummy mocks. Enforces 100% complete, fully implemented production code.
+alwaysApply: true
+---
+
+# Zero Stubs & Production-Grade Code Policy
+
+This repository enforces an uncompromising standard: **every line of code delivered must be complete, functional, and fully implemented.**
+Half-baked implementations, stubs, and pseudocode erode system stability, mislead developers, and cause production failures.
+
+---
+
+## 1. Strictly Prohibited Code Patterns
+
+The following patterns are **strictly forbidden** in all production, service, and utility files:
+
+1. **Pseudocode & Handwaving:**
+   - ❌ `// rest of implementation goes here`
+   - ❌ `# implement business logic later`
+   - ❌ `/* insert calculation here */`
+   - ❌ `...` (Ellipsis) as a function body in regular code.
+
+2. **Hollow Functions & Stubs:**
+   - ❌ `def process_event(...): pass` (unless decorated with `@abc.abstractmethod`).
+   - ❌ `raise NotImplementedError` in concrete production classes or services.
+   - ❌ Functions containing only a docstring without an executable body.
+
+3. **Fake & Deceptive Returns:**
+   - ❌ `return True` or `return {"status": "ok"}` without actually executing the underlying operation (database write, RPC call, state update).
+   - ❌ Returning mock/hardcoded entities in production API endpoints or services.
+
+4. **Exception Swallowing (Blackholes):**
+   - ❌ `try: ... except Exception: pass`
+   - ❌ Catching errors and silently discarding them without logging or re-raising.
+
+5. **Deferred Implementation Markers in Production:**
+   - ❌ `# TODO: implement`
+   - ❌ `# FIXME: finish this`
+   - ❌ `# STUB` or `# PLACEHOLDER`
+
+---
+
+## 2. Mandatory Production Requirements
+
+Every feature, function, and class must satisfy:
+
+1. **Full Business Logic:**
+   - Data validation, boundary checks, state mutations, and persistence must be completely implemented.
+   - If a function takes arguments, it must process, validate, or pass them to their designated destinations.
+
+2. **Fail-Secure Architecture:**
+   - If an external resource (database, model, network service) is unavailable or unconfigured, **fail closed**.
+   - Raise a typed, descriptive domain exception (e.g., `ServiceUnavailableError`, `ConfigurationError`).
+   - Never return fake success data to mask an unavailable dependency.
+
+3. **Explicit Error Handling & Logging:**
+   - Catch specific exceptions (`httpx.TimeoutException`, `psycopg2.OperationalError`), log with contextual structured metadata, and handle or propagate cleanly.
+   - Clean up resources (close sockets, release locks, rollback transactions) on error.
+
+4. **Verifiability:**
+   - Code must be syntactically valid and pass static verification via `python3 .cursor/skills/anti-stub-enforcement/scripts/verify_no_stubs.py`.
+   - All public methods must have type annotations and corresponding tests.

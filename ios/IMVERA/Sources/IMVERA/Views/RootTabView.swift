@@ -1,14 +1,5 @@
 import SwiftUI
 
-@main
-struct IMVERAApp: App {
-    var body: some Scene {
-        WindowGroup {
-            RootTabView()
-        }
-    }
-}
-
 struct RootTabView: View {
     var body: some View {
         TabView {

@@ -1,0 +1,154 @@
+{
+  "session_id": "elder-sim-20260904-123809",
+  "greeting": "Здравствуйте! Это Вера из сервиса Имвера. Как у вас сегодня самочувствие?",
+  "turns": [
+    {
+      "turn": 1,
+      "user": "Да нормально вроде.",
+      "analysis_kind": "NORMAL_RESPONSE",
+      "analysis_facts": {
+        "answered_slot": "wellness"
+      },
+      "planner_action": "ACK_ONLY",
+      "vera_final": "Услышала вас, спасибо.",
+      "flags": [],
+      "elapsed_s": 15.0
+    },
+    {
+      "turn": 2,
+      "user": "А зачем ты вообще меня об этом спрашиваешь?",
+      "analysis_kind": "DIRECT_USER_QUESTION",
+      "analysis_facts": {},
+      "planner_action": "ANSWER_USER",
+      "vera_final": "Я помощник сервиса Имвера. Мы звоним, чтобы узнать, как вы себя чувствуете.",
+      "flags": [],
+      "elapsed_s": 15.0
+    },
+    {
+      "turn": 3,
+      "user": "Да настроение нормальное.",
+      "analysis_kind": "NORMAL_RESPONSE",
+      "analysis_facts": {
+        "answered_slot": "wellness"
+      },
+      "planner_action": "ASK_SLOT(mood)",
+      "vera_final": "Услышала вас, спасибо.",
+      "flags": [],
+      "elapsed_s": 15.0
+    },
+    {
+      "turn": 4,
+      "user": "Хотя нет, если честно, что-то сегодня грустно.",
+      "analysis_kind": "NORMAL_RESPONSE",
+      "analysis_facts": {
+        "answered_slot": "mood"
+      },
+      "planner_action": "ASK_SLOT(mood)",
+      "vera_final": "Услышала вас, спасибо.",
+      "flags": [],
+      "elapsed_s": 15.0
+    },
+    {
+      "turn": 5,
+      "user": "Не хочу я про настроение.",
+      "analysis_kind": "TOPIC_REFUSAL",
+      "analysis_facts": {
+        "refused_slot": "mood"
+      },
+      "planner_action": "HANDLE_REFUSAL",
+      "vera_final": "Хорошо, не буду настаивать. Спасибо, что сказали.",
+      "flags": [],
+      "elapsed_s": 15.01
+    },
+    {
+      "turn": 6,
+      "user": "Лучше про внучку расскажу.",
+      "analysis_kind": "NORMAL_RESPONSE",
+      "analysis_facts": {
+        "improvement": "yes"
+      },
+      "planner_action": "ASK_SLOT(sleep)",
+      "vera_final": "Услышала вас, спасибо.",
+      "flags": [],
+      "elapsed_s": 15.0
+    },
+    {
+      "turn": 7,
+      "user": "Вчера она приезжала, картошки привезла. А к вечеру что-то колено заболело.",
+      "analysis_kind": "NORMAL_RESPONSE",
+      "analysis_facts": {},
+      "planner_action": "ASK_SLOT(sleep)",
+      "vera_final": "Услышала вас, спасибо.",
+      "flags": [],
+      "elapsed_s": 15.0
+    },
+    {
+      "turn": 8,
+      "user": "Да нет, не колено. Оговорился. Спина.",
+      "analysis_kind": "CORRECTION",
+      "analysis_facts": {
+        "symptom": "back"
+      },
+      "planner_action": "HANDLE_CORRECTION",
+      "vera_final": "Спасибо за уточнение, я записала.",
+      "flags": [],
+      "elapsed_s": 15.0
+    },
+    {
+      "turn": 9,
+      "user": "Сейчас уже прошло.",
+      "analysis_kind": "NORMAL_RESPONSE",
+      "analysis_facts": {},
+      "planner_action": "ASK_SLOT(plans)",
+      "vera_final": "Услышала вас, спасибо.",
+      "flags": [],
+      "elapsed_s": 15.8
+    },
+    {
+      "turn": 10,
+      "user": "А что ты перед этим спросила?",
+      "analysis_kind": "DIRECT_USER_QUESTION",
+      "analysis_facts": {},
+      "planner_action": "ANSWER_USER",
+      "vera_final": "Я помощник сервиса Имвера. Мы звоним, чтобы узнать, как вы себя чувствуете.",
+      "flags": [],
+      "elapsed_s": 596.24
+    },
+    {
+      "turn": 11,
+      "user": "Понятно.",
+      "analysis_kind": "NORMAL_RESPONSE",
+      "analysis_facts": {},
+      "planner_action": "ACK_ONLY",
+      "vera_final": "Услышала вас, спасибо.",
+      "flags": [],
+      "elapsed_s": 15.01
+    },
+    {
+      "turn": 12,
+      "user": "Хорошо.",
+      "analysis_kind": "NORMAL_RESPONSE",
+      "analysis_facts": {
+        "answered_slot": "wellness"
+      },
+      "planner_action": "ACK_ONLY",
+      "vera_final": "Услышала вас, спасибо.",
+      "flags": [],
+      "elapsed_s": 15.01
+    },
+    {
+      "turn": 13,
+      "user": "Я устал уже отвечать.",
+      "analysis_kind": "NORMAL_RESPONSE",
+      "analysis_facts": {
+        "answered_slot": "wellness"
+      },
+      "planner_action": "ACK_ONLY",
+      "vera_final": "Услышала вас, спасибо.",
+      "flags": [
+        "IGNORED_FATIGUE"
+      ],
+      "elapsed_s": 31.94
+    }
+  ]
+}

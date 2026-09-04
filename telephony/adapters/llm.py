@@ -15,7 +15,7 @@ import time
 import urllib.parse
 import urllib.request
 
-from core.dialogue import VERA_LLM_ID, VERA_LLM_URL, _clean_llm
+from conversation_system.reply.prompts import VERA_LLM_ID, VERA_LLM_URL, _clean_llm
 
 
 class LLMClient:
@@ -385,11 +385,15 @@ class LLMClient:
                         except json.JSONDecodeError:
                             continue
                         try:
-                            delta = obj["choices"][0]["delta"].get("content")
+                            choice = obj["choices"][0]["delta"]
+                            delta = choice.get("content")
+                            if not delta:
+                                delta = choice.get("reasoning_content")
                         except Exception:  # noqa: BLE001
                             delta = None
                         if delta:
-                            delta = delta.replace("</think>", "")
+                            delta = re.sub(
+                                r"^</think>\s*", "", str(delta))
                             if delta.strip():
                                 yield delta
                 # A successful OpenAI stream is explicitly terminated by

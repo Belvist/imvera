@@ -116,8 +116,12 @@ class StateMachine:
         raise UnhandledEvent(self.state, event)
 
     def _fire(self, ctx, t, event):
+        prev_state = self.state
         result = t.action(ctx, event) if t.action else None
-        if t.dst is not None and t.dst != "*":
+        # Actions such as _a_side_resume / _a_confirm_no re-dispatch and set
+        # state themselves. Applying t.dst after that would clobber the inner
+        # transition (e.g. GOODBYE_CONFIRM -> CHECKIN after nested goodbye).
+        if t.dst is not None and t.dst != "*" and self.state == prev_state:
             self.state = t.dst
         return result
 

@@ -1,0 +1,25 @@
+{
+  "id": "mood_declined",
+  "name": "Decline mood only",
+  "turns": [
+    "самочувствие нормальное",
+    "не хочу говорить о настроении",
+    "спал хорошо",
+    "планов нет",
+    "спасибо",
+    "ладно",
+    "хорошо",
+    "пока"
+  ],
+  "assertions": [
+    {
+      "type": "slot_status",
+      "slot": "mood",
+      "status": "DECLINED"
+    },
+    {
+      "type": "never_plan",
+      "slot": "mood"
+    }
+  ]
+}

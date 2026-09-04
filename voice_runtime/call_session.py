@@ -11,43 +11,67 @@ One ``CallSession`` owns one answered FreeSWITCH channel:
         -> on hangup: uuid_record stop + POST /calls/<id>/end
 
 Cancellation model (matches the 4 acceptance tests):
-  * user speaks while Vera plays -> barge_onset -> uuid_break stops audio
-    in <=300 ms (PLAYBACK_STOP confirms), stream-cancel invalidates the old
-    LLM/TTS generation, and the FULL utterance keeps being buffered by the
-    VAD -> nothing is clipped (tests 2, 3);
-  * segments of a cancelled generation are never started
-    (``self.suppress``), done.json still clears the streaming flag ->
-    no stale audio and no wedged state (test 4);
-  * speaking after Vera finished needs no cancellation at all -> plain
-    turn submission (test 1).
+  * user speaks while Vera plays -> barge_onset (playing=True) -> uuid_break
+    + stream-cancel; the FULL utterance keeps buffering in the VAD;
+  * RMS blips while LLM/TTS is working but nothing is audible yet
+    (streaming=True, playing=False) are IGNORED — they used to
+    stream-cancel + suppress every seg-*.wav (live "не услышала" bug);
+  * completed VAD turns below mean energy 0.004 are dropped at VAD and
+    again in CallSession before any HTTP submit (phantom tape noise);
+  * segments of a cancelled generation are never started (``self.suppress``);
+  * speaking after Vera finished -> plain turn submission (test 1).
 
 All of this is single-threaded: the runtime loop calls ``on_tick`` and
 ``handle_event``; nothing here blocks on network I/O except the ESL
 broadcast/break calls, which are fast command replies.
 """
+import glob
 import logging
 import os
+import random
 import shutil
 import time
 
 try:
-    from .agent_http import AgentClient, AgentError
+    from .agent_http import AgentClient, AgentError, EXPECTED_AGENT_PROTOCOL
     from .esl_client import EslClient
     from .media_tap import LiveWavReader, write_wav, SAMPLE_RATE
     from .vad import VAD, MIN_TURN_SAMPLES
     from .turn_fsm import TurnFSM
     from .call_fsm import CallFSM
 except ImportError:  # run as a plain script (python3 voice_runtime/...py)
-    from agent_http import AgentClient, AgentError
+    from agent_http import AgentClient, AgentError, EXPECTED_AGENT_PROTOCOL
     from esl_client import EslClient
     from media_tap import LiveWavReader, write_wav, SAMPLE_RATE
     from vad import VAD, MIN_TURN_SAMPLES
     from turn_fsm import TurnFSM
     from call_fsm import CallFSM
 
-DEFAULT_GREETING = "Здравствуйте! Это Имвэра. Как вы себя чувствуете?"
+DEFAULT_GREETING = "Здравствуйте! Это Вера из Имвера. Как вы себя чувствуете?"
+ACK_WAV_GLOB = os.path.join(
+    os.environ.get("MOSS_OUTDIR", "/tmp/mossvoice"), "acks", "ack-*.wav")
+BACKCHANNEL_ACK_ENABLED = os.environ.get("MOSS_BACKCHANNEL_ACK", "1").strip() not in (
+    "0", "false", "False", "no", "NO",
+)
 VAD_STEP = int(SAMPLE_RATE * 0.03)  # ~480 samples = 30 ms per VAD feed
 TAP_VALID_GRACE = 5.0   # sec to see a VALID growing WAV before refusing
+# Match telephony _blank_turn_diag SILENT gate: phantom VAD turns (noise
+# during/after Vera speaks) must NOT cancel an in-flight reply stream.
+TURN_ENERGY_MIN = 0.004
+
+
+def _turn_mean_energy(samples):
+    if not samples:
+        return 0.0
+    total = 0
+    for s in samples:
+        total += abs(int(s))
+    return total / (32768.0 * len(samples))
+
+
+def turn_is_submittable(samples):
+    """True when a completed VAD buffer looks like caller speech, not noise."""
+    return len(samples) >= MIN_TURN_SAMPLES and _turn_mean_energy(samples) >= TURN_ENERGY_MIN
 
 
 class CallSession:
@@ -72,6 +96,9 @@ class CallSession:
         self.greeting_attempted = False
         self._play_end = None
         self.current_file = None
+        self._pending_turn = None
+        self._ack_deadline = None
+        self._ack_played = False
 
     @property
     def playing(self):
@@ -97,6 +124,10 @@ class CallSession:
     def suppress(self, value):
         self._turn.suppress = bool(value)
 
+    def _agent_speaking(self):
+        """Raise VAD thresholds only while Vera's audio is on the wire."""
+        return self.playing
+
     # ---- lifecycle ------------------------------------------------------
     def start(self):
         # CHECK_IN (2026-08-30): phone + runtime paths must arm the wellness
@@ -113,6 +144,25 @@ class CallSession:
         if not self.call_id:
             self.log("create_call returned no call_id")
             return False
+        identity = self.agent.agent_identity()
+        build_sha = (identity.get("build_sha") or "unknown").strip()
+        proto = identity.get("protocol_version")
+        conv = (identity.get("conversation_version") or "-").strip()
+        self.log(
+            "agent attach build_sha=%s protocol=%s conversation=%s"
+            % (build_sha, proto, conv)
+        )
+        if proto is not None:
+            try:
+                if int(proto) != EXPECTED_AGENT_PROTOCOL:
+                    self.log(
+                        "agent protocol mismatch: agent=%s runtime=%s — refusing"
+                        % (proto, EXPECTED_AGENT_PROTOCOL)
+                    )
+                    self._abort_agent_call()
+                    return False
+            except (TypeError, ValueError):
+                self.log("agent protocol_version unreadable: %r" % proto)
         os.makedirs(self.workdir, exist_ok=True)
         self.tap_path = os.path.join(self.workdir, "tap.wav")
         # record_stereo must be set BEFORE uuid_record starts: LEFT=caller.
@@ -188,11 +238,13 @@ class CallSession:
             self._turn.on_playback_stop()
             self.current_file = None
             self._play_end = None
+            self._maybe_flush_pending_turn()
         elif name == "CHANNEL_HANGUP" or name == "DESTROY":
             pass  # stop() is invoked by the runtime on the tracked UUID
 
     def on_tick(self, now):
         self._drain_tap()
+        self._maybe_play_backchannel_ack(now)
         self._pump_segments(now)
 
     def _drain_tap(self):
@@ -205,23 +257,45 @@ class CallSession:
             chunk = samples[i:i + VAD_STEP]
             ms = 1000.0 * len(chunk) / SAMPLE_RATE
             turn, onset = self.vad.feed(chunk, ms,
-                                        agent_speaking=self.playing)
+                                        agent_speaking=self._agent_speaking())
             if onset:
                 self._on_barge_in()
             if turn:
                 self._on_turn(turn)
 
+    @staticmethod
+    def _is_backchannel_ack(path):
+        """True when ``path`` is a pre-rendered filler (acks/ack-*.wav)."""
+        if not path:
+            return False
+        norm = str(path).replace("\\", "/")
+        return "/acks/ack-" in norm
+
     # ---- barge-in --------------------------------------------------------
     def _on_barge_in(self):
-        self.log("BARGE-IN onset")
-        if self.playing:
-            self.log("  -> uuid_break (barge-in)")
-            try:
-                self.esl.api_break(self.fs_uuid)
-            except Exception as e:  # noqa: BLE001
-                self.log("  uuid_break failed: %s" % e)
-            self.current_file = None
-            self._play_end = None
+        # While LLM/TTS is working but no audio is on the wire yet, RMS
+        # blips must NOT stream-cancel or set suppress — that wedged live
+        # calls: turn 1 transcribed fine, then phantom onset blocked every
+        # seg-*.wav and the caller only heard silence-ladder prompts.
+        if not self.playing:
+            self.log("BARGE-IN ignored (processing, Vera not audible)")
+            return
+        is_ack = self._is_backchannel_ack(self.current_file)
+        self.log("BARGE-IN onset%s" % (" (backchannel ack)" if is_ack else ""))
+        self.log("  -> uuid_break (barge-in)")
+        try:
+            self.esl.api_break(self.fs_uuid)
+        except Exception as e:  # noqa: BLE001
+            self.log("  uuid_break failed: %s" % e)
+        self.current_file = None
+        self._play_end = None
+        if is_ack:
+            # Caller spoke over the short filler ("Поняла вас") while the
+            # real reply was still generating. Do NOT stream-cancel or set
+            # suppress — that was the live bug: user heard only the ack and
+            # never the actual answer segments.
+            self._turn.on_playback_stop()
+            return
         self._turn.on_barge_in()
         if self.streaming:
             self._cancel_stream()
@@ -234,12 +308,37 @@ class CallSession:
         except Exception as e:  # noqa: BLE001
             self.log("  stream-cancel failed: %s" % e)
 
+    def _maybe_flush_pending_turn(self):
+        """Submit speech captured while the previous turn was still generating."""
+        if self._pending_turn is None or self.streaming or self.playing:
+            return
+        turn = self._pending_turn
+        self._pending_turn = None
+        self.log("TURN flushing queued utterance (%.2fs)" %
+                 (len(turn) / SAMPLE_RATE))
+        self._submit_turn(turn)
+
     # ---- turn submission --------------------------------------------------
     def _on_turn(self, turn):
-        if len(turn) < MIN_TURN_SAMPLES:
+        if not turn_is_submittable(turn):
+            energy = _turn_mean_energy(turn)
+            self.log("TURN dropped: phantom (energy=%.4f < %.4f, %.2fs)" %
+                     (energy, TURN_ENERGY_MIN, len(turn) / SAMPLE_RATE))
             return
-        self.log("TURN complete (%d samples, %.2fs)" %
-                 (len(turn), len(turn) / SAMPLE_RATE))
+        energy = _turn_mean_energy(turn)
+        self.log("TURN complete (%d samples, %.2fs energy=%.4f)" %
+                 (len(turn), len(turn) / SAMPLE_RATE, energy))
+        # Caller spoke while STT/LLM was working but Vera was still silent —
+        # queue instead of stream-cancel (live 0ccc0c3b92a3: «хорошо
+        # послушай» during a 7 s first reply never reached telephony).
+        if self.streaming and not self.playing:
+            self._pending_turn = turn
+            self.log("TURN queued during processing (%.2fs)" %
+                     (len(turn) / SAMPLE_RATE))
+            return
+        self._submit_turn(turn)
+
+    def _submit_turn(self, turn):
         if self.playing:
             try:
                 self.esl.api_break(self.fs_uuid)
@@ -266,6 +365,44 @@ class CallSession:
             on_done=lambda ok, info, _t=my_turn:
                 self._stream_done(ok, info, _t))
         self.log("turn %d submitted -> %s" % (self.turn_no, wav))
+        self._ack_played = False
+        self._ack_deadline = time.monotonic() + random.uniform(0.7, 0.9)
+
+    def _maybe_play_backchannel_ack(self, now):
+        """Soft-timeout filler — only if first reply audio not started yet."""
+        if not BACKCHANNEL_ACK_ENABLED:
+            self._ack_deadline = None
+            return
+        if self._ack_played or self._ack_deadline is None:
+            return
+        if not self.streaming or self.playing or self.suppress:
+            self._ack_deadline = None
+            return
+        if time.monotonic() < self._ack_deadline:
+            return
+        self._ack_played = True
+        self._ack_deadline = None
+        self._play_backchannel_ack()
+
+    def _pick_ack_wav(self):
+        """Pre-rendered ack phrases from telephony warmup (shared /tmp/mossvoice)."""
+        try:
+            acks = glob.glob(ACK_WAV_GLOB)
+        except OSError:
+            return None
+        if not acks:
+            return None
+        return random.choice(acks)
+
+    def _play_backchannel_ack(self):
+        """Instant filler while STT+LLM run — mirrors Lua play_random_ack()."""
+        if self.playing or self.suppress:
+            return
+        ack = self._pick_ack_wav()
+        if not ack:
+            return
+        self.log("   >> ack %s (mask STT latency)" % os.path.basename(ack))
+        self._play(ack)
 
     def _stream_done(self, ok, info, turn_no):
         self.log("turn %d stream %s%s" % (turn_no, "OK" if ok else "FAIL",
@@ -285,6 +422,7 @@ class CallSession:
             self._turn.on_stream_failed()
             self.segdir = None
             self.log("turn %d stream FAILED -> session unblocked" % turn_no)
+        self._maybe_flush_pending_turn()
 
     # ---- segment playback -------------------------------------------------
     PLAYBACK_WATCHDOG_GRACE = 0.5   # s of slack after nominal file duration
@@ -330,6 +468,7 @@ class CallSession:
             self._turn.on_playback_watchdog()
             self.current_file = None
             self._play_end = None
+            self._maybe_flush_pending_turn()
 
     def _pump_segments(self, now):
         self._maybe_watchdog_playing(now)
@@ -344,6 +483,7 @@ class CallSession:
                 if os.path.exists(seg) and seg not in self.seg_files:
                     self.seg_files.add(seg)
                     self.next_seg += 1
+                    self._ack_deadline = None
                     self._play(seg)
                     return
             if os.path.exists(done):
@@ -357,6 +497,7 @@ class CallSession:
                     return
                 self._turn.on_stream_finished()
                 self.log("turn %d stream finished" % self.turn_no)
+                self._maybe_flush_pending_turn()
                 return
             return  # no new seg yet; poll again next tick
 

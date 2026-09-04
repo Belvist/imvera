@@ -1,0 +1,26 @@
+{
+  "id": "goodbye_early",
+  "name": "Early goodbye",
+  "turns": [
+    "нормально",
+    "до свидания",
+    "всего доброго",
+    "пока",
+    "спасибо",
+    "ладно",
+    "хорошо",
+    "ещё раз пока"
+  ],
+  "assertions": [
+    {
+      "type": "analysis_on_turn",
+      "turn": 2,
+      "kind": "GOODBYE"
+    },
+    {
+      "type": "plan_on_turn",
+      "turn": 2,
+      "action": "CLOSE"
+    }
+  ]
+}

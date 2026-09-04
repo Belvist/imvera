@@ -97,6 +97,16 @@ class TTSClient:
             return None
         if not obj.get("ok"):
             return None
+        trace = obj.get("tts_trace")
+        if trace:
+            print(
+                "[TTS_TRACE]\n"
+                f'TTS_INPUT_ORIGINAL: "{trace.get("TTS_INPUT_ORIGINAL", "")}"\n'
+                f'TTS_INPUT_NORMALIZED: "{trace.get("TTS_INPUT_NORMALIZED", "")}"\n'
+                f"PRONUNCIATION_OVERRIDES: {trace.get('PRONUNCIATION_OVERRIDES', [])}\n"
+                f'TTS_SSML: "{trace.get("TTS_SSML", "")}"',
+                flush=True,
+            )
         return base64.b64decode(obj["wav_b64"])
 
     def stream(self, text, cancel_event=None, stream_id=None):

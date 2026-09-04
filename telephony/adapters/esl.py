@@ -202,6 +202,18 @@ def originate_to_number(phone_number: str, caller_id: str = "IMVERA") -> dict:
     except Exception as e:
         return {"ok": False, "uuid": None, "message": str(e)}
 
+
+def originate_status(result):
+    """Normalize originate_* dict to (ok, detail). Failures use ``message``."""
+    if not isinstance(result, dict):
+        return False, "esl failed"
+    if result.get("ok"):
+        return True, str(result.get("uuid") or result.get("message") or "ok")
+    detail = result.get("message") or result.get("error") or "esl failed"
+    text = " ".join(str(detail).split())
+    return False, text or "esl failed"
+
+
 def kill_call(uuid_or_ext):
     """Kill a FreeSWITCH call channel.
 

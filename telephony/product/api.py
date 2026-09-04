@@ -415,25 +415,6 @@ def create_app(store: Optional[ProductStore] = None,
         except ProductError as exc:
             raise _http_error(exc) from exc
 
-    @app.post("/api/v1/households/{household_id}/telegram-bind")
-    def telegram_bind(household_id: str,
-                      user: dict = Depends(current_user),
-                      store: ProductStore = Depends(_store)):
-        try:
-            store.require_member(household_id, user["id"],
-                                 roles={"owner", "member"})
-            from core.tg_bind import mint_bind_token
-            token = mint_bind_token(household_id)
-            bot = os.environ.get("MOSS_TG_BOT_USERNAME", "imvera_bot")
-            return {
-                "token": token,
-                "deep_link": f"https://t.me/{bot}?start=bind_{token}",
-            }
-        except ProductError as exc:
-            raise _http_error(exc) from exc
-        except RuntimeError as exc:
-            raise HTTPException(503, detail=str(exc)) from exc
-
     return app
 
 

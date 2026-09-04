@@ -1,0 +1,119 @@
+{
+  "generated_at": "2026-09-03T02:07:22Z",
+  "mode": "synthetic",
+  "trials": 5,
+  "endpointing_ms": 2000,
+  "stack": {
+    "stt_ready": false,
+    "tts_ready": false,
+    "llm_ready": true,
+    "stt_host": "",
+    "stt_model": "",
+    "llm_provider": "local"
+  },
+  "samples": [
+    {
+      "endpointing_ms": 2000.0,
+      "stt_ms": 1.0,
+      "plan_ms": 1.6896724700927734,
+      "gen_tts_ms": 0.03409385681152344,
+      "first_audio_ms": 2002.7237663269043,
+      "transcript": "Нормально, спасибо.",
+      "reply_preview": "Как вы себя сегодня чувствуете?",
+      "mode": "synthetic",
+      "phrase": "Нормально, спасибо."
+    },
+    {
+      "endpointing_ms": 2000.0,
+      "stt_ms": 1.0,
+      "plan_ms": 0.7486343383789062,
+      "gen_tts_ms": 0.018358230590820312,
+      "first_audio_ms": 2001.7669925689697,
+      "transcript": "Голова немного болит.",
+      "reply_preview": "Голова — сильно болит или терпимо?",
+      "mode": "synthetic",
+      "phrase": "Голова немного болит."
+    },
+    {
+      "endpointing_ms": 2000.0,
+      "stt_ms": 1.0,
+      "plan_ms": 0.38695335388183594,
+      "gen_tts_ms": 0.016927719116210938,
+      "first_audio_ms": 2001.403881072998,
+      "transcript": "Спал плохо, просыпался.",
+      "reply_preview": "Что беспокоит — и насколько сильно?",
+      "mode": "synthetic",
+      "phrase": "Спал плохо, просыпался."
+    },
+    {
+      "endpointing_ms": 2000.0,
+      "stt_ms": 1.0,
+      "plan_ms": 1.2199878692626953,
+      "gen_tts_ms": 0.015020370483398438,
+      "first_audio_ms": 2002.235008239746,
+      "transcript": "Да, всё хорошо.",
+      "reply_preview": "Как самочувствие сегодня?",
+      "mode": "synthetic",
+      "phrase": "Да, всё хорошо."
+    },
+    {
+      "endpointing_ms": 2000.0,
+      "stt_ms": 1.0,
+      "plan_ms": 0.46706199645996094,
+      "gen_tts_ms": 0.0171661376953125,
+      "first_audio_ms": 2001.4842281341553,
+      "transcript": "Настроение нормальное.",
+      "reply_preview": "Как вы себя чувствуете?",
+      "mode": "synthetic",
+      "phrase": "Настроение нормальное."
+    }
+  ],
+  "aggregates": {
+    "count": 5,
+    "endpointing_ms": {
+      "min": 2000.0,
+      "max": 2000.0,
+      "mean": 2000.0,
+      "p50": 2000.0,
+      "p95": 2000.0
+    },
+    "stt_ms": {
+      "min": 1.0,
+      "max": 1.0,
+      "mean": 1.0,
+      "p50": 1.0,
+      "p95": 1.0
+    },
+    "plan_ms": {
+      "min": 0.38695335388183594,
+      "max": 1.6896724700927734,
+      "mean": 0.9024620056152344,
+      "p50": 0.7486343383789062,
+      "p95": 1.5957355499267578
+    },
+    "gen_tts_ms": {
+      "min": 0.015020370483398438,
+      "max": 0.03409385681152344,
+      "mean": 0.020313262939453125,
+      "p50": 0.0171661376953125,
+      "p95": 0.03094673156738281
+    },
+    "first_audio_ms": {
+      "min": 2001.403881072998,
+      "max": 2002.7237663269043,
+      "mean": 2001.9227752685547,
+      "p50": 2001.7669925689697,
+      "p95": 2002.6260147094727
+    }
+  },
+  "gates": {
+    "cpu_first_audio_p50_ms": 4000,
+    "cpu_first_audio_p95_ms": 4000,
+    "gpu_first_audio_p50_ms": 2000,
+    "pass_cpu_p50": true,
+    "pass_cpu_p95": true,
+    "pass_gpu_p50": false,
+    "measured_p50_ms": 2001.7669925689697,
+    "measured_p95_ms": 2002.6260147094727
+  }
+}

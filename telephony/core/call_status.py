@@ -41,7 +41,8 @@ def from_agent_outcome(status: str) -> CallStatus:
 
 
 def resolve_family_status(agent_status, *, technical_error=None,
-                          no_contact=False, declined=False) -> CallStatus:
+                          no_contact=False, declined=False,
+                          wellness_band=None) -> CallStatus:
     """Final family status with hard overrides.
 
     TECHNICAL always wins over a green-looking agent status when a hard
@@ -54,7 +55,13 @@ def resolve_family_status(agent_status, *, technical_error=None,
     if no_contact or (agent_status or "").strip().lower() in (
             "no_contact", "no_speech"):
         return CallStatus.NO_CONTACT
-    return from_agent_outcome(agent_status)
+    status = from_agent_outcome(agent_status)
+    band = (wellness_band or "").strip().lower()
+    if band in ("bad", "medium") and status is CallStatus.GREEN:
+        return CallStatus.YELLOW
+    if band == "critical" and status in (CallStatus.GREEN, CallStatus.YELLOW):
+        return CallStatus.RED
+    return status
 
 
 def build_reasons(notes=None, facts=None, status=None,
@@ -154,13 +161,14 @@ def summary_for_family(notes=None, facts=None, status=None) -> str:
 
 def family_fields_for_finalize(agent_status, notes=None, facts=None,
                                technical_error=None, no_contact=False,
-                               declined=False) -> dict:
+                               declined=False, wellness_band=None) -> dict:
     """Bundle columns written into call_results on finalize."""
     status = resolve_family_status(
         agent_status,
         technical_error=technical_error,
         no_contact=no_contact,
         declined=declined,
+        wellness_band=wellness_band,
     )
     # Hard invariant: technical failure can never stay GREEN.
     if technical_error and status is CallStatus.GREEN:

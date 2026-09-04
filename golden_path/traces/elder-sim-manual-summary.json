@@ -1,0 +1,242 @@
+{
+  "trace": "/Users/earflow/Downloads/MossVoice/golden_path/traces/elder-sim-manual.jsonl",
+  "turns": [
+    {
+      "turn": 1,
+      "user": "Да нормально вроде.",
+      "planner": "ACK_ONLY",
+      "analysis": "NORMAL_RESPONSE",
+      "facts": {
+        "answered_slot": "wellness"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "OPEN",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "vera": "Услышала вас, спасибо.",
+      "flags": []
+    },
+    {
+      "turn": 2,
+      "user": "А зачем ты вообще меня об этом спрашиваешь?",
+      "planner": "ANSWER_USER",
+      "analysis": "DIRECT_USER_QUESTION",
+      "facts": {
+        "answered_slot": "wellness"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "OPEN",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "vera": "Понимаю, что вопрос важен. Давайте поговорим о том, что вас беспокоит.",
+      "flags": []
+    },
+    {
+      "turn": 3,
+      "user": "Да настроение нормальное.",
+      "planner": "ASK_SLOT(sleep)",
+      "analysis": "NORMAL_RESPONSE",
+      "facts": {
+        "answered_slot": "mood"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "vera": "Услышала вас, спасибо.",
+      "flags": []
+    },
+    {
+      "turn": 4,
+      "user": "Хотя нет, если честно, что-то сегодня грустно.",
+      "planner": "ASK_SLOT(plans)",
+      "analysis": "NORMAL_RESPONSE",
+      "facts": {
+        "answered_slot": "mood"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "ANSWERED",
+        "plans": "OPEN"
+      },
+      "vera": "Услышала вас, спасибо.",
+      "flags": []
+    },
+    {
+      "turn": 5,
+      "user": "Не хочу я про настроение.",
+      "planner": "HANDLE_REFUSAL",
+      "analysis": "TOPIC_REFUSAL",
+      "facts": {
+        "answered_slot": "mood",
+        "refused_slot": "mood"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "ANSWERED",
+        "plans": "DECLINED"
+      },
+      "vera": "Хорошо, не буду настаивать. Спасибо, что сказали.",
+      "flags": []
+    },
+    {
+      "turn": 6,
+      "user": "Лучше про внучку расскажу.",
+      "planner": "ACK_ONLY",
+      "analysis": "NORMAL_RESPONSE",
+      "facts": {
+        "answered_slot": "mood",
+        "refused_slot": "mood"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "ANSWERED",
+        "plans": "DECLINED"
+      },
+      "vera": "Разберусь, что вы хотите. Скажите, пожалуйста, что именно.",
+      "flags": []
+    },
+    {
+      "turn": 7,
+      "user": "Вчера она приезжала, картошки привезла. А к вечеру что-то колено заболело.",
+      "planner": "ACK_ONLY",
+      "analysis": "NORMAL_RESPONSE",
+      "facts": {
+        "answered_slot": "wellness",
+        "refused_slot": "mood",
+        "symptom": "knee"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "ANSWERED",
+        "plans": "DECLINED"
+      },
+      "vera": "Услышала вас, спасибо.",
+      "flags": []
+    },
+    {
+      "turn": 8,
+      "user": "Да нет, не колено. Оговорился. Спина.",
+      "planner": "HANDLE_CORRECTION",
+      "analysis": "CORRECTION",
+      "facts": {
+        "answered_slot": "wellness",
+        "refused_slot": "mood",
+        "symptom": "back"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "ANSWERED",
+        "plans": "DECLINED"
+      },
+      "vera": "Спасибо за уточнение, я записала.",
+      "flags": []
+    },
+    {
+      "turn": 9,
+      "user": "Сейчас уже прошло.",
+      "planner": "ACK_ONLY",
+      "analysis": "NORMAL_RESPONSE",
+      "facts": {
+        "answered_slot": "wellness",
+        "refused_slot": "mood",
+        "symptom": "back"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "ANSWERED",
+        "plans": "DECLINED"
+      },
+      "vera": "Услышала вас, спасибо.",
+      "flags": []
+    },
+    {
+      "turn": 10,
+      "user": "А что ты перед этим спросила?",
+      "planner": "REPAIR",
+      "analysis": "REPAIR",
+      "facts": {
+        "answered_slot": "wellness",
+        "refused_slot": "mood",
+        "symptom": "back"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "ANSWERED",
+        "plans": "DECLINED"
+      },
+      "vera": "Конечно. Я спрашивала, как вы себя чувствуете сегодня.",
+      "flags": []
+    },
+    {
+      "turn": 11,
+      "user": "Понятно.",
+      "planner": "REPAIR",
+      "analysis": "NORMAL_RESPONSE",
+      "facts": {
+        "answered_slot": "wellness",
+        "refused_slot": "mood",
+        "symptom": "back"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "ANSWERED",
+        "plans": "DECLINED"
+      },
+      "vera": "Конечно. Я спрашивала, как вы себя чувствуете сегодня.",
+      "flags": []
+    },
+    {
+      "turn": 12,
+      "user": "Хорошо.",
+      "planner": "ACK_ONLY",
+      "analysis": "NORMAL_RESPONSE",
+      "facts": {
+        "answered_slot": "wellness",
+        "refused_slot": "mood",
+        "symptom": "back"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "ANSWERED",
+        "plans": "DECLINED"
+      },
+      "vera": "Спасибо, что ответили. Я понимаю, что вы сегодня выглядите уставшим. Надеюсь, что вскоре вы поспите и отдохнёте.",
+      "flags": []
+    },
+    {
+      "turn": 13,
+      "user": "Я устал уже отвечать.",
+      "planner": "ACK_ONLY",
+      "analysis": "NORMAL_RESPONSE",
+      "facts": {
+        "answered_slot": "wellness",
+        "refused_slot": "mood",
+        "symptom": "back"
+      },
+      "slots": {
+        "wellness": "ANSWERED",
+        "mood": "ANSWERED",
+        "sleep": "ANSWERED",
+        "plans": "DECLINED"
+      },
+      "vera": "Понимаю, что вы устали. Постарайтесь отдохнуть, когда сможете.",
+      "flags": []
+    }
+  ]
+}

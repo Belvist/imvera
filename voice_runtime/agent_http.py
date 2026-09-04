@@ -31,6 +31,7 @@ import urllib.request
 AGENT_HOST = os.environ.get("MOSS_AGENT_HOST", "127.0.0.1")
 AGENT_PORT = int(os.environ.get("MOSS_AGENT_PORT", "9400"))
 AGENT_TOKEN = os.environ.get("MOSS_INTERNAL_API_TOKEN", "")
+EXPECTED_AGENT_PROTOCOL = int(os.environ.get("MOSS_AGENT_PROTOCOL", "1"))
 
 
 class AgentError(RuntimeError):
@@ -117,7 +118,19 @@ class AgentClient:
                           timeout=10)
 
     def end_call(self, call_id):
-        return self._json("POST", "/calls/%s/end" % call_id, {}, timeout=10)
+        try:
+            return self._json("POST", "/calls/%s/end" % call_id, {}, timeout=10)
+        except AgentError as exc:
+            msg = str(exc)
+            if "404" in msg or "not found" in msg.lower():
+                return {
+                    "ok": True,
+                    "call_id": call_id,
+                    "finished": True,
+                    "already_ended": True,
+                    "outcome": {"status": "ok", "notes": []},
+                }
+            raise
 
     def health(self, timeout=4):
         try:
@@ -125,6 +138,13 @@ class AgentClient:
             return bool(obj.get("ready"))
         except AgentError:
             return False
+
+    def agent_identity(self, timeout=4):
+        """Fetch /health build identity (build_sha, protocol_version)."""
+        try:
+            return self._json("GET", "/health", None, timeout=timeout) or {}
+        except AgentError:
+            return {}
 
     def turn_stream(self, call_id, audio_paths, segment_dir, on_done,
                     timeout=60):

@@ -1,0 +1,293 @@
+{
+  "status": "AWAITING_OWNER_EARS",
+  "run_dir": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608",
+  "phrase_count": 10,
+  "criteria": [
+    "stress_correct",
+    "phrase_intonation_natural",
+    "no_stitch_artifacts_around_stress_marks"
+  ],
+  "phrases": [
+    {
+      "id": "01_imvera",
+      "text": "Имвера",
+      "local_trace": {
+        "TTS_INPUT_ORIGINAL": "Имвера",
+        "TTS_INPUT_NORMALIZED": "+Имвера",
+        "TTS_SSML_INPUT": "+Имвера",
+        "TTS_SSML": "<speak>+Имвера</speak>",
+        "PRONUNCIATION_OVERRIDES": [
+          {
+            "kind": "word",
+            "source": "Имвера",
+            "replacement": "+Имвера"
+          }
+        ],
+        "MOSS_TTS_SSML": "1"
+      },
+      "wav": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608/01_imvera.wav",
+      "server_trace": {
+        "TTS_INPUT_ORIGINAL": "Имвера",
+        "TTS_INPUT_NORMALIZED": "+Имвера",
+        "TTS_SSML_INPUT": "+Имвера",
+        "TTS_SSML": "<speak>+Имвера</speak>",
+        "PRONUNCIATION_OVERRIDES": [
+          {
+            "kind": "word",
+            "source": "Имвера",
+            "replacement": "+Имвера"
+          }
+        ],
+        "MOSS_TTS_SSML": "1"
+      },
+      "owner_verdict": "PENDING"
+    },
+    {
+      "id": "02_pozvonit",
+      "text": "позвонит",
+      "local_trace": {
+        "TTS_INPUT_ORIGINAL": "позвонит",
+        "TTS_INPUT_NORMALIZED": "позвон+ит",
+        "TTS_SSML_INPUT": "позвон+ит",
+        "TTS_SSML": "<speak>позвон+ит</speak>",
+        "PRONUNCIATION_OVERRIDES": [
+          {
+            "kind": "word",
+            "source": "позвонит",
+            "replacement": "позвон+ит"
+          }
+        ],
+        "MOSS_TTS_SSML": "1"
+      },
+      "wav": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608/02_pozvonit.wav",
+      "server_trace": {
+        "TTS_INPUT_ORIGINAL": "позвонит",
+        "TTS_INPUT_NORMALIZED": "позвон+ит",
+        "TTS_SSML_INPUT": "позвон+ит",
+        "TTS_SSML": "<speak>позвон+ит</speak>",
+        "PRONUNCIATION_OVERRIDES": [
+          {
+            "kind": "word",
+            "source": "позвонит",
+            "replacement": "позвон+ит"
+          }
+        ],
+        "MOSS_TTS_SSML": "1"
+      },
+      "owner_verdict": "PENDING"
+    },
+    {
+      "id": "03_zvonit",
+      "text": "звонит",
+      "local_trace": {
+        "TTS_INPUT_ORIGINAL": "звонит",
+        "TTS_INPUT_NORMALIZED": "звон+ит",
+        "TTS_SSML_INPUT": "звон+ит",
+        "TTS_SSML": "<speak>звон+ит</speak>",
+        "PRONUNCIATION_OVERRIDES": [
+          {
+            "kind": "word",
+            "source": "звонит",
+            "replacement": "звон+ит"
+          }
+        ],
+        "MOSS_TTS_SSML": "1"
+      },
+      "wav": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608/03_zvonit.wav",
+      "server_trace": {
+        "TTS_INPUT_ORIGINAL": "звонит",
+        "TTS_INPUT_NORMALIZED": "звон+ит",
+        "TTS_SSML_INPUT": "звон+ит",
+        "TTS_SSML": "<speak>звон+ит</speak>",
+        "PRONUNCIATION_OVERRIDES": [
+          {
+            "kind": "word",
+            "source": "звонит",
+            "replacement": "звон+ит"
+          }
+        ],
+        "MOSS_TTS_SSML": "1"
+      },
+      "owner_verdict": "PENDING"
+    },
+    {
+      "id": "04_davlenie",
+      "text": "давление",
+      "local_trace": {
+        "TTS_INPUT_ORIGINAL": "давление",
+        "TTS_INPUT_NORMALIZED": "давл+ение",
+        "TTS_SSML_INPUT": "давл+ение",
+        "TTS_SSML": "<speak>давл+ение</speak>",
+        "PRONUNCIATION_OVERRIDES": [
+          {
+            "kind": "word",
+            "source": "давление",
+            "replacement": "давл+ение"
+          }
+        ],
+        "MOSS_TTS_SSML": "1"
+      },
+      "wav": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608/04_davlenie.wav",
+      "server_trace": {
+        "TTS_INPUT_ORIGINAL": "давление",
+        "TTS_INPUT_NORMALIZED": "давл+ение",
+        "TTS_SSML_INPUT": "давл+ение",
+        "TTS_SSML": "<speak>давл+ение</speak>",
+        "PRONUNCIATION_OVERRIDES": [
+          {
+            "kind": "word",
+            "source": "давление",
+            "replacement": "давл+ение"
+          }
+        ],
+        "MOSS_TTS_SSML": "1"
+      },
+      "owner_verdict": "PENDING"
+    },
+    {
+      "id": "05_lekarstva",
+      "text": "лекарства",
+      "local_trace": {
+        "TTS_INPUT_ORIGINAL": "лекарства",
+        "TTS_INPUT_NORMALIZED": "лек+арства",
+        "TTS_SSML_INPUT": "лек+арства",
+        "TTS_SSML": "<speak>лек+арства</speak>",
+        "PRONUNCIATION_OVERRIDES": [
+          {
+            "kind": "word",
+            "source": "лекарства",
+            "replacement": "лек+арства"
+          }
+        ],
+        "MOSS_TTS_SSML": "1"
+      },
+      "wav": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608/05_lekarstva.wav",
+      "server_trace": {
+        "TTS_INPUT_ORIGINAL": "лекарства",
+        "TTS_INPUT_NORMALIZED": "лек+арства",
+        "TTS_SSML_INPUT": "лек+арства",
+        "TTS_SSML": "<speak>лек+арства</speak>",
+        "PRONUNCIATION_OVERRIDES": [
+          {
+            "kind": "word",
+            "source": "лекарства",
+            "replacement": "лек+арства"
+          }
+        ],
+        "MOSS_TTS_SSML": "1"
+      },
+      "owner_verdict": "PENDING"
+    },
+    {
+      "id": "06_rodnye",
+      "text": "родные",
+      "local_trace": {
+        "TTS_INPUT_ORIGINAL": "родные",
+        "TTS_INPUT_NORMALIZED": "родные",
+        "TTS_SSML_INPUT": "родные",
+        "TTS_SSML": "<speak>родные</speak>",
+        "PRONUNCIATION_OVERRIDES": [],
+        "MOSS_TTS_SSML": "1"
+      },
+      "wav": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608/06_rodnye.wav",
+      "server_trace": {
+        "TTS_INPUT_ORIGINAL": "родные",
+        "TTS_INPUT_NORMALIZED": "родные",
+        "TTS_SSML_INPUT": "родные",
+        "TTS_SSML": "<speak>родные</speak>",
+        "PRONUNCIATION_OVERRIDES": [],
+        "MOSS_TTS_SSML": "1"
+      },
+      "owner_verdict": "PENDING"
+    },
+    {
+      "id": "07_segodnya_vecherom",
+      "text": "сегодня вечером",
+      "local_trace": {
+        "TTS_INPUT_ORIGINAL": "сегодня вечером",
+        "TTS_INPUT_NORMALIZED": "сегодня вечером",
+        "TTS_SSML_INPUT": "сегодня вечером",
+        "TTS_SSML": "<speak>сегодня вечером</speak>",
+        "PRONUNCIATION_OVERRIDES": [],
+        "MOSS_TTS_SSML": "1"
+      },
+      "wav": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608/07_segodnya_vecherom.wav",
+      "server_trace": {
+        "TTS_INPUT_ORIGINAL": "сегодня вечером",
+        "TTS_INPUT_NORMALIZED": "сегодня вечером",
+        "TTS_SSML_INPUT": "сегодня вечером",
+        "TTS_SSML": "<speak>сегодня вечером</speak>",
+        "PRONUNCIATION_OVERRIDES": [],
+        "MOSS_TTS_SSML": "1"
+      },
+      "owner_verdict": "PENDING"
+    },
+    {
+      "id": "08_wellness_question",
+      "text": "Как вы сегодня себя чувствуете?",
+      "local_trace": {
+        "TTS_INPUT_ORIGINAL": "Как вы сегодня себя чувствуете?",
+        "TTS_INPUT_NORMALIZED": "Как вы сегодня себя чувствуете?",
+        "TTS_SSML_INPUT": "Как вы сегодня себя чувствуете?",
+        "TTS_SSML": "<speak>Как вы сегодня себя чувствуете?</speak>",
+        "PRONUNCIATION_OVERRIDES": [],
+        "MOSS_TTS_SSML": "1"
+      },
+      "wav": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608/08_wellness_question.wav",
+      "server_trace": {
+        "TTS_INPUT_ORIGINAL": "Как вы сегодня себя чувствуете?",
+        "TTS_INPUT_NORMALIZED": "Как вы сегодня себя чувствуете?",
+        "TTS_SSML_INPUT": "Как вы сегодня себя чувствуете?",
+        "TTS_SSML": "<speak>Как вы сегодня себя чувствуете?</speak>",
+        "PRONUNCIATION_OVERRIDES": [],
+        "MOSS_TTS_SSML": "1"
+      },
+      "owner_verdict": "PENDING"
+    },
+    {
+      "id": "09_correction_spine",
+      "text": "Поняла, спасибо за уточнение — речь о спине.",
+      "local_trace": {
+        "TTS_INPUT_ORIGINAL": "Поняла, спасибо за уточнение — речь о спине.",
+        "TTS_INPUT_NORMALIZED": "Поняла, спасибо за уточнение — речь о спине.",
+        "TTS_SSML_INPUT": "Поняла, спасибо за уточнение — речь о спине.",
+        "TTS_SSML": "<speak>Поняла, спасибо за уточнение — речь о спине.</speak>",
+        "PRONUNCIATION_OVERRIDES": [],
+        "MOSS_TTS_SSML": "1"
+      },
+      "wav": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608/09_correction_spine.wav",
+      "server_trace": {
+        "TTS_INPUT_ORIGINAL": "Поняла, спасибо за уточнение — речь о спине.",
+        "TTS_INPUT_NORMALIZED": "Поняла, спасибо за уточнение — речь о спине.",
+        "TTS_SSML_INPUT": "Поняла, спасибо за уточнение — речь о спине.",
+        "TTS_SSML": "<speak>Поняла, спасибо за уточнение — речь о спине.</speak>",
+        "PRONUNCIATION_OVERRIDES": [],
+        "MOSS_TTS_SSML": "1"
+      },
+      "owner_verdict": "PENDING"
+    },
+    {
+      "id": "10_goodbye",
+      "text": "Хорошо. Берегите себя, до свидания.",
+      "local_trace": {
+        "TTS_INPUT_ORIGINAL": "Хорошо. Берегите себя, до свидания.",
+        "TTS_INPUT_NORMALIZED": "Хорошо. Берегите себя, до свидания.",
+        "TTS_SSML_INPUT": "Хорошо. Берегите себя, до свидания.",
+        "TTS_SSML": "<speak>Хорошо.<break time=\"280ms\"/>Берегите себя, до свидания.</speak>",
+        "PRONUNCIATION_OVERRIDES": [],
+        "MOSS_TTS_SSML": "1"
+      },
+      "wav": "/Users/earflow/Downloads/MossVoice/voice_gate_runs/20260904-184608/10_goodbye.wav",
+      "server_trace": {
+        "TTS_INPUT_ORIGINAL": "Хорошо. Берегите себя, до свидания.",
+        "TTS_INPUT_NORMALIZED": "Хорошо. Берегите себя, до свидания.",
+        "TTS_SSML_INPUT": "Хорошо. Берегите себя, до свидания.",
+        "TTS_SSML": "<speak>Хорошо.<break time=\"280ms\"/>Берегите себя, до свидания.</speak>",
+        "PRONUNCIATION_OVERRIDES": [],
+        "MOSS_TTS_SSML": "1"
+      },
+      "owner_verdict": "PENDING"
+    }
+  ],
+  "live_zoiper_hint": "MOSS_TTS_TRACE=1 on mossvoice-voice; docker logs mossvoice-telephony | TTS_TRACE"
+}

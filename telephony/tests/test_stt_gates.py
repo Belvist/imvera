@@ -30,9 +30,19 @@ class SttGatesTests(unittest.TestCase):
         self.assertEqual(reason, "low_conf")
 
     def test_mid_conf_confirm(self):
-        text, reason = gate_stt_transcript("да всё хорошо", 0.65)
-        self.assertEqual(text, "да всё хорошо")
+        text, reason = gate_stt_transcript("может быть", 0.65)
+        self.assertEqual(text, "может быть")
         self.assertEqual(reason, "stt_uncertain")
+
+    def test_clear_refusal_skips_confirm(self):
+        text, reason = gate_stt_transcript("Ничего не нужно.", 0.78)
+        self.assertEqual(text, "Ничего не нужно.")
+        self.assertIsNone(reason)
+
+    def test_mood_phrase_skips_uncertain_confirm(self):
+        text, reason = gate_stt_transcript("Хорошее настроение.", 0.65)
+        self.assertEqual(text, "Хорошее настроение.")
+        self.assertIsNone(reason)
 
     def test_high_conf_passes(self):
         text, reason = gate_stt_transcript("да всё хорошо", 0.90)
@@ -48,24 +58,6 @@ class SttGatesTests(unittest.TestCase):
     def test_repair_fall_miscue_unit(self):
         self.assertIn("упал", repair_fall_miscue("у палок не ударилось"))
         self.assertEqual(repair_fall_miscue("я упала"), "я упала")
-
-
-class SttUncertainPlanTests(unittest.TestCase):
-    def test_plan_reply_confirms_mid_conf(self):
-        from core.dialogue import Agent
-
-        agent = Agent(llm=None)
-        plan = agent.plan_reply("может быть", reason="stt_uncertain")
-        self.assertIn("услышала", (plan.get("fallback") or "").lower())
-        self.assertIsNone(plan.get("intent"))
-
-    def test_plan_reply_short_wellness_skips_confirm(self):
-        from core.dialogue import Agent
-
-        agent = Agent(llm=None)
-        agent.start_check_in()
-        plan = agent.plan_reply("хорошо", reason="stt_uncertain")
-        self.assertNotIn("услышала", (plan.get("fallback") or "").lower())
 
 
 if __name__ == "__main__":

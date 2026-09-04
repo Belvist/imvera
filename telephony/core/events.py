@@ -11,7 +11,8 @@ import re
 import struct
 import tempfile
 
-from core.dialogue import clean_transcript
+from conversation_system.turn._cleaners import clean_transcript
+from conversation_system.variety.dedupe import reply_too_similar
 from adapters.audio import pcm_to_wav
 
 
@@ -194,16 +195,25 @@ def reply_segments(agent, plan, cancel_event=None,
     emitted_chars = 0
     prefix_stripped = False
     _prev = ""
+    _emitted_joined = ""
 
     def _is_dup(seg):
-        nonlocal _prev
+        nonlocal _prev, _emitted_joined
         if not _prev:
             _prev = seg
+            _emitted_joined = seg
             return False
         norm = lambda s: re.sub(r"[^\w]", "", s.lower())
-        dup = norm(seg) and norm(seg) == norm(_prev)
+        if norm(seg) and norm(seg) == norm(_prev):
+            _prev = seg
+            return True
+        if "?" in seg and _emitted_joined and "?" in _emitted_joined:
+            if reply_too_similar(seg, _emitted_joined, threshold=0.45):
+                _prev = seg
+                return True
         _prev = seg
-        return dup
+        _emitted_joined = f"{_emitted_joined} {seg}".strip()
+        return False
 
     for delta in agent.reply_stream(plan):
         if cancel_event is not None and cancel_event.is_set():
@@ -268,7 +278,8 @@ def reply_segments(agent, plan, cancel_event=None,
                         emitted_chars += len(seg)
                         yield seg
                         buffer = buffer[cut:].strip()
-                        break
+                    # Keep reading the LLM stream — early-first-sound must not
+                    # truncate the rest of the reply (Phase 5 P0).
 
     # flush a trailing reply that has no terminal punctuation
     tail = buffer.strip()
@@ -280,4 +291,5 @@ def reply_segments(agent, plan, cancel_event=None,
             # giant reply is still spoken, just truncated.
             cut = tail[:max_chars].rfind(" ")
             tail = (tail[:cut].rstrip() if cut > 0 else tail[:max_chars]) + "."
-        yield tail
+        if not _is_dup(tail):
+            yield tail

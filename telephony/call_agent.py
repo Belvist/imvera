@@ -36,8 +36,8 @@ from core.state import (  # noqa: E402
     DEFAULT_GREETING,
     SESSION_TTL_SEC,
 )
-from core.dialogue import (  # noqa: E402
-    Agent,
+from core.call_mirror import CallMirror  # noqa: E402
+from conversation_system.reply.prompts import (  # noqa: E402
     MVERA_GREETING,
     VERA_LLM_ID,
     VERA_LLM_URL,
@@ -47,10 +47,9 @@ from core.dialogue import (  # noqa: E402
     DISTRESS_WORDS,
     MED_WORDS,
     HELP_WORDS,
-    clean_transcript,
-    short_real_answer,
     _clean_llm,
 )
+from conversation_system.turn._cleaners import clean_transcript, short_real_answer
 from core.events import (  # noqa: E402
     StreamingSTT,
     STT_HOP_SECONDS,
@@ -83,7 +82,7 @@ __all__ = [
     "CallBusyError",
     "DEFAULT_GREETING",
     "SESSION_TTL_SEC",
-    "Agent",
+    "CallMirror",
     "MVERA_GREETING",
     "VERA_LLM_ID",
     "VERA_LLM_URL",

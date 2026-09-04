@@ -1,85 +1,90 @@
-"""Conversation Lab: text-in / text-out REPL for VERA.
+"""Conversation Lab: text-in / text-out REPL for VERA (ConversationFacade).
 
-Runs the REAL dialogue engine (telephony/core/dialogue.py Agent) against the
-LLM daemon (MOSS_LLM_URL, default http://127.0.0.1:9500). No audio, no
-telephony, no database — only "what Vera would say", so the conversation can
-be tuned and gated BEFORE any voice work.
+Runs the production dialogue engine without audio or telephony.
 
-Usage (from repo root, with the runtime venv):
+Usage (from repo root):
 
-    "$HOME/Library/Application Support/MossVoice/runtime/qwen-venv/bin/python" \
-        voice-lab/lab.py [--check-in] [--url http://127.0.0.1:9500]
+    python3 voice-lab/lab.py [--url http://127.0.0.1:9500]
 
 REPL commands:
     plain text       -> one conversational turn
-    /reset           -> fresh Agent (companion mode)
-    /mode            -> print mode / status / done
-    /hist            -> print the LLM history exactly as it will be sent
+    /reset           -> fresh call session
+    /mode            -> print status / done
     /quit            -> exit
 """
+
+from __future__ import annotations
 
 import argparse
 import os
 import sys
+import uuid
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "telephony"))
 
-from adapters.llm import LLMClient          # noqa: E402
-from core.dialogue import Agent             # noqa: E402
+from conversation_system.integration.facade import ConversationFacade  # noqa: E402
 
 
-def make_agent(url=None):
+def _new_session(facade: ConversationFacade, *, url: str | None = None):
     if url:
         os.environ["MOSS_LLM_URL"] = url
-    return Agent(llm=LLMClient.get())
+    call_id = uuid.uuid4().hex[:12]
+    handle, greeting = facade.begin_call(call_id=call_id, greeting_played=True)
+    plan0 = facade.plan_turn(handle)
+    spoken0 = plan0.spoken_reply or greeting
+    facade.commit_turn(handle, plan0, spoken0)
+    return handle, spoken0
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Conversation Lab REPL")
-    ap.add_argument("--check-in", action="store_true",
-                    help="start with the service-initiated greeting")
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Conversation Lab REPL (facade)")
     ap.add_argument("--url", default=None, help="LLM daemon URL override")
     args = ap.parse_args()
 
-    agent = make_agent(args.url)
-    if args.check_in:
-        print(f"ВЕРА> {agent.start_check_in()}")
+    facade = ConversationFacade()
+    handle, last = _new_session(facade, url=args.url)
+    print(f"ВЕРА> {last}")
+    print("Conversation Lab (facade). /help — команды, /quit — выход.")
 
-    print("Conversation Lab. Тип: /help для команд, /quit для выхода.")
     while True:
         try:
-            line = input("ВЫ> ").strip()
+            line = input("Вы> ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
         if not line:
             continue
-        if line == "/help":
-            print("текст — реплика; /reset — новый агент; /mode — состояние; "
-                  "/hist — история LLM; /quit — выход")
-            continue
+        if line == "/quit":
+            break
         if line == "/reset":
-            agent = make_agent(args.url)
-            if args.check_in:
-                print(f"ВЕРА> {agent.start_check_in()}")
-            print("(сброшено)")
+            try:
+                facade.end_call(handle)
+            except Exception:  # noqa: BLE001
+                pass
+            handle, last = _new_session(facade, url=args.url)
+            print(f"ВЕРА> {last}")
             continue
         if line == "/mode":
-            print(f"mode={agent.mode} step={agent.step} "
-                  f"status={agent.status} done={agent.done}")
+            print("engine=ConversationFacade")
             continue
-        if line == "/hist":
-            for m in agent._build_history():
-                print(f"[{m['role']}] {m['content'][:220]}")
+        if line == "/help":
+            print(__doc__)
             continue
-        if line in ("/quit", "/exit"):
-            break
-        reply = agent.reply(line)
+
+        plan = facade.plan_turn(handle, transcript=line)
+        reply = plan.spoken_reply or ""
+        facade.commit_turn(handle, plan, reply)
         print(f"ВЕРА> {reply}")
-        if agent.done:
-            print("(разговор завершён)")
-            break
+        if plan.terminal:
+            print("(звонок завершён)")
+            handle, last = _new_session(facade, url=args.url)
+            print(f"ВЕРА> {last}")
+
+    try:
+        facade.end_call(handle)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 if __name__ == "__main__":

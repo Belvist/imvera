@@ -17,7 +17,7 @@ safety engine can distrust hallucinations (U9):
 import array
 import wave
 
-from core.dialogue import clean_transcript
+from conversation_system.turn._cleaners import clean_transcript
 
 # audio-energy gate (mean |sample| normalized to full scale).
 # 2026-08-30 UPGRADE: lowered from 0.004 to 0.002 — elderly callers often

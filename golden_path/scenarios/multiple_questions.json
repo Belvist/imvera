@@ -1,0 +1,24 @@
+{
+  "id": "multiple_questions",
+  "name": "Several user questions",
+  "turns": [
+    "зачем вы звоните?",
+    "а это бесплатно?",
+    "ладно, самочувствие нормальное",
+    "настроение спокойное",
+    "спал нормально",
+    "планов нет",
+    "спасибо",
+    "до свидания"
+  ],
+  "check_plans_before_handle": true,
+  "assertions": [
+    {
+      "type": "user_question_before_slot"
+    },
+    {
+      "type": "question_budget",
+      "max_violations": 4
+    }
+  ]
+}

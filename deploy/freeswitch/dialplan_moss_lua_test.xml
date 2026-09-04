@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MossVoice automated conversation test route (extension 4403).
+  Production 4400 = VoiceRuntime (answer+park). This extension runs the
+  legacy Lua agent for loopback harnesses that inject speech via uuid_broadcast
+  during the record phase. Safe to load alongside mossvoice.xml.
+-->
+<include>
+  <extension name="mossvoice_lua_test_4403">
+    <condition field="destination_number" expression="^4403$">
+      <action application="answer"/>
+      <action application="lua" data="moss_agent.lua"/>
+    </condition>
+  </extension>
+</include>

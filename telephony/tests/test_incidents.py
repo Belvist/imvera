@@ -33,7 +33,7 @@ _TABLES = [
 
 class ScriptedChannel:
     """A channel that plays back a script of (ok, detail) results."""
-    name = "telegram"
+    name = "push"
 
     def __init__(self, name, script):
         self.name = name
@@ -45,7 +45,7 @@ class ScriptedChannel:
 
 def _engine(pg, script):
     router = DeliveryRouter([
-        ScriptedChannel("telegram", script.get("telegram", [])),
+        ScriptedChannel("push", script.get("push", [])),
         ScriptedChannel("sms", script.get("sms", [])),
         ScriptedChannel("call", script.get("call", [])),
     ])
@@ -58,7 +58,7 @@ def _open(engine, call_id="c-1", contacts=None, notes=None):
         f"ON CONFLICT DO NOTHING")
     return engine.maybe_open(
         call_id, "alert", notes=notes or ["плохо"],
-        contacts=contacts or {"telegram": "tg-1", "sms": "+7999",
+        contacts=contacts or {"push": "push-token-1", "sms": "+7999",
                               "call": "+7999"})
 
 
@@ -87,7 +87,7 @@ class IncidentDrillTests(unittest.TestCase):
         self.assertEqual(self.pg.get_incident(inc_id)["status"], "open")
         acts = self.pg.actions_for(inc_id)
         self.assertEqual([a["channel"] for a in acts],
-                         ["telegram", "sms", "call"])
+                         ["push", "sms", "call"])
         self.assertEqual([a["status"] for a in acts],
                          ["queued", "queued", "queued"])
         # notifier is enqueued (dedup) for the first action
@@ -99,8 +99,8 @@ class IncidentDrillTests(unittest.TestCase):
         self.assertIsNone(eng.maybe_open("c-2", "ok"))
         self.assertIsNone(eng.maybe_open("c-3", "attention"))
 
-    def test_telegram_down_fallback_to_sms_ack_resolved(self):
-        eng = _engine(self.pg, {"telegram": [(False, "tg down")],
+    def test_push_down_fallback_to_sms_ack_resolved(self):
+        eng = _engine(self.pg, {"push": [(False, "tg down")],
                                 "sms": [(True, "delivered")]})
         inc_id = _open(eng)
         acts = self.pg.actions_for(inc_id)
@@ -131,8 +131,8 @@ class IncidentDrillTests(unittest.TestCase):
         ])
 
     def test_ack_before_deadline_resolves_without_escalation(self):
-        eng = _engine(self.pg, {"telegram": [(True, "ok")]})
-        inc_id = _open(eng, contacts={"telegram": "tg-1"})
+        eng = _engine(self.pg, {"push": [(True, "ok")]})
+        inc_id = _open(eng, contacts={"push": "push-token-1"})
         acts = self.pg.actions_for(inc_id)
         eng.deliver({"incident_id": inc_id, "action_id": acts[0]["id"]})
         eng.ack(inc_id, "дочь", action_id=acts[0]["id"])
@@ -142,12 +142,12 @@ class IncidentDrillTests(unittest.TestCase):
         self.assertEqual(inc["escalation_level"], 0)
 
     def test_no_ack_within_deadline_escalates(self):
-        eng = _engine(self.pg, {"telegram": [(True, "ok")]})
-        inc_id = _open(eng, contacts={"telegram": "tg-1", "sms": "+7999"})
+        eng = _engine(self.pg, {"push": [(True, "ok")]})
+        inc_id = _open(eng, contacts={"push": "push-token-1", "sms": "+7999"})
         acts = self.pg.actions_for(inc_id)
         eng.deliver({"incident_id": inc_id, "action_id": acts[0]["id"]})
         self.assertEqual(self.pg.get_action(acts[0]["id"])["status"], "sent")
-        # telegram sent but family did NOT ack; ack deadline passed
+        # push sent but family did NOT ack; ack deadline passed
         self.pg._exec(
             "UPDATE incidents SET opened_at = now() - interval '300 seconds' "
             "WHERE id = %s", (inc_id,))
@@ -164,8 +164,8 @@ class IncidentDrillTests(unittest.TestCase):
         self.assertEqual(sms["channel"], "sms")
 
     def test_double_notify_never_double_sends(self):
-        eng = _engine(self.pg, {"telegram": [(True, "ok")]})
-        inc_id = _open(eng, contacts={"telegram": "tg-1"})
+        eng = _engine(self.pg, {"push": [(True, "ok")]})
+        inc_id = _open(eng, contacts={"push": "push-token-1"})
         acts = self.pg.actions_for(inc_id)
         self.assertEqual(eng.deliver(
             {"incident_id": inc_id, "action_id": acts[0]["id"]}), True)
@@ -179,14 +179,14 @@ class IncidentDrillTests(unittest.TestCase):
 
     def test_restart_reconcile_redelivers_pending(self):
         # crash between enqueue and delivery: notifier pending, action queued
-        eng1 = _engine(self.pg, {"telegram": [(True, "ok")]})
-        inc_id = _open(eng1, contacts={"telegram": "tg-1"})
+        eng1 = _engine(self.pg, {"push": [(True, "ok")]})
+        inc_id = _open(eng1, contacts={"push": "push-token-1"})
         pending = self.pg._exec(
             "SELECT count(*) FROM outbox_messages WHERE status='pending' "
             "AND topic='incident.notify'", fetch="val")
         self.assertEqual(pending, 1)
         # 'restart': fresh engine + worker delivers the pending notifier
-        eng2 = _engine(self.pg, {"telegram": [(True, "ok")]})
+        eng2 = _engine(self.pg, {"push": [(True, "ok")]})
         claimed = eng2.pg.claim_batch(worker_id="restart")
         self.assertEqual(len(claimed), 1)
         for row in claimed:
@@ -208,7 +208,7 @@ class IncidentDrillTests(unittest.TestCase):
             {"incident_id": inc_id, "action_id": 1}), True)
 
     def test_out_of_channels_escalates(self):
-        eng = _engine(self.pg, {"telegram": [(False, "down")],
+        eng = _engine(self.pg, {"push": [(False, "down")],
                                 "sms": [(False, "down")],
                                 "call": [(False, "down")]})
         inc_id = _open(eng)
@@ -280,7 +280,7 @@ class IncidentDrillTests(unittest.TestCase):
 
         serve = Serve(_Args())
         try:
-            inc_id = _open(serve.incidents, contacts={"telegram": "tg-1"})
+            inc_id = _open(serve.incidents, contacts={"push": "push-token-1"})
             srv = QuietHTTPServer(("127.0.0.1", 0), Handler)
             srv.serve = serve
             import threading

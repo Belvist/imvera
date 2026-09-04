@@ -427,10 +427,33 @@ def vad_speech_seconds(path: str, tail_s: float = None):
             seg = audio[s0:s1]
             for k in range(0, max(1, len(seg) - frame), frame):
                 energies.append(np.sqrt(np.mean(seg[k:k + frame] ** 2)))
-        if energies and float(np.median(energies)) < 0.008:
+        if energies and float(np.median(energies)) < 0.004:
             return 0.0
     return secs
 
+
+def mean_audio_energy(path: str) -> float:
+    """Mean |sample| normalized to [0,1] — matches telephony adapters.stt."""
+    import wave as _wave
+    try:
+        with _wave.open(path, "rb") as w:
+            ch = w.getnchannels()
+            raw = w.readframes(w.getnframes())
+        if not raw:
+            return 0.0
+        import numpy as np
+        audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+        if ch > 1:
+            audio = audio.reshape(-1, ch)[:, 0]
+        return float(np.mean(np.abs(audio)))
+    except Exception:  # noqa: BLE001
+        return 1.0
+
+
+# Quiet elderly phone speech often lands 0.003–0.007 mean energy — below
+# Silero's TV-rejection floor but still real voice; trust STT host when
+# energy clears the orchestrator silence gate (0.002).
+_STT_HOST_MIN_ENERGY = 0.002
 
 class SttHostAdapter:
     """Duck-typed like mlx_audio STT: exposes `.generate(path, ...).text`.
@@ -463,14 +486,15 @@ class SttHostAdapter:
             segments = ()
             speech_s = 0.0
 
-        # NOISE GATE pass 1: authoritative Silero VAD on the file. Pure
-        # noise/TV/music is rejected HERE without hitting the host at all
-        # (fast + no hallucinations possible).
+        # NOISE GATE pass 1: Silero VAD — skip only when BOTH no VAD speech
+        # AND file energy is below the phone silence gate. Quiet callers
+        # (live c112a3017a2f: en=0.0044, vad=0) must still reach Qwen host.
         vad_speech = vad_speech_seconds(path)
+        energy = mean_audio_energy(path)
         r = _R()
-        if vad_speech is not None and vad_speech < 0.15:
+        if vad_speech is not None and vad_speech < 0.15 and energy < _STT_HOST_MIN_ENERGY:
             return r
-        r.speech_s = vad_speech if vad_speech is not None else 0.0
+        r.speech_s = vad_speech if vad_speech is not None else max(energy * 2.0, 0.2)
         boundary = "--mossstt" + hashlib.md5(path.encode()).hexdigest()[:8]
         payload = self._wav(path)
         body = (("--%s\r\nContent-Disposition: form-data; name=\"file\"; "
@@ -515,7 +539,8 @@ class SttHostWithFallback:
         if (getattr(r, "text", "") or "").strip():
             return r
         vad_speech = vad_speech_seconds(path)
-        if vad_speech is not None and vad_speech < 0.15:
+        energy = mean_audio_energy(path)
+        if vad_speech is not None and vad_speech < 0.15 and energy < _STT_HOST_MIN_ENERGY:
             return r
         print("[stt-host] host empty/error -> whisper fallback", flush=True)
         try:

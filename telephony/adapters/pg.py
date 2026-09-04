@@ -654,7 +654,7 @@ class PgStore:
 
     def family_elder_by_phone(self, phone_digits):
         return self._exec(
-            "SELECT person_id, phone, display_name, household_id "
+            "SELECT person_id, phone, display_name, household_id, timezone "
             "FROM elders WHERE phone = %s",
             (phone_digits,), fetch="one")
 

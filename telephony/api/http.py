@@ -149,14 +149,51 @@ class Handler(BaseHTTPRequestHandler):
         health endpoint. LLM NOT ready is a degraded mode (scripted replies),
         never a lie about the other two.
         """
+        from core.build_info import is_local_only
+
         serve = self.server.serve
         stt_ok = bool(getattr(serve.stt, "ready", lambda: False)())
         llm_ok = bool(getattr(serve.llm, "ready", lambda: False)())
         tts_ok, tts_err = serve.tts.health()
+        local_only = is_local_only()
+        stt_engine = os.environ.get("MOSS_STT_PROVIDER", "local")
+        llm_engine = os.environ.get("MOSS_LLM_PROVIDER", "local")
+        tts_engine = os.environ.get("MOSS_TTS_PROVIDER", "local")
+        stt_model = (
+            getattr(serve.stt, "model_id", None)
+            or os.environ.get("MOSS_STT_MODEL", "local")
+        )
+        llm_model = (
+            getattr(serve.llm, "model_id", None)
+            or os.environ.get("MOSS_LLM_MODEL", "local")
+        )
+        tts_model = (
+            getattr(serve.tts, "model_id", None)
+            or os.environ.get("MOSS_TTS_MODEL", "local")
+        )
         return {
             "stt": stt_ok,
             "llm": llm_ok,
             "tts": tts_ok,
+            "stt_detail": {
+                "ready": stt_ok,
+                "engine": stt_engine,
+                "model_id": stt_model,
+                "local_only": local_only,
+            },
+            "llm_detail": {
+                "ready": llm_ok,
+                "engine": llm_engine,
+                "model_id": llm_model,
+                "local_only": local_only,
+            },
+            "tts_detail": {
+                "ready": tts_ok,
+                "engine": tts_engine,
+                "model_id": tts_model,
+                "local_only": local_only,
+            },
+            "local_only": local_only,
             # read.md rev-4 gate D: schema compatibility is an explicit
             # readiness capability, not a silent console print.
             "schema": bool(getattr(serve, "schema_compatible", True)),
@@ -285,18 +322,35 @@ btn.disabled=false;
                     "MOSS_MAX_CONCURRENT_CALLS", "0") or 0)
             except ValueError:
                 max_calls = 0
+            from core.build_info import (
+                CONVERSATION_VERSION,
+                PROTOCOL_VERSION,
+                get_build_sha,
+                get_build_time,
+            )
+            require_llm = os.environ.get(
+                "MOSS_REQUIRE_LLM", "0").strip().lower() in (
+                "1", "true", "yes", "on")
+            conversation_mode = "full" if comps["llm"] else "scripted"
+            conversation_degraded = require_llm and not comps["llm"]
             # TRUTHFUL READINESS: "ok" is only true when the realtime
-            # pipeline (STT + TTS) is ACTUALLY usable. Previously /health
-            # returned "ok": True unconditionally — a broken STT/TTS still
-            # looked healthy. LLM is reported but does not gate "ok" (the
-            # scripted fallback is a real, working degraded mode).
+            # pipeline (STT + TTS) is ACTUALLY usable. When MOSS_REQUIRE_LLM=1,
+            # conversation mode also requires a wired LLM.
             ok = bool(comps["stt"] and comps["tts"] and comps["schema"])
+            if require_llm:
+                ok = ok and comps["llm"]
             self._json({
                 # read.md rev-3 G4: identity contract (see /ready above).
                 "service": "mossvoice-telephony",
-                "protocol_version": 1,
+                "protocol_version": PROTOCOL_VERSION,
+                "conversation_version": CONVERSATION_VERSION,
+                "build_sha": get_build_sha(),
+                "build_time": get_build_time(),
                 "ok": ok,
                 "components": comps,
+                "conversation_mode": conversation_mode,
+                "conversation_degraded": conversation_degraded,
+                "require_llm": require_llm,
                 "tts": comps["tts"],
                 "error": tts_err,
                 "pg": getattr(serve, "pg_available", False),
@@ -409,7 +463,8 @@ btn.disabled=false;
                 # the state machine into an unknown mode).
                 self._json({"ok": False, "error": str(e)}, 400)
                 return
-            self._json({"ok": True, "call_id": call_id})
+            greeting = self.server.serve.call_greeting(call_id)
+            self._json({"ok": True, "call_id": call_id, "greeting": greeting})
             return
         if path.startswith("/calls/"):
             rest = path[len("/calls/"):]
@@ -444,27 +499,8 @@ btn.disabled=false;
                 self._json({"ok": True, "speech": speech})
                 return
             if action == "end":
-                try:
-                    result = self.server.serve.end_call(call_id)
-                except KeyError:
-                    self._json({"ok": False, "error": "call not found"}, 404)
-                    return
-                self._json(result)
-                return
-            if action == "dtmf":
-                # ROADMAP E2/E3: DTMF fallback (1=ok / 2=help; consent 1/2).
-                payload = self._read_json_body() or {}
-                digit = payload.get("digit")
-                if digit is None and payload.get("digits"):
-                    digit = str(payload.get("digits"))[:1]
-                if digit is None:
-                    self._json({"ok": False, "error": "digit required"}, 400)
-                    return
-                try:
-                    result = self.server.serve.handle_dtmf(call_id, digit)
-                except KeyError:
-                    self._json({"ok": False, "error": "call not found"}, 404)
-                    return
+                # orchestrator.end_call is idempotent (KeyError -> already_ended).
+                result = self.server.serve.end_call(call_id)
                 self._json(result)
                 return
             if action == "hangup":

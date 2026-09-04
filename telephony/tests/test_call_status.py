@@ -1,4 +1,4 @@
-"""ROADMAP E2: family call statuses + DTMF fallback."""
+"""ROADMAP E2: family call statuses + silence ladder."""
 import os
 import sys
 import unittest
@@ -10,10 +10,9 @@ from core.call_status import (  # noqa: E402
     from_agent_outcome, resolve_family_status, build_reasons,
     summary_for_family, family_fields_for_finalize,
 )
-from core.dtmf import (  # noqa: E402
-    DTMF_PROMPT, DtmfEvent, interpret_dtmf, should_offer_dtmf,
-)
-from core.dialogue import Agent  # noqa: E402
+from core.call_mirror import CallMirror  # noqa: E402
+from core.conversation_v2_bridge import begin_v2_call, plan_turn_for_call
+from core.state import CallContext  # noqa: E402
 
 
 class CallStatusMappingTests(unittest.TestCase):
@@ -93,46 +92,30 @@ class SummaryAndReasonsTests(unittest.TestCase):
         self.assertTrue(any("головн" in r for r in reasons))
 
 
-class DtmfTests(unittest.TestCase):
-    def test_interpret_dtmf(self):
-        self.assertEqual(interpret_dtmf("1"), DtmfEvent.OK)
-        self.assertEqual(interpret_dtmf("2"), DtmfEvent.HELP)
-        self.assertEqual(interpret_dtmf("DTMF 1"), DtmfEvent.OK)
-        self.assertEqual(interpret_dtmf("9"), DtmfEvent.UNKNOWN)
-        self.assertEqual(interpret_dtmf(""), DtmfEvent.UNKNOWN)
+class SilenceLadderTests(unittest.TestCase):
+    def _ctx(self):
+        ctx = CallContext(call_id="silence-test", agent=CallMirror())
+        begin_v2_call(ctx)
+        return ctx
 
-    def test_should_offer_after_two_empty(self):
-        self.assertFalse(should_offer_dtmf(1))
-        self.assertTrue(should_offer_dtmf(2))
-        self.assertTrue(should_offer_dtmf(5))
-
-    def test_agent_offers_dtmf_after_two_empty(self):
-        a = Agent(llm=None)
-        a.start_check_in()
-        a.observe_confidence(0.9)
-        p1 = a.plan_reply("", reason="low_conf")
+    def test_facade_never_offers_dtmf(self):
+        ctx = self._ctx()
+        p1, _ = plan_turn_for_call(
+            ctx, ctx.agent, transcript="", reason="low_conf", stt_confidence=0.9)
         self.assertNotIn("нажмите 1", p1["fallback"].lower())
-        p2 = a.plan_reply("", reason="low_conf")
-        self.assertIn("нажмите 1", p2["fallback"].lower())
-        self.assertIn("нажмите 2", p2["fallback"].lower())
-        self.assertEqual(p2["fallback"], DTMF_PROMPT)
-        self.assertTrue(a._dtmf_offered)
+        p2, _ = plan_turn_for_call(
+            ctx, ctx.agent, transcript="", reason="low_conf", stt_confidence=0.9)
+        self.assertNotIn("нажмите 1", p2["fallback"].lower())
+        self.assertNotIn("нажмите 2", p2["fallback"].lower())
 
-    def test_handle_dtmf_ok_and_help(self):
-        a = Agent(llm=None)
-        a.start_check_in()
-        a.observe_confidence(0.9)
-        p = a.handle_dtmf("1")
-        self.assertTrue(p.get("fallback") or p.get("intent"))
-        a2 = Agent(llm=None)
-        a2.start_check_in()
-        a2.observe_confidence(0.9)
-        p2 = a2.handle_dtmf("2")
-        self.assertIn(a2.status, ("attention", "alert", "ok", "unknown"))
-        self.assertTrue(p2.get("fallback") or p2.get("intent"))
+    def test_silence_ladder_has_spoken_fallback(self):
+        ctx = self._ctx()
+        plan, _ = plan_turn_for_call(
+            ctx, ctx.agent, transcript="", reason="low_conf", stt_confidence=0.9)
+        self.assertTrue((plan.get("fallback") or "").strip())
 
     def test_mark_technical_blocks_green(self):
-        a = Agent(llm=None)
+        a = CallMirror(llm=None)
         a.status = "ok"
         a.mark_technical("llm:Timeout")
         self.assertEqual(a.status, "technical")

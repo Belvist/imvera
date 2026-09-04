@@ -1,0 +1,26 @@
+{
+  "id": "refusal",
+  "name": "Topic refusal",
+  "turns": [
+    "не хочу говорить о самочувствии",
+    "настроение нормальное скажу",
+    "про сон не буду говорить",
+    "планов нет",
+    "хорошо",
+    "спасибо",
+    "ладно",
+    "пока"
+  ],
+  "assertions": [
+    {
+      "type": "slot_status",
+      "slot": "wellness",
+      "status": "DECLINED"
+    },
+    {
+      "type": "slot_status",
+      "slot": "sleep",
+      "status": "DECLINED"
+    }
+  ]
+}

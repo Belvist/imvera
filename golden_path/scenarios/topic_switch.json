@@ -1,0 +1,27 @@
+{
+  "id": "topic_switch",
+  "name": "Mid-agenda topic switch",
+  "turns": [
+    "давление немного скачет",
+    "кстати какая сегодня погода у вас?",
+    "ладно, настроение ровное",
+    "спал средне",
+    "может завтра прогуляюсь",
+    "спасибо",
+    "хорошо",
+    "до свидания"
+  ],
+  "check_plans_before_handle": true,
+  "assertions": [
+    {
+      "type": "analysis_on_turn",
+      "turn": 2,
+      "kind": "DIRECT_USER_QUESTION"
+    },
+    {
+      "type": "slot_status",
+      "slot": "wellness",
+      "status": "ANSWERED"
+    }
+  ]
+}

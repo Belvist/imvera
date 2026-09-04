@@ -747,6 +747,9 @@ def build_handler(worker, registry):
                         "wav_b64": base64.b64encode(wav_bytes).decode("ascii"),
                         "text": text,
                     }
+                    trace = getattr(worker._tts, "last_tts_trace", None)
+                    if isinstance(trace, dict):
+                        resp["tts_trace"] = trace
                     meta = worker.ref_meta.get(worker._key(refs_p, ref_text))
                     if meta:
                         resp["reference_text_source"] = meta.get("source")

@@ -1,14 +1,26 @@
 """Call session state (P0-SESSION-001)."""
 
 from dataclasses import dataclass, field
+import os
+import tempfile
 import threading
 import time
 
-from core.dialogue import Agent
+from core.call_mirror import CallMirror
 from adapters.postgres_results import Recorder
 
 
-DEFAULT_GREETING = "Здравствуйте! Это Имвэра. Как вы себя чувствуете?"
+def _default_recorder() -> Recorder:
+    base = os.environ.get("MOSS_OUTDIR") or os.path.join(
+        tempfile.gettempdir(), "mossvoice_calls")
+    return Recorder(base)
+
+
+from conversation_system.reply.pools import GREETING_POOL
+
+DEFAULT_GREETING = GREETING_POOL[0] if GREETING_POOL else (
+    "Здравствуйте! Это Вера из Имвера. Как вы себя чувствуете?"
+)
 
 # When a call has been idle for this long it is garbage-collected.
 SESSION_TTL_SEC = 60 * 60
@@ -28,8 +40,8 @@ class CallContext:
     rejected with HTTP 429 instead of interleaving with the first one.
     """
     call_id: str
-    agent: Agent = field(default_factory=Agent)
-    recorder: Recorder = field(default_factory=lambda: Recorder(""))
+    agent: CallMirror = field(default_factory=CallMirror)
+    recorder: Recorder = field(default_factory=_default_recorder)
     created_at: float = field(default_factory=time.time)
     last_seen: float = field(default_factory=time.time)
     caller_id: str | None = None

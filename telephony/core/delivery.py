@@ -1,10 +1,7 @@
 """Phase 3: outbound delivery channels for incident notifications.
 
-Each channel implements ``send(contact, text) -> (ok, detail)``. Telegram is
-REAL (Bot API via urllib — no new deps) when ``MOSS_TG_BOT_TOKEN`` is set.
-SMS/call channels are structured but fail fast until their providers exist
-(Exolve/Phase 4) — which is exactly what drives the escalation chain:
-"Telegram недоступен -> fallback -> ...".
+Each channel implements ``send(contact, text) -> (ok, detail)``. Push/SMS/call
+channels use generic HTTP provider adapters when configured.
 """
 
 import json
@@ -68,33 +65,6 @@ def _post_provider(url, key, payload, timeout):
     return data
 
 
-class TelegramChannel:
-    name = "telegram"
-
-    def send(self, contact, text):
-        token = os.environ.get("MOSS_TG_BOT_TOKEN", "")
-        if not token:
-            return False, "telegram: no MOSS_TG_BOT_TOKEN"
-        if not str(contact or "").strip():
-            return False, "telegram: contact not set"
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        body = json.dumps({"chat_id": contact, "text": str(text)[:4096]}).encode()
-        req = urllib.request.Request(
-            url, data=body,
-            headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                raw = resp.read(MAX_PROVIDER_RESPONSE_BYTES + 1)
-                if len(raw) > MAX_PROVIDER_RESPONSE_BYTES:
-                    return False, "telegram: response too large"
-                data = json.loads(raw.decode("utf-8", "strict"))
-            if data.get("ok"):
-                return True, f"telegram:ok:{data.get('result', {}).get('message_id')}"
-            return False, f"telegram:{data.get('description', 'api error')}"
-        except Exception as e:  # noqa: BLE001
-            return False, f"telegram:{type(e).__name__}"
-
-
 class SmsChannel:
     name = "sms"
 
@@ -126,11 +96,12 @@ class VoiceChannel:
         # Prefer FreeSWITCH ESL originate when MOSS_CALL_VIA_ESL=1 (ROADMAP E6).
         if _env_true("MOSS_CALL_VIA_ESL"):
             try:
-                from adapters.esl import originate_to_number
-                result = originate_to_number(_normalized_phone(contact))
-                if result.get("ok"):
-                    return True, f"call:esl:ok:{result.get('uuid', '')}"
-                return False, f"call:esl:{result.get('error', 'failed')}"
+                from adapters.esl import originate_status, originate_to_number
+                ok, detail = originate_status(
+                    originate_to_number(_normalized_phone(contact)))
+                if ok:
+                    return True, f"call:esl:ok:{detail}"
+                return False, f"call:esl:{detail}"
             except Exception as e:  # noqa: BLE001
                 return False, f"call:esl:{type(e).__name__}"
         provider = os.environ.get("MOSS_CALL_PROVIDER", "")
@@ -235,7 +206,7 @@ class DeliveryRouter:
 
     def channel_names(self):
         order = (os.environ.get("MOSS_INCIDENT_CHANNELS",
-                                "push,telegram,sms,call")
+                                "push,sms,call")
                  .replace(" ", "").split(","))
         return [n for n in order if n in self._by_name]
 
@@ -264,10 +235,7 @@ class DeliveryRouter:
             out.sort(key=lambda x: x[2])
             return [(c, a) for c, a, _ in out]
         legacy = []
-        chat = os.environ.get("MOSS_FAMILY_CHAT_ID", "").strip()
         phone = os.environ.get("MOSS_FAMILY_PHONE", "").strip()
-        if chat:
-            legacy.append(("telegram", chat))
         if phone:
             legacy.append(("sms", phone))
             legacy.append(("call", phone))
@@ -285,7 +253,7 @@ class DeliveryRouter:
 
 def _default_channels():
     out = []
-    for cls in (PushChannel, TelegramChannel, SmsChannel, VoiceChannel):
+    for cls in (PushChannel, SmsChannel, VoiceChannel):
         try:
             out.append(cls())
         except Exception:  # noqa: BLE001

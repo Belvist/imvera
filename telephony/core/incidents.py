@@ -215,8 +215,8 @@ class IncidentEngine:
 
 
 def _default_contact(channel):
-    if channel == "telegram":
-        return os.environ.get("MOSS_FAMILY_CHAT_ID", "")
+    if channel == "push":
+        return os.environ.get("MOSS_FAMILY_PUSH_TOKEN", "")
     if channel in ("sms", "call"):
         return os.environ.get("MOSS_FAMILY_PHONE", "")
     return ""

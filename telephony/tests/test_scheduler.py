@@ -262,6 +262,25 @@ class MayOriginateTests(unittest.TestCase):
             self.assertTrue(has_active_consent(pg, "elder-1"))
 
 
+class OriginateJobEslTests(unittest.TestCase):
+    def test_esl_failure_records_freeswitch_message(self):
+        from workers.scheduler_worker_main import originate_job
+
+        job = {"elder_id": "elder-1"}
+        with mock.patch.dict(os.environ, {
+                "MOSS_SCHEDULER_DRY_RUN": "",
+                "MOSS_OUTBOUND_KILL_SWITCH": ""}), \
+                mock.patch("core.scheduler.may_originate", return_value=True), \
+                mock.patch("core.scheduler.elder_phone",
+                           return_value="+79001234567"), \
+                mock.patch("adapters.esl.originate_to_number",
+                           return_value={"ok": False, "uuid": None,
+                                         "message": "NO_ROUTE_DESTINATION"}):
+            ok, detail = originate_job(mock.Mock(), job)
+        self.assertFalse(ok)
+        self.assertEqual(detail, "NO_ROUTE_DESTINATION")
+
+
 @unittest.skipUnless(os.environ.get("MOSS_PG_URL"), "MOSS_PG_URL not set")
 class LivePgSchedulerTests(unittest.TestCase):
     def test_claim_sql_parses(self):

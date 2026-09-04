@@ -1,0 +1,950 @@
+{
+  "session_id": "wave2-integration",
+  "trace_path": "golden_path/traces/wave2-integration.jsonl",
+  "llm": {
+    "ready": true,
+    "model_id": "Qwen3-4B-Q4_K_M",
+    "revision": "main",
+    "backend": "llama.cpp",
+    "protocol": "openai",
+    "device": "metal",
+    "base_url": "http://127.0.0.1:9500",
+    "raw": {
+      "service": "mossvoice-llm",
+      "protocol_version": 1,
+      "ready": true,
+      "model_id": "Qwen3-4B-Q4_K_M",
+      "revision": "main",
+      "backend": "llama.cpp",
+      "protocol": "openai",
+      "device": "metal",
+      "thinking": false,
+      "generation_profile": "vera_deterministic",
+      "gateway": "stage_a",
+      "internal_url": "http://127.0.0.1:9501"
+    },
+    "thinking": false,
+    "generation_profile": "vera_deterministic"
+  },
+  "failures": [],
+  "spoken_failures": [],
+  "records": [
+    {
+      "turn": 1,
+      "user": "нормально",
+      "analysis": {
+        "kind": "NORMAL_RESPONSE",
+        "facts": {
+          "answered_slot": "wellness"
+        },
+        "user_question": null,
+        "answer_type": null,
+        "refusal_slot": null,
+        "safety_reason": null,
+        "confidence": 1.0
+      },
+      "state_after_user": {
+        "session_id": "wave2-integration",
+        "facts": {
+          "answered_slot": "wellness"
+        },
+        "slot_statuses": {
+          "wellness": "ANSWERED",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "declined_topics": [],
+        "pending_question": "Какое у вас сегодня настроение?",
+        "pending_slot": "mood",
+        "current_topic": "mood",
+        "current_goal": "check_in",
+        "assistant_turn_count": 2,
+        "turns_since_question": 0,
+        "greeted": true,
+        "closing": false,
+        "safety_active": false,
+        "safety_phase": "INACTIVE",
+        "repair_pending": false,
+        "wait_request": false,
+        "user_fatigue": false
+      },
+      "planner_action": {
+        "action": "ASK_SLOT",
+        "slot": "mood",
+        "answer_type": null,
+        "reason": "slot_answered_advance",
+        "action_name": "ASK_SLOT(mood)"
+      },
+      "content_plan": {
+        "action": "ASK_SLOT(mood)",
+        "response_intent": "ask_slot_with_brief_ack",
+        "facts_to_reference": [
+          "тема «самочувствие» уже обсуждена"
+        ],
+        "required_question": "mood_today",
+        "forbidden_topics": [
+          "планы",
+          "самочувствие",
+          "сон"
+        ],
+        "semantic_bullets": [
+          "коротко позитивно отреагировать на сказанное",
+          "задать один вопрос про настроение",
+          "формулировка без угадывания пола (используйте «вы спали», не «спал»)"
+        ],
+        "required_meaning_ru": "какое настроение сегодня",
+        "example_realization": "Какое у вас сегодня настроение?",
+        "do_not_say": [
+          "инструкции пользователю (попрощайтесь, спросите и т.п.)",
+          "английские слова",
+          "внутренние метки (knee, sleep_last_night)",
+          "мужской род от лица Веры",
+          "угадывание пола пользователя",
+          "«вы выглядите» / «я вижу»"
+        ]
+      },
+      "raw_llm_output": "Какое у вас сегодня настроение?",
+      "validator_result": {
+        "ok": true,
+        "text": "Какое у вас сегодня настроение?",
+        "violations": [],
+        "used_fallback": false
+      },
+      "regen_used": false,
+      "fallback_used": false,
+      "deterministic": false,
+      "final_text": "Какое у вас сегодня настроение?",
+      "spoken_ok": true,
+      "spoken_violations": [],
+      "action_ok": true
+    },
+    {
+      "turn": 2,
+      "user": "настроение хорошее",
+      "analysis": {
+        "kind": "NORMAL_RESPONSE",
+        "facts": {
+          "answered_slot": "mood"
+        },
+        "user_question": null,
+        "answer_type": null,
+        "refusal_slot": null,
+        "safety_reason": null,
+        "confidence": 1.0
+      },
+      "state_after_user": {
+        "session_id": "wave2-integration",
+        "facts": {
+          "answered_slot": "mood"
+        },
+        "slot_statuses": {
+          "wellness": "ANSWERED",
+          "mood": "ANSWERED",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "declined_topics": [],
+        "pending_question": "Как вы спали этой ночью?",
+        "pending_slot": "sleep",
+        "current_topic": "sleep",
+        "current_goal": "check_in",
+        "assistant_turn_count": 3,
+        "turns_since_question": 0,
+        "greeted": true,
+        "closing": false,
+        "safety_active": false,
+        "safety_phase": "INACTIVE",
+        "repair_pending": false,
+        "wait_request": false,
+        "user_fatigue": false
+      },
+      "planner_action": {
+        "action": "ASK_SLOT",
+        "slot": "sleep",
+        "answer_type": null,
+        "reason": "slot_answered_advance",
+        "action_name": "ASK_SLOT(sleep)"
+      },
+      "content_plan": {
+        "action": "ASK_SLOT(sleep)",
+        "response_intent": "ask_slot_with_brief_ack",
+        "facts_to_reference": [
+          "тема «настроение» уже обсуждена"
+        ],
+        "required_question": "sleep_last_night",
+        "forbidden_topics": [
+          "настроение",
+          "планы",
+          "самочувствие"
+        ],
+        "semantic_bullets": [
+          "коротко откликнуться на сказанное",
+          "задать один вопрос про сон",
+          "формулировка без угадывания пола (используйте «вы спали», не «спал»)"
+        ],
+        "required_meaning_ru": "как прошла ночь / как человек спал",
+        "example_realization": "Как вы спали этой ночью?",
+        "do_not_say": [
+          "инструкции пользователю (попрощайтесь, спросите и т.п.)",
+          "английские слова",
+          "внутренние метки (knee, sleep_last_night)",
+          "мужской род от лица Веры",
+          "угадывание пола пользователя",
+          "«вы выглядите» / «я вижу»"
+        ]
+      },
+      "raw_llm_output": "Как вы спали этой ночью?",
+      "validator_result": {
+        "ok": true,
+        "text": "Как вы спали этой ночью?",
+        "violations": [],
+        "used_fallback": false
+      },
+      "regen_used": false,
+      "fallback_used": false,
+      "deterministic": false,
+      "final_text": "Как вы спали этой ночью?",
+      "spoken_ok": true,
+      "spoken_violations": [],
+      "action_ok": true
+    },
+    {
+      "turn": 3,
+      "user": "спал хорошо",
+      "analysis": {
+        "kind": "NORMAL_RESPONSE",
+        "facts": {
+          "answered_slot": "sleep"
+        },
+        "user_question": null,
+        "answer_type": null,
+        "refusal_slot": null,
+        "safety_reason": null,
+        "confidence": 1.0
+      },
+      "state_after_user": {
+        "session_id": "wave2-integration",
+        "facts": {
+          "answered_slot": "sleep"
+        },
+        "slot_statuses": {
+          "wellness": "ANSWERED",
+          "mood": "ANSWERED",
+          "sleep": "ANSWERED",
+          "plans": "OPEN"
+        },
+        "declined_topics": [],
+        "pending_question": "Что планируете на сегодня?",
+        "pending_slot": "plans",
+        "current_topic": "plans",
+        "current_goal": "check_in",
+        "assistant_turn_count": 4,
+        "turns_since_question": 0,
+        "greeted": true,
+        "closing": false,
+        "safety_active": false,
+        "safety_phase": "INACTIVE",
+        "repair_pending": false,
+        "wait_request": false,
+        "user_fatigue": false
+      },
+      "planner_action": {
+        "action": "ASK_SLOT",
+        "slot": "plans",
+        "answer_type": null,
+        "reason": "slot_answered_advance",
+        "action_name": "ASK_SLOT(plans)"
+      },
+      "content_plan": {
+        "action": "ASK_SLOT(plans)",
+        "response_intent": "ask_slot_with_brief_ack",
+        "facts_to_reference": [
+          "тема «сон» уже обсуждена"
+        ],
+        "required_question": "plans_today",
+        "forbidden_topics": [
+          "настроение",
+          "самочувствие",
+          "сон"
+        ],
+        "semantic_bullets": [
+          "коротко позитивно отреагировать на сказанное",
+          "задать один вопрос про планы",
+          "формулировка без угадывания пола (используйте «вы спали», не «спал»)"
+        ],
+        "required_meaning_ru": "планы на сегодня",
+        "example_realization": "Что планируете на сегодня?",
+        "do_not_say": [
+          "инструкции пользователю (попрощайтесь, спросите и т.п.)",
+          "английские слова",
+          "внутренние метки (knee, sleep_last_night)",
+          "мужской род от лица Веры",
+          "угадывание пола пользователя",
+          "«вы выглядите» / «я вижу»"
+        ]
+      },
+      "raw_llm_output": "Что планируете на сегодня?",
+      "validator_result": {
+        "ok": true,
+        "text": "Что планируете на сегодня?",
+        "violations": [],
+        "used_fallback": false
+      },
+      "regen_used": false,
+      "fallback_used": false,
+      "deterministic": false,
+      "final_text": "Что планируете на сегодня?",
+      "spoken_ok": true,
+      "spoken_violations": [],
+      "action_ok": true
+    },
+    {
+      "turn": 4,
+      "user": "а зачем вы звоните?",
+      "analysis": {
+        "kind": "DIRECT_USER_QUESTION",
+        "facts": {},
+        "user_question": "а зачем вы звоните?",
+        "answer_type": "WHY_CALLING",
+        "refusal_slot": null,
+        "safety_reason": null,
+        "confidence": 1.0
+      },
+      "state_after_user": {
+        "session_id": "wave2-integration",
+        "facts": {
+          "answered_slot": "sleep"
+        },
+        "slot_statuses": {
+          "wellness": "ANSWERED",
+          "mood": "ANSWERED",
+          "sleep": "ANSWERED",
+          "plans": "OPEN"
+        },
+        "declined_topics": [],
+        "pending_question": "Что планируете на сегодня?",
+        "pending_slot": "plans",
+        "current_topic": "plans",
+        "current_goal": "check_in",
+        "assistant_turn_count": 5,
+        "turns_since_question": 1,
+        "greeted": true,
+        "closing": false,
+        "safety_active": false,
+        "safety_phase": "INACTIVE",
+        "repair_pending": false,
+        "wait_request": false,
+        "user_fatigue": false
+      },
+      "planner_action": {
+        "action": "ANSWER_USER",
+        "slot": null,
+        "answer_type": "WHY_CALLING",
+        "reason": "user_question",
+        "action_name": "ANSWER_USER(WHY_CALLING)"
+      },
+      "content_plan": {
+        "action": "ANSWER_USER(WHY_CALLING)",
+        "response_intent": "answer_user_why_calling",
+        "facts_to_reference": [
+          "тема «сон» уже обсуждена"
+        ],
+        "required_question": null,
+        "forbidden_topics": [
+          "настроение",
+          "планы",
+          "самочувствие",
+          "сон"
+        ],
+        "semantic_bullets": [
+          "объяснить цель звонка — узнать самочувствие",
+          "без вопроса по повестке в этом же ответе"
+        ],
+        "required_meaning_ru": "объяснить цель звонка — узнать самочувствие",
+        "example_realization": null,
+        "do_not_say": [
+          "инструкции пользователю (попрощайтесь, спросите и т.п.)",
+          "английские слова",
+          "внутренние метки (knee, sleep_last_night)",
+          "мужской род от лица Веры",
+          "угадывание пола пользователя",
+          "«вы выглядите» / «я вижу»"
+        ]
+      },
+      "raw_llm_output": null,
+      "validator_result": {
+        "ok": true,
+        "text": "Мы звоним, чтобы узнать, как вы себя чувствуете, и передать близким, если им будет важно.",
+        "violations": [],
+        "used_fallback": true
+      },
+      "regen_used": false,
+      "fallback_used": true,
+      "deterministic": true,
+      "final_text": "Мы звоним, чтобы узнать, как вы себя чувствуете, и передать близким, если им будет важно.",
+      "spoken_ok": true,
+      "spoken_violations": [],
+      "action_ok": true
+    },
+    {
+      "turn": 5,
+      "user": "да ничего не планирую",
+      "analysis": {
+        "kind": "NORMAL_RESPONSE",
+        "facts": {
+          "answered_slot": "plans"
+        },
+        "user_question": null,
+        "answer_type": null,
+        "refusal_slot": null,
+        "safety_reason": null,
+        "confidence": 1.0
+      },
+      "state_after_user": {
+        "session_id": "wave2-integration",
+        "facts": {
+          "answered_slot": "plans"
+        },
+        "slot_statuses": {
+          "wellness": "ANSWERED",
+          "mood": "ANSWERED",
+          "sleep": "ANSWERED",
+          "plans": "ANSWERED"
+        },
+        "declined_topics": [],
+        "pending_question": "Что планируете на сегодня?",
+        "pending_slot": null,
+        "current_topic": "plans",
+        "current_goal": "check_in",
+        "assistant_turn_count": 6,
+        "turns_since_question": 2,
+        "greeted": true,
+        "closing": false,
+        "safety_active": false,
+        "safety_phase": "INACTIVE",
+        "repair_pending": false,
+        "wait_request": false,
+        "user_fatigue": false
+      },
+      "planner_action": {
+        "action": "CLOSE",
+        "slot": null,
+        "answer_type": null,
+        "reason": "all_slots_closed_wrap",
+        "action_name": "CLOSE"
+      },
+      "content_plan": {
+        "action": "CLOSE",
+        "response_intent": "warm_close",
+        "facts_to_reference": [
+          "тема «планы» уже обсуждена"
+        ],
+        "required_question": null,
+        "forbidden_topics": [
+          "настроение",
+          "планы",
+          "самочувствие",
+          "сон"
+        ],
+        "semantic_bullets": [
+          "тепло попрощаться от лица Веры",
+          "не давать инструкций пользователю",
+          "без новых вопросов"
+        ],
+        "required_meaning_ru": "тепло попрощаться от лица Веры",
+        "example_realization": "Хорошо. Берегите себя, до свидания.",
+        "do_not_say": [
+          "инструкции пользователю (попрощайтесь, спросите и т.п.)",
+          "английские слова",
+          "внутренние метки (knee, sleep_last_night)",
+          "мужской род от лица Веры",
+          "угадывание пола пользователя",
+          "«вы выглядите» / «я вижу»"
+        ]
+      },
+      "raw_llm_output": null,
+      "validator_result": {
+        "ok": true,
+        "text": "Хорошо. Берегите себя, до свидания.",
+        "violations": [],
+        "used_fallback": true
+      },
+      "regen_used": false,
+      "fallback_used": true,
+      "deterministic": true,
+      "final_text": "Хорошо. Берегите себя, до свидания.",
+      "spoken_ok": true,
+      "spoken_violations": [],
+      "action_ok": true
+    },
+    {
+      "turn": 6,
+      "user": "не хочу про настроение",
+      "analysis": {
+        "kind": "TOPIC_REFUSAL",
+        "facts": {
+          "refused_slot": "mood"
+        },
+        "user_question": null,
+        "answer_type": null,
+        "refusal_slot": "mood",
+        "safety_reason": null,
+        "confidence": 1.0
+      },
+      "state_after_user": {
+        "session_id": "wave2-integration",
+        "facts": {
+          "answered_slot": "plans",
+          "refused_slot": "mood"
+        },
+        "slot_statuses": {
+          "wellness": "ANSWERED",
+          "mood": "ANSWERED",
+          "sleep": "ANSWERED",
+          "plans": "ANSWERED"
+        },
+        "declined_topics": [],
+        "pending_question": "Что планируете на сегодня?",
+        "pending_slot": null,
+        "current_topic": "plans",
+        "current_goal": "check_in",
+        "assistant_turn_count": 7,
+        "turns_since_question": 3,
+        "greeted": true,
+        "closing": false,
+        "safety_active": false,
+        "safety_phase": "INACTIVE",
+        "repair_pending": false,
+        "wait_request": false,
+        "user_fatigue": false
+      },
+      "planner_action": {
+        "action": "HANDLE_REFUSAL",
+        "slot": "mood",
+        "answer_type": null,
+        "reason": "topic_refusal",
+        "action_name": "HANDLE_REFUSAL"
+      },
+      "content_plan": {
+        "action": "HANDLE_REFUSAL",
+        "response_intent": "accept_refusal",
+        "facts_to_reference": [
+          "тема «планы» уже обсуждена",
+          "пользователь отказался от темы «настроение»"
+        ],
+        "required_question": null,
+        "forbidden_topics": [
+          "настроение",
+          "планы",
+          "самочувствие",
+          "сон"
+        ],
+        "semantic_bullets": [
+          "пользователь отказался от темы «настроение»",
+          "без нового вопроса"
+        ],
+        "required_meaning_ru": "принять отказ без давления",
+        "example_realization": "Хорошо, не будем об этом.",
+        "do_not_say": [
+          "инструкции пользователю (попрощайтесь, спросите и т.п.)",
+          "английские слова",
+          "внутренние метки (knee, sleep_last_night)",
+          "мужской род от лица Веры",
+          "угадывание пола пользователя",
+          "«вы выглядите» / «я вижу»"
+        ]
+      },
+      "raw_llm_output": null,
+      "validator_result": {
+        "ok": true,
+        "text": "Хорошо, не будем об этом.",
+        "violations": [],
+        "used_fallback": true
+      },
+      "regen_used": false,
+      "fallback_used": true,
+      "deterministic": true,
+      "final_text": "Хорошо, не будем об этом.",
+      "spoken_ok": true,
+      "spoken_violations": [],
+      "action_ok": true
+    },
+    {
+      "turn": 7,
+      "user": "секундочку",
+      "analysis": {
+        "kind": "WAIT_REQUEST",
+        "facts": {
+          "wait_request": "yes"
+        },
+        "user_question": null,
+        "answer_type": null,
+        "refusal_slot": null,
+        "safety_reason": null,
+        "confidence": 1.0
+      },
+      "state_after_user": {
+        "session_id": "wave2-integration",
+        "facts": {
+          "answered_slot": "plans",
+          "refused_slot": "mood",
+          "wait_request": "yes"
+        },
+        "slot_statuses": {
+          "wellness": "ANSWERED",
+          "mood": "ANSWERED",
+          "sleep": "ANSWERED",
+          "plans": "ANSWERED"
+        },
+        "declined_topics": [],
+        "pending_question": "Что планируете на сегодня?",
+        "pending_slot": null,
+        "current_topic": "plans",
+        "current_goal": "check_in",
+        "assistant_turn_count": 8,
+        "turns_since_question": 4,
+        "greeted": true,
+        "closing": false,
+        "safety_active": false,
+        "safety_phase": "INACTIVE",
+        "repair_pending": false,
+        "wait_request": true,
+        "user_fatigue": false
+      },
+      "planner_action": {
+        "action": "WAIT",
+        "slot": null,
+        "answer_type": null,
+        "reason": "wait_request",
+        "action_name": "WAIT"
+      },
+      "content_plan": {
+        "action": "WAIT",
+        "response_intent": "wait_ack",
+        "facts_to_reference": [
+          "тема «планы» уже обсуждена",
+          "пользователь отказался от темы «настроение»"
+        ],
+        "required_question": null,
+        "forbidden_topics": [
+          "настроение",
+          "планы",
+          "самочувствие",
+          "сон"
+        ],
+        "semantic_bullets": [
+          "подтвердить, что подождёте",
+          "без нового вопроса"
+        ],
+        "required_meaning_ru": "подтвердить, что подождёте",
+        "example_realization": "Конечно, я подожду.",
+        "do_not_say": [
+          "инструкции пользователю (попрощайтесь, спросите и т.п.)",
+          "английские слова",
+          "внутренние метки (knee, sleep_last_night)",
+          "мужской род от лица Веры",
+          "угадывание пола пользователя",
+          "«вы выглядите» / «я вижу»"
+        ]
+      },
+      "raw_llm_output": null,
+      "validator_result": {
+        "ok": true,
+        "text": "Конечно, я подожду.",
+        "violations": [],
+        "used_fallback": true
+      },
+      "regen_used": false,
+      "fallback_used": true,
+      "deterministic": true,
+      "final_text": "Конечно, я подожду.",
+      "spoken_ok": true,
+      "spoken_violations": [],
+      "action_ok": true
+    },
+    {
+      "turn": 8,
+      "user": "что вы спросили?",
+      "analysis": {
+        "kind": "REPAIR",
+        "facts": {},
+        "user_question": null,
+        "answer_type": null,
+        "refusal_slot": null,
+        "safety_reason": null,
+        "confidence": 1.0
+      },
+      "state_after_user": {
+        "session_id": "wave2-integration",
+        "facts": {
+          "answered_slot": "plans",
+          "refused_slot": "mood",
+          "wait_request": "yes"
+        },
+        "slot_statuses": {
+          "wellness": "ANSWERED",
+          "mood": "ANSWERED",
+          "sleep": "ANSWERED",
+          "plans": "ANSWERED"
+        },
+        "declined_topics": [],
+        "pending_question": "Что планируете на сегодня?",
+        "pending_slot": null,
+        "current_topic": "plans",
+        "current_goal": "check_in",
+        "assistant_turn_count": 9,
+        "turns_since_question": 0,
+        "greeted": true,
+        "closing": false,
+        "safety_active": false,
+        "safety_phase": "INACTIVE",
+        "repair_pending": true,
+        "wait_request": false,
+        "user_fatigue": false
+      },
+      "planner_action": {
+        "action": "REPAIR",
+        "slot": null,
+        "answer_type": null,
+        "reason": "repair_request",
+        "action_name": "REPAIR"
+      },
+      "content_plan": {
+        "action": "REPAIR",
+        "response_intent": "repeat_last_question",
+        "facts_to_reference": [
+          "тема «планы» уже обсуждена",
+          "пользователь отказался от темы «настроение»"
+        ],
+        "required_question": null,
+        "forbidden_topics": [
+          "настроение",
+          "планы",
+          "самочувствие",
+          "сон"
+        ],
+        "semantic_bullets": [
+          "повторить предыдущий вопрос: «Что планируете на сегодня?»"
+        ],
+        "required_meaning_ru": "повторить тот же вопрос, не задавать новый",
+        "example_realization": "Что планируете на сегодня?",
+        "do_not_say": [
+          "инструкции пользователю (попрощайтесь, спросите и т.п.)",
+          "английские слова",
+          "внутренние метки (knee, sleep_last_night)",
+          "мужской род от лица Веры",
+          "угадывание пола пользователя",
+          "«вы выглядите» / «я вижу»"
+        ]
+      },
+      "raw_llm_output": null,
+      "validator_result": {
+        "ok": true,
+        "text": "Что планируете на сегодня?",
+        "violations": [],
+        "used_fallback": true
+      },
+      "regen_used": false,
+      "fallback_used": true,
+      "deterministic": true,
+      "final_text": "Что планируете на сегодня?",
+      "spoken_ok": true,
+      "spoken_violations": [],
+      "action_ok": true
+    },
+    {
+      "turn": 9,
+      "user": "нет, не голова, спина",
+      "analysis": {
+        "kind": "CORRECTION",
+        "facts": {
+          "symptom": "back"
+        },
+        "user_question": null,
+        "answer_type": null,
+        "refusal_slot": null,
+        "safety_reason": null,
+        "confidence": 1.0
+      },
+      "state_after_user": {
+        "session_id": "wave2-integration",
+        "facts": {
+          "answered_slot": "plans",
+          "refused_slot": "mood",
+          "wait_request": "yes",
+          "symptom": "back"
+        },
+        "slot_statuses": {
+          "wellness": "ANSWERED",
+          "mood": "ANSWERED",
+          "sleep": "ANSWERED",
+          "plans": "ANSWERED"
+        },
+        "declined_topics": [],
+        "pending_question": "Что планируете на сегодня?",
+        "pending_slot": null,
+        "current_topic": "plans",
+        "current_goal": "check_in",
+        "assistant_turn_count": 10,
+        "turns_since_question": 1,
+        "greeted": true,
+        "closing": false,
+        "safety_active": false,
+        "safety_phase": "INACTIVE",
+        "repair_pending": true,
+        "wait_request": false,
+        "user_fatigue": false
+      },
+      "planner_action": {
+        "action": "HANDLE_CORRECTION",
+        "slot": null,
+        "answer_type": null,
+        "reason": "user_correction",
+        "action_name": "HANDLE_CORRECTION"
+      },
+      "content_plan": {
+        "action": "HANDLE_CORRECTION",
+        "response_intent": "acknowledge_correction",
+        "facts_to_reference": [
+          "тема «планы» уже обсуждена",
+          "пользователь отказался от темы «настроение»",
+          "уточнённый симптом: спине"
+        ],
+        "required_question": null,
+        "forbidden_topics": [
+          "настроение",
+          "планы",
+          "самочувствие",
+          "сон"
+        ],
+        "semantic_bullets": [
+          "подтвердить, что речь о спине",
+          "без вопроса"
+        ],
+        "required_meaning_ru": "подтвердить, что речь о спине",
+        "example_realization": "Поняла, спасибо за уточнение — речь о спине.",
+        "do_not_say": [
+          "инструкции пользователю (попрощайтесь, спросите и т.п.)",
+          "английские слова",
+          "внутренние метки (knee, sleep_last_night)",
+          "мужской род от лица Веры",
+          "угадывание пола пользователя",
+          "«вы выглядите» / «я вижу»"
+        ]
+      },
+      "raw_llm_output": null,
+      "validator_result": {
+        "ok": true,
+        "text": "Поняла, спасибо за уточнение — речь о спине.",
+        "violations": [],
+        "used_fallback": true
+      },
+      "regen_used": false,
+      "fallback_used": true,
+      "deterministic": true,
+      "final_text": "Поняла, спасибо за уточнение — речь о спине.",
+      "spoken_ok": true,
+      "spoken_violations": [],
+      "action_ok": true
+    },
+    {
+      "turn": 10,
+      "user": "я устал уже отвечать",
+      "analysis": {
+        "kind": "USER_FATIGUE",
+        "facts": {
+          "user_fatigue": "yes"
+        },
+        "user_question": null,
+        "answer_type": null,
+        "refusal_slot": null,
+        "safety_reason": null,
+        "confidence": 1.0
+      },
+      "state_after_user": {
+        "session_id": "wave2-integration",
+        "facts": {
+          "answered_slot": "plans",
+          "refused_slot": "mood",
+          "wait_request": "yes",
+          "symptom": "back",
+          "user_fatigue": "yes"
+        },
+        "slot_statuses": {
+          "wellness": "ANSWERED",
+          "mood": "ANSWERED",
+          "sleep": "ANSWERED",
+          "plans": "ANSWERED"
+        },
+        "declined_topics": [],
+        "pending_question": "Что планируете на сегодня?",
+        "pending_slot": null,
+        "current_topic": "plans",
+        "current_goal": "check_in",
+        "assistant_turn_count": 11,
+        "turns_since_question": 2,
+        "greeted": true,
+        "closing": false,
+        "safety_active": false,
+        "safety_phase": "INACTIVE",
+        "repair_pending": true,
+        "wait_request": false,
+        "user_fatigue": true
+      },
+      "planner_action": {
+        "action": "HANDLE_FATIGUE",
+        "slot": null,
+        "answer_type": null,
+        "reason": "user_fatigue",
+        "action_name": "HANDLE_FATIGUE"
+      },
+      "content_plan": {
+        "action": "HANDLE_FATIGUE",
+        "response_intent": "fatigue_respect",
+        "facts_to_reference": [
+          "тема «планы» уже обсуждена",
+          "пользователь отказался от темы «настроение»",
+          "уточнённый симптом: спине"
+        ],
+        "required_question": null,
+        "forbidden_topics": [
+          "настроение",
+          "планы",
+          "самочувствие",
+          "сон"
+        ],
+        "semantic_bullets": [
+          "пользователь устал отвечать — не говорите, что устали вы",
+          "без нового вопроса по повестке"
+        ],
+        "required_meaning_ru": "признать усталость пользователя и предложить закончить",
+        "example_realization": "Понимаю. Можем на этом закончить.",
+        "do_not_say": [
+          "инструкции пользователю (попрощайтесь, спросите и т.п.)",
+          "английские слова",
+          "внутренние метки (knee, sleep_last_night)",
+          "мужской род от лица Веры",
+          "угадывание пола пользователя",
+          "«вы выглядите» / «я вижу»"
+        ]
+      },
+      "raw_llm_output": null,
+      "validator_result": {
+        "ok": true,
+        "text": "Понимаю. Можем на этом закончить.",
+        "violations": [],
+        "used_fallback": true
+      },
+      "regen_used": false,
+      "fallback_used": true,
+      "deterministic": true,
+      "final_text": "Понимаю. Можем на этом закончить.",
+      "spoken_ok": true,
+      "spoken_violations": [],
+      "action_ok": true
+    }
+  ],
+  "planner_actions_ok": true,
+  "spoken_quality_ok": true
+}

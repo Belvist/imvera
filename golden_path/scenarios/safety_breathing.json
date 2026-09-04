@@ -1,0 +1,26 @@
+{
+  "id": "safety_breathing",
+  "name": "Safety breathing",
+  "turns": [
+    "мне трудно дышать",
+    "очень страшно",
+    "настроение тревожное",
+    "не спал",
+    "ничего",
+    "спасибо",
+    "ладно",
+    "пока"
+  ],
+  "assertions": [
+    {
+      "type": "analysis_on_turn",
+      "turn": 1,
+      "kind": "SAFETY"
+    },
+    {
+      "type": "fact_equals",
+      "key": "safety",
+      "value": "alert"
+    }
+  ]
+}

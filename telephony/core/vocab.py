@@ -167,6 +167,33 @@ def looks_like_garbage(text):
     return not contains_real_word(text)
 
 
+def looks_like_stt_glue_noise(text: str) -> bool:
+    """Mixed-audio STT: function-word glue + junk tokens, no care anchor.
+
+    Example from live call bc92bcca5d7b: «Як как, у пять» — passes the loose
+    ``contains_real_word`` gate via «как», but is not caller speech.
+    """
+    toks = [t for t in _tokens(text) if t not in OBSERVED_NOISE]
+    if not toks or len(toks) > 5:
+        return False
+    if any(
+        any(tok.startswith(r) for r in CRITICAL_HEALTH_ROOTS) or _core_hit(tok)
+        for tok in toks
+    ):
+        return False
+    if not any(tok in FUNCTION_WORDS for tok in toks):
+        return False
+    junk = [t for t in toks if t not in FUNCTION_WORDS]
+    return bool(junk)
+
+
+def plausible_caller_speech(text: str) -> bool:
+    """Phone-path alias — glue noise is rejected; otherwise use lexicon gate."""
+    if looks_like_stt_glue_noise(text):
+        return False
+    return contains_real_word(text)
+
+
 def repair_fall_miscue(text):
     """Restore fall hints when STT mangles «упал» into «у палок не ударилось».
 

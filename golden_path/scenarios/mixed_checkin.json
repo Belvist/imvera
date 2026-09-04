@@ -1,0 +1,36 @@
+{
+  "id": "mixed_checkin",
+  "name": "Mixed check-in with narrative",
+  "turns": [
+    "таблетки принял, давление нормальное",
+    "настроение бодрое после прогулки",
+    "ночью проснулся от шума",
+    "сегодня встречаюсь с другом",
+    "спасибо что позвонили",
+    "всё понятно",
+    "хорошо",
+    "до свидания"
+  ],
+  "assertions": [
+    {
+      "type": "slot_status",
+      "slot": "wellness",
+      "status": "ANSWERED"
+    },
+    {
+      "type": "slot_status",
+      "slot": "mood",
+      "status": "ANSWERED"
+    },
+    {
+      "type": "slot_status",
+      "slot": "sleep",
+      "status": "ANSWERED"
+    },
+    {
+      "type": "slot_status",
+      "slot": "plans",
+      "status": "ANSWERED"
+    }
+  ]
+}

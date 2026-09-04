@@ -1,0 +1,26 @@
+{
+  "id": "repair",
+  "name": "Repair repeat request",
+  "turns": [
+    "нормально себя чувствую",
+    "что вы сказали, повторите пожалуйста",
+    "ага понял",
+    "настроение хорошее",
+    "спал нормально",
+    "планов нет",
+    "спасибо",
+    "до свидания"
+  ],
+  "assertions": [
+    {
+      "type": "analysis_on_turn",
+      "turn": 2,
+      "kind": "REPAIR"
+    },
+    {
+      "type": "plan_on_turn",
+      "turn": 2,
+      "action": "REPAIR"
+    }
+  ]
+}

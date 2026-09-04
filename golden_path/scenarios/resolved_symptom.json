@@ -1,0 +1,26 @@
+{
+  "id": "resolved_symptom",
+  "name": "Symptom improvement",
+  "turns": [
+    "голова болела утром",
+    "уже стало легче, таблетка помогла",
+    "настроение приподнялое",
+    "спал нормально",
+    "сегодня дома посижу",
+    "спасибо",
+    "хорошо",
+    "пока"
+  ],
+  "assertions": [
+    {
+      "type": "fact_equals",
+      "key": "improvement",
+      "value": "yes"
+    },
+    {
+      "type": "slot_status",
+      "slot": "wellness",
+      "status": "ANSWERED"
+    }
+  ]
+}

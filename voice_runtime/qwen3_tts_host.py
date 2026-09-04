@@ -12,9 +12,7 @@ GET  /ready               -> {"ready": bool}
 POST /synthesize          {"text": str, "voice_id": str}
                             -> {"wav_b64": str, "latency_ms": int}
 POST /stream              {"text": str, "voice_id": str}
-                            -> {"frames": [{"i": n,
-                                            "wav_b64": str,
-                                            "done": bool}]}
+                            -> NDJSON lines: {"i": n, "wav_b64": str, "done": bool}
 
 Run:
     python3 voice_runtime/qwen3_tts_host.py [--port 9711]
@@ -116,18 +114,51 @@ def _synthesize(text, voice_id):
     return wav_b64, latency_ms
 
 
-def _stream_frames(text, voice_id):
-    wav_b64, _ = _synthesize(text, voice_id)
+def _split_for_early_tts(text):
+    """Split at comma/clause so the first synthesis chunk returns sooner."""
+    text = (text or "").strip()
+    if not text:
+        return text, ""
+    for sep in (", ", " — ", " - ", "; "):
+        idx = text.find(sep)
+        if 0 < idx < len(text) - len(sep):
+            return text[: idx + 1].strip(), text[idx + len(sep):].strip()
+    words = text.split()
+    if len(words) > 8:
+        mid = max(4, len(words) // 2)
+        return " ".join(words[:mid]), " ".join(words[mid:])
+    return text, ""
+
+
+def _wav_b64_to_pcm_chunks(wav_b64, chunk_bytes=8192):
     raw = base64.b64decode(wav_b64)
-    n_frames = max(1, len(raw) // (PCM_RATE * PCM_WIDTH))
-    chunk_size = max(1, len(raw) // n_frames)
+    if len(raw) <= 44:
+        return
     i = 0
+    frame_no = 0
     while i < len(raw):
-        chunk = raw[i:i + chunk_size]
-        yield {"i": i // chunk_size,
-               "wav_b64": base64.b64encode(chunk).decode("ascii"),
-               "done": False}
-        i += chunk_size
+        chunk = raw[i: i + chunk_bytes]
+        yield {
+            "i": frame_no,
+            "wav_b64": base64.b64encode(chunk).decode("ascii"),
+            "done": False,
+        }
+        frame_no += 1
+        i += chunk_bytes
+
+
+def _stream_frames(text, voice_id):
+    """Yield audio frames; first clause synthesized before the rest."""
+    first, rest = _split_for_early_tts(text)
+    parts = [first] if first else []
+    if rest:
+        parts.append(rest)
+    if not parts:
+        yield {"done": True}
+        return
+    for part in parts:
+        wav_b64, _ = _synthesize(part, voice_id)
+        yield from _wav_b64_to_pcm_chunks(wav_b64)
     yield {"done": True}
 
 
@@ -145,6 +176,20 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _ndjson_stream(self, frames_iter):
+        self.send_response(200)
+        self.send_header("Content-Type",
+                         "application/x-ndjson; charset=utf-8")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.end_headers()
+        for frame in frames_iter:
+            line = json.dumps(frame, ensure_ascii=False).encode("utf-8") + b"\n"
+            self.wfile.write(("%x\r\n" % len(line)).encode("ascii"))
+            self.wfile.write(line)
+            self.wfile.write(b"\r\n")
+            self.wfile.flush()
+        self.wfile.write(b"0\r\n\r\n")
 
     def _read_body(self):
         length = int(self.headers.get("Content-Length", "0"))
@@ -194,11 +239,9 @@ class _Handler(BaseHTTPRequestHandler):
             text = req.get("text", "")
             voice_id = req.get("voice_id", "vera")
             try:
-                frames = list(_stream_frames(text, voice_id))
+                self._ndjson_stream(_stream_frames(text, voice_id))
             except Exception as e:
                 self._json(500, {"error": str(e)[:200]})
-                return
-            self._json(200, {"frames": frames})
             return
         self._json(404, {"error": "not found"})
 

@@ -169,6 +169,12 @@ ACUTE_PAIN_PHRASES = (
     "сильная боль", "невыносимая боль", "боль невыносимая", "очень болит",
 )
 
+# Localized symptom — headache/stomach ache is a routine complaint, not RED.
+_LOCALIZED_SYMPTOM_RE = re.compile(
+    r"голов|живот|спин|горл|груд|зуб|колен|ше[ея]|рук|ног|уш|сустав",
+    re.IGNORECASE,
+)
+
 COMPLAINT_PHRASES = ("не очень хорошо", "не очень", "не хорошо",
                      "неважно себя чувствую")
 
@@ -328,6 +334,43 @@ def _subject_of(tokens, j, fall=True):
     return best or "none"
 
 
+def is_yes_no_confirmation_question(question: str | None) -> bool:
+    """True only for direct yes/no check-in questions on acute danger.
+
+    An open question («Где болит и как сильно?», «Что беспокоит?») or an
+    alternative question («Сильно или терпимо?») is NOT confirmed by a bare «да».
+    """
+    if not question:
+        return True
+    q = question.strip().lower()
+    if re.search(
+            r"^(?:что|где|как|когда|куда|почему|зачем|какая|какой|какое|какие|"
+            r"расскажите|подскажите|назовите)\b",
+            q):
+        return False
+    if " или " in q or "нажмите" in q:
+        return False
+    return bool(re.search(
+        r"\b(?:плохо|неважно|худо|больно|болит|нужна\s+помощь|помощь|упал\w*)\b",
+        q))
+
+
+def _check_denies_help(tokens) -> bool:
+    """True when user explicitly states they do NOT need help / are fine."""
+    for i, tok in enumerate(tokens):
+        if tok in NEGATORS:
+            if i + 1 < len(tokens) and tokens[i + 1] in ("нужна", "надо", "требуется", "хочу"):
+                if any(tokens[j].startswith("помо") for j in range(max(0, i - 2), min(len(tokens), i + 4))):
+                    return True
+    if "помощь" in tokens and any(t in NEGATORS for t in tokens) and any(t in ("нужна", "надо") for t in tokens):
+        return True
+    for i in range(len(tokens) - 1):
+        pair = f"{tokens[i]} {tokens[i + 1]}"
+        if pair in ("не надо", "не нужно", "не хочу", "не требуется"):
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # The machine
 # ---------------------------------------------------------------------------
@@ -386,19 +429,15 @@ class SafetyEngine:
                 self._awaiting = False
                 return self._event("uncertain_red", obs, p)
             if p["affirmative"]:
-                # CONFIRM-QUESTION GATE (2026-08-29): a bare "да"/"ага" only
-                # confirms when the pending question is a YES/NO one ("вам
+                # CONFIRM-QUESTION GATE (2026-08-29 / 2026-09-03): a bare "да"/"ага" only
+                # confirms when the pending question is a direct YES/NO one ("вам
                 # плохо?", "нужна помощь?"). If Vera asked an OPEN question
-                # ("что вас беспокоит?", "что именно сейчас?") then "да" is
-                # a backchannel ("да, слушаю") — NOT a confirmation of
-                # danger. Escalate to UNCERTAIN (re-ask) instead of a
-                # confirmed_red that alarms the family for a routine
-                # complaint (live post-mortem: 7/100 synthetic calls false-
-                # alarmed on «да»).
-                q = (getattr(obs, "question", None) or "").lower()
-                if q and not re.search(r"(плохо|неважно|нужна помощь|"
-                                       r"помощь|худо|плохое самочувствие|"
-                                       r"больно|болит)", q):
+                # ("что вас беспокоит?", "где болит и как сильно?") or an alternative
+                # question ("сильно или терпимо?"), then "да" is a backchannel —
+                # NOT a confirmation of danger. Escalate to UNCERTAIN (re-ask) instead of a
+                # confirmed_red that alarms the family for a routine complaint.
+                q = getattr(obs, "question", None) or ""
+                if q and not is_yes_no_confirmation_question(q):
                     self._state = "UNCERTAIN_RED"
                     self._awaiting = False
                     return self._event("uncertain_red", obs, p)
@@ -406,6 +445,11 @@ class SafetyEngine:
                 self._awaiting = False
                 return self._event("confirmed_red", obs, p)
             if p["denial"] or kind == "ok":
+                if kind == "possible_red":
+                    # Caller denied the acute emergency / help question, but reported a routine symptom
+                    self._state = "POSSIBLE_RED"
+                    self._awaiting = False
+                    return self._event("possible_red", obs, p)
                 self._state = "OK"
                 self._awaiting = False
                 return self._event("ok", obs, p)
@@ -440,6 +484,17 @@ class SafetyEngine:
     def freeze(self):
         """Terminal (dialogue done): no later turn may change the verdict."""
         self._frozen = True
+
+    def defer_confirmation_for_symptom_detail(self) -> bool:
+        """Symptom depth answer — not a yes/no danger confirmation gate."""
+        if self._frozen or self._state == "CONFIRMED_RED":
+            return False
+        if not self._awaiting:
+            return False
+        self._awaiting = False
+        if self._state in ("POSSIBLE_RED", "UNCERTAIN_RED"):
+            self._state = "OK"
+        return True
 
     @property
     def frozen(self):
@@ -521,6 +576,8 @@ class SafetyEngine:
         for group in (BREATHING_PHRASES, STANDUP_PHRASES, ACUTE_PAIN_PHRASES):
             for phrase in group:
                 if not _has_phrase(tokens, phrase):
+                    continue
+                if group is ACUTE_PAIN_PHRASES and _LOCALIZED_SYMPTOM_RE.search(text):
                     continue
                 last = phrase.split()[-1]
                 j = _idx(tokens, last)
@@ -734,10 +791,12 @@ class SafetyEngine:
             if any(tok.startswith(r) for r in MEDS_ROOTS):
                 meds_taken = True
 
+        denies_help = _check_denies_help(tokens)
+
         if high_self:
             notes.append("острая симптоматика")
-            return {"kind": "confirmed_red", "affirmative": True,
-                    "denial": False, "low_conf": low_conf,
+            return {"kind": "confirmed_red", "affirmative": not denies_help,
+                    "denial": denies_help, "low_conf": low_conf,
                     "notes": tuple(notes)}
         if high_third:
             notes.append("у близких проблема")
@@ -746,8 +805,10 @@ class SafetyEngine:
                     "notes": tuple(notes)}
         if med_self:
             notes.append("плохое самочувствие")
-            return {"kind": "possible_red", "affirmative": True,
-                    "denial": False, "low_conf": low_conf,
+            # If user explicitly denies needing help ("мне не нужна помощь, просто голова болит")
+            # it is a symptom with denial of emergency, NOT affirmative confirmation!
+            return {"kind": "possible_red", "affirmative": not denies_help,
+                    "denial": denies_help, "low_conf": low_conf,
                     "notes": tuple(notes)}
         if med_third:
             notes.append("у близких недомогание")

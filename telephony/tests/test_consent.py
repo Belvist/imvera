@@ -13,7 +13,8 @@ from core.consent import (  # noqa: E402
 from core.call_status import (  # noqa: E402
     CallStatus, from_agent_outcome, family_fields_for_finalize,
 )
-from core.dialogue import Agent  # noqa: E402
+from core.call_mirror import CallMirror  # noqa: E402
+from core.consent_call import plan_consent_turn, start_consent_call
 
 
 class _FakePg:
@@ -113,10 +114,6 @@ class ConsentCallFlowTests(unittest.TestCase):
         d, reply = classify_consent_reply(text="нет, не надо")
         self.assertEqual(d, "declined")
         self.assertEqual(reply, CONSENT_DECLINE_ACK)
-        d, _ = classify_consent_reply(digit="1")
-        self.assertEqual(d, "granted")
-        d, _ = classify_consent_reply(digit="2")
-        self.assertEqual(d, "declined")
 
     def test_silence_on_consent_becomes_declined(self):
         d, reply = classify_consent_reply(text="", empty_turns=1)
@@ -126,14 +123,13 @@ class ConsentCallFlowTests(unittest.TestCase):
         self.assertEqual(reply, CONSENT_DECLINE_ACK)
 
     def test_agent_consent_silence_path(self):
-        a = Agent(llm=None)
-        script = a.start_consent_call()
-        self.assertIn("Имвэра", script)
+        a = CallMirror(llm=None)
+        script = start_consent_call(a)
+        self.assertIn("Имвера", script)
         self.assertEqual(script, CONSENT_VOICE_SCRIPT)
-        p1 = a.plan_reply("")
+        p1 = plan_consent_turn(a, "")
         self.assertFalse(a.done)
-        self.assertIn("pending", ("pending",))  # still open
-        p2 = a.plan_reply("")
+        p2 = plan_consent_turn(a, "")
         self.assertTrue(a.done)
         self.assertEqual(a.status, "declined")
         self.assertTrue(a._consent_declined)
@@ -146,9 +142,9 @@ class ConsentCallFlowTests(unittest.TestCase):
         self.assertEqual(p2["fallback"], CONSENT_DECLINE_ACK)
 
     def test_agent_consent_grant_voice(self):
-        a = Agent(llm=None)
-        a.start_consent_call()
-        p = a.plan_reply("согласна")
+        a = CallMirror(llm=None)
+        start_consent_call(a)
+        p = plan_consent_turn(a, "согласна")
         self.assertTrue(a._consent_granted)
         self.assertEqual(a.status, "ok")
         self.assertTrue(a.done)
@@ -156,8 +152,8 @@ class ConsentCallFlowTests(unittest.TestCase):
 
     def test_apply_consent_outcome_persists_to_pg(self):
         pg = _FakePg()
-        a = Agent(llm=None)
-        a.start_consent_call()
+        a = CallMirror(llm=None)
+        start_consent_call(a)
         a._pg = pg
         a._person_id = "elder-persist"
         apply_consent_outcome(
@@ -168,15 +164,15 @@ class ConsentCallFlowTests(unittest.TestCase):
 
     def test_agent_plan_reply_consent_writes_pg(self):
         pg = _FakePg()
-        a = Agent(llm=None)
-        a.start_consent_call()
+        a = CallMirror(llm=None)
+        start_consent_call(a)
         a._pg = pg
         a._person_id = "elder-voice"
-        a.plan_reply("да, согласна")
+        plan_consent_turn(a, "да, согласна")
         self.assertTrue(has_active_consent(pg, "elder-voice"))
 
     def test_apply_consent_outcome_declined(self):
-        a = Agent(llm=None)
+        a = CallMirror(llm=None)
         apply_consent_outcome(a, "declined")
         self.assertEqual(a.status, "declined")
         self.assertTrue(a.done)

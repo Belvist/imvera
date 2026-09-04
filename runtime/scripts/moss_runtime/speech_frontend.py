@@ -114,3 +114,32 @@ def to_ssml(text: str):
     if _PROSODY_RATE:
         inner = f'<prosody rate="{_PROSODY_RATE}">{inner}</prosody>'
     return f"<speak>{inner}</speak>"
+
+
+def build_tts_trace(original: str) -> dict:
+    """Full Silero input trace: pronunciation → normalization → SSML."""
+    from pronunciation import apply_pronunciation_with_trace
+
+    pron = apply_pronunciation_with_trace(original)
+    normalized = pron.normalized
+    ssml = to_ssml(normalized)
+    ssml_input = normalize_text(normalized).strip() if ssml else normalized
+    return {
+        "TTS_INPUT_ORIGINAL": original,
+        "TTS_INPUT_NORMALIZED": normalized,
+        "TTS_SSML_INPUT": ssml_input,
+        "TTS_SSML": ssml,
+        "PRONUNCIATION_OVERRIDES": [o.to_dict() for o in pron.overrides],
+        "MOSS_TTS_SSML": os.environ.get("MOSS_TTS_SSML", "1"),
+    }
+
+
+def format_tts_trace_lines(trace: dict) -> str:
+    lines = [
+        f'TTS_INPUT_ORIGINAL: "{trace.get("TTS_INPUT_ORIGINAL", "")}"',
+        f'TTS_INPUT_NORMALIZED: "{trace.get("TTS_INPUT_NORMALIZED", "")}"',
+        f"PRONUNCIATION_OVERRIDES: {trace.get('PRONUNCIATION_OVERRIDES', [])}",
+    ]
+    if trace.get("TTS_SSML"):
+        lines.append(f'TTS_SSML: "{trace["TTS_SSML"]}"')
+    return "\n".join(lines)

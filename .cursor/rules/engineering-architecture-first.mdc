@@ -1,0 +1,53 @@
+---
+description: Mandatory pre-implementation architectural reasoning, formal logic design, state machines, and system invariants.
+alwaysApply: true
+---
+
+# Engineering Architecture First (Logic-First Protocol)
+
+Do not rush into writing code by trial and error ("programming by permutation").
+Before writing code, construct a clear, rigorous mental and architectural model of the solution.
+
+---
+
+## 1. Pre-Implementation Modeling
+
+Before modifying or creating any core component, complete these 4 steps:
+
+### Step A: Define the Domain Invariants
+- What must **always** be true before an operation runs? (Preconditions)
+- What must **always** be true after the operation finishes? (Postconditions)
+- What invariants must **never** be broken, even in failure scenarios? (System Invariants)
+- *Example:* "An outbound call job can only be leased by one worker at any given time (`FOR UPDATE SKIP LOCKED`). If the lease expires without heartbeat, another worker may claim it."
+
+### Step B: Formalize State Machines (No Ad-Hoc `if/elif` Sprawl)
+- When dealing with stateful workflows (calls, audio streams, multi-turn dialogues, incidents):
+  1. Define the finite set of **States** (`IDLE`, `CONNECTING`, `STREAMING`, `TERMINATED`).
+  2. Define the finite set of **Events** (`CHANNEL_ANSWER`, `SPEECH_ONSET`, `HANGUP`).
+  3. Define pure, side-effect-free **Guards** (predicates checking state without mutating it).
+  4. Define explicit **Actions** (state mutations and external I/O).
+  5. Use a declarative transition table: `(src_state, event, guard, action, dst_state)`.
+  6. Ensure **Run-to-Completion (RTC)** and **Totality** (unhandled events trigger an explicit fallback or error).
+
+### Step C: Resource Lifecycle & Concurrency
+- Identify the lifecycle owner of every resource:
+  - File descriptors, sockets, WAV files in `/tmp`, database connections, locks.
+- Always guarantee deterministic cleanup via RAII / context managers (`with`, `async with`, `try/finally`).
+- Ensure thread-safety: models with internal mutable state (e.g., TorchScript Silero-VAD) must be protected by explicit re-entrant locks.
+
+### Step D: Failure Modes & Timeouts
+- Distributed systems fail. Model what happens when:
+  - Network drops mid-turn.
+  - LLM/STT host times out.
+  - Database rejects a transaction due to serialization failure.
+  - The caller hangs up abruptly.
+- Every external I/O must have bounded timeouts, circuit breakers, and idempotency keys.
+
+---
+
+## 2. Anti-Patterns to Avoid
+
+- ❌ **Flag Soup:** Adding boolean flags (`_is_special_case`, `_retry_happened_2`) to patch edge cases rather than updating the FSM.
+- ❌ **Blind Error Swallowing:** Catching errors and assuming the state remained consistent.
+- ❌ **Unbudgeted Latency:** Adding blocking synchronous calls into real-time media or streaming paths.
+- ❌ **Ungrounded Promises:** Letting conversational agents promise actions ("I will call an ambulance") that the system cannot autonomously fulfill.

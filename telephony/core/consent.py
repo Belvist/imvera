@@ -14,14 +14,15 @@ from core.call_status import CallStatus
 CONSENT_SCRIPT_VERSION = "consent-v1"
 
 CONSENT_VOICE_SCRIPT = (
-    "Здравствуйте. Это Имвэра — сервис заботы. Мы хотим иногда звонить вам, "
+    "Здравствуйте. Это Имвера — сервис заботы. Мы хотим иногда звонить вам, "
     "чтобы спросить, как вы себя чувствуете, и при необходимости сообщать "
-    "близким. Если вы согласны на такие звонки и запись разговора — скажите "
-    "«согласна» или нажмите 1. Если не согласны — скажите «нет» или нажмите 2."
+    "близким. Если вы согласны на такие звонки и запись разговора — "
+    "скажите «согласна». Если не согласны — скажите «нет»."
 )
 
-CONSENT_DTMF_SCRIPT = (
-    "Для согласия нажмите 1. Чтобы отказаться — нажмите 2."
+CONSENT_REPEAT_SCRIPT = (
+    "Повторите, пожалуйста: скажите «согласна», если можно звонить, "
+    "или «нет», если не согласны."
 )
 
 CONSENT_GRANT_ACK = (
@@ -150,28 +151,17 @@ def classify_consent_reply(text=None, digit=None, empty_turns=0):
     Returns ``("granted"|"declined"|"pending", reply_text)``.
     Silence after ``CONSENT_SILENCE_DECLINE_AFTER`` empty turns → declined.
     """
-    from core.dtmf import interpret_dtmf, DtmfEvent
-
-    if digit is not None and str(digit).strip() != "":
-        ev = interpret_dtmf(digit)
-        if ev is DtmfEvent.OK:
-            return "granted", CONSENT_GRANT_ACK
-        if ev is DtmfEvent.HELP:
-            # On consent call, digit 2 = refuse (not emergency help).
-            return "declined", CONSENT_DECLINE_ACK
-
     low = (text or "").strip().lower()
     if low:
         if any(w in low for w in _REFUSE_WORDS):
             return "declined", CONSENT_DECLINE_ACK
         if any(w in low for w in _GRANT_WORDS):
             return "granted", CONSENT_GRANT_ACK
-        # Unclear speech — keep pending, re-offer DTMF.
-        return "pending", CONSENT_DTMF_SCRIPT
+        return "pending", CONSENT_REPEAT_SCRIPT
 
     if int(empty_turns or 0) >= CONSENT_SILENCE_DECLINE_AFTER:
         return "declined", CONSENT_DECLINE_ACK
-    return "pending", CONSENT_DTMF_SCRIPT
+    return "pending", CONSENT_REPEAT_SCRIPT
 
 
 def apply_consent_outcome(agent, decision, pg=None, person_id=None,

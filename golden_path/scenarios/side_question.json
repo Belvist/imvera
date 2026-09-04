@@ -1,0 +1,25 @@
+{
+  "id": "side_question",
+  "name": "User side question before agenda",
+  "turns": [
+    "а вы кто такая?",
+    "понятно, ну я себя нормально чувствую",
+    "настроение ровное",
+    "спал средне",
+    "планов особых нет",
+    "спасибо",
+    "хорошо",
+    "до свидания"
+  ],
+  "check_plans_before_handle": true,
+  "assertions": [
+    {
+      "type": "analysis_on_turn",
+      "turn": 1,
+      "kind": "DIRECT_USER_QUESTION"
+    },
+    {
+      "type": "user_question_before_slot"
+    }
+  ]
+}

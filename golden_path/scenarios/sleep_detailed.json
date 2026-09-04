@@ -1,0 +1,25 @@
+{
+  "id": "sleep_detailed",
+  "name": "Detailed sleep answer",
+  "turns": [
+    "чувствую себя бодро",
+    "настроение ровное",
+    "ночью просыпался два раза, снилось что-то тревожное",
+    "днём посплю может",
+    "планов особых нет",
+    "спасибо",
+    "хорошо",
+    "до свидания"
+  ],
+  "assertions": [
+    {
+      "type": "slot_status",
+      "slot": "sleep",
+      "status": "ANSWERED"
+    },
+    {
+      "type": "never_plan",
+      "slot": "sleep"
+    }
+  ]
+}

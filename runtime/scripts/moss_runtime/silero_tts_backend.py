@@ -12,12 +12,14 @@ Interface mirrors what tts_server.TTSWorker needs:
     - ``.generate(...) -> (np.float32 mono, sample_rate, None)``
     - ``.stream_generate(...) -> yields np.float32 mono chunks (sentence-aligned)``
 """
+import logging
 import os
 import sys
 import threading
 
 import numpy as np
 
+_LOG = logging.getLogger(__name__)
 SILERO_SPEAKER = os.environ.get("MOSS_SILERO_SPEAKER", "kseniya")
 
 
@@ -48,10 +50,20 @@ def _master(audio: np.ndarray, sr: int) -> np.ndarray:
 # at sentence boundaries.
 MAX_CHARS_PER_SYNTH = 200
 
+# SSML pauses must not disable Silero homograph stress (prod bug 2026-09-04).
+_SILERO_ACCENT_KWARGS = {
+    "put_accent": True,
+    "put_yo": True,
+    "put_stress_homo": True,
+    "put_yo_homo": True,
+    "stress_single_vowel": True,
+}
+
 
 class SileroTtsBackend:
     _is_qwen3 = False
     sample_rate = 48000
+    last_tts_trace: dict | None = None
 
     def __init__(self):
         self.tts_model = self
@@ -74,22 +86,35 @@ class SileroTtsBackend:
 
     def _synth(self, text: str) -> np.ndarray:
         model = self._ensure_model()
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from speech_frontend import build_tts_trace, format_tts_trace_lines, to_ssml
+
+        trace = build_tts_trace(text)
+        self.last_tts_trace = trace
+        if os.environ.get("MOSS_TTS_TRACE", "0").strip() in ("1", "true", "yes"):
+            _LOG.info("TTS_TRACE\n%s", format_tts_trace_lines(trace))
+
+        prepared = trace["TTS_INPUT_NORMALIZED"]
         ssml = None
         if os.environ.get("MOSS_TTS_SSML", "1") == "1":
             try:
-                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-                from speech_frontend import to_ssml
-                ssml = to_ssml(text)
+                ssml = to_ssml(prepared)
             except Exception:
                 ssml = None
         if ssml:
             audio = model.apply_tts(
-                ssml_text=ssml, speaker=SILERO_SPEAKER,
-                sample_rate=self.sample_rate)
+                ssml_text=ssml,
+                speaker=SILERO_SPEAKER,
+                sample_rate=self.sample_rate,
+                **_SILERO_ACCENT_KWARGS,
+            )
         else:
             audio = model.apply_tts(
-                text=text, speaker=SILERO_SPEAKER,
-                sample_rate=self.sample_rate, put_accent=True, put_yo=True)
+                text=prepared,
+                speaker=SILERO_SPEAKER,
+                sample_rate=self.sample_rate,
+                **_SILERO_ACCENT_KWARGS,
+            )
         if hasattr(audio, "detach"):
             audio = audio.detach().cpu().numpy()
         audio = _master(np.asarray(audio, dtype=np.float32), self.sample_rate)

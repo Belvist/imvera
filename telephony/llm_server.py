@@ -349,6 +349,10 @@ def build_handler(worker):
         def do_GET(self):
             path = self.path.split("?")[0]
             if path in ("/health", "/healthz"):
+                revision = os.environ.get("MOSS_LLM_REVISION", "main")
+                protocol = os.environ.get("MOSS_LLM_PROTOCOL", "native")
+                device = os.environ.get("MOSS_LLM_DEVICE", "metal")
+                backend = os.environ.get("MOSS_LLM_BACKEND", worker.backend_name or "mlx")
                 self._json({
                     # read.md rev-3 G4: identity contract — the supervisor
                     # refuses to adopt a port whose /health does not answer
@@ -357,8 +361,13 @@ def build_handler(worker):
                     "protocol_version": 1,
                     "ok": True,
                     "ready": worker.ready,
+                    "model_id": worker.model_id,
+                    "revision": revision,
+                    "backend": backend,
+                    "protocol": protocol,
+                    "device": device,
+                    # Legacy aliases (supervisor / adapters)
                     "model": worker.model_id,
-                    "backend": worker.backend_name,
                     "error": worker.error,
                     "metrics": worker.slot.metrics(),
                     "stats": worker.stats,

@@ -241,6 +241,51 @@ def _http_json(method, url, body=None, headers=None, timeout=30):
         raise ProviderError(f"bad JSON from {url}: {e}") from e
 
 
+def _http_ndjson_stream(url, body=None, timeout=120, cancel_event=None):
+    """POST and yield newline-delimited JSON frames as they arrive."""
+    import http.client
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url)
+    host = parts.hostname or "127.0.0.1"
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    path = parts.path or "/"
+    if parts.query:
+        path = f"{path}?{parts.query}"
+    payload = json.dumps(body or {}).encode("utf-8")
+    conn = http.client.HTTPConnection(host, port, timeout=timeout)
+    try:
+        conn.request(
+            "POST",
+            path,
+            body=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        resp = conn.getresponse()
+        if resp.status != 200:
+            err_body = resp.read().decode("utf-8", "replace")[:300]
+            raise ProviderError(f"POST {url}: HTTP {resp.status}: {err_body}")
+        while True:
+            if cancel_event is not None and cancel_event.is_set():
+                return
+            raw = resp.readline()
+            if not raw:
+                break
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line.decode("utf-8", "replace"))
+            except ValueError as e:
+                raise ProviderError(f"bad NDJSON from {url}: {e}") from e
+    except ProviderError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise ProviderError(f"POST {url}: {e}") from e
+    finally:
+        conn.close()
+
+
 def _split_host_port(url):
     """"http://host:port/path" -> (host, port) for http.client."""
     from urllib.parse import urlsplit
@@ -541,23 +586,27 @@ class Qwen3TTSProvider(TTSProvider):
 
     def stream(self, text, cancel_event=None, stream_id=None):
         self._breaker.guard()
+        url = f"http://{self.host}:{self.port}/stream"
         try:
-            obj = _http_json(
-                "POST",
-                f"http://{self.host}:{self.port}/stream",
-                body={"text": text, "voice_id": self.voice_id,
-                      "stream_id": stream_id or ""},
-                timeout=120)
-            if obj.get("error"):
-                raise ProviderError("qwen3-tts stream: " + obj["error"])
-            frames = obj.get("frames", [])
-            for frame in frames:
+            for frame in _http_ndjson_stream(
+                    url,
+                    body={"text": text, "voice_id": self.voice_id,
+                          "stream_id": stream_id or ""},
+                    timeout=120,
+                    cancel_event=cancel_event):
                 if cancel_event and cancel_event.is_set():
                     return
+                if frame.get("error"):
+                    raise ProviderError("qwen3-tts stream: " + frame["error"])
                 yield frame
+                if frame.get("done"):
+                    return
+            self._breaker.succeeded()
         except ProviderError:
+            self._breaker.failed()
             raise
         except Exception as e:  # noqa: BLE001
+            self._breaker.failed()
             raise ProviderError(f"qwen3-tts stream: {e}") from e
 
 

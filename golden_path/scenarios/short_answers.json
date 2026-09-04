@@ -1,0 +1,25 @@
+{
+  "id": "short_answers",
+  "name": "Short one-word answers",
+  "turns": [
+    "нормально",
+    "хорошо",
+    "да",
+    "неплохо",
+    "ладно",
+    "угу",
+    "спасибо",
+    "пока"
+  ],
+  "assertions": [
+    {
+      "type": "slot_status",
+      "slot": "wellness",
+      "status": "ANSWERED"
+    },
+    {
+      "type": "question_budget",
+      "max_violations": 3
+    }
+  ]
+}

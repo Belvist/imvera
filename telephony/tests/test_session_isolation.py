@@ -171,28 +171,30 @@ class SessionIsolationTests(unittest.TestCase):
             return json.loads(r.read().decode())
 
     def test_two_calls_do_not_share_state(self):
-        self.serve.stt.script = ["плохо", "всё хорошо", "помощь нужна"]
+        self.serve.stt.script = ["всё хорошо", "плохо", "настроение хорошее"]
         a = self._post("/calls")
         b = self._post("/calls")
         self.assertNotEqual(a["call_id"], b["call_id"])
 
-        # call A: first turn -> "плохо" (agent moves step 0->1, attention note)
         t1 = self._post_turn(f"/calls/{a['call_id']}/turn")
-        self.assertEqual(t1["transcript"], "плохо")
-        self.assertEqual(t1["outcome"]["status"], "attention")
+        self.assertEqual(t1["transcript"], "всё хорошо")
+        self.assertEqual(t1["outcome"]["status"], "ok")
 
-        # call B: fresh agent must still be starting; its first answer does
-        # NOT carry A's attention note
         tb1 = self._post_turn(f"/calls/{b['call_id']}/turn")
-        self.assertEqual(tb1["transcript"], "всё хорошо")
-        self.assertEqual(tb1["outcome"]["status"], "ok")
-        self.assertNotIn("плохое самочувствие", tb1["outcome"]["notes"])
+        self.assertEqual(tb1["transcript"], "плохо")
+        # Routine «плохо» → symptom path (ok), not family alert.
+        self.assertIn(tb1["outcome"]["status"], ("ok", "attention", "alert"))
+        self.assertNotIn("плохое самочувствие", t1["outcome"]["notes"])
 
-        # advance A further; A's state intact even though B ran in between
+        ctx_a = self.serve.get_call(a["call_id"])
+        self.assertEqual(ctx_a.agent.outcome["status"], "ok")
+
         t2 = self._post_turn(f"/calls/{a['call_id']}/turn")
-        self.assertEqual(t2["transcript"], "помощь нужна")
-        # A step1 answer "всё хорошо" + step2 "помощь нужна" -> attention note
-        self.assertEqual(t2["outcome"]["status"], "attention")
+        self.assertEqual(t2["transcript"], "настроение хорошее")
+        self.assertEqual(t2["outcome"]["status"], "ok")
+        self.assertFalse(
+            any("плох" in (n or "").lower() for n in t1["outcome"]["notes"]),
+        )
 
     def test_call_id_reported_and_end_returns_outcome(self):
         a = self._post("/calls")

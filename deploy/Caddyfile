@@ -1,8 +1,9 @@
 # Edge TLS for Product API (ROADMAP E9)
 # Replace api.imvera.ru with real DNS + email for ACME.
+# Upstream is the compose service name: loopback is Caddy's own container.
 
 api.imvera.ru {
-        reverse_proxy 127.0.0.1:9480
+        reverse_proxy product:9480
         encode gzip
         header {
                 Strict-Transport-Security "max-age=31536000; includeSubDomains"

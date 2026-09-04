@@ -22,11 +22,8 @@ def originate_job(pg, job) -> tuple:
     if not phone:
         return False, "no phone"
     try:
-        from adapters.esl import originate_to_number
-        result = originate_to_number(phone)
-        if result.get("ok"):
-            return True, result.get("uuid") or "ok"
-        return False, result.get("error") or "esl failed"
+        from adapters.esl import originate_status, originate_to_number
+        return originate_status(originate_to_number(phone))
     except Exception as e:  # noqa: BLE001
         return False, type(e).__name__
 

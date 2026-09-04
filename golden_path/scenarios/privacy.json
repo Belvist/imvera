@@ -1,0 +1,26 @@
+{
+  "id": "privacy",
+  "name": "Privacy question",
+  "turns": [
+    "а какой у меня адрес у вас записан?",
+    "ладно, самочувствие нормальное",
+    "настроение спокойное",
+    "сон был нормальный",
+    "планов нет",
+    "спасибо",
+    "хорошо",
+    "пока"
+  ],
+  "assertions": [
+    {
+      "type": "analysis_on_turn",
+      "turn": 1,
+      "kind": "DIRECT_USER_QUESTION"
+    },
+    {
+      "type": "slot_status",
+      "slot": "wellness",
+      "status": "ANSWERED"
+    }
+  ]
+}

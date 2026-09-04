@@ -9,8 +9,9 @@
 # Overrides:
 #   MOSS_LLM_GGUF_URL   alternative GGUF URL (default unsloth Qwen3-4B Q4_K_M)
 #   MOSS_LLM_GGUF_FILE  target path inside the container
-#   MOSS_LLM_THREADS    llama.cpp threads (default 6)
-#   MOSS_LLM_CTX        context size (default 4096)
+#   MOSS_LLM_THREADS       llama.cpp threads (default 4; measured on 4P+6E ARM)
+#   MOSS_LLM_CTX           context size (default 4096)
+#   MOSS_LLM_N_GPU_LAYERS  GPU offload (default 0 in Linux CPU container)
 set -eu
 
 MODEL_URL="${MOSS_LLM_GGUF_URL:-https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf}"
@@ -27,9 +28,10 @@ fi
 exec /app/llama-server \
   --host 0.0.0.0 --port 9500 \
   --model "$MODEL_FILE" \
-  --threads "${MOSS_LLM_THREADS:-8}" \
-  --ctx-size "${MOSS_LLM_CTX:-2048}" \
+  --threads "${MOSS_LLM_THREADS:-4}" \
+  --ctx-size "${MOSS_LLM_CTX:-4096}" \
   --parallel 1 \
+  --n-gpu-layers "${MOSS_LLM_N_GPU_LAYERS:-0}" \
   --mlock \
   --cache-reuse 256 \
   --cont-batching

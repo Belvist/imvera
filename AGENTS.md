@@ -25,8 +25,74 @@ Product Core / согласие / расписание / приложение �
 Temporal / cell router (до Э12), обучение VeraVoice, смена stack v1 без
 бенчмарка, cutover 4400→VoiceRuntime без P4 живого Zoiper-звонка.
 
-## Текущее состояние (обновлено 2026-09-02)
+## Текущее состояние (обновлено 2026-09-04)
 
+- **VERA GOLDEN PATH Stage A (2026-09-04):** независимый пакет
+  [`golden_path/`](../golden_path/) — State → Analyzer → Planner → LLM → Validator;
+  text lab [`scripts/run_vera_text_lab.py`](../scripts/run_vera_text_lab.py),
+  20 сценариев [`golden_path/scenarios/`](../golden_path/scenarios/),
+  runner [`scripts/run_golden_path_scenarios.py`](../scripts/run_golden_path_scenarios.py).
+  Док: [`docs/GOLDEN_PATH.md`](docs/GOLDEN_PATH.md) · статус
+  [`docs/GOLDEN_PATH_STATUS.md`](docs/GOLDEN_PATH_STATUS.md) =
+  **WAITING_OWNER_ACCEPTANCE**. **Заморозка:** не патчить
+  `telephony/conversation_system/` (FSM/agenda/pools) до `OWNER_ACCEPTED`.
+  Golden Path = канон качества разговора; legacy `make test-fast` — регрессия only.
+  Owner gate: 10+ мин `run_vera_text_lab.py` на реальной local LLM (:9500).
+- **CONVERSATION_SYSTEM Observer Phase 6 (2026-09-04):** QuestionLedger
+  (PLANNED→ASKED→HEARD→ANSWERED/CANCELLED), TurnDirective `required_slot`,
+  semantic slot validator + regenerate/fallback, InterruptionFrame
+  `return_question_id`, voice gateway scaffold (`voice_runtime/voice_gateway/`,
+  `docs/VOICE_GATEWAY.md`), Lua max-duration/idle guards + conditional ack,
+  `MOSS_LOCAL_ONLY` fail-fast, FactLedger/EventLog/ActionSupervisor scaffolds.
+  Gates: `make test-fast` **440 OK** · `dialog_quality` **18/18** ·
+  `adversarial_dialogue_eval` **10/10** · `real_llm_conversation_eval` **6/6** ·
+  `test_observer_phase6` **7 OK**. Owner gate: live Zoiper + mod_audio_fork unchanged.
+- **CONVERSATION_SYSTEM Observer Phase 5 (2026-09-04):** audit P0 fixes — stream
+ truncation (`reply_segments` no early break), FSM goal arbitration over resolver LLM,
+ side-question `InterruptionFrame` resume, per-slot `must_do` + `compose_turn_directive`,
+ unconfirmed-promise pool purge, REPAIR/correction lifecycle, semantic_close tightening,
+ prompts tone rewrite, `/health` LLM readiness (`MOSS_REQUIRE_LLM`), harness
+ `voice-lab/real_llm_conversation_eval.py` (5/5). Gates: `make test-fast` **433 OK**
+ · `adversarial_dialogue_eval` **10/10** · `dialog_quality` **18/18** ·
+ `test_observer_phase5` **10 OK**. Owner gate: live Zoiper unchanged.
+- **CONVERSATION_SYSTEM Observer Phase 3 (2026-09-04):** LLM Observer + Supervisor —
+  `observer/llm_enricher.py` (2.5s timeout, JSON schema, fail-closed → deterministic v1),
+  `observer/supervisor.py` (promise/CHOICE/agenda-skip overrides, structured log),
+  `apply_pending_to_memory()` at compose (`composer` + `session.plan_turn`),
+  multi-option CHOICE («тяжесть, слабость или что-то другое»), orchestrator wires
+  `mirror.llm` via `conversation_v2_bridge._ensure_observer_llm`. Harness:
+  `make test-fast` **412 OK** · `adversarial_dialogue_eval` **10/10** ·
+  `dialog_quality --strict` **18/18** · `test_observer_phase3` **14 OK**. Док:
+  [`ARCHITECTURE_V2_OBSERVER.md`](система%20разговоров%20для%20звонка/docs/ARCHITECTURE_V2_OBSERVER.md).
+  Phase 4: live Zoiper owner gate, richer LLM supervisor.
+- **CONVERSATION_SYSTEM Observer Phase 1–2 (2026-09-04):** deterministic v1 +
+  CHOICE «да» fix, adversarial **10/10**, `make test-fast` 398 OK (pre-Phase 3).
+- **CONVERSATION_SYSTEM Observer Phase 4 (2026-09-04):** spoken-text single
+ source of truth in `commit_turn`; correction-aware `extract_correction_focus`;
+ side-question lifecycle (`mark_question_answered`); `SpeechAct.ACK` + extended
+ repair patterns; LLM enabled for normal conversation goals (`must_do` constraints);
+ non-blocking observer LLM (`MOSS_OBSERVER_LLM_BLOCKING=0` default); `/health`
+ build identity; idempotent runtime `end_call` on 404. Tests:
+ `test_observer_phase4.py` · `make test-fast` · `adversarial_dialogue_eval` 10/10 ·
+ `dialog_quality` 18/18. Owner gate: live Zoiper unchanged.
+- **CONVERSATION_SYSTEM v1 gate (2026-09-03, без Zoiper):** автономный harness
+  `scripts/synthetic_caller.py --strict` **30/30 PASS** (HTTP `/calls` +
+  `/turn_stream` + `/turn_text`, ≥50% STT path через macOS say→ffmpeg WAV).
+  Quality gates: `make test-fast` 381 OK · `dialog_quality --strict` 18/18 ·
+  `e2e_live_calls --strict` 17/17 · `test_auto_call_scenarios` 24/24.
+  Отчёт: [`система разговоров для звонка/docs/AUTO_TEST_REPORT.md`](система%20разговоров%20для%20звонка/docs/AUTO_TEST_REPORT.md).
+  Фиксы: bad_symptom «сильно» dead-end (`_bad_symptom_probe_answered`),
+  `NARRATIVE_ACK_POOL`, greeting-before-wellness в resolver. **Owner gate
+  остаётся:** один живой Zoiper (RTP + client mic) — HTTP ≠ SIP.
+- **CONVERSATION_SYSTEM cutover (2026-09-03):** legacy `telephony/core/dialogue/`
+  и `telephony/core/conversation/` **удалены**. Orchestrator использует только
+  `telephony/conversation_system/` через `core/conversation_v2_bridge.py`
+  (facade-only, без feature flag). `CallMirror` — зеркало для echo-guard/notes;
+  consent — `core/consent_call.py`. Пулы ≥100 уникальных реплик в
+  `conversation_system/reply/pools.py`; тест
+  `tests/test_scenario_pool_count_and_quality.py`. Харнесс
+  `voice-lab/dialog_quality.py --strict` на ConversationFacade.
+  Owner gate: `make up telephony` + живой Zoiper.
 - **Э4 Product Core + API (skeleton 2026-09-02):** миграция
   `telephony/migrations/006_product_core.sql` (users/households/members,
   elders profile, contacts, schedules, device_tokens, call_jobs,
@@ -93,7 +159,7 @@ Temporal / cell router (до Э12), обучение VeraVoice, смена stack
   chunk 1 до 5 с, дальше по 2 с с VAD-проверкой `/has_speech`.
 - **Правила продукта:** Вера НИКОГДА не обещает «я вызову/позвоню/отправлю» —
   только «я записала, близкие увидят» (промпт + скрипты + сценарии).
-  Бренд — **IMVERA**, произносится «Имвэра».
+  Бренд — **IMVERA**, произносится «Имвера».
 - **Базовая линия голоса:** `voice-bench/` — Silero RTF 0.015 / round-trip
   WER 0.269 (500 фраз); Piper RTF 0.026 / WER 0.285. CosyVoice 300M —
   живее, но RTF 3.3 на CPU (заморожен до x86/GPU-пула).
@@ -971,8 +1037,28 @@ Venv'и: qwen-venv (хост, TTS/STT-эксперименты) — `~/Library/A
 Support/MossVoice/runtime/qwen-venv`; CosyVoice-лаборатория — `~/cosyvoice-lab`;
 Piper — `~/tts-arena`. Сэмплы голоса — `~/Downloads/imvera_samples/`.
 
+## Инженерный стандарт агента (2026-09-03)
+
+Перед любой нетривиальной задачей агент обязан следовать `.cursor/`:
+
+- **Rules (always apply):** `.cursor/rules/` — zero-stubs, architecture-first,
+  security fail-closed, **staff-engineer-verification-loop** (OBSERVE→REVERIFY;
+  не «готово» без доказательств).
+- **Skills:** `.cursor/skills/engineering-architecture/` (FSM, инварианты),
+  `anti-stub-enforcement/` (сканер заглушек),
+  `deep-implementation-workflow/` (4 этапа: архитектура → код → security → тесты),
+  **`staff-engineer-verification-loop/`** (task contract, матрица проверок,
+  финальный отчёт Implemented/Verified/Not verified).
+- **Проверка:** `make verify-stubs` + `make test-fast`; для диалогов —
+  `voice-lab/dialog_quality.py --strict` + `scripts/synthetic_caller.py --strict`
+  (полная матрица — в skill).
+
+Запрещено: `pass`-заглушки, `# TODO` в прод-путях, fake `return ok`, обещание
+«готово» без прогона тестов. Честно сообщать, что не проверено на живом Zoiper.
+
 ## Где глубокая документация
 
+- `.cursor/README.md` — карта rules/skills для агентов.
 - `ENGINEERING_PLAN.md` — план; §3.5 (этапы A–E + единый маршрут),
   §14–15 (скорость/CPU), §16 (cells/voice plane), §17 нет.
 - `docs/TTS_ARENA.md` — голосовые гипотезы и замеры (Silero/Piper/CosyVoice).

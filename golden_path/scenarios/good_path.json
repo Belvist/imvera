@@ -1,0 +1,30 @@
+{
+  "id": "good_path",
+  "name": "Full check-in good path",
+  "turns": [
+    "здравствуйте, нормально себя чувствую",
+    "настроение хорошее, спокойное",
+    "спал крепко, выспался",
+    "завтра внуки приедут в гости",
+    "да, спасибо",
+    "всё устраивает",
+    "хорошо",
+    "до свидания"
+  ],
+  "assertions": [
+    {
+      "type": "slot_status",
+      "slot": "wellness",
+      "status": "ANSWERED"
+    },
+    {
+      "type": "slot_status",
+      "slot": "mood",
+      "status": "ANSWERED"
+    },
+    {
+      "type": "never_plan",
+      "slot": "mood"
+    }
+  ]
+}

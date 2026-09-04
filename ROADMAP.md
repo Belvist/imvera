@@ -16,7 +16,7 @@
 |------|--------|
 | Э0 Фиксация базы | code done — P4 live Zoiper call = owner gate; stack ADR + migrations 003–006 landed |
 | Э1 Медиа-фундамент | code done (PreRoll/GenerationGuard/StreamingPcm/harness) — live barge-in 20/20 + 4400 cutover gated on P4 |
-| Э2 Статусы | code done — 6 family statuses + TECHNICAL override + DTMF HTTP `/calls/{id}/dtmf`; dialog_quality corpus extend open |
+| Э2 Статусы | code done — 6 family statuses + TECHNICAL override + DTMF HTTP `/calls/{id}/dtmf`; dialog_quality **15/15** strict (2026-09-03) |
 | Э3 Согласие | code done — grant persists to PG; auto consent-call when no active consent; silence→DECLINED |
 | Э4 Product Core + API | code done — FastAPI :9480, OTP+JWT, households/elders/schedules/contacts/tokens/invite/call-now/tg-bind; compose `product` |
 | Э5 Исходящие по расписанию | code done — lease queue + worker + NO_CONTACT→call_results; dry-run default in compose |
@@ -27,6 +27,10 @@
 | Э10 Безопасность и право | checklist in `docs/legal/` — lawyer boxes open |
 | Э11 Пилот | playbook ready — needs live families |
 | Э12 Платный запуск | checklist ready — blocked on E11 exit gate |
+| **Golden Path A** | code done — `golden_path/` text lab + scenarios; **WAITING_OWNER_ACCEPTANCE** (see `docs/GOLDEN_PATH_STATUS.md`) |
+| **Golden Path B–D** | B skeleton only; C/D spec in `docs/GOLDEN_PATH.md` — blocked on owner A gate |
+
+**Заморозка диалогов (2026-09-04):** до `OWNER_ACCEPTED` в `docs/GOLDEN_PATH_STATUS.md` не патчить `telephony/conversation_system/` (FSM, agenda, pools). Канон качества разговора — [`docs/GOLDEN_PATH.md`](docs/GOLDEN_PATH.md).
 
 ---
 

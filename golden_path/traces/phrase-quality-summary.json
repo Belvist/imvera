@@ -1,0 +1,77 @@
+{
+  "model": "Qwen3-4B-Q4_K_M",
+  "thinking": {
+    "thinking_disabled": true,
+    "sample_output": "Вы ждёте?",
+    "raw_length": 9
+  },
+  "profiles": {
+    "qwen3_official": {
+      "total": 50,
+      "auto_pass": 48,
+      "auto_pass_rate": 0.96,
+      "validator_ok": 43,
+      "validator_ok_rate": 0.86,
+      "latency_p50_ms": 476.9,
+      "failures": [
+        {
+          "case_id": "ask_wellness_1",
+          "notes": [
+            "multi_question"
+          ],
+          "output": "Как вы сегодня? Насколько вам хорошо?"
+        },
+        {
+          "case_id": "ask_sleep_2",
+          "notes": [
+            "multi_question"
+          ],
+          "output": "Вы проснулись отдохнувшим? Какие у вас планы на сегодня?"
+        }
+      ]
+    },
+    "vera_deterministic": {
+      "total": 50,
+      "auto_pass": 49,
+      "auto_pass_rate": 0.98,
+      "validator_ok": 42,
+      "validator_ok_rate": 0.84,
+      "latency_p50_ms": 483.3,
+      "failures": [
+        {
+          "case_id": "ask_sleep_2",
+          "notes": [
+            "multi_question"
+          ],
+          "output": "Вы проснулись отдохнувшим? Какие у вас планы на сегодня?"
+        }
+      ]
+    },
+    "vera_balanced": {
+      "total": 50,
+      "auto_pass": 48,
+      "auto_pass_rate": 0.96,
+      "validator_ok": 42,
+      "validator_ok_rate": 0.84,
+      "latency_p50_ms": 528.9,
+      "failures": [
+        {
+          "case_id": "ask_wellness_1",
+          "notes": [
+            "multi_question"
+          ],
+          "output": "Как вы сегодня? Чем занимаетесь?"
+        },
+        {
+          "case_id": "ask_sleep_2",
+          "notes": [
+            "multi_question"
+          ],
+          "output": "Вы проснулись отдохнувшим? Какие планы сегодня?"
+        }
+      ]
+    }
+  },
+  "best_generation_profile": "vera_deterministic",
+  "status": "QWEN3_4B_ACCEPTABLE"
+}

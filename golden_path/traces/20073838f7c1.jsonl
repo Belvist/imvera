@@ -1,0 +1,2 @@
+{"ts": "2026-09-04T13:18:07.215681+00:00", "session_id": "20073838f7c1", "event": "session_begin", "payload": {"session_id": "20073838f7c1"}}
+{"ts": "2026-09-04T13:18:07.216019+00:00", "session_id": "20073838f7c1", "event": "greeting", "payload": {"assistant_text": "Здравствуйте! Это Вера из сервиса Имвера. Как у вас сегодня самочувствие?", "pending_slot": "wellness"}}

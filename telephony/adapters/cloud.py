@@ -15,12 +15,85 @@ import os
 import wave
 
 from adapters.stt import STTResult, audio_energy, confidence_from_result
-from core.dialogue import clean_transcript
+from conversation_system.turn._cleaners import clean_transcript
+
+
+class LocalOnlyViolation(RuntimeError):
+    """Raised when MOSS_LOCAL_ONLY=1 and a remote cloud provider is configured."""
+
+
+def _is_localhost_url(url: str) -> bool:
+    u = (url or "").strip().lower()
+    if not u:
+        return False
+    return any(
+        h in u
+        for h in (
+            "127.0.0.1",
+            "localhost",
+            "host.docker.internal",
+            "::1",
+        )
+    )
+
+
+def enforce_local_only() -> None:
+    """Fail-fast when MOSS_LOCAL_ONLY=1 and external cloud APIs are selected."""
+    raw = os.environ.get("MOSS_LOCAL_ONLY", "").strip().lower()
+    if raw not in ("1", "true", "yes", "on"):
+        return
+    violations: list[str] = []
+    stt = os.environ.get("MOSS_STT_PROVIDER", "local").lower()
+    tts = os.environ.get("MOSS_TTS_PROVIDER", "local").lower()
+    llm = os.environ.get("MOSS_LLM_PROVIDER", "local").lower()
+    if stt in ("openai", "deepgram"):
+        violations.append(f"MOSS_STT_PROVIDER={stt}")
+    if tts in ("elevenlabs", "openai"):
+        violations.append(f"MOSS_TTS_PROVIDER={tts}")
+    if llm == "openai":
+        base = (
+            os.environ.get("MOSS_LLM_BASE_URL")
+            or os.environ.get("OPENAI_BASE_URL")
+            or os.environ.get("MOSS_LLM_URL")
+            or ""
+        )
+        if not _is_localhost_url(base):
+            violations.append(
+                "MOSS_LLM_PROVIDER=openai without localhost base URL"
+            )
+    if violations:
+        msg = (
+            "MOSS_LOCAL_ONLY=1 forbids external cloud providers: "
+            + ", ".join(violations)
+        )
+        raise LocalOnlyViolation(msg)
+
+
+class LocalProviderFactory:
+    """Force local STT/LLM/TTS when MOSS_LOCAL_ONLY=1 (no cloud fallback)."""
+
+    @staticmethod
+    def wrap_stt(local_engine):
+        enforce_local_only()
+        return local_engine
+
+    @staticmethod
+    def wrap_llm(local_client):
+        enforce_local_only()
+        return local_client
+
+    @staticmethod
+    def wrap_tts(local_client):
+        enforce_local_only()
+        return local_client
 
 
 def _maybe_cloud_stt(local_engine):
     """Return a cloud STT provider when MOSS_STT_PROVIDER is set
     to a non-local backend (openai, nemotron)."""
+    from core.build_info import is_local_only
+    if is_local_only():
+        return LocalProviderFactory.wrap_stt(local_engine)
     want = os.environ.get("MOSS_STT_PROVIDER", "local").lower()
     if want == "openai":
         from moss_providers import OpenAISTTProvider
@@ -56,6 +129,9 @@ def _maybe_cloud_llm(local_client):
     честнее немоты. Локальный клиент возвращается только когда провайдер
     не openai (чистый оффлайн).
     """
+    from core.build_info import is_local_only
+    if is_local_only():
+        return LocalProviderFactory.wrap_llm(local_client)
     if os.environ.get("MOSS_LLM_PROVIDER", "local").lower() != "openai":
         return local_client
     from moss_providers import OpenAILLMProvider
@@ -88,6 +164,9 @@ class NullLLM:
 def _maybe_cloud_tts(local_client):
     """Return a cloud TTS provider when MOSS_TTS_PROVIDER is set
     to a non-local backend (elevenlabs, qwen3)."""
+    from core.build_info import is_local_only
+    if is_local_only():
+        return LocalProviderFactory.wrap_tts(local_client)
     want = os.environ.get("MOSS_TTS_PROVIDER", "local").lower()
     if want == "elevenlabs":
         from moss_providers import ElevenLabsTTSProvider

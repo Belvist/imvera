@@ -1,0 +1,26 @@
+{
+  "id": "correction_spine",
+  "name": "Correction head to back",
+  "turns": [
+    "голова немного болит",
+    "нет, не голова, а спина болит",
+    "уже полегче стало",
+    "настроение нормальное",
+    "спал хорошо",
+    "завтра к врачу схожу",
+    "спасибо",
+    "до свидания"
+  ],
+  "assertions": [
+    {
+      "type": "analysis_on_turn",
+      "turn": 2,
+      "kind": "CORRECTION"
+    },
+    {
+      "type": "fact_equals",
+      "key": "symptom",
+      "value": "back"
+    }
+  ]
+}

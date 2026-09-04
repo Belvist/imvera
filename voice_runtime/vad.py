@@ -25,6 +25,15 @@ ECHO_THRESHOLD_RATIO = 2.6
 ECHO_MIN_SPEECH_MS = 320
 PRE_ROLL_MS = 400                           # pre-onset context for ASR
 PRE_ROLL_SAMPLES = int(SAMPLE_RATE * PRE_ROLL_MS / 1000)
+# Keep in sync with call_session.TURN_ENERGY_MIN / orchestrator SILENT gate.
+MIN_TURN_MEAN_ENERGY = 0.004
+
+
+def mean_abs_energy(samples):
+    if not samples:
+        return 0.0
+    total = sum(abs(int(x)) for x in samples)
+    return total / (32768.0 * len(samples))
 
 
 def rms(samples):
@@ -81,6 +90,8 @@ class VAD:
         self.speech_ms = 0
         self._in_speech = False
         self._onset_fired = False
+        if mean_abs_energy(turn) < MIN_TURN_MEAN_ENERGY:
+            return None
         return turn
 
     def feed(self, samples, chunk_ms=None, agent_speaking=False):
@@ -122,7 +133,8 @@ class VAD:
             self._keep_preroll(samples)
 
         if len(self.buffer) > MAX_TURN_SAMPLES:
-            return self._finish_turn(), onset
+            turn = self._finish_turn()
+            return turn, onset
 
         if self.silence >= SILENCE_GAP_MS:
             min_ms = ECHO_MIN_SPEECH_MS if agent_speaking else MIN_SPEECH_MS
@@ -133,5 +145,6 @@ class VAD:
                 self._in_speech = False
                 self._onset_fired = False
                 return None, onset
-            return self._finish_turn(), onset
+            turn = self._finish_turn()
+            return turn, onset
         return None, onset

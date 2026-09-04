@@ -79,7 +79,7 @@ def _notify_status(incidents, payload, household_id):
     status = payload.get("family_status") or ""
     text = f"IMVERA: статус {status.upper()}. {summary}".strip()
     contacts = incidents._load_contacts(household_id=household_id)
-    for ch in ("push", "telegram"):
+    for ch in ("push",):
         addr = contacts.get(ch)
         if not addr:
             continue

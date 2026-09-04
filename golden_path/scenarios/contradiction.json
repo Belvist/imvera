@@ -1,0 +1,26 @@
+{
+  "id": "contradiction",
+  "name": "Contradictory wellness",
+  "turns": [
+    "всё хорошо",
+    "хотя нет, голова всё-таки болит",
+    "но таблетка помогла",
+    "настроение среднее",
+    "спал плохо",
+    "ничего особенного не планирую",
+    "спасибо",
+    "пока"
+  ],
+  "assertions": [
+    {
+      "type": "slot_status",
+      "slot": "wellness",
+      "status": "ANSWERED"
+    },
+    {
+      "type": "fact_equals",
+      "key": "symptom",
+      "value": "head"
+    }
+  ]
+}
