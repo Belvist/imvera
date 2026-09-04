@@ -8,8 +8,10 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.vocab import (  # noqa: E402
-    looks_like_garbage, contains_real_word, plausible_caller_speech,
-    looks_like_stt_glue_noise, repair_fall_miscue)
+    contains_health_signal, looks_like_garbage, contains_real_word,
+    plausible_caller_speech,
+    looks_like_directed_caller_speech, looks_like_stt_glue_noise,
+    repair_fall_miscue)
 
 
 class VocabGateTests(unittest.TestCase):
@@ -73,6 +75,26 @@ class VocabGateTests(unittest.TestCase):
         self.assertFalse(looks_like_stt_glue_noise("пойду гулять"))
         self.assertTrue(plausible_caller_speech("хорошо"))
         self.assertTrue(plausible_caller_speech("голова болит"))
+
+    def test_questions_repairs_and_safety_are_never_glue_noise(self):
+        caller_turns = (
+            "а кто вы такая",
+            "вы записываете разговор",
+            "я не понял вопрос",
+            "я не поняла вопрос",
+            "я не могу встать",
+            "мне трудно дышать",
+        )
+        for text in caller_turns:
+            with self.subTest(text=text):
+                self.assertTrue(looks_like_directed_caller_speech(text))
+                self.assertFalse(looks_like_stt_glue_noise(text))
+                self.assertTrue(plausible_caller_speech(text))
+
+    def test_health_prefix_false_positives_do_not_bypass_noise_gate(self):
+        for text in ("больше лайков", "скорость видео", "двигатель работает"):
+            with self.subTest(text=text):
+                self.assertFalse(contains_health_signal(text))
 
 
 if __name__ == "__main__":

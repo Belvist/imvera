@@ -106,6 +106,15 @@ class DialogueRelevanceTests(unittest.TestCase):
         )
         self.assertTrue(should_reject_mixed_capture(text, last_question=q))
 
+    def test_media_with_health_prefix_false_positive_stays_rejected(self):
+        text = "Смотрите видео и ставьте больше лайков"
+        self.assertTrue(
+            should_reject_mixed_capture(
+                text,
+                last_question="Как настроение сегодня?",
+            )
+        )
+
     def test_live_call_garbage_stt_rejected(self):
         q = "Как вы себя чувствуете сегодня?"
         self.assertTrue(
@@ -120,6 +129,21 @@ class DialogueRelevanceTests(unittest.TestCase):
     def test_elder_family_story_not_overheard(self):
         text = "Внучка приезжала вчера, мы с ней чай пили"
         self.assertFalse(looks_like_overheard_speech(text))
+
+    def test_caller_controls_not_rejected_as_off_agenda(self):
+        q = "Как настроение сегодня?"
+        for text in (
+            "а кто вы такая",
+            "вы записываете разговор",
+            "я не понял вопрос",
+            "я не поняла вопрос",
+            "я упал и не могу встать",
+            "мне трудно дышать",
+            "мне плохо, блять",
+        ):
+            with self.subTest(text=text):
+                self.assertFalse(
+                    should_reject_mixed_capture(text, last_question=q))
 
 
     def test_live_call_profanity_bleed_rejected(self):

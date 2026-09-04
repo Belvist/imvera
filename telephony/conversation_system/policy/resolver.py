@@ -23,6 +23,7 @@ from conversation_system.domain.wellness import (
 from conversation_system.memory.state import ConversationMemory
 from conversation_system.observer.observer import ObserverPatch
 from conversation_system.turn._cleaners import short_real_answer, wellness_short_answer
+from conversation_system.turn._classifiers import side_question_kind
 from conversation_system.turn.analyzer import answers_wellness
 from conversation_system.turn.dialogue_relevance import should_reject_mixed_capture
 from core.safety_engine import VerdictEvent
@@ -382,6 +383,7 @@ class IntentResolver:
         elif FsmEvent.E_SIDE_QUESTION in events:
             goal = ResponseGoal(
                 kind=ResponseGoalKind.ANSWER_SIDE,
+                topic=side_question_kind(u.clean_text),
                 allow_llm=True,
                 scripted_only=False,
             )

@@ -84,6 +84,23 @@ class CorrectionExtractionTests(unittest.TestCase):
 
 
 class QuestionLifecycleTests(unittest.TestCase):
+    def test_side_question_fallback_matches_question_kind(self):
+        cases = (
+            ("вы записываете разговор", ("запис", "соглас")),
+            ("а кто вы такая", ("вера", "имвера")),
+            ("какое сегодня число", ("ошиб", "не могу", "не хочу")),
+        )
+        for idx, (text, expected) in enumerate(cases):
+            with self.subTest(text=text):
+                facade = ConversationFacade()
+                handle, _ = facade.begin_call(
+                    call_id=f"p4-side-kind-{idx}", greeting_played=True)
+                plan = facade.plan_turn(
+                    handle, transcript=text, stt_confidence=0.9)
+                reply = plan.spoken_reply.lower()
+                self.assertEqual(plan.meta.get("goal_kind"), "answer_side")
+                self.assertTrue(any(word in reply for word in expected), reply)
+
     def test_side_question_cleared_after_answer(self):
         facade = ConversationFacade()
         handle, _ = facade.begin_call(call_id="p4-q-life", greeting_played=True)

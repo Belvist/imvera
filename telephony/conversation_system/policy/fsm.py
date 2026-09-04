@@ -646,6 +646,8 @@ class CallPhaseMachine:
         )
 
     def _a_side_enter(self, ctx: CallPhaseContext, _ev: FsmEvent) -> FsmActionResult:
+        from conversation_system.turn._classifiers import side_question_kind
+
         qid = ""
         ledger = getattr(ctx, "question_ledger", None)
         if ledger is not None and hasattr(ledger, "active_question_id"):
@@ -664,6 +666,9 @@ class CallPhaseMachine:
         return FsmActionResult(
             goal=ResponseGoal(
                 kind=ResponseGoalKind.ANSWER_SIDE,
+                topic=side_question_kind(
+                    ctx.understanding.clean_text if ctx.understanding else ""
+                ),
                 allow_llm=True,
                 scripted_only=False,
                 must_do="Ответь на вопрос абонента коротко, без нового вопроса по повестке.",

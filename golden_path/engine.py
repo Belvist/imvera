@@ -307,8 +307,20 @@ class GoldenPathEngine:
     def trace_path(self) -> str:
         return self._trace.location
 
+    @property
+    def ended(self) -> bool:
+        """Public lifecycle state for adapters and scenario runners."""
+        return self._ended
+
     def plan_only(self, user_text: str) -> tuple[Analysis, Plan]:
-        """Inspect planner without mutating state — for scenario runner."""
+        """Preview the committed-turn plan without mutating live state."""
         analysis = analyze_turn(user_text, self.state)
-        plan = plan_turn(self.state, analysis)
+        preview_state = self.state.clone()
+        preview_state.reduce_user_turn(
+            user_text,
+            analysis.kind.value,
+            analysis.facts,
+            refusal_slot=analysis.refusal_slot,
+        )
+        plan = plan_turn(preview_state, analysis)
         return analysis, plan

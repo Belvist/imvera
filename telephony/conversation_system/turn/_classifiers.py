@@ -82,8 +82,33 @@ _WORRY_RE = re.compile(
 
 _QUESTION_WORDS = (
     "скажи", "расскажи", "что", "как", "почему", "зачем", "где",
-    "когда", "кто", "сколько", "говори", "можешь", "может", "слышишь",
-    "понимаешь", "поможешь", "what", "how", "why",
+    "куда", "откуда", "когда", "кто", "сколько", "чей", "какой",
+    "какая", "какое", "какие", "который", "которая", "которое",
+    "которые", "говори", "можешь", "может", "слышишь", "понимаешь",
+    "поможешь", "what", "how", "why",
+)
+
+_YES_NO_QUESTION_RE = re.compile(
+    r"^(?:вы|ты)\s+(?:меня\s+)?(?:записыва\w*|слыш\w*|понима\w*|"
+    r"вид\w*|помн\w*|зна\w*|звон\w*|переда\w*|мож\w*)\b",
+    re.IGNORECASE,
+)
+
+_SIDE_PRIVACY_RE = re.compile(
+    r"(записыва|запись\s+разговор|слуша|прослуш|конфиденц|"
+    r"личн\w*\s+данн|\bадрес\b|\bпаспорт\b|"
+    r"кто\s+услышит|кто\s+увидит|переда\w*\s+родн)",
+    re.IGNORECASE,
+)
+_SIDE_PURPOSE_RE = re.compile(
+    r"(зачем\s+(?:вы|ты)\s+звон|почему\s+(?:вы|ты)?\s*звон|"
+    r"зачем\s+этот\s+звон|для\s+чего\s+(?:вы|ты)?\s*звон)",
+    re.IGNORECASE,
+)
+_SIDE_IDENTITY_RE = re.compile(
+    r"(кто\s+(?:вы|ты)|как\s+вас\s+зовут|кто\s+такая\s+(?:вера|имвера)|"
+    r"что\s+за\s+сервис|что\s+такое\s+имвера)",
+    re.IGNORECASE,
 )
 
 
@@ -175,11 +200,31 @@ def is_text_question(text: str) -> bool:
     low = text.strip().lower()
     if not low:
         return False
+    # Whisper often omits question punctuation and keeps a discourse marker:
+    # «а кто вы такая», «ну какое сегодня число».
+    probe = re.sub(
+        r"^(?:(?:а|ну|простите|извините)\s*[,—-]?\s+)+",
+        "",
+        low,
+    )
+    probe = re.sub(r"^(?:скажите|подскажите)\s+", "", probe)
     for w in _QUESTION_WORDS:
         end = len(w)
-        if low[:end] == w and (end >= len(low) or low[end] not in "-—"):
+        if probe[:end] == w and (end >= len(probe) or probe[end] not in "-—"):
             return True
-    return False
+    return bool(_YES_NO_QUESTION_RE.search(probe))
+
+
+def side_question_kind(text: str) -> str:
+    """Classify supported side questions for deterministic fallbacks."""
+    cleaned = (text or "").strip()
+    if _SIDE_PRIVACY_RE.search(cleaned):
+        return "privacy"
+    if _SIDE_PURPOSE_RE.search(cleaned):
+        return "purpose"
+    if _SIDE_IDENTITY_RE.search(cleaned):
+        return "identity"
+    return "unsupported"
 
 
 def skips_stt_confirm(text: str) -> bool:

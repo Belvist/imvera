@@ -15,7 +15,10 @@ from conversation_system.domain.pending_question import (
 )
 from conversation_system.domain.understanding import MemoryPatch, SpeechAct, TurnUnderstanding
 from conversation_system.observer.state_contract import ConversationState
-from conversation_system.turn._classifiers import is_text_question
+from conversation_system.turn._classifiers import (
+    is_text_question,
+    side_question_kind,
+)
 from conversation_system.turn.analyzer import (
     extract_correction_focus,
     extract_symptom_focus,
@@ -54,19 +57,6 @@ _CONTRADICTION_RE = re.compile(
     r"нет\s*[,]?\s*(?:наоборот|на\s+самом\s+деле))",
     re.IGNORECASE,
 )
-
-_WHY_CALL_RE = re.compile(
-    r"(зачем\s+(?:вы|ты)\s+звон|почему\s+звон|зачем\s+этот\s+звон|"
-    r"кто\s+вы|что\s+за\s+сервис|что\s+такое\s+имвера)",
-    re.IGNORECASE,
-)
-
-_PRIVACY_RE = re.compile(
-    r"(записыва|слуша|прослуш|конфиденц|личн\w+\s+данн|"
-    r"кто\s+услышит|кто\s+увидит|переда\w+\s+родн)",
-    re.IGNORECASE,
-)
-
 
 class Observer:
     """Turn observer — deterministic v1 with optional LLM enrichment."""
@@ -304,11 +294,12 @@ class Observer:
 
         if unanswered:
             last_q = unanswered[-1]
-            if _WHY_CALL_RE.search(last_q):
+            question_kind = side_question_kind(last_q)
+            if question_kind in ("identity", "purpose"):
                 parts.append(
                     "Коротко объясни зачем звонишь (Имвера, забота, "
                     "запись для близких). Не добавляй вопрос по повестке.")
-            elif _PRIVACY_RE.search(last_q):
+            elif question_kind == "privacy":
                 parts.append(
                     "Успокой: записываешь для близких по согласию, "
                     "не обещай звонков/врачей.")

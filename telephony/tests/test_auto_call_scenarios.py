@@ -291,7 +291,7 @@ SCENARIOS: tuple[ScenarioExpect, ...] = (
         (
             ("какое сегодня число?", None, 0.9),
         ),
-        must_contain_any=("имвера", "вера", "забот"),
+        must_contain_any=("не хочу", "не могу", "ошиб"),
         no_dead_end=False,
     ),
     ScenarioExpect(

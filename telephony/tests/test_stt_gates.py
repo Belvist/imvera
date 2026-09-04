@@ -59,6 +59,18 @@ class SttGatesTests(unittest.TestCase):
         self.assertIn("упал", repair_fall_miscue("у палок не ударилось"))
         self.assertEqual(repair_fall_miscue("я упала"), "я упала")
 
+    def test_high_conf_caller_controls_survive_vocab_gate(self):
+        for raw in (
+            "а кто вы такая",
+            "вы записываете разговор",
+            "я не понял вопрос",
+            "я не могу встать",
+        ):
+            with self.subTest(raw=raw):
+                text, reason = gate_stt_transcript(raw, 0.90)
+                self.assertEqual(text, raw)
+                self.assertIsNone(reason)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

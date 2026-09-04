@@ -10,12 +10,20 @@ from __future__ import annotations
 import re
 
 from conversation_system.turn._classifiers import (
+    is_closing,
     is_greeting,
+    is_help_request,
+    is_meta_confusion,
     is_refusal,
     is_repair,
+    is_text_question,
 )
 from conversation_system.turn._cleaners import wellness_short_answer
-from core.vocab import looks_like_stt_glue_noise
+from core.vocab import (
+    contains_health_signal,
+    looks_like_directed_caller_speech,
+    looks_like_stt_glue_noise,
+)
 
 # Streaming / social / meme dialogue — never a care-call answer.
 _MEDIA_BLEED_MARKERS: tuple[str, ...] = (
@@ -115,10 +123,36 @@ def looks_like_hostile_or_unintelligible_bleed(text: str) -> bool:
     return False
 
 
+def is_explicit_caller_turn(text: str) -> bool:
+    """Caller speech that must reach intent and safety classification.
+
+    Mixed phone audio is ambiguous.  For explicit questions, repair/control
+    requests, and health signals, a false rejection is more harmful than an
+    occasional background false positive.  SafetyEngine and IntentResolver
+    still apply their subject-aware policies after this preservation gate.
+    """
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return False
+    if contains_health_signal(cleaned):
+        return True
+    if looks_like_directed_caller_speech(cleaned):
+        return True
+    return any((
+        is_greeting(cleaned),
+        is_closing(cleaned),
+        is_refusal(cleaned),
+        is_repair(cleaned),
+        is_meta_confusion(cleaned),
+        is_help_request(cleaned),
+        is_text_question(cleaned),
+    ))
+
+
 def _plausible_care_answer(text: str) -> bool:
     if wellness_short_answer(text):
         return True
-    if is_greeting(text) or is_repair(text) or is_refusal(text):
+    if is_explicit_caller_turn(text):
         return True
     low = text.lower()
     return any(h in low for h in _CARE_ANSWER_HINTS)
@@ -146,6 +180,12 @@ def should_reject_mixed_capture(
     """Reject transcript before dialogue when it is not caller→Vera speech."""
     cleaned = (text or "").strip()
     if not cleaned:
+        return False
+    # Intentional caller control and safety content take precedence over the
+    # statistical background heuristics below.  Previously this check came
+    # too late, so questions, repairs and even «я упал и не могу встать» were
+    # converted to OFF_AGENDA before SafetyEngine could inspect them.
+    if is_explicit_caller_turn(cleaned):
         return False
     if looks_like_media_bleed(cleaned):
         return True

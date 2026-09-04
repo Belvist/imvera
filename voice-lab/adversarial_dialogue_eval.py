@@ -61,6 +61,15 @@ def _must_contain(*words: str) -> Callable:
     return check
 
 
+def _must_contain_any(*words: str) -> Callable:
+    def check(_users: List[str], replies: List[str]) -> Tuple[bool, str]:
+        last = (replies[-1] if replies else "").lower()
+        if any(word.lower() in last for word in words):
+            return True, ""
+        return False, f"missing any of {words!r} in: {last[:100]}"
+    return check
+
+
 def _must_answer_question(keywords: Sequence[str]) -> Callable:
     def check(users: List[str], replies: List[str]) -> Tuple[bool, str]:
         if not users:
@@ -211,6 +220,49 @@ SCENARIOS: List[Scenario] = [
         ),
         _no_unhandled,
     ),
+    (
+        "identity_without_question_mark",
+        (
+            ("а кто вы такая", 0.9),
+        ),
+        _must_contain_any("вера", "имвера"),
+    ),
+    (
+        "privacy_without_question_mark_first_turn",
+        (
+            ("вы записываете разговор", 0.9),
+        ),
+        _must_contain("запис", "соглас"),
+    ),
+    (
+        "unsupported_question_fails_honestly",
+        (
+            ("какое сегодня число", 0.9),
+        ),
+        _must_contain_any("ошиб", "не могу", "не хочу"),
+    ),
+    (
+        "repair_without_question_mark",
+        (
+            ("всё хорошо", 0.9),
+            ("я не понял вопрос", 0.9),
+        ),
+        _repair_repeats,
+    ),
+    (
+        "critical_fall_not_discarded",
+        (
+            ("я упал и не могу встать", 0.9),
+        ),
+        _must_contain_any("запис", "родн", "близк", "семь"),
+    ),
+    (
+        "distress_with_profanity_not_discarded",
+        (
+            ("мне плохо, блять", 0.9),
+        ),
+        _must_contain_any("опас", "сроч", "серьёз", "помощ", "хуже"),
+    ),
 ]
 
 
@@ -244,11 +296,9 @@ def main() -> int:
             print(f"         {r.detail}")
         if not r.passed and r.replies:
             print(f"         last reply: {r.replies[-1][:120]}")
-    if strict and passed < 6:
-        print(f"FAIL: need at least 6/10, got {passed}")
-        return 1
     if strict and passed < total:
-        print(f"WARN: {total - passed} scenario(s) still failing (Phase 2)")
+        print(f"FAIL: strict mode requires {total}/{total}, got {passed}/{total}")
+        return 1
     return 0
 
 

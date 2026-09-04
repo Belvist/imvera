@@ -12,10 +12,9 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from golden_path.analyzer import analyze_turn
 from golden_path.engine import GoldenPathEngine
 from golden_path.llm import MockLLM
-from golden_path.planner import PlannerAction, plan_turn
+from golden_path.planner import PlannerAction
 from golden_path.slots import SlotName, SlotStatus
 from golden_path.status import status_line
 
@@ -44,8 +43,12 @@ def _check_assertion(engine: GoldenPathEngine, history: list[dict[str, Any]], sp
     state = engine.state
 
     if atype == "min_turns":
-        if len(spec.get("turns", [])) < int(spec.get("count", 8)):
-            return f"scenario has fewer than {spec['count']} user turns"
+        required = int(spec.get("count", 8))
+        if len(history) < required:
+            return (
+                f"scenario processed {len(history)} user turns; "
+                f"expected at least {required}"
+            )
         return None
 
     if atype == "slot_status":
@@ -89,17 +92,21 @@ def _check_assertion(engine: GoldenPathEngine, history: list[dict[str, Any]], sp
         turn = int(spec["turn"])
         expected = spec["action"]
         for item in history:
-            if item["turn"] == turn and item["plan"] != expected:
-                return f"turn {turn}: expected {expected}, got {item['plan']}"
-        return None
+            if item["turn"] == turn:
+                if item["plan"] != expected:
+                    return f"turn {turn}: expected {expected}, got {item['plan']}"
+                return None
+        return f"turn {turn}: expected {expected}, but turn was not processed"
 
     if atype == "analysis_on_turn":
         turn = int(spec["turn"])
         expected = spec["kind"]
         for item in history:
-            if item["turn"] == turn and item["analysis"] != expected:
-                return f"turn {turn}: expected analysis {expected}, got {item['analysis']}"
-        return None
+            if item["turn"] == turn:
+                if item["analysis"] != expected:
+                    return f"turn {turn}: expected analysis {expected}, got {item['analysis']}"
+                return None
+        return f"turn {turn}: expected analysis {expected}, but turn was not processed"
 
     if atype == "question_budget":
         violations = 0
@@ -130,24 +137,29 @@ def run_scenario(scenario: dict[str, Any], use_mock: bool) -> tuple[bool, list[s
     errors: list[str] = []
 
     for idx, user_text in enumerate(scenario.get("turns", []), start=1):
-        analysis = analyze_turn(user_text, engine.state)
-        pre_plan = plan_turn(engine.state, analysis)
+        analysis, pre_plan = engine.plan_only(user_text)
 
-        if scenario.get("check_plans_before_handle"):
-            history.append(
-                {
-                    "turn": idx,
-                    "plan": pre_plan.action_name(),
-                    "analysis": analysis.kind.value,
-                    "assistant": "",
-                }
+        try:
+            result = engine.handle_turn(user_text)
+        except Exception as exc:  # scenario failure; keep the pack running
+            errors.append(
+                f"{scenario['id']}: turn {idx} raised "
+                f"{type(exc).__name__}: {exc}"
+            )
+            break
+
+        if scenario.get("check_plans_before_handle") \
+                and pre_plan.action_name() != result.plan.action_name():
+            errors.append(
+                f"{scenario['id']}: turn {idx} plan_only="
+                f"{pre_plan.action_name()}, handle={result.plan.action_name()}"
             )
 
-        result = engine.handle_turn(user_text)
         history.append(
             {
                 "turn": idx,
                 "plan": result.plan.action_name(),
+                "pre_plan": pre_plan.action_name(),
                 "analysis": result.analysis.kind.value,
                 "assistant": result.assistant_text,
                 "slots": {
@@ -156,6 +168,11 @@ def run_scenario(scenario: dict[str, Any], use_mock: bool) -> tuple[bool, list[s
                 },
             }
         )
+        # Scripted fixtures often include padding turns after a goodbye.  A
+        # real session cannot accept another user turn, so stop at the same
+        # lifecycle boundary instead of crashing with "session already ended".
+        if engine.ended:
+            break
 
     for spec in scenario.get("assertions", []):
         err = _check_assertion(engine, history, spec)

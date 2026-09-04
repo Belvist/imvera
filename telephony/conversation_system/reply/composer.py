@@ -20,7 +20,9 @@ from conversation_system.reply.pools import (
     SAFETY_ACTIVE_POOL,
     SAFETY_CONFIRM_POOL,
     SHORT_ACK_POOL,
+    SIDE_PRIVACY_ANSWERS,
     SIDE_QUESTION_ANSWERS,
+    SIDE_UNAVAILABLE_ANSWERS,
     HELLO_BACK_POOL,
     NARRATIVE_ACK_POOL,
     SILENCE_ANCHOR_POOL,
@@ -146,7 +148,9 @@ class ReplyComposer:
             return self._clarify_line(memory, echo=echo)
         if kind == ResponseGoalKind.ANSWER_SIDE:
             return self._variety.pick_from_pool(
-                SIDE_QUESTION_ANSWERS, pool_key="side")
+                self._side_question_pool(goal),
+                pool_key=f"side_{goal.topic or 'unsupported'}",
+            )
         if kind == ResponseGoalKind.HELP_OFFER:
             return self._variety.pick_from_pool(
                 HELP_EMPATHY_POOL, pool_key="help_offer")
@@ -249,7 +253,7 @@ class ReplyComposer:
         if kind == ResponseGoalKind.CLOSE:
             return goodbye_pool_for_band(agenda.wellness_band)
         if kind == ResponseGoalKind.ANSWER_SIDE:
-            return SIDE_QUESTION_ANSWERS
+            return self._side_question_pool(goal)
         if kind == ResponseGoalKind.HELP_OFFER:
             return HELP_EMPATHY_POOL
         if kind == ResponseGoalKind.SYMPTOM_FOLLOWUP:
@@ -257,6 +261,13 @@ class ReplyComposer:
         if kind == ResponseGoalKind.ASK_TOPIC:
             return GOOD_PROBE_POOL
         return WARM_ACK_POOL
+
+    def _side_question_pool(self, goal: ResponseGoal) -> Sequence[str]:
+        if goal.topic == "privacy":
+            return SIDE_PRIVACY_ANSWERS
+        if goal.topic in ("identity", "purpose"):
+            return SIDE_QUESTION_ANSWERS
+        return SIDE_UNAVAILABLE_ANSWERS
 
     def _last_reply_was_notify(self, memory: ConversationMemory) -> bool:
         last = (memory.last_reply or "").lower()

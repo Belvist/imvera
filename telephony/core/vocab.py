@@ -13,6 +13,9 @@ Contract:
     doctor, pressure, heart...). Those are NEVER gated: losing "упал" is
     worse than a false positive.
   * ``looks_like_garbage(text)`` — ``not contains_real_word(text)``.
+  * ``looks_like_directed_caller_speech(text)`` — narrow, high-value caller
+    controls (questions, repair, help, call/privacy) that must never be
+    discarded by the mixed-audio glue gate.
 
 The lexicon is intentionally small and product-scoped (this is a care-call
 domain, not general Russian); a transcript of real Russian normally carries
@@ -29,8 +32,16 @@ CRITICAL_HEALTH_ROOTS = frozenset((
     "упа", "пада", "удар", "болит", "бол", "голов", "табл", "лекар",
     "врач", "доктор", "давл", "сердц", "температур", "приступ", "скор",
     "неотлож", "помог", "помощ", "плох", "боль", "кров", "сознани",
-    "тошн", "круж", "слаб", "худ", "нездоров",
+    "тошн", "круж", "слаб", "худ", "нездоров", "дыш", "задыха",
+    "вста", "двиг", "обмор", "судорог", "инфаркт", "инсульт", "умир",
 ))
+
+# Prefix roots above are intentionally recall-heavy.  These ordinary words
+# share a prefix but are not health signals and must not bypass media/noise
+# rejection merely because of morphology (e.g. «ставьте больше лайков»).
+_HEALTH_PREFIX_FALSE_POSITIVES = (
+    "больш", "болот", "скоро", "скорее", "скорост", "двигател",
+)
 
 # Product/domain lexicon (core roots). Small by design — see module docstring.
 # Includes daily-life words the agenda actually asks about (sleep, mood,
@@ -99,6 +110,30 @@ OBSERVED_NOISE = frozenset((
 ))
 
 
+_DIRECT_QUESTION_RE = re.compile(
+    r"^\s*(?:(?:а|ну|простите|извините)\s*[,—-]?\s+)*"
+    r"(?:(?:скажите|подскажите)\s+)?"
+    r"(?:кто|что|где|куда|откуда|когда|зачем|почему|как|сколько|чей|"
+    r"какой|какая|какое|какие|который|которая|которое|которые)\b",
+    re.IGNORECASE,
+)
+_YES_NO_CALL_QUESTION_RE = re.compile(
+    r"^\s*(?:(?:а|ну)\s+)?(?:вы|ты)\s+(?:меня\s+)?"
+    r"(?:записыва\w*|слыш\w*|понима\w*|вид\w*|помн\w*|зна\w*|"
+    r"звон\w*|переда\w*|мож\w*)\b",
+    re.IGNORECASE,
+)
+_DIALOGUE_CONTROL_RE = re.compile(
+    r"(?:\bповтор(?:и|ите)\w*|\bещ[её]\s+раз\b|"
+    r"\bне\s+(?:понял\w*|расслышал\w*|слышу)\b|"
+    r"\b(?:что|как)\s+вы\s+(?:сказал\w*|спросил\w*)|"
+    r"\b(?:помогите|помоги|спасите)\b|\bнужна\s+помощь\b|"
+    r"\b(?:алло|здравствуйте|привет|до\s+свидания|пока)\b|"
+    r"\b(?:имвера|записыва\w*\s+разговор)\b)",
+    re.IGNORECASE,
+)
+
+
 def _tokens(text):
     """Lower-cased Cyrillic/alnum tokens (len >= 2)."""
     if not text:
@@ -138,6 +173,43 @@ def _core_hit(tok):
     return False
 
 
+def contains_health_signal(text: str) -> bool:
+    """True when text contains a health/safety root worth preserving.
+
+    This is intentionally a preservation signal, not a safety verdict.  The
+    subject-aware SafetyEngine decides whether a mention is self-directed,
+    third-person, negated, or urgent after the transcript survives STT gates.
+    """
+    for tok in _tokens(text):
+        if tok.startswith(_HEALTH_PREFIX_FALSE_POSITIVES):
+            continue
+        if any(tok.startswith(root) for root in CRITICAL_HEALTH_ROOTS):
+            return True
+    return False
+
+
+def looks_like_directed_caller_speech(text: str) -> bool:
+    """Recognise caller controls that take precedence over glue filtering.
+
+    ASR punctuation is optional, so identity/privacy questions and repair
+    requests are recognised from their wording as well as a trailing ``?``.
+    The patterns stay deliberately narrow: this function is only an escape
+    hatch from the short ``function-word + unknown token`` noise heuristic.
+    """
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return False
+    if contains_health_signal(cleaned):
+        return True
+    if "?" in cleaned:
+        return True
+    return bool(
+        _DIRECT_QUESTION_RE.search(cleaned)
+        or _YES_NO_CALL_QUESTION_RE.search(cleaned)
+        or _DIALOGUE_CONTROL_RE.search(cleaned)
+    )
+
+
 def contains_real_word(text):
     """True when the transcript carries a real domain/health word or a
     critical health entity. Pure noise → False."""
@@ -173,6 +245,8 @@ def looks_like_stt_glue_noise(text: str) -> bool:
     Example from live call bc92bcca5d7b: «Як как, у пять» — passes the loose
     ``contains_real_word`` gate via «как», but is not caller speech.
     """
+    if looks_like_directed_caller_speech(text):
+        return False
     toks = [t for t in _tokens(text) if t not in OBSERVED_NOISE]
     if not toks or len(toks) > 5:
         return False
