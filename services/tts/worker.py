@@ -7,7 +7,6 @@ import base64
 import json
 import os
 import queue
-import threading
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -117,17 +116,24 @@ mount_health(app, state, "tts")
 async def _ndjson_stream(req: SynthesizeRequest) -> AsyncIterator[bytes]:
     check_deadline(req.deadline)
     out_q: queue.Queue = queue.Queue(maxsize=8)
-    threading.Thread(target=_produce_chunks, args=(req, out_q), daemon=True).start()
+
+    def produce() -> None:
+        _produce_chunks(req, out_q)
+
+    fut = executor.submit(produce)
     got_audio = False
-    while True:
-        item = await asyncio.to_thread(out_q.get)
-        if item is None:
-            break
-        if req.generation_id in _cancelled:
-            yield (json.dumps({"done": True, "cancelled": True}) + "\n").encode()
-            return
-        got_audio = True
-        yield (json.dumps(item, ensure_ascii=False) + "\n").encode()
+    try:
+        while True:
+            item = await asyncio.to_thread(out_q.get)
+            if item is None:
+                break
+            if req.generation_id in _cancelled:
+                yield (json.dumps({"done": True, "cancelled": True}) + "\n").encode()
+                return
+            got_audio = True
+            yield (json.dumps(item, ensure_ascii=False) + "\n").encode()
+    finally:
+        await asyncio.wrap_future(fut)
     if not got_audio and req.generation_id not in _cancelled:
         yield (
             json.dumps({"done": True, "error": "no audio generated"}, ensure_ascii=False)

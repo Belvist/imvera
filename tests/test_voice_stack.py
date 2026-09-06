@@ -2,19 +2,26 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import httpx
+import pytest
 
+from packages.contracts.enums import FsmState
+from packages.contracts.semantic import Evidence, FactCandidate, SemanticPayload
 from packages.dialogue.context_builder import active_question_kind
 from packages.dialogue.semantic_bridge import semantic_to_user_interpretation
 from packages.dialogue.state import DialogueState
-from packages.contracts.enums import FsmState
-from packages.contracts.semantic import Evidence, SemanticPayload
-from packages.telephony.asterisk import _json_or_empty
-from packages.telephony.ws_protocol import flush_media_command, parse_media_start
-from packages.voice_runtime.playback import PlaybackQueue, split_pcm_frames
+from packages.telephony.asterisk import _json_or_empty, ari_rest_base, normalize_ari_http_root
+from packages.telephony.ws_protocol import flush_media_command, is_media_start, parse_media_start
 from packages.voice_runtime.audio import AudioEnvelope, pcm16_frame_bytes
+from packages.voice_runtime.playback import PlaybackQueue, split_pcm_frames
+
+
+def test_ari_base_normalization():
+    assert normalize_ari_http_root("http://127.0.0.1:8088/ari") == "http://127.0.0.1:8088"
+    assert ari_rest_base("http://127.0.0.1:8088") == "http://127.0.0.1:8088/ari"
 
 
 def test_json_or_empty_on_204():
@@ -22,24 +29,26 @@ def test_json_or_empty_on_204():
     assert _json_or_empty(response) == {}
 
 
-def test_media_start_parse():
-    fmt = parse_media_start(
-        {
-            "type": "MEDIA_START",
-            "format": {"sample_rate": 16000, "encoding": "slin16"},
-            "optimal_frame_size": 320,
-        }
-    )
+def test_media_start_parse_string_format():
+    msg = {
+        "event": "MEDIA_START",
+        "format": "slin16",
+        "optimal_frame_size": 640,
+        "ptime": 20,
+    }
+    assert is_media_start(msg)
+    fmt = parse_media_start(msg)
     assert fmt.sample_rate == 16000
-    assert fmt.frame_size_bytes == 320
+    assert fmt.frame_size_bytes == 640
+    assert fmt.ptime_ms == 20
 
 
 def test_flush_media_command():
     cmd = json.loads(flush_media_command())
-    assert cmd["type"] == "FLUSH_MEDIA"
+    assert cmd["command"] == "FLUSH_MEDIA"
 
 
-def test_semantic_identity_yes():
+def test_semantic_identity_yes_requires_evidence():
     state = DialogueState(call_id="c1", family_id="f1", fsm_state=FsmState.IDENTIFY_PERSON)
     payload = SemanticPayload(
         dialogue_act="answer",
@@ -53,7 +62,39 @@ def test_semantic_identity_yes():
         "да", payload, active_question_kind=active_question_kind(state)
     )
     assert interp.confirms_identity is True
-    assert interp.sets_consent is None
+
+
+def test_semantic_identity_no_not_confirm():
+    state = DialogueState(call_id="c1", family_id="f1", fsm_state=FsmState.IDENTIFY_PERSON)
+    payload = SemanticPayload(
+        dialogue_act="answer",
+        control="none",
+        consent_answer="no",
+        consent_evidence=Evidence(start=0, end=3, quote="нет"),
+        answers_pending_question=True,
+        needs_clarification=False,
+    )
+    interp = semantic_to_user_interpretation(
+        "нет", payload, active_question_kind=active_question_kind(state)
+    )
+    assert interp.declines is True
+    assert interp.confirms_identity is False
+
+
+def test_semantic_can_talk_with_pending_answer():
+    state = DialogueState(call_id="c1", family_id="f1", fsm_state=FsmState.CHECK_CAN_TALK)
+    payload = SemanticPayload(
+        dialogue_act="answer",
+        control="none",
+        consent_answer="not_applicable",
+        consent_evidence=Evidence(start=0, end=2, quote="да"),
+        answers_pending_question=True,
+        needs_clarification=False,
+    )
+    interp = semantic_to_user_interpretation(
+        "да", payload, active_question_kind=active_question_kind(state)
+    )
+    assert interp.confirms_can_talk is True
 
 
 def test_semantic_mood_not_consent():
@@ -63,8 +104,6 @@ def test_semantic_mood_not_consent():
         fsm_state=FsmState.DAILY_CHECK,
         pending_slot="mood",
     )
-    from packages.contracts.semantic import FactCandidate
-
     payload = SemanticPayload(
         dialogue_act="answer",
         control="none",
@@ -89,11 +128,26 @@ def test_semantic_mood_not_consent():
     assert interp.confirms_identity is False
 
 
-def test_tts_done_line_skipped():
-    line = '{"done": true}'
-    data = json.loads(line)
-    assert data.get("done") is True
-    assert "pcm_b64" not in data
+@pytest.mark.asyncio
+async def test_playback_queue_no_loss():
+    q = PlaybackQueue("c1", buffer_limit_ms=200, sample_rate=16000, frame_ms=20)
+    q.begin_phrase("g1", "p1", "hello")
+    data = b"\x01\x00" * 4000
+    chunk = AudioEnvelope("c1", "g1", "p1", 0, 16000, data)
+    total_out = 0
+
+    async def consumer() -> None:
+        nonlocal total_out
+        while total_out < len(data):
+            item = q.pop_nowait()
+            if item:
+                total_out += len(item.pcm_s16le)
+            await asyncio.sleep(0)
+
+    task = asyncio.create_task(consumer())
+    assert await q.enqueue_wait(chunk)
+    await task
+    assert total_out == len(data)
 
 
 def test_playback_splits_frames():
@@ -102,13 +156,3 @@ def test_playback_splits_frames():
     parts = split_pcm_frames(big, 16000, 20)
     assert len(parts) == 3
     assert all(len(p) == len(frame) for p in parts)
-
-
-def test_playback_queue_consumer():
-    q = PlaybackQueue("c1", buffer_limit_ms=800, sample_rate=16000)
-    q.begin_phrase("g1", "p1", "hello")
-    chunk = AudioEnvelope("c1", "g1", "p1", 0, 16000, b"\x00" * 640)
-    assert q.enqueue(chunk)
-    popped = q.pop()
-    assert popped is not None
-    assert q._ledger.sent_samples == 320

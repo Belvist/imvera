@@ -13,8 +13,14 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from packages.contracts.runtime import RuntimeEvent
-from packages.telephony.ws_protocol import flush_media_command, is_control_message, parse_media_start
+from packages.telephony.ws_protocol import (
+    flush_media_command,
+    is_control_message,
+    is_media_start,
+    parse_media_start,
+)
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks, build_call_actor
+from packages.voice_runtime.trace import record_event
 
 app = FastAPI(title="IMVERA Voice Gateway", version="0.2.0")
 
@@ -38,7 +44,8 @@ class CallSession:
     inject_ws: WebSocket | None = None
     media_ready: asyncio.Event = field(default_factory=asyncio.Event)
     sample_rate: int = 16000
-    frame_size: int = 320
+    frame_size: int = 640
+    ptime_ms: int = 20
 
 
 _sessions: dict[str, CallSession] = {}
@@ -54,6 +61,17 @@ class OpenCallRequest(BaseModel):
 async def ready() -> dict:
     stt, tts, llm = _urls()
     return {"status": "ok", "stt": stt, "tts": tts, "llm": llm}
+
+
+@app.get("/internal/calls/{call_id}/trace")
+async def call_trace(call_id: str) -> dict:
+    from packages.voice_runtime.trace import trace_path
+
+    path = trace_path(call_id)
+    if not path.exists():
+        raise HTTPException(404, detail="trace not found")
+    lines = path.read_text(encoding="utf-8").strip().splitlines()
+    return {"call_id": call_id, "events": [json.loads(line) for line in lines if line]}
 
 
 @app.post("/internal/calls/{call_id}/open")
@@ -82,7 +100,7 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
             pass
 
     async def emit(event: RuntimeEvent) -> None:
-        pass
+        record_event(call_id, event)
 
     actor = build_call_actor(
         call_id,
@@ -124,10 +142,11 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
                 if not is_control_message(raw):
                     continue
                 data = json.loads(raw)
-                if data.get("type") == "MEDIA_START":
+                if is_media_start(data):
                     fmt = parse_media_start(data)
                     session.sample_rate = fmt.sample_rate
                     session.frame_size = fmt.frame_size_bytes
+                    session.ptime_ms = fmt.ptime_ms
                     if session.capture_ws and session.inject_ws:
                         if not session.media_ready.is_set():
                             session.media_ready.set()
@@ -189,6 +208,7 @@ async def browser_media(
         await websocket.close()
 
     async def emit(event: RuntimeEvent) -> None:
+        record_event(call_id, event)
         await websocket.send_text(
             json.dumps(
                 {"type": event.event_type.value, "payload": event.payload},
@@ -207,7 +227,7 @@ async def browser_media(
     )
     actor.start()
     try:
-        await actor.on_media_ready(sample_rate, 320)
+        await actor.on_media_ready(sample_rate, 640)
         while True:
             message = await websocket.receive()
             if message["type"] == "websocket.disconnect":

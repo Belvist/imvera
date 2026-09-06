@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import sys
 
 from scripts.local_sip_config import load_or_create
 
