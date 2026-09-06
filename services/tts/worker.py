@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import os
+import queue
+import threading
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -58,49 +61,38 @@ def _float_to_pcm16(audio: np.ndarray) -> bytes:
     return (arr * 32767.0).astype(np.int16).tobytes()
 
 
-def _synthesize_chunks(req: SynthesizeRequest) -> list[dict[str, Any]]:
+def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
     cfg = _load_config()
     tts_cfg = cfg["models"]["tts"]
     voice = req.voice or tts_cfg["voice"]
     lang = req.language or tts_cfg["lang_code"]
-    chunks: list[dict[str, Any]] = []
     seq = 0
-    for result in _tts.generate(
-        text=req.text,
-        voice=voice,
-        lang_code=lang,
-        stream=True,
-        streaming_interval=tts_cfg.get("streaming_interval", 0.32),
-    ):
-        if req.generation_id in _cancelled:
-            break
-        audio = getattr(result, "audio", None)
-        if audio is None:
-            continue
-        pcm = _float_to_pcm16(np.asarray(audio))
-        sample_rate = int(getattr(result, "sample_rate", 24000))
-        chunks.append(
-            {
-                "sequence": seq,
-                "sample_rate": sample_rate,
-                "pcm_b64": base64.b64encode(pcm).decode("ascii"),
-                "is_last": False,
-            }
-        )
-        seq += 1
-    if chunks:
-        chunks[-1]["is_last"] = True
-    elif not _cancelled:
-        chunks.append(
-            {
-                "sequence": 0,
-                "sample_rate": 24000,
-                "pcm_b64": "",
-                "is_last": True,
-                "error": "no audio generated",
-            }
-        )
-    return chunks
+    try:
+        for result in _tts.generate(
+            text=req.text,
+            voice=voice,
+            lang_code=lang,
+            stream=True,
+            streaming_interval=tts_cfg.get("streaming_interval", 0.32),
+        ):
+            if req.generation_id in _cancelled:
+                break
+            audio = getattr(result, "audio", None)
+            if audio is None:
+                continue
+            pcm = _float_to_pcm16(np.asarray(audio))
+            sample_rate = int(getattr(result, "sample_rate", 24000))
+            out_q.put(
+                {
+                    "sequence": seq,
+                    "sample_rate": sample_rate,
+                    "pcm_b64": base64.b64encode(pcm).decode("ascii"),
+                    "is_last": False,
+                }
+            )
+            seq += 1
+    finally:
+        out_q.put(None)
 
 
 @app.on_event("startup")
@@ -124,12 +116,24 @@ mount_health(app, state, "tts")
 
 async def _ndjson_stream(req: SynthesizeRequest) -> AsyncIterator[bytes]:
     check_deadline(req.deadline)
-    chunks = await executor.run(lambda: _synthesize_chunks(req))
-    for item in chunks:
+    out_q: queue.Queue = queue.Queue(maxsize=8)
+    threading.Thread(target=_produce_chunks, args=(req, out_q), daemon=True).start()
+    got_audio = False
+    while True:
+        item = await asyncio.to_thread(out_q.get)
+        if item is None:
+            break
         if req.generation_id in _cancelled:
             yield (json.dumps({"done": True, "cancelled": True}) + "\n").encode()
             return
+        got_audio = True
         yield (json.dumps(item, ensure_ascii=False) + "\n").encode()
+    if not got_audio and req.generation_id not in _cancelled:
+        yield (
+            json.dumps({"done": True, "error": "no audio generated"}, ensure_ascii=False)
+            + "\n"
+        ).encode()
+        return
     yield (json.dumps({"done": True}) + "\n").encode()
 
 

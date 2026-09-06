@@ -1,4 +1,4 @@
-"""Per-call voice actor — event queue, revision guards, no blocking on inference."""
+"""Per-call voice actor — media-ready greeting, render path, barge-in, lifecycle."""
 
 from __future__ import annotations
 
@@ -9,28 +9,37 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from packages.contracts.core import TerminationReason
 from packages.contracts.interpretation import TurnInterpretation
-from packages.contracts.providers import STTProvider, TTSProvider
+from packages.contracts.providers import TTSProvider
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
-from packages.dialogue.context_builder import build_turn_context
+from packages.contracts.turn import TurnProposal
+from packages.dialogue.context_builder import active_question_kind, build_turn_context
 from packages.dialogue.interpretation import to_turn_interpretation
 from packages.dialogue.semantic_bridge import semantic_to_user_interpretation
-from packages.dialogue.session import CallSession
+from packages.dialogue.session import CallSession, SessionTurnResult
+from packages.dialogue.validator import Validator
 from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler
 from packages.voice_runtime.endpointing import SpeechSegmentCollector
 from packages.voice_runtime.playback import PlaybackQueue
-from packages.voice_runtime.vad import EnergyVad
+from packages.voice_runtime.silero_vad import create_vad
 from services.llm.http_provider import HttpLLMProvider
 from services.stt.http_provider import HttpSTTProvider
 from services.tts.http_provider import HttpTTSProvider
 
-SendAudioFn = Callable[[AudioEnvelope], Awaitable[None]]
 EmitFn = Callable[[RuntimeEvent], Awaitable[None]]
+
+
+@dataclass(frozen=True)
+class MediaCallbacks:
+    send_pcm: Callable[[bytes], Awaitable[None]]
+    flush: Callable[[], Awaitable[None]]
+    hangup: Callable[[], Awaitable[None]]
+    emit: EmitFn
 
 
 class ActorEventType(StrEnum):
     PCM = "pcm"
-    SPEECH_STARTED = "speech_started"
     STOP = "stop"
 
 
@@ -47,7 +56,8 @@ class CallActorConfig:
     stt_deadline_s: float = 12.0
     llm_deadline_s: float = 15.0
     tts_deadline_s: float = 20.0
-    playback_buffer_ms: int = 200
+    playback_buffer_ms: int = 800
+    frame_ms: int = 20
 
 
 @dataclass
@@ -55,72 +65,113 @@ class CallActor:
     call_id: str
     family_id: str
     session: CallSession
-    stt: STTProvider
+    stt: HttpSTTProvider
     tts: TTSProvider
     llm: HttpLLMProvider
-    send_audio: SendAudioFn
-    emit: EmitFn
+    media: MediaCallbacks
     config: CallActorConfig = field(default_factory=CallActorConfig)
     _queue: asyncio.Queue[ActorEvent] = field(default_factory=asyncio.Queue)
     _task: asyncio.Task | None = None
+    _playback_task: asyncio.Task | None = None
     _policy_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     _resampler: StatefulResampler | None = None
-    _vad: EnergyVad | None = None
+    _output_resampler: StatefulResampler | None = None
+    _vad: object | None = None
     _collector: SpeechSegmentCollector | None = None
     _playback: PlaybackQueue | None = None
     _active_generation: str | None = None
     _tts_task: asyncio.Task | None = None
     _utterance_seq: int = 0
-    _state_version_at_work: int = 0
     _delivered_phrases: list[str] = field(default_factory=list)
+    _stopped: bool = False
+    _media_ready: bool = False
+    _pending_open: SessionTurnResult | None = None
+    _output_sample_rate: int = 16000
+    _inflight_utterances: set[int] = field(default_factory=set)
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
+        self._stopped = True
         await self._queue.put(ActorEvent(ActorEventType.STOP))
         if self._task:
             await self._task
 
+    async def on_media_ready(self, sample_rate: int, frame_size: int) -> None:
+        await self._ensure_audio_chain(sample_rate)
+        self._output_sample_rate = sample_rate
+        self._media_ready = True
+        if self._playback_task is None:
+            self._playback_task = asyncio.create_task(self._playback_pump())
+        if self._pending_open:
+            await self._deliver_session_turn(self._pending_open)
+            self._pending_open = None
+
     async def push_pcm(self, pcm: bytes, sample_rate: int) -> None:
+        if self._stopped:
+            return
         await self._queue.put(ActorEvent(ActorEventType.PCM, pcm=pcm, sample_rate=sample_rate))
 
     async def _run(self) -> None:
-        result = await asyncio.to_thread(self.session.start)
-        await self.emit(RuntimeEvent(self.call_id, RuntimeEventType.CALL_STARTED, {}))
-        if result.validated.allowed and result.validated.speech:
-            self._delivered_phrases.append(result.validated.speech)
-            await self._speak_phrase(result.validated.speech)
+        open_result = await asyncio.to_thread(self.session.start)
+        await self.media.emit(
+            RuntimeEvent(self.call_id, RuntimeEventType.CALL_STARTED, {})
+        )
+        if open_result.validated.allowed and open_result.validated.speech:
+            self._pending_open = open_result
+            if self._media_ready:
+                await self._deliver_session_turn(open_result)
+                self._pending_open = None
+
         while True:
             event = await self._queue.get()
             if event.kind == ActorEventType.STOP:
-                await self._interrupt_playback()
-                await self.emit(
-                    RuntimeEvent(self.call_id, RuntimeEventType.TRANSPORT_DISCONNECTED, {})
+                await self._interrupt_playback(flush=False)
+                await self._finalize_disconnect()
+                await self.media.emit(
+                    RuntimeEvent(
+                        self.call_id, RuntimeEventType.TRANSPORT_DISCONNECTED, {}
+                    )
                 )
                 break
             if event.kind == ActorEventType.PCM:
                 await self._on_pcm(event.pcm, event.sample_rate)
 
+    async def _finalize_disconnect(self) -> None:
+        if self.session.state.call_finalized:
+            return
+        if not self.session.state.final_action_done:
+            self.session.state.final_action_done = True
+            self.session.state.termination_reason = TerminationReason.DISCONNECTED
+        await asyncio.to_thread(self.session.finalize_if_needed)
+
     async def _ensure_audio_chain(self, sample_rate: int) -> None:
-        if self._resampler is None:
-            self._resampler = StatefulResampler(sample_rate, self.config.target_sample_rate)
-            self._vad = EnergyVad(self.config.target_sample_rate)
-            self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
-            self._playback = PlaybackQueue(
+        if self._resampler is not None:
+            return
+        self._resampler = StatefulResampler(sample_rate, self.config.target_sample_rate)
+        self._output_resampler = StatefulResampler(
+            self.config.target_sample_rate, sample_rate
+        )
+        self._vad = create_vad(self.config.target_sample_rate)
+        self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
+        self._playback = PlaybackQueue(
+            self.call_id,
+            buffer_limit_ms=self.config.playback_buffer_ms,
+            sample_rate=sample_rate,
+            frame_ms=self.config.frame_ms,
+        )
+        await self.media.emit(
+            RuntimeEvent(
                 self.call_id,
-                buffer_limit_ms=self.config.playback_buffer_ms,
-                sample_rate=self.config.target_sample_rate,
+                RuntimeEventType.MEDIA_READY,
+                {"sample_rate": sample_rate},
             )
-            await self.emit(
-                RuntimeEvent(
-                    self.call_id,
-                    RuntimeEventType.MEDIA_READY,
-                    {"sample_rate": sample_rate},
-                )
-            )
+        )
 
     async def _on_pcm(self, pcm_s16le: bytes, sample_rate: int) -> None:
+        if self._stopped or not self._media_ready:
+            return
         await self._ensure_audio_chain(sample_rate)
         assert self._resampler and self._vad and self._collector
         pcm = self._resampler.process(pcm_s16le)
@@ -128,16 +179,25 @@ class CallActor:
             return
         started, ended = self._vad.feed(pcm)
         if started:
-            await self._interrupt_playback()
-            await self.emit(RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {}))
+            await self._interrupt_playback(flush=True)
+            await self.media.emit(
+                RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {})
+            )
         segment = self._collector.on_frame(pcm, started, ended)
         if segment:
-            await self.emit(RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_ENDED, {}))
-            asyncio.create_task(self._handle_utterance(segment))
+            await self.media.emit(
+                RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_ENDED, {})
+            )
+            seq = self._utterance_seq + 1
+            self._inflight_utterances.add(seq)
+            asyncio.create_task(self._handle_utterance(segment, seq))
 
-    async def _handle_utterance(self, pcm: bytes) -> None:
-        self._utterance_seq += 1
-        utterance_id = f"u-{self._utterance_seq}"
+    async def _handle_utterance(self, pcm: bytes, utterance_seq: int) -> None:
+        if self._stopped:
+            self._inflight_utterances.discard(utterance_seq)
+            return
+        self._utterance_seq = utterance_seq
+        utterance_id = f"u-{utterance_seq}"
         turn_id = self.session.turn_id + 1
         captured_version = self.session.state.state_version
         deadline = time.monotonic() + self.config.stt_deadline_s
@@ -150,16 +210,22 @@ class CallActor:
                 deadline=deadline,
             )
         except Exception as exc:
-            await self.emit(
-                RuntimeEvent(
-                    self.call_id,
-                    RuntimeEventType.INTERPRETATION_FAILED,
-                    {"error": str(exc), "stage": "stt"},
+            self._inflight_utterances.discard(utterance_seq)
+            if not self._stopped:
+                await self.media.emit(
+                    RuntimeEvent(
+                        self.call_id,
+                        RuntimeEventType.INTERPRETATION_FAILED,
+                        {"error": str(exc), "stage": "stt"},
+                    )
                 )
-            )
             return
+        if self._stopped or self.session.state.call_finalized:
+            self._inflight_utterances.discard(utterance_seq)
+            return
+
         text = (stt_result.text or "").strip()
-        await self.emit(
+        await self.media.emit(
             RuntimeEvent(
                 self.call_id,
                 RuntimeEventType.STT_FINAL,
@@ -167,6 +233,7 @@ class CallActor:
             )
         )
         if not text:
+            self._inflight_utterances.discard(utterance_seq)
             return
 
         llm_deadline = time.monotonic() + self.config.llm_deadline_s
@@ -181,16 +248,27 @@ class CallActor:
         try:
             semantic = await self.llm.interpret_turn(ctx, deadline=llm_deadline)
         except Exception as exc:
-            await self.emit(
-                RuntimeEvent(
-                    self.call_id,
-                    RuntimeEventType.INTERPRETATION_FAILED,
-                    {"error": str(exc), "stage": "llm"},
+            self._inflight_utterances.discard(utterance_seq)
+            if not self._stopped:
+                await self.media.emit(
+                    RuntimeEvent(
+                        self.call_id,
+                        RuntimeEventType.INTERPRETATION_FAILED,
+                        {"error": str(exc), "stage": "llm"},
+                    )
                 )
-            )
             return
-        await self.emit(RuntimeEvent(self.call_id, RuntimeEventType.INTERPRETATION_READY, {}))
-        interp = semantic_to_user_interpretation(text, semantic.payload)
+        if self._stopped or self.session.state.call_finalized:
+            self._inflight_utterances.discard(utterance_seq)
+            return
+
+        await self.media.emit(
+            RuntimeEvent(self.call_id, RuntimeEventType.INTERPRETATION_READY, {})
+        )
+        qkind = active_question_kind(self.session.state)
+        interp = semantic_to_user_interpretation(
+            text, semantic.payload, active_question_kind=qkind
+        )
         legacy_contract: TurnInterpretation = to_turn_interpretation(
             self.session.state,
             turn_id,
@@ -201,7 +279,11 @@ class CallActor:
         )
 
         async with self._policy_lock:
+            if self._stopped or self.session.state.call_finalized:
+                self._inflight_utterances.discard(utterance_seq)
+                return
             if self.session.state.state_version != captured_version:
+                self._inflight_utterances.discard(utterance_seq)
                 return
             result = await asyncio.to_thread(
                 self.session.handle_user_text,
@@ -210,8 +292,11 @@ class CallActor:
                 contract=legacy_contract,
             )
 
+        self._inflight_utterances.discard(utterance_seq)
+        if self._stopped or self.session.state.call_finalized:
+            return
         if not result.persist_ok:
-            await self.emit(
+            await self.media.emit(
                 RuntimeEvent(
                     self.call_id,
                     RuntimeEventType.PERSISTENCE_FAILED,
@@ -219,22 +304,68 @@ class CallActor:
                 )
             )
             return
-        await self.emit(RuntimeEvent(self.call_id, RuntimeEventType.PERSISTENCE_COMMITTED, {}))
-        if result.validated.allowed and result.validated.speech:
-            self._delivered_phrases.append(result.validated.speech)
-            await self._speak_phrase(result.validated.speech)
-        elif self.session.state.call_finalized:
-            await self.emit(RuntimeEvent(self.call_id, RuntimeEventType.CALL_STOP_REQUESTED, {}))
+        await self.media.emit(
+            RuntimeEvent(self.call_id, RuntimeEventType.PERSISTENCE_COMMITTED, {})
+        )
+        await self._deliver_session_turn(result)
 
-    async def _interrupt_playback(self) -> None:
+    async def _deliver_session_turn(self, result: SessionTurnResult) -> None:
+        if self._stopped or not result.validated.allowed:
+            if self.session.state.final_action_done and not result.validated.speech:
+                await self._maybe_hangup_when_idle()
+            return
+        planner_text = result.validated.speech
+        if not planner_text:
+            if self.session.state.final_action_done:
+                await self._maybe_hangup_when_idle()
+            return
+
+        rendered = planner_text
+        try:
+            facts = [
+                {"field": k, "value": v.value, "quote": v.source_quote}
+                for k, v in self.session.state.facts.items()
+            ]
+            rendered_llm = await self.llm.render_text(
+                {
+                    "intent": result.proposal.intent,
+                    "fsm_state": result.proposal.fsm_state.value,
+                    "planner_text": planner_text,
+                },
+                facts,
+                time.monotonic() + self.config.llm_deadline_s,
+            )
+            if rendered_llm:
+                rendered = rendered_llm
+        except Exception:
+            rendered = planner_text
+
+        proposal = TurnProposal(
+            turn_id=result.proposal.turn_id,
+            generation_id=result.proposal.generation_id,
+            speech=rendered,
+            intent=result.proposal.intent,
+            fsm_state=result.proposal.fsm_state,
+            mandatory_remaining=result.proposal.mandatory_remaining,
+        )
+        validated = Validator.validate(proposal)
+        if not validated.allowed or not validated.speech:
+            if self.session.state.final_action_done:
+                await self._maybe_hangup_when_idle()
+            return
+        await self._speak_phrase(validated.speech)
+
+    async def _interrupt_playback(self, *, flush: bool) -> None:
+        if flush:
+            asyncio.create_task(self.media.flush())
         if not self._playback or not self._active_generation:
             return
         gen = self._active_generation
         self._playback.cancel_generation(gen)
-        await self.tts.cancel(gen)
+        asyncio.create_task(self.tts.cancel(gen))
         if self._tts_task and not self._tts_task.done():
             self._tts_task.cancel()
-        await self.emit(
+        await self.media.emit(
             RuntimeEvent(
                 self.call_id,
                 RuntimeEventType.PLAYBACK_INTERRUPTED,
@@ -244,7 +375,7 @@ class CallActor:
         self._active_generation = None
 
     async def _speak_phrase(self, text: str) -> None:
-        if not text or not self._playback:
+        if not text or not self._playback or self._stopped:
             return
         generation_id = f"g-{uuid.uuid4().hex[:8]}"
         phrase_id = f"p-{uuid.uuid4().hex[:8]}"
@@ -255,43 +386,82 @@ class CallActor:
 
         async def _run_tts() -> None:
             nonlocal seq
-            async for chunk in self.tts.synthesize(
-                text,
-                generation_id=generation_id,
-                phrase_id=phrase_id,
-                deadline=deadline,
-            ):
-                if generation_id != self._active_generation:
-                    break
-                env = AudioEnvelope(
+            try:
+                async for chunk in self.tts.synthesize(
+                    text,
                     call_id=self.call_id,
                     generation_id=generation_id,
                     phrase_id=phrase_id,
-                    sequence=seq,
-                    sample_rate=chunk.sample_rate,
-                    pcm_s16le=chunk.pcm_s16le,
-                )
-                seq += 1
-                if self._playback.enqueue(env):
-                    await self.send_audio(env)
-            if generation_id == self._active_generation:
-                self._playback.mark_completed()
-                await self.emit(
-                    RuntimeEvent(
-                        self.call_id,
-                        RuntimeEventType.PLAYBACK_COMPLETED,
-                        {"generation_id": generation_id},
+                    deadline=deadline,
+                ):
+                    if generation_id != self._active_generation or self._stopped:
+                        break
+                    env = AudioEnvelope(
+                        call_id=self.call_id,
+                        generation_id=generation_id,
+                        phrase_id=phrase_id,
+                        sequence=seq,
+                        sample_rate=chunk.sample_rate,
+                        pcm_s16le=chunk.pcm_s16le,
                     )
-                )
+                    seq += 1
+                    if self._playback and self._playback.enqueue(env):
+                        pass
+            finally:
+                if self._playback and generation_id == self._active_generation:
+                    self._playback.mark_generation_done()
 
         self._tts_task = asyncio.create_task(_run_tts())
-        await self.emit(
+        await self.media.emit(
             RuntimeEvent(
                 self.call_id,
                 RuntimeEventType.RENDERER_PHRASE_READY,
                 {"phrase_id": phrase_id, "text": text},
             )
         )
+
+    async def _playback_pump(self) -> None:
+        assert self._playback and self._output_resampler
+        while not self._stopped:
+            chunk = self._playback.pop()
+            if chunk is None:
+                if self._playback.playback_complete():
+                    self._playback.mark_completed()
+                    if self._active_generation:
+                        await self.media.emit(
+                            RuntimeEvent(
+                                self.call_id,
+                                RuntimeEventType.PLAYBACK_COMPLETED,
+                                {"generation_id": self._active_generation},
+                            )
+                        )
+                        if self._delivered_phrases and self._playback._ledger:
+                            spoken = self._playback._ledger.canonical_text
+                            if spoken and (
+                                not self._delivered_phrases
+                                or self._delivered_phrases[-1] != spoken
+                            ):
+                                self._delivered_phrases.append(spoken)
+                        self._active_generation = None
+                        if self.session.state.final_action_done:
+                            await self._maybe_hangup_when_idle()
+                await asyncio.sleep(0.01)
+                continue
+            out_pcm = chunk.pcm_s16le
+            if chunk.sample_rate != self._output_sample_rate:
+                out_pcm = self._output_resampler.process(out_pcm)
+            if out_pcm:
+                await self.media.send_pcm(out_pcm)
+            await asyncio.sleep(self.config.frame_ms / 1000.0)
+
+    async def _maybe_hangup_when_idle(self) -> None:
+        if self._stopped:
+            return
+        if self._active_generation or (self._playback and self._playback._queue):
+            return
+        if self._inflight_utterances:
+            return
+        await self.media.hangup()
 
 
 def build_call_actor(
@@ -301,8 +471,7 @@ def build_call_actor(
     stt_url: str,
     tts_url: str,
     llm_url: str,
-    send_audio: SendAudioFn,
-    emit: EmitFn,
+    media: MediaCallbacks,
 ) -> CallActor:
     session = CallSession(
         call_id=call_id,
@@ -316,6 +485,5 @@ def build_call_actor(
         stt=HttpSTTProvider(stt_url),
         tts=HttpTTSProvider(tts_url),
         llm=HttpLLMProvider(llm_url),
-        send_audio=send_audio,
-        emit=emit,
+        media=media,
     )

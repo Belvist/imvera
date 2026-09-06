@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from packages.contracts.enums import AsrQuality
-from packages.contracts.semantic import ConfirmedFact, Evidence, FactCandidate, TurnContext
+from packages.contracts.enums import AsrQuality, FsmState
+from packages.contracts.semantic import (
+    ActiveQuestionKind,
+    ConfirmedFact,
+    Evidence,
+    FactCandidate,
+    TurnContext,
+)
 from packages.dialogue.state import DialogueState
 
 
@@ -15,6 +21,43 @@ def _asr_label(q: AsrQuality) -> str:
     return "GOOD"
 
 
+def active_question_kind(state: DialogueState) -> ActiveQuestionKind:
+    if state.fsm_state == FsmState.IDENTIFY_PERSON:
+        return "identity"
+    if state.fsm_state == FsmState.CHECK_CONSENT:
+        return "consent"
+    if state.fsm_state == FsmState.CHECK_CAN_TALK:
+        return "can_talk"
+    if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
+        return "risk"
+    if state.awaiting_goodbye_confirm or state.fsm_state == FsmState.GOODBYE:
+        return "goodbye"
+    if state.pending_slot:
+        return "slot"
+    return "none"
+
+
+def _pending_question_text(state: DialogueState) -> str | None:
+    if state.pending_question:
+        return state.pending_question
+    if state.fsm_state == FsmState.IDENTIFY_PERSON:
+        return f"Я разговариваю с {state.elder_display_name}?"
+    if state.fsm_state == FsmState.CHECK_CONSENT:
+        return (
+            "Вы согласны получать регулярные звонки от IMVERA? "
+            "Это важно — звонки только с вашего согласия."
+        )
+    if state.fsm_state == FsmState.CHECK_CAN_TALK:
+        return "Вам сейчас удобно немного поговорить?"
+    if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
+        return state.risk_source_quote
+    if state.pending_slot:
+        from packages.dialogue.planner import _SLOT_QUESTIONS
+
+        return _SLOT_QUESTIONS.get(state.pending_slot)
+    return None
+
+
 def build_turn_context(
     state: DialogueState,
     *,
@@ -23,6 +66,7 @@ def build_turn_context(
     raw_text: str,
     asr_quality: AsrQuality = AsrQuality.GOOD,
     delivered_phrases: tuple[str, ...] = (),
+    question_delivery: str = "complete",
 ) -> TurnContext:
     confirmed: list[ConfirmedFact] = []
     for field, fact in state.facts.items():
@@ -50,12 +94,13 @@ def build_turn_context(
             )
         )
 
-    pending_q = None
-    pending_id = state.pending_slot
-    if pending_id:
-        from packages.dialogue.planner import _SLOT_QUESTIONS
-
-        pending_q = _SLOT_QUESTIONS.get(pending_id)
+    pending_id = state.pending_slot or (
+        state.fsm_state.value if state.fsm_state != FsmState.CALL_START else None
+    )
+    qkind = active_question_kind(state)
+    delivery: str = question_delivery
+    if delivery == "complete" and qkind == "none":
+        delivery = "unknown"
 
     return TurnContext(
         call_id=state.call_id,
@@ -65,8 +110,9 @@ def build_turn_context(
         raw_text=raw_text,
         asr_quality=_asr_label(asr_quality),
         pending_question_id=pending_id,
-        pending_question=pending_q,
-        pending_question_delivery="complete",
+        pending_question=_pending_question_text(state),
+        pending_question_delivery=delivery,
+        active_question_kind=qkind,
         confirmed_facts=tuple(confirmed),
         risk_episodes=(),
         delivered_assistant_phrases=delivered_phrases,

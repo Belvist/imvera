@@ -9,7 +9,12 @@ from collections.abc import AsyncIterator
 
 import httpx
 
-from packages.contracts.providers import AudioChunk, ProviderTimeout, ProviderUnavailable
+from packages.contracts.providers import (
+    AudioChunk,
+    ProviderCancelled,
+    ProviderTimeout,
+    ProviderUnavailable,
+)
 
 
 class HttpTTSProvider:
@@ -33,6 +38,7 @@ class HttpTTSProvider:
         self,
         text: str,
         *,
+        call_id: str,
         generation_id: str,
         phrase_id: str,
         deadline: float,
@@ -48,6 +54,7 @@ class HttpTTSProvider:
                     "POST",
                     f"{self._base_url}/v1/synthesize",
                     json={
+                        "call_id": call_id,
                         "text": text,
                         "generation_id": generation_id,
                         "phrase_id": phrase_id,
@@ -62,11 +69,21 @@ class HttpTTSProvider:
                     seq = 0
                     async for line in response.aiter_lines():
                         if generation_id in self._cancelled:
-                            break
+                            raise ProviderCancelled(generation_id)
                         if not line:
                             continue
                         data = json.loads(line)
+                        if data.get("done"):
+                            if data.get("cancelled"):
+                                raise ProviderCancelled(generation_id)
+                            if data.get("error"):
+                                raise ProviderUnavailable(str(data["error"]))
+                            return
+                        if "pcm_b64" not in data:
+                            continue
                         pcm = base64.b64decode(data["pcm_b64"])
+                        if not pcm and data.get("is_last"):
+                            return
                         yield AudioChunk(
                             pcm_s16le=pcm,
                             sample_rate=int(data.get("sample_rate", 16000)),

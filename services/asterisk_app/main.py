@@ -1,4 +1,4 @@
-"""Asterisk Stasis application — bridges SIP caller to voice gateway."""
+"""Asterisk Stasis application — snoop capture + inject ExternalMedia."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import uuid
+from dataclasses import dataclass, field
 
 import httpx
 import uvicorn
@@ -16,11 +17,23 @@ from packages.telephony.asterisk import AsteriskARI
 
 app = FastAPI(title="IMVERA Asterisk Stasis App")
 STASIS_APP = os.environ.get("IMVERA_STASIS_APP", "imvera")
-GATEWAY_WS = os.environ.get(
-    "IMVERA_VOICE_GATEWAY_WS",
-    "ws://host.docker.internal:9200/media",
-)
+GATEWAY_HTTP = os.environ.get("IMVERA_VOICE_GATEWAY_HTTP", "http://127.0.0.1:9200")
 _ari = AsteriskARI()
+
+
+@dataclass
+class ActiveCall:
+    call_id: str
+    sip_channel_id: str
+    bridge_id: str
+    snoop_id: str
+    capture_id: str
+    inject_id: str
+    capture_bridge_id: str
+    extra_ids: list[str] = field(default_factory=list)
+
+
+_active: dict[str, ActiveCall] = {}
 
 
 @app.get("/health/live")
@@ -28,34 +41,97 @@ def live() -> dict[str, str]:
     return {"status": "live"}
 
 
-async def _handle_stasis_start(channel: dict) -> None:
-    channel_id = channel["id"]
-    caller = channel.get("caller", {}).get("number", "unknown")
-    call_id = f"sip-{uuid.uuid4().hex[:10]}"
-    family_id = os.environ.get("IMVERA_DEV_FAMILY_ID", "fam-voice")
-    elder = os.environ.get("IMVERA_ELDER_DISPLAY_NAME", caller)
-    from urllib.parse import quote
+@app.post("/internal/calls/{call_id}/hangup")
+async def hangup_call(call_id: str) -> dict[str, str]:
+    ctx = _active.pop(call_id, None)
+    if not ctx:
+        return {"status": "gone"}
+    for ch in (
+        ctx.capture_id,
+        ctx.inject_id,
+        ctx.snoop_id,
+        ctx.sip_channel_id,
+        *ctx.extra_ids,
+    ):
+        await _ari.hangup(ch)
+    await _ari.destroy_bridge(ctx.capture_bridge_id)
+    await _ari.destroy_bridge(ctx.bridge_id)
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(f"{GATEWAY_HTTP}/internal/calls/{call_id}/close")
+    except httpx.HTTPError:
+        pass
+    return {"status": "hungup"}
 
-    ws_url = (
-        f"{GATEWAY_WS}/{call_id}"
-        f"?family_id={family_id}&elder_name={quote(elder)}"
-    )
+
+async def _register_gateway(call_id: str, sip_channel_id: str) -> None:
+    family_id = os.environ.get("IMVERA_DEV_FAMILY_ID", "fam-voice")
+    elder = os.environ.get("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.post(
+            f"{GATEWAY_HTTP}/internal/calls/{call_id}/open",
+            json={
+                "family_id": family_id,
+                "elder_name": elder,
+                "sip_channel_id": sip_channel_id,
+            },
+        )
+        r.raise_for_status()
+
+
+async def _handle_stasis_start(channel: dict) -> None:
+    name = channel.get("name", "")
+    if not name.startswith("PJSIP/"):
+        return
+    channel_id = channel["id"]
+    call_id = f"sip-{uuid.uuid4().hex[:10]}"
+    bridge_id = f"br-{call_id}"
+    capture_bridge_id = f"cap-{call_id}"
+
+    await _register_gateway(call_id, channel_id)
     await _ari.answer(channel_id)
-    ext = await _ari.create_external_media(STASIS_APP, ws_url.replace("ws://", ""))
-    async with httpx.AsyncClient(auth=_ari._auth, timeout=10.0) as client:
-        await client.post(
-            f"{_ari.base_url}/ari/bridges",
-            json={"type": "mixing", "bridgeId": f"br-{call_id}"},
-        )
-        await client.post(
-            f"{_ari.base_url}/ari/bridges/br-{call_id}/addChannel",
-            params={"channel": channel_id},
-        )
-        if ext.get("id"):
-            await client.post(
-                f"{_ari.base_url}/ari/bridges/br-{call_id}/addChannel",
-                params={"channel": ext["id"]},
-            )
+    await _ari.create_bridge(bridge_id)
+    await _ari.add_to_bridge(bridge_id, channel_id)
+
+    snoop = await _ari.snoop_channel(channel_id, STASIS_APP, spy="in", whisper="none")
+    snoop_id = snoop["id"]
+
+    capture = await _ari.create_external_media(
+        STASIS_APP, "imvera-capture", direction="send", format="slin16"
+    )
+    inject = await _ari.create_external_media(
+        STASIS_APP, "imvera-inject", direction="recv", format="slin16"
+    )
+    capture_id = capture["id"]
+    inject_id = inject["id"]
+
+    await _ari.create_bridge(capture_bridge_id)
+    await _ari.add_to_bridge(capture_bridge_id, snoop_id)
+    await _ari.add_to_bridge(capture_bridge_id, capture_id)
+    await _ari.add_to_bridge(bridge_id, inject_id)
+
+    _active[call_id] = ActiveCall(
+        call_id=call_id,
+        sip_channel_id=channel_id,
+        bridge_id=bridge_id,
+        snoop_id=snoop_id,
+        capture_id=capture_id,
+        inject_id=inject_id,
+        capture_bridge_id=capture_bridge_id,
+    )
+
+
+async def _handle_stasis_end(channel: dict) -> None:
+    channel_id = channel.get("id", "")
+    for call_id, ctx in list(_active.items()):
+        if channel_id in (
+            ctx.sip_channel_id,
+            ctx.snoop_id,
+            ctx.capture_id,
+            ctx.inject_id,
+        ):
+            await hangup_call(call_id)
+            break
 
 
 async def _ari_events_loop() -> None:
@@ -67,10 +143,12 @@ async def _ari_events_loop() -> None:
             async with websockets.connect(url) as ws:
                 async for raw in ws:
                     event = json.loads(raw)
-                    if event.get("type") == "StasisStart":
-                        ch = event.get("channel", {})
-                        if ch.get("name", "").startswith("PJSIP/"):
-                            asyncio.create_task(_handle_stasis_start(ch))
+                    etype = event.get("type")
+                    ch = event.get("channel", {})
+                    if etype == "StasisStart":
+                        asyncio.create_task(_handle_stasis_start(ch))
+                    elif etype == "StasisEnd":
+                        asyncio.create_task(_handle_stasis_end(ch))
         except Exception:
             await asyncio.sleep(2.0)
 

@@ -42,23 +42,16 @@ voice-up:
 	$(PYTHON) scripts/voice_up.py
 
 voice-doctor:
-	@curl -sf http://127.0.0.1:9101/health/ready && echo "STT ready" || echo "STT not ready"
-	@curl -sf http://127.0.0.1:9102/health/ready && echo "TTS ready" || echo "TTS not ready"
-	@curl -sf http://127.0.0.1:9103/health/ready && echo "LLM ready" || echo "LLM not ready"
-	@curl -sf http://127.0.0.1:9200/health/ready && echo "Gateway ready" || echo "Gateway not ready"
+	@$(PYTHON) scripts/voice_doctor.py
 
 voice-down:
-	@for f in stt tts llm voice_gateway; do \
-	  if [ -f .run/$$f.pid ]; then kill `cat .run/$$f.pid` 2>/dev/null || true; rm .run/$$f.pid; fi; \
-	done
-	$(VOICE_COMPOSE) down 2>/dev/null || true
+	$(PYTHON) scripts/voice_down.py
 
 zoiper-info:
 	$(PYTHON) scripts/zoiper_info.py
 
 voice-e2e:
-	@echo "Manual gate: Zoiper call to extension 7000 after make voice-up"
-	@exit 0
+	@$(PYTHON) scripts/voice_e2e.py
 
 up:
 	$(COMPOSE) up -d --build
@@ -92,7 +85,7 @@ test-voice:
 	@echo "Run make voice-up then Zoiper E2E (make voice-e2e)"
 
 test-sip:
-	@echo "Requires: docker compose -f docker/docker-compose.voice.yml up -d && make voice-up"
+	@$(PYTHON) scripts/test_sip.py
 
 test-pstn:
 	@echo "BLOCKED: PSTN trunk not in scope for Zoiper sprint"
