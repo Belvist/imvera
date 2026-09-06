@@ -23,20 +23,17 @@ class StatusEngine:
         consent = snapshot.consent_state
         active_risk = snapshot.safety.active_risk
 
-        # Consent decline (after contact or explicit decline flow)
         if consent == ConsentState.DECLINED:
             if active_risk == RiskLevel.RED or care == CareState.RED:
                 return PublicCallStatus.RED
             return PublicCallStatus.DECLINED
 
-        # Delivery / technical failures before meaningful contact
         if delivery in (DeliveryState.NOT_ATTEMPTED, DeliveryState.FAILED):
             return PublicCallStatus.TECHNICAL
 
         if delivery == DeliveryState.NOT_ANSWERED and technical == TechnicalState.OK:
             return PublicCallStatus.NO_CONTACT
 
-        # Active risk / care precedence over technical degradation
         if active_risk == RiskLevel.RED or care == CareState.RED:
             return PublicCallStatus.RED
 
@@ -44,18 +41,16 @@ class StatusEngine:
             return PublicCallStatus.YELLOW
 
         if technical in (TechnicalState.FAILED, TechnicalState.DEGRADED):
-            if delivery == DeliveryState.ANSWERED:
-                return PublicCallStatus.TECHNICAL
             return PublicCallStatus.TECHNICAL
-
-        if delivery == DeliveryState.ANSWERED and care == CareState.GREEN:
-            if StatusEngine._mandatory_complete(snapshot):
-                return PublicCallStatus.GREEN
-            if care == CareState.UNKNOWN:
-                return PublicCallStatus.YELLOW
 
         if delivery == DeliveryState.RINGING:
             return PublicCallStatus.TECHNICAL
+
+        if delivery == DeliveryState.ANSWERED and technical == TechnicalState.OK:
+            if care == CareState.GREEN and StatusEngine._mandatory_complete(snapshot):
+                return PublicCallStatus.GREEN
+            # Answered, no RED/YELLOW risk, but checks incomplete or care not GREEN
+            return PublicCallStatus.YELLOW
 
         return PublicCallStatus.TECHNICAL
 

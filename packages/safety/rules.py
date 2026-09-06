@@ -11,7 +11,7 @@ RED_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 ]
 
 YELLOW_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("dizziness", re.compile(r"\b(голова\s+круж|кружится\s+голова)\b", re.I)),
+    ("dizziness", re.compile(r"\b(голова\s+круж\w*|кружится\s+голова)\b", re.I)),
     ("feels_bad", re.compile(r"\b(мне\s+плохо|плохо\s+себя\s+чувств)\b", re.I)),
 ]
 

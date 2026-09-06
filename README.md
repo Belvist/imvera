@@ -13,11 +13,16 @@ Greenfield **voice + telephony** stack for [IMVERA](https://imvera.ru/).
 | 2 Domain core (FSM, Safety, Status) | ✅ |
 | 3 Speech lab (Silero STT/TTS) | next |
 
-## Launch (start here)
+## Quick start
 
 ```bash
-make install && make test
+make install && make test    # local dev + 14 tests
+make up                      # Docker: postgres, redis, minio, api
+make api-health              # http://127.0.0.1:8080/health
+make down                    # stop stack
 ```
+
+Copy `docker/.env.example` → `docker/.env` for custom secrets (never commit `.env`).
 
 Full guide: **[LAUNCH.md](./LAUNCH.md)**
 

@@ -35,7 +35,30 @@ signal_resolution:    UNRESOLVED | CONFIRMED | CONFIRMED_FALSE_ALARM
 | ANSWERED | FAILED | UNKNOWN | ACTIVE | TECHNICAL |
 | ANSWERED | FAILED | RED | ACTIVE | **RED** |
 | ANSWERED | OK | GREEN | ACTIVE | GREEN |
+| ANSWERED | OK | GREEN | ACTIVE | **YELLOW** (mandatory_checks incomplete) |
+| ANSWERED | OK | UNKNOWN | ACTIVE | **YELLOW** (contact made, classification incomplete) |
 | ANSWERED | * | * | DECLINED | DECLINED |
+
+### Mandatory-incomplete rule (answered, no technical failure)
+
+When:
+
+```text
+delivery_state  == ANSWERED
+technical_state == OK
+active_risk     not RED or YELLOW
+care_state      not RED or YELLOW
+mandatory_checks incomplete OR care_state != GREEN
+```
+
+→ public status is **YELLOW**, never TECHNICAL.
+
+`TECHNICAL` requires a real delivery/pipeline failure (`technical_state` FAILED/DEGRADED,
+`NOT_ATTEMPTED`, `FAILED`, or in-call media/STT total loss before classification).
+Incomplete dialogue alone is not a technical fault.
+
+After `CONFIRMED_FALSE_ALARM`, `active_risk` may clear but public status stays **YELLOW**
+until mandatory checks complete and `care_state == GREEN` (never auto-GREEN).
 
 Precedence when mapping to public:
 
@@ -82,4 +105,5 @@ Trunk down before dial → **TECHNICAL**, never NO_CONTACT.
 
 ## Verification status
 
-✅ Logic specified; implementation Phase 2.
+✅ Logic specified and implemented in `packages/status/engine.py`.  
+✅ Scenario tests S01–S12 in `tests/test_scenarios.py` assert mapping + dialogue gates.

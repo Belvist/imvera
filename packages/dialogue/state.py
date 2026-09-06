@@ -27,7 +27,8 @@ class DialogueState(BaseModel):
         }
     )
     greeted: bool = False
-    closing: bool = False
+    goodbye_count: int = 0
+    goodbye_confirmed: bool = False
 
     def mandatory_remaining(self) -> list[str]:
         return [k for k, v in self.mandatory_checks.items() if not v]
