@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 from packages.dialogue.session import CallSession
@@ -10,7 +11,7 @@ from packages.dialogue.session import CallSession
 
 def main() -> int:
     call_id = sys.argv[1] if len(sys.argv) > 1 else "text-demo"
-    session = CallSession(call_id=call_id)
+    session = CallSession(call_id=call_id, family_id=os.environ.get("IMVERA_FAMILY_ID", "fam-demo"))
     opening = session.start()
     print(f"Vera: {opening.validated.speech}\n")
 

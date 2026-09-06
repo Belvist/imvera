@@ -60,7 +60,11 @@ class SafetyEngine:
         safety: SafetySnapshot,
         text: str,
         semantic_signals: list[str] | None = None,
+        *,
+        allow_new_episodes: bool = True,
     ) -> SafetySnapshot:
+        if not allow_new_episodes:
+            return safety
         signals = match_deterministic_signals(text)
         level = _level_from_deterministic(signals)
 

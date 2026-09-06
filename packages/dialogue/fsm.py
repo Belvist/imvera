@@ -55,9 +55,15 @@ class CallFsm:
         return state
 
     @staticmethod
-    def interrupt_red(state: DialogueState, source_quote: str | None = None) -> DialogueState:
+    def interrupt_red(
+        state: DialogueState,
+        source_quote: str | None = None,
+        episode_id: str | None = None,
+    ) -> DialogueState:
         state.fsm_state = FsmState.RED_SIGNAL
         state.risk_handling = True
         if source_quote:
             state.risk_source_quote = source_quote
+        if episode_id:
+            state.risk_episode_id = episode_id
         return state

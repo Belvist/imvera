@@ -40,6 +40,10 @@ _REVOKE = re.compile(
     r"(не\s+звоните|не\s+звонить|хватит\s+звон|больше\s+не\s+звон)",
     re.I,
 )
+_RISK_FALSE_ALARM = re.compile(
+    r"(сосед\w*|не\s+я\s+упал|другая\s+упала|про\s+друг|ошибк|не\s+со\s+мной)",
+    re.I,
+)
 _WRONG_PERSON = re.compile(
     r"(ошибл\w*\s+номер|не\s+туда\s+попали|не\s+тот\s+номер|ошиблись)",
     re.I,
@@ -88,6 +92,7 @@ class UserInterpretation(BaseModel):
     wrong_person: bool = False
     defers_call: bool = False
     asks_who_are_you: bool = False
+    risk_false_alarm: bool = False
 
 
 def _strip_punct(text: str) -> str:
@@ -224,6 +229,44 @@ def interpret_user_turn(state: DialogueState, user_text: str) -> UserInterpretat
             wrong_person=True,
         )
 
+    if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
+        if _RISK_FALSE_ALARM.search(normalized):
+            return UserInterpretation(
+                judgement=AnswerJudgement.VALID,
+                dialogue_act=DialogueAct.CORRECTION,
+                risk_false_alarm=True,
+            )
+        if _REVOKE.search(normalized):
+            return UserInterpretation(
+                judgement=AnswerJudgement.DECLINE,
+                dialogue_act=DialogueAct.REVOKE_CONSENT,
+                declines=True,
+                revoke_consent=True,
+                sets_consent=ConsentState.DECLINED,
+            )
+        if _contains_goodbye(text):
+            return UserInterpretation(
+                judgement=AnswerJudgement.SIDE_TOPIC,
+                dialogue_act=DialogueAct.STOP_CALL,
+                requests_goodbye=True,
+            )
+        if _is_affirmation(text) and not _DENY.search(normalized):
+            return UserInterpretation(
+                judgement=AnswerJudgement.VALID,
+                dialogue_act=DialogueAct.ANSWER,
+                affirms=True,
+            )
+        if _DENY.search(normalized):
+            return UserInterpretation(
+                judgement=AnswerJudgement.DECLINE,
+                dialogue_act=DialogueAct.CORRECTION,
+                declines=True,
+            )
+        return UserInterpretation(
+            judgement=AnswerJudgement.UNCLEAR,
+            dialogue_act=DialogueAct.UNCLEAR,
+        )
+
     if state.awaiting_goodbye_confirm:
         if _is_affirmation(text) and not _DENY.search(normalized):
             return UserInterpretation(
@@ -328,24 +371,6 @@ def interpret_user_turn(state: DialogueState, user_text: str) -> UserInterpretat
         return UserInterpretation(
             judgement=AnswerJudgement.BACKCHANNEL,
             dialogue_act=DialogueAct.BACKCHANNEL,
-        )
-
-    if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
-        if _is_affirmation(text) and not _DENY.search(normalized):
-            return UserInterpretation(
-                judgement=AnswerJudgement.VALID,
-                dialogue_act=DialogueAct.ANSWER,
-                affirms=True,
-            )
-        if _DENY.search(normalized):
-            return UserInterpretation(
-                judgement=AnswerJudgement.DECLINE,
-                dialogue_act=DialogueAct.CORRECTION,
-                declines=True,
-            )
-        return UserInterpretation(
-            judgement=AnswerJudgement.UNCLEAR,
-            dialogue_act=DialogueAct.UNCLEAR,
         )
 
     candidates = extract_fact_candidates(text, state.pending_slot)

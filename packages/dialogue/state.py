@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, Field
 
+from packages.contracts.core import TerminationReason
 from packages.contracts.enums import FsmState, SlotStatus
 from packages.contracts.mandatory import PILOT_MANDATORY_CHECKS, pilot_mandatory_defaults
 from packages.dialogue.facts import FactRecord
@@ -36,8 +37,11 @@ class DialogueState(BaseModel):
     state_version: int = 0
     risk_handling: bool = False
     risk_source_quote: str | None = None
+    risk_episode_id: str | None = None
     summary_spoken: bool = False
     final_action_done: bool = False
+    call_finalized: bool = False
+    termination_reason: TerminationReason | None = None
     family_id: str = ""
     slot_unclear_counts: dict[str, int] = Field(default_factory=dict)
 
