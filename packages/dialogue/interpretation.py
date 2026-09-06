@@ -4,8 +4,15 @@ import re
 
 from pydantic import BaseModel, Field
 
-from packages.contracts.enums import AnswerJudgement, ConsentState, DialogueAct, FsmState
+from packages.contracts.enums import (
+    AnswerJudgement,
+    AsrQuality,
+    ConsentState,
+    DialogueAct,
+    FsmState,
+)
 from packages.contracts.interpretation import FactCandidate, TurnInterpretation
+from packages.dialogue.fact_extraction import extract_fact_candidates
 from packages.dialogue.state import DialogueState
 
 _BACKCHANNEL_EXACT = frozenset({"ага", "угу", "алло", "да", "нет"})
@@ -323,6 +330,42 @@ def interpret_user_turn(state: DialogueState, user_text: str) -> UserInterpretat
             dialogue_act=DialogueAct.BACKCHANNEL,
         )
 
+    if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
+        if _is_affirmation(text) and not _DENY.search(normalized):
+            return UserInterpretation(
+                judgement=AnswerJudgement.VALID,
+                dialogue_act=DialogueAct.ANSWER,
+                affirms=True,
+            )
+        if _DENY.search(normalized):
+            return UserInterpretation(
+                judgement=AnswerJudgement.DECLINE,
+                dialogue_act=DialogueAct.CORRECTION,
+                declines=True,
+            )
+        return UserInterpretation(
+            judgement=AnswerJudgement.UNCLEAR,
+            dialogue_act=DialogueAct.UNCLEAR,
+        )
+
+    candidates = extract_fact_candidates(text, state.pending_slot)
+    if candidates:
+        pending = state.pending_slot
+        answered_pending = pending is not None and any(c.field == pending for c in candidates)
+        is_correction = pending is not None and any(
+            c.field != pending for c in candidates
+        ) and bool(state.facts)
+        act = DialogueAct.CORRECTION if is_correction else DialogueAct.ANSWER
+        primary = next((c for c in candidates if c.field == pending), candidates[0])
+        return UserInterpretation(
+            judgement=AnswerJudgement.VALID,
+            dialogue_act=act,
+            affirms=True,
+            fills_pending_slot=answered_pending,
+            slot_value=primary.value,
+            fact_candidates=candidates,
+        )
+
     fact = _build_slot_fact(state, text)
     if fact:
         return UserInterpretation(
@@ -361,15 +404,24 @@ def to_turn_interpretation(
     turn_id: int,
     user_text: str,
     interp: UserInterpretation,
+    *,
+    state_version: int,
+    asr_quality: AsrQuality | None = None,
 ) -> TurnInterpretation:
+    from packages.contracts.enums import AsrQuality as AsrQ
+
     return TurnInterpretation(
         call_id=state.call_id,
         turn_id=turn_id,
         raw_text=user_text,
-        state_version=state.state_version,
+        state_version=state_version,
+        asr_quality=asr_quality or AsrQ.GOOD,
         dialogue_act=interp.dialogue_act,
         judgement=interp.judgement,
-        fact_candidates=interp.fact_candidates,
-        answers_pending_question=interp.fills_pending_slot,
+        fact_candidates=list(interp.fact_candidates),
+        answers_pending_question=any(
+            c.answers_pending for c in interp.fact_candidates
+        )
+        or interp.fills_pending_slot,
         ambiguous=interp.judgement == AnswerJudgement.UNCLEAR,
     )

@@ -127,17 +127,18 @@ def test_terminal_allo_no_repeat_goodbye() -> None:
     assert result.validated.speech == ""
 
 
-def test_red_interrupt_gets_safety_prompt() -> None:
+def test_red_interrupt_gets_product_compliant_prompt() -> None:
     state = DialogueState(call_id="red")
     state.fsm_state = FsmState.DAILY_CHECK
-    CallFsm.interrupt_red(state)
+    CallFsm.interrupt_red(state, source_quote="я упала")
     proposal = Planner.plan_vera_turn(state, 1, "g1")
     assert proposal.intent == "red_confirm_safety"
-    assert "безопасности" in proposal.speech.lower()
+    assert "передам" in proposal.speech.lower()
+    assert "помощ" not in proposal.speech.lower()
 
 
 def test_multi_fact_phrase_stores_wellness() -> None:
     session = _session_through_wellness()
     session.handle_user_text("Чувствую себя хорошо, только плохо спала, весь день буду дома")
     assert session.state.slots["wellness"] == SlotStatus.FILLED
-    assert "wellness" in session.state.facts
+    assert session.state.slots["sleep"] == SlotStatus.FILLED

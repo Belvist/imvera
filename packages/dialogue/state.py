@@ -34,6 +34,11 @@ class DialogueState(BaseModel):
     call_deferred: bool = False
     elder_display_name: str = "Анной Петровной"
     state_version: int = 0
+    risk_handling: bool = False
+    risk_source_quote: str | None = None
+    summary_spoken: bool = False
+    final_action_done: bool = False
+    family_id: str = ""
     slot_unclear_counts: dict[str, int] = Field(default_factory=dict)
 
     def bump_version(self) -> None:

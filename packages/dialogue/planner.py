@@ -18,8 +18,10 @@ _DEFER_ACK = "Поняла. Поговорим в другой раз. До св
 _WRONG_PERSON_FINAL = "Извините, видимо, ошиблись номером. До свидания."
 _REVOKE_FINAL = "Поняла. Без вашего согласия больше не буду звонить. До свидания."
 _RED_SAFETY_PROMPT = (
-    "Мне важно убедиться: вы сейчас в безопасности? Нужна ли вам помощь?"
+    "Я записала ваше сообщение и передам его близким. "
+    "Правильно я поняла смысл?"
 )
+_RED_CLARIFY = "Спасибо, я уточнила. Информация будет передана близким."
 _SLOT_ALT_CLOSE = (
     "Кажется, сейчас не очень удобно. Можем закончить — "
     "или скажите коротко, как вы себя чувствуете?"
@@ -59,6 +61,9 @@ class Planner:
         if interp is None:
             interp = interpret_user_turn(state, user_text)
 
+        if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
+            return Planner._handle_risk_turn(state, interp, turn_id, generation_id)
+
         if interp.revoke_consent:
             return Planner._handle_revoke_consent(state, turn_id, generation_id)
 
@@ -77,7 +82,11 @@ class Planner:
         if interp.requests_repeat:
             return Planner._prompt_repeat(state, turn_id, generation_id)
 
-        if interp.judgement.name == "UNCLEAR" and state.pending_slot:
+        if (
+            interp.judgement.name == "UNCLEAR"
+            and state.pending_slot
+            and not state.risk_handling
+        ):
             slot = state.pending_slot
             count = state.slot_unclear_counts.get(slot, 0) + 1
             state.slot_unclear_counts[slot] = count
@@ -118,6 +127,7 @@ class Planner:
         state.call_ended_early = True
         state.fsm_state = FsmState.FINAL_CLASSIFICATION
         state.goodbye_confirmed = True
+        state.final_action_done = True
         state.bump_version()
         return TurnProposal(
             turn_id=turn_id,
@@ -138,6 +148,7 @@ class Planner:
         state.call_ended_early = True
         state.fsm_state = FsmState.FINAL_CLASSIFICATION
         state.goodbye_confirmed = True
+        state.final_action_done = True
         state.bump_version()
         return TurnProposal(
             turn_id=turn_id,
@@ -147,6 +158,71 @@ class Planner:
             fsm_state=state.fsm_state,
             mandatory_remaining=state.mandatory_remaining(),
         )
+
+    @staticmethod
+    def _handle_risk_turn(
+        state: DialogueState,
+        interp: UserInterpretation,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        if state.fsm_state == FsmState.RED_SIGNAL and interp.affirms:
+            state.fsm_state = FsmState.CONFIRM_SITUATION
+            state.bump_version()
+            quote = state.risk_source_quote or "ваше сообщение"
+            return TurnProposal(
+                turn_id=turn_id,
+                generation_id=generation_id,
+                fsm_state=state.fsm_state,
+                mandatory_remaining=state.mandatory_remaining(),
+                speech=f"Правильно я поняла: {quote}?",
+                intent="red_clarify_confirm",
+            )
+        if state.fsm_state == FsmState.CONFIRM_SITUATION and interp.affirms:
+            state.fsm_state = FsmState.DAILY_CHECK
+            state.risk_handling = False
+            state.bump_version()
+            return Planner._prompt_for_state(state, turn_id, generation_id)
+        if state.fsm_state == FsmState.CONFIRM_SITUATION:
+            return TurnProposal(
+                turn_id=turn_id,
+                generation_id=generation_id,
+                fsm_state=state.fsm_state,
+                mandatory_remaining=state.mandatory_remaining(),
+                speech=_RED_CLARIFY,
+                intent="red_clarified",
+            )
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+            speech=_RED_SAFETY_PROMPT,
+            intent="red_confirm_safety",
+        )
+
+    @staticmethod
+    def _commit_fact(
+        state: DialogueState,
+        field: str,
+        value: str,
+        source_quote: str,
+        turn_id: int,
+        negated: bool = False,
+    ) -> None:
+        prev = state.facts.get(field)
+        revision = (prev.revision + 1) if prev else 1
+        state.facts[field] = FactRecord(
+            field=field,
+            value=value,
+            source_quote=source_quote,
+            turn_id=turn_id,
+            revision=revision,
+            negated=negated,
+        )
+        state.slots[field] = SlotStatus.FILLED
+        state.mandatory_checks[field] = True
+        state.slot_unclear_counts.pop(field, None)
 
     @staticmethod
     def _handle_defer(
@@ -286,10 +362,26 @@ class Planner:
                 )
 
         if state.fsm_state == FsmState.SUMMARY:
+            if state.summary_spoken:
+                state.fsm_state = FsmState.GOODBYE
+                return Planner._prompt_for_state(state, turn_id, generation_id)
+            state.summary_spoken = True
             return TurnProposal(
                 **base,
                 speech="Спасибо за разговор.",
                 intent="summary",
+            )
+
+        if state.fsm_state == FsmState.GOODBYE:
+            if not state.goodbye_confirmed:
+                state.fsm_state = FsmState.FINAL_CLASSIFICATION
+                state.goodbye_confirmed = True
+                state.final_action_done = True
+                state.bump_version()
+            return TurnProposal(
+                **base,
+                speech=_GOODBYE_FINAL,
+                intent="goodbye_final",
             )
 
         if state.fsm_state == FsmState.RED_SIGNAL:
@@ -299,7 +391,16 @@ class Planner:
                 intent="red_confirm_safety",
             )
 
+        if state.fsm_state == FsmState.CONFIRM_SITUATION:
+            return TurnProposal(
+                **base,
+                speech=_RED_CLARIFY,
+                intent="red_clarified",
+            )
+
         if state.fsm_state == FsmState.FINAL_CLASSIFICATION:
+            if state.final_action_done:
+                return Planner._terminal_noop(state, turn_id, generation_id)
             if state.consent_declined or state.call_revoked:
                 return TurnProposal(
                     **base,
@@ -368,7 +469,21 @@ class Planner:
         if interp.confirms_can_talk:
             state.mandatory_checks["can_talk"] = True
 
-        if (
+        if interp.fact_candidates and interp.judgement == AnswerJudgement.VALID:
+            for cand in interp.fact_candidates:
+                Planner._commit_fact(
+                    state,
+                    cand.field,
+                    cand.value,
+                    cand.source_quote,
+                    turn_id,
+                    cand.negated,
+                )
+            if state.pending_slot and state.pending_slot in state.facts:
+                state.pending_slot = None
+                state.pending_question = None
+            state.bump_version()
+        elif (
             interp.fills_pending_slot
             and state.pending_slot
             and state.pending_slot in state.slots
@@ -376,20 +491,9 @@ class Planner:
         ):
             slot = state.pending_slot
             value = interp.slot_value or ""
-            prev = state.facts.get(slot)
-            revision = (prev.revision + 1) if prev else 1
-            state.facts[slot] = FactRecord(
-                field=slot,
-                value=value,
-                source_quote=value,
-                turn_id=turn_id,
-                revision=revision,
-            )
-            state.slots[slot] = SlotStatus.FILLED
-            state.mandatory_checks[slot] = True
+            Planner._commit_fact(state, slot, value, value, turn_id)
             state.pending_slot = None
             state.pending_question = None
-            state.slot_unclear_counts.pop(slot, None)
             state.bump_version()
 
         return state
@@ -461,6 +565,7 @@ class Planner:
             state.call_ended_early = bool(state.mandatory_remaining())
             state.awaiting_goodbye_confirm = False
             state.fsm_state = FsmState.FINAL_CLASSIFICATION
+            state.final_action_done = True
             state.bump_version()
             return TurnProposal(
                 turn_id=turn_id,

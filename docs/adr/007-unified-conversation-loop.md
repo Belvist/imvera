@@ -1,35 +1,75 @@
-# ADR-007: Unified Conversation Loop
+# ADR-007: Unified Conversation Loop (Product Edition)
 
-**Status:** Accepted  
+**Status:** Accepted (amended 2026-09-06)  
 **Date:** 2026-09-06  
-**Context:** Investor Voice Demo v1 requires one skвозной path from user text/audio to Vera speech, with typed interpretation, policy-owned state changes, and no duplicate dialogue brains.
+**Owner:** Daniil  
+
+## Context
+
+IMVERA is a **working product**, not a demo shell. Vera conducts natural dialogue, records what the person said with provenance, and delivers structured observations to IMVERA Core/backend so authorized family members see results in the app.
+
+Vera **does not promise** help, emergency response, safety guarantees, or family reaction. Message delivery ≠ help rendered.
+
+This ADR amends the earlier “Investor Voice Demo” framing: the same technical boundaries remain, but acceptance is product-level (dialogue + voice + data + operations).
 
 ## Decision
 
-1. **CallSession** (`packages/dialogue/session.py`) is the single orchestrator per active call. It sequences: interpret → safety ingest → RED interrupt policy → planner → validator.
+### 1. Single conversation owner
 
-2. **TurnInterpretation** (`packages/contracts/interpretation.py`) is the typed hypothesis contract. Interpreter proposes `dialogue_act`, `fact_candidates`, and ambiguity; only planner/policy commits facts into `DialogueState.facts`.
+**CallSession** (`packages/dialogue/session.py`) orchestrates each call:
 
-3. **FactRecord** (`packages/dialogue/facts.py`) stores committed slot values with `source_quote`, `turn_id`, and `revision` — not only `SlotStatus.FILLED`.
+```text
+Interpreter (hypothesis) → Safety ingest → RED policy → Planner (commit) → Validator → persistence outbox
+```
 
-4. **Global control events** are first-class dialogue acts:
-   - `REVOKE_CONSENT` — from any non-terminal state; distinct from `STOP_CALL` (goodbye).
-   - `WRONG_PERSON` — ends identification without further polling.
-   - `DEFER` at `CHECK_CAN_TALK` — ends call without consent revoke.
+One state owner. Transport never authors Vera speech. LLM/semantic providers propose; code commits facts, consent, and external actions.
 
-5. **Planner** owns action selection including `explain_vera_resume`, `red_confirm_safety`, `terminal_noop`, and repeat limits (`slot_unclear_counts`).
+### 2. Typed interpretation before mutation
 
-6. **Renderer/Validator** remain downstream of `TurnProposal`; Validator allows empty speech only for `terminal_noop`.
+**TurnInterpretation** is built with `state_version` **before** planner mutates `DialogueState`. Stale or cancelled generations must not apply.
 
-7. **Core boundary:** `StatusEngine` and `SafetyEngine` are libraries invoked by CallSession. Voiseup emits observations; product verdicts await Core ack (unchanged from Architecture Freeze).
+**RuleBasedInterpretationProvider** is the current production-path baseline (`rule_baseline_v1`). **InterpretationProvider** is the plug-in contract for benchmarked LLM interpreters.
+
+### 3. Facts and observations
+
+- **FactRecord** in dialogue state (field, value, quote, turn_id, revision).
+- **Multi-fact** utterances extracted clause-wise (`fact_extraction.py`); sleep clauses do not fill mood.
+- **CallObservation** + **CallRecordStore** persist observations with idempotency keys before claiming “recorded” or “passed to family” in speech.
+
+### 4. Delivery stages (product)
+
+```text
+OBSERVATION_RECEIVED → PERSISTED → CORE_ACCEPTED → APP_AVAILABLE → NOTIFICATION_DELIVERED → VIEWED
+```
+
+Speech may only claim stages with evidence (`DeliveryStage` in `packages/contracts/core.py`). Validator blocks help promises and unconfirmed delivery claims.
+
+### 5. Risk handling
+
+On deterministic RED: interrupt survey, persist observation immediately, one clarify question without delaying transfer. `slot_unclear_counts` does not run during `risk_handling`.
+
+### 6. Global controls
+
+`REVOKE_CONSENT`, `STOP_CALL`, `DEFER`, `WRONG_PERSON`, `REPEAT`, `CORRECTION` — unchanged semantics; revoke must eventually update Core consent (integration gate).
+
+### 7. Core boundary
+
+Voiseup emits events and observations. **StatusEngine** / **SafetyEngine** remain domain libraries. Public GREEN/YELLOW/RED in the app requires Core ack — local results are candidates.
 
 ## Consequences
 
-- Text runner (`scripts/text_dialogue.py`) and future mic/WebSocket transport share `CallSession.handle_user_text`.
-- Semantic LLM provider plugs into interpretation layer behind an interface; rule baseline remains for deterministic gates.
-- Tests must use public session API, not manual state mutation after each turn (setup helpers excepted).
+- Text and future mic/SIP transports share `CallSession`.
+- Backend/app integration uses `CallRecordStore` contract first; replace with Core HTTP/DB without changing dialogue code.
+- Tests use public session API; green pytest ≠ voice/backend/load proof.
 
-## Supersedes / extends
+## Not in scope of this ADR
 
-- Extends ADR-004 (FSM) with in-check-in planner flexibility and RED_SIGNAL prompts.
-- Does not choose STT/TTS/LLM production winners (see ADR-003, ADR-006).
+- STT/TTS production winner (ADR-003, ADR-006)
+- PSTN transport (ADR-001)
+- Family mobile UI implementation
+
+## Verification status
+
+- Dialogue loop + persistence contract: unit-tested
+- Real STT/TTS/audio: **not verified**
+- Core HTTP + app visibility: **not verified** — no external IMVERA backend connected in this repo
