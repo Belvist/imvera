@@ -1,7 +1,6 @@
 """Phase 2.1 regression tests — safety, FSM gates, mandatory pilot scope."""
 
 from packages.contracts.enums import (
-    AnswerJudgement,
     CareState,
     ConsentState,
     DeliveryState,
@@ -157,10 +156,9 @@ def test_planner_identity_question_before_answer() -> None:
 
     after = Planner.plan_after_user(
         state,
-        user_text="да, это я",
-        judgement=AnswerJudgement.VALID,
-        generation_id="g1",
-        turn_id=2,
+        "да, это я",
+        "g1",
+        2,
     )
     assert state.mandatory_checks["identity"] is True
     assert after.intent == "confirm_consent"
@@ -170,13 +168,7 @@ def test_planner_identity_question_before_answer() -> None:
 def test_slot_fill_sets_mandatory_for_mood() -> None:
     state = DialogueState(call_id="slot", fsm_state=FsmState.DAILY_CHECK)
     state.pending_slot = "mood"
-    Planner.plan_after_user(
-        state,
-        user_text="хорошее",
-        judgement=AnswerJudgement.VALID,
-        generation_id="g1",
-        turn_id=1,
-    )
+    Planner.plan_after_user(state, "хорошее", "g1", 1)
     assert state.slots["mood"] == SlotStatus.FILLED
     assert state.mandatory_checks["mood"] is True
 
@@ -206,14 +198,12 @@ def test_sequential_slot_questions_fill_all_four_slots() -> None:
         if slot == "wellness":
             question = Planner.plan_vera_turn(state, turn, gid)
         else:
-            question = Planner.plan_after_user(
-                state, "", AnswerJudgement.NO_ANSWER, gid, turn
-            )
+            question = Planner.plan_after_user(state, "", gid, turn)
         assert state.pending_slot == slot
         assert slot in question.intent
 
         turn += 1
-        Planner.plan_after_user(state, answer, AnswerJudgement.VALID, gid, turn)
+        Planner.plan_after_user(state, answer, gid, turn)
         assert state.slots[slot] == SlotStatus.FILLED
         assert state.mandatory_checks[slot] is True
 
@@ -242,9 +232,7 @@ def test_sequential_happy_path_call_to_green() -> None:
         if turn == 1:
             proposal = Planner.plan_vera_turn(state, turn, gid)
         else:
-            proposal = Planner.plan_after_user(
-                state, "", AnswerJudgement.NO_ANSWER, gid, turn
-            )
+            proposal = Planner.plan_after_user(state, "", gid, turn)
         assert proposal.intent == intent
         if substring:
             assert substring in proposal.speech.lower()
@@ -252,9 +240,7 @@ def test_sequential_happy_path_call_to_green() -> None:
     def user_after_vera(text: str, *, expected_next_intent: str) -> None:
         nonlocal turn
         turn += 1
-        proposal = Planner.plan_after_user(
-            state, text, AnswerJudgement.VALID, gid, turn
-        )
+        proposal = Planner.plan_after_user(state, text, gid, turn)
         assert proposal.intent == expected_next_intent
 
     vera_must("confirm_identity", substring="разговариваю")

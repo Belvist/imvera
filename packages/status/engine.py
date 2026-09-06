@@ -36,6 +36,9 @@ class StatusEngine:
         if care == CareState.YELLOW or active_risk == RiskLevel.YELLOW:
             return PublicCallStatus.YELLOW
 
+        if active_risk == RiskLevel.POSSIBLE:
+            return PublicCallStatus.YELLOW
+
         if consent == ConsentState.DECLINED:
             return PublicCallStatus.DECLINED
 

@@ -19,6 +19,7 @@ class SafetySnapshot(BaseModel):
     signal_resolution: SignalResolution = SignalResolution.UNRESOLVED
     active_episode_id: str | None = None
     dismissed_episode_ids: list[str] = Field(default_factory=list)
+    episode_levels: dict[str, RiskLevel] = Field(default_factory=dict)
     episode_seq: int = 0
 
 

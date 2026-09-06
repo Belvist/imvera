@@ -1,7 +1,6 @@
 """Scenario tests S01–S12 — Phase 2 gate (public_status + dialogue invariants)."""
 
 from packages.contracts.enums import (
-    AnswerJudgement,
     CareState,
     ConsentState,
     DeliveryState,
@@ -164,13 +163,7 @@ def test_s10_false_alarm_public_status_yellow_not_green() -> None:
 
 def test_s11_backchannel_does_not_close_slot_or_green() -> None:
     state = DialogueState(call_id="s11", fsm_state=FsmState.DAILY_CHECK)
-    Planner.plan_after_user(
-        state,
-        user_text="ага",
-        judgement=AnswerJudgement.BACKCHANNEL,
-        generation_id="g1",
-        turn_id=1,
-    )
+    Planner.plan_after_user(state, "ага", "g1", 1)
     assert state.slots["wellness"] == SlotStatus.OPEN
     assert "wellness" in state.mandatory_remaining()
 
@@ -182,13 +175,7 @@ def test_s11_backchannel_does_not_close_slot_or_green() -> None:
 def test_s11_no_answer_does_not_close_slot() -> None:
     state = DialogueState(call_id="s11b", fsm_state=FsmState.DAILY_CHECK)
     state.pending_slot = "wellness"
-    Planner.plan_after_user(
-        state,
-        user_text="",
-        judgement=AnswerJudgement.NO_ANSWER,
-        generation_id="g1",
-        turn_id=1,
-    )
+    Planner.plan_after_user(state, "", "g1", 1)
     assert state.slots["wellness"] == SlotStatus.OPEN
 
 

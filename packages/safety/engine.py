@@ -29,10 +29,18 @@ def _level_from_deterministic(signals: list[str]) -> RiskLevel:
 
 
 def _level_from_semantic(semantic_signals: list[str]) -> RiskLevel:
-    """LLM may flag candidates only — no RED/YELLOW/GREEN authority."""
     if not semantic_signals:
         return RiskLevel.NONE
     return RiskLevel.POSSIBLE
+
+
+def _recompute_active_risk(safety: SafetySnapshot) -> RiskLevel:
+    level = RiskLevel.NONE
+    for episode_id, ep_level in safety.episode_levels.items():
+        if episode_id in safety.dismissed_episode_ids:
+            continue
+        level = _max_level(level, ep_level)
+    return level
 
 
 class SafetyEngine:
@@ -57,15 +65,11 @@ class SafetyEngine:
             safety.episode_seq += 1
             episode_id = f"ep-{safety.episode_seq}"
             safety.active_episode_id = episode_id
-            if episode_id not in safety.dismissed_episode_ids:
-                safety.active_risk = _max_level(safety.active_risk, level)
-                safety.signal_resolution = SignalResolution.UNRESOLVED
+            safety.episode_levels[episode_id] = level
+            safety.active_risk = _recompute_active_risk(safety)
+            safety.signal_resolution = SignalResolution.UNRESOLVED
         elif level > RiskLevel.NONE:
-            if (
-                safety.active_episode_id is None
-                or safety.active_episode_id not in safety.dismissed_episode_ids
-            ):
-                safety.active_risk = _max_level(safety.active_risk, level)
+            safety.active_risk = _max_level(safety.active_risk, level)
 
         return safety
 
@@ -74,6 +78,9 @@ class SafetyEngine:
         safety.signal_resolution = SignalResolution.CONFIRMED
         safety.active_risk = RiskLevel.RED
         safety.highest_signal_seen = RiskLevel.RED
+        if safety.active_episode_id:
+            safety.episode_levels[safety.active_episode_id] = RiskLevel.RED
+            safety.active_risk = _recompute_active_risk(safety)
         return safety
 
     @staticmethod
@@ -81,10 +88,13 @@ class SafetyEngine:
         safety: SafetySnapshot,
         episode_id: str | None = None,
     ) -> SafetySnapshot:
-        """Clear active_risk for one episode only; new episodes may re-raise RED."""
+        """Dismiss one episode only; newer non-dismissed episodes keep active_risk."""
         ep = episode_id or safety.active_episode_id
         if ep and ep not in safety.dismissed_episode_ids:
             safety.dismissed_episode_ids.append(ep)
-        safety.signal_resolution = SignalResolution.CONFIRMED_FALSE_ALARM
-        safety.active_risk = RiskLevel.NONE
+        safety.active_risk = _recompute_active_risk(safety)
+        if safety.active_risk == RiskLevel.NONE:
+            safety.signal_resolution = SignalResolution.CONFIRMED_FALSE_ALARM
+        else:
+            safety.signal_resolution = SignalResolution.UNRESOLVED
         return safety

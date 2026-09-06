@@ -1,14 +1,14 @@
 """Planner — decides what to do next (not how to say it)."""
 
-from packages.contracts.enums import AnswerJudgement, FsmState, SlotStatus
+from packages.contracts.enums import ConsentState, FsmState, SlotStatus
 from packages.contracts.mandatory import PILOT_SLOT_CHECKS
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.fsm import CallFsm
+from packages.dialogue.interpretation import UserInterpretation, interpret_user_turn
 from packages.dialogue.state import DialogueState
 
 _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
 _GOODBYE_FINAL = "До свидания. Хорошего дня."
-_GOODBYE_BLOCKED = "Давайте сначала закончим несколько вопросов, хорошо?"
 _GOODBYE_MARKERS = ("до свидания", "пока", "всего доброго")
 
 _SLOT_QUESTIONS: dict[str, str] = {
@@ -35,11 +35,11 @@ class Planner:
     def plan_after_user(
         state: DialogueState,
         user_text: str,
-        judgement: AnswerJudgement,
         generation_id: str,
         turn_id: int,
     ) -> TurnProposal:
-        state = Planner._apply_user(state, user_text, judgement)
+        interp = interpret_user_turn(state, user_text)
+        state = Planner._apply_interpretation(state, interp)
         Planner._advance_when_ready(state)
         return Planner._prompt_for_state(state, turn_id, generation_id)
 
@@ -151,21 +151,38 @@ class Planner:
         return None
 
     @staticmethod
-    def _apply_user(
-        state: DialogueState, user_text: str, judgement: AnswerJudgement
+    def _apply_interpretation(
+        state: DialogueState,
+        interp: UserInterpretation,
     ) -> DialogueState:
-        if judgement == AnswerJudgement.VALID and user_text.strip():
-            if state.fsm_state == FsmState.IDENTIFY_PERSON:
-                state.mandatory_checks["identity"] = True
-            elif state.fsm_state == FsmState.CHECK_CONSENT:
-                state.mandatory_checks["consent"] = True
-            elif state.fsm_state == FsmState.CHECK_CAN_TALK:
-                state.mandatory_checks["can_talk"] = True
-            elif state.pending_slot and state.pending_slot in state.slots:
-                state.slots[state.pending_slot] = SlotStatus.FILLED
-                state.mandatory_checks[state.pending_slot] = True
-                state.pending_slot = None
-                state.pending_question = None
+        from packages.contracts.enums import AnswerJudgement
+
+        if interp.sets_consent == ConsentState.DECLINED:
+            state.consent_declined = True
+            state.mandatory_checks["consent"] = False
+            return state
+
+        if interp.sets_consent == ConsentState.ACTIVE:
+            state.mandatory_checks["consent"] = True
+            state.consent_declined = False
+
+        if interp.confirms_identity:
+            state.mandatory_checks["identity"] = True
+
+        if interp.confirms_can_talk:
+            state.mandatory_checks["can_talk"] = True
+
+        if (
+            interp.fills_pending_slot
+            and state.pending_slot
+            and state.pending_slot in state.slots
+            and interp.judgement == AnswerJudgement.VALID
+        ):
+            state.slots[state.pending_slot] = SlotStatus.FILLED
+            state.mandatory_checks[state.pending_slot] = True
+            state.pending_slot = None
+            state.pending_question = None
+
         return state
 
     @staticmethod
@@ -190,23 +207,14 @@ class Planner:
         can_close = Planner._may_enter_closing_fsm(state)
 
         if state.goodbye_count >= 2:
-            if can_close:
-                state.goodbye_confirmed = True
-                state.fsm_state = FsmState.FINAL_CLASSIFICATION
-                return TurnProposal(
-                    turn_id=turn_id,
-                    generation_id=generation_id,
-                    speech=_GOODBYE_FINAL,
-                    intent="goodbye_final",
-                    fsm_state=state.fsm_state,
-                    mandatory_remaining=state.mandatory_remaining(),
-                )
-            state.fsm_state = saved_fsm
+            state.goodbye_confirmed = True
+            state.call_ended_early = bool(state.mandatory_remaining())
+            state.fsm_state = FsmState.FINAL_CLASSIFICATION
             return TurnProposal(
                 turn_id=turn_id,
                 generation_id=generation_id,
-                speech=_GOODBYE_BLOCKED,
-                intent="goodbye_blocked_incomplete",
+                speech=_GOODBYE_FINAL,
+                intent="goodbye_final",
                 fsm_state=state.fsm_state,
                 mandatory_remaining=state.mandatory_remaining(),
             )
