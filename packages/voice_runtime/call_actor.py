@@ -46,6 +46,7 @@ class MediaCallbacks:
     hangup: Callable[[], Awaitable[None]]
     emit: EmitFn
     prime_downlink: Callable[[], Awaitable[None]] | None = None
+    finish: Callable[[], Awaitable[None]] | None = None
 
 
 class ActorEventType(StrEnum):
@@ -128,10 +129,9 @@ class CallActor:
         *,
         input_sample_rate: int | None = None,
     ) -> None:
-        capture_rate = input_sample_rate or output_sample_rate
-        await self._ensure_audio_chain(capture_rate, output_sample_rate)
-        self._output_sample_rate = output_sample_rate
-        self._output_frame_bytes = output_frame_size
+        await self._ensure_output_chain(output_sample_rate, output_frame_size)
+        if input_sample_rate is not None:
+            await self._ensure_input_chain(input_sample_rate)
         self._media_ready = True
         if self._playback_task is None:
             self._playback_task = asyncio.create_task(self._playback_pump())
@@ -194,16 +194,13 @@ class CallActor:
             self.session.state.termination_reason = TerminationReason.DISCONNECTED
         await asyncio.to_thread(self.session.finalize_if_needed)
 
-    async def _ensure_audio_chain(
-        self, input_sample_rate: int, output_sample_rate: int
+    async def _ensure_output_chain(
+        self, output_sample_rate: int, output_frame_size: int
     ) -> None:
-        if self._input_resampler is not None:
+        if self._playback is not None:
             return
-        self._input_resampler = StatefulResampler(
-            input_sample_rate, self.config.target_sample_rate
-        )
-        self._vad = create_vad(self.config.target_sample_rate)
-        self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
+        self._output_sample_rate = output_sample_rate
+        self._output_frame_bytes = output_frame_size
         self._playback = PlaybackQueue(
             self.call_id,
             buffer_limit_ms=self.config.playback_buffer_ms,
@@ -216,10 +213,24 @@ class CallActor:
                 RuntimeEventType.MEDIA_READY,
                 {
                     "sample_rate": output_sample_rate,
-                    "capture_sample_rate": input_sample_rate,
+                    "capture_sample_rate": self._input_resampler.source_rate
+                    if self._input_resampler
+                    else None,
                 },
             )
         )
+
+    async def _ensure_input_chain(self, capture_sample_rate: int) -> None:
+        if (
+            self._input_resampler is not None
+            and self._input_resampler.source_rate == capture_sample_rate
+        ):
+            return
+        self._input_resampler = StatefulResampler(
+            capture_sample_rate, self.config.target_sample_rate
+        )
+        self._vad = create_vad(self.config.target_sample_rate)
+        self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
 
     def _tts_resampler(self, generation_id: str, source_rate: int) -> StatefulResampler:
         key = f"{generation_id}:{source_rate}"
@@ -235,8 +246,7 @@ class CallActor:
     async def _on_pcm(self, pcm_s16le: bytes, sample_rate: int) -> None:
         if self._stopped or not self._media_ready or self._transport_closed:
             return
-        if self._input_resampler is None:
-            await self._ensure_audio_chain(sample_rate, self._output_sample_rate or sample_rate)
+        await self._ensure_input_chain(sample_rate)
         assert self._input_resampler and self._vad and self._collector
         pcm = self._input_resampler.process(pcm_s16le)
         if not pcm:
@@ -579,7 +589,8 @@ class CallActor:
         spoken = ledger.canonical_text
         if spoken and (not self._delivered_phrases or self._delivered_phrases[-1] != spoken):
             self._delivered_phrases.append(spoken)
-        await self.media.flush()
+        finish = self.media.finish or self.media.flush
+        await finish()
         await self.media.emit(
             RuntimeEvent(
                 self.call_id,
