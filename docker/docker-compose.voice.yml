@@ -1,0 +1,16 @@
+# Voice lab overlay — Asterisk for Zoiper (ADR-008 scoped)
+name: imvera-voice
+
+services:
+  asterisk:
+    build:
+      context: ..
+      dockerfile: docker/asterisk/Dockerfile
+    container_name: imvera-asterisk
+    ports:
+      - "127.0.0.1:5060:5060/udp"
+      - "127.0.0.1:8088:8088"
+      - "127.0.0.1:10000-10100:10000-10100/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

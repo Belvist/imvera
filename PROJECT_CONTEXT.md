@@ -23,13 +23,20 @@ IMVERA — семейный сервис заботы о пожилых близ
 - Event emission to IMVERA Core (verdicts and incidents are **not** decided here)
 - Observability: latency traces, call recordings, dialogue logs
 
-**Out of scope (separate services / repos):**
+**Out of scope (until integrated):**
 
-- Family mobile app UI
-- Households, auth, billing
-- Postgres schema for product data (consume via Core API)
-- Notification delivery (TG/SMS/push) — Core + delivery layer
-- Safety verdict final authority — IMVERA Core `SafetyEngine`
+- External IMVERA Core deployment (use in-repo `services/core` per ADR-008 until verified API exists)
+- Family mobile app UI (use `apps/family-web` when no external client)
+
+**Previously out of scope — now in-repo per ADR-008:**
+
+- Minimal Core API (`services/core`): families, consent, scheduler, call results for app
+- Postgres `voice.*` and `core.*` schemas (see `migrations/`)
+
+**Still out of scope:**
+
+- Notification delivery implementation beyond one pilot channel (TG bot)
+- Safety verdict final authority — Core `SafetyEngine` projection
 
 ## Target Architecture (v0 — design intent)
 
@@ -55,7 +62,7 @@ VoiceRuntime (one process per node)
           Brain
             │
             ▼
-           LLM (renderer assist only — not the owner of state)
+           LLM (interpretation + renderer assist — NOT owner of state or verdicts)
         │
         └── async CallEvents ──► IMVERA Core API
 ```
@@ -111,41 +118,48 @@ StatusEngine maps axes → 6 public statuses. RED active risk wins over TECHNICA
 
 | Metric | P50 | P95 | Gate |
 |--------|-----|-----|------|
-| speech_end → stt_final | < 800 ms | — | measured |
-| stt_final → planner_done | < 500 ms | — | measured |
-| phrase_commit → tts_first_pcm | < 200 ms | — | Silero phrase-chunked |
-| End-to-end turn | **< 1 s** | **< 1.5–2 s** | live SIP |
-| Barge-in stop playback | < 150 ms | < 250 ms | live SIP |
+| End-to-end turn | **p50 < 1 s** | **p95 ≤ 2 s** | release profile (ADR-008 §15) |
+| Barge-in stop playback | p50 < 150 ms | p95 < 250 ms | live / mic |
 
-## Audio Contract (v1.1)
+> **Single SLO source:** release profile in ADR-008 / product spec §15. Older per-stage gates are diagnostic only.
 
-**Silero `v5_5_ru` supports 8000 / 24000 / 48000 Hz — not 16000.**  
-See [docs/AUDIO_CONTRACT.md](docs/AUDIO_CONTRACT.md) and [docs/PLAN.md](docs/PLAN.md) §3.
+## Audio Contract (v1.2 — ADR-008)
+
+Provider selection: **ADR-003 (STT), ADR-006 (TTS)** — not legacy Silero-only path.
 
 ```text
 PSTN 8kHz → Asterisk → transport → PCM S16LE
-  STT branch: resample → 16kHz → Whisper
-  TTS branch: Silero @ 8k or 24k → resample if needed → 8kHz → PSTN
+  STT branch: resample → 16kHz → ASR (Qwen3-ASR per ADR-003 benchmark)
+  TTS branch: CosyVoice3 / benchmark winner → resample → wire rate → PSTN
 ```
 
-TTS mode: **phrase-chunked** `apply_tts()` — not native token streaming.
+**20 ms frame sizes (PCM16):**
 
-## Deployment Phases
+```text
+16 kHz → 320 samples → 640 bytes
+ 8 kHz → 160 samples → 320 bytes
+```
 
-1. **Phase 0** — Agent system + architecture docs (this repo skeleton)
-2. **Phase 1** — Loopback voice pipeline (no PSTN): mic → STT → dialogue → TTS
-3. **Phase 2** — SIP lab (softphone / local FreeSWITCH)
-4. **Phase 3** — PSTN trunk (test numbers)
-5. **Phase 4** — Core integration (events, no local verdicts)
-6. **Phase 5** — Pilot readiness gate (20–50 families)
+TTS mode: streaming PCM chunks when adapter supports it; phrase-chunked acceptable with honest latency accounting.
+
+See [docs/AUDIO_CONTRACT.md](docs/AUDIO_CONTRACT.md) and [docs/adr/008-product-milestones-voice-core.md](docs/adr/008-product-milestones-voice-core.md).
+
+## Deployment Phases (ADR-008 milestones)
+
+1. **M0** — ADR-008, doctor, doc sync
+2. **M1** — Mic loopback: real STT + LLM interpretation + TTS + PostgreSQL
+3. **M2** — Dialogue/audio integrity (barge-in, ledger, single CALL_ENDED)
+4. **M3** — Core inbox, family app, scheduler, notification channel
+5. **M4** — Asterisk SIP lab → PSTN trunk
+6. **M5** — Pilot deploy, load, rollback evidence
 
 ## Technology Constraints (initial)
 
 - Language: **Python 3.12+** for runtime services (fast iteration, team familiarity)
-- Telephony: **Asterisk ≥22.6** + PJSIP + ARI + ExternalMedia (`chan_websocket`, fallback AudioSocket) — ADR-001
-- TTS: **Silero v5_5_ru** phrase-chunked (`apply_tts`) @ 8k or 24k — ADR-002
-- STT: faster-whisper large-v3-turbo + streaming wrapper — ADR-003, benchmark required
-- LLM: RendererProvider only (no verdict authority); local-first for dev
+- Telephony: **Asterisk ≥22.8** + PJSIP + ARI + chan_websocket — ADR-001 (no FreeSWITCH in production path)
+- STT: **Qwen3-ASR** primary candidate per ADR-003; benchmark before release
+- TTS: **CosyVoice3** primary candidate per ADR-006; benchmark before release
+- LLM: interpretation (SemanticPayload) + Renderer; local inference workers; no verdict authority
 - StatusEngine: pure domain logic in Phase 2 (not Phase 6)
 - Persistence: async only in voice hot path; durable spool for recordings
 

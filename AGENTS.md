@@ -133,7 +133,7 @@ Skip steps only with explicit user approval and documented reason.
 Record irreversible decisions here. Format: `ADR-NNN: title (date) — one line`.
 
 ```text
-(none yet — greenfield)
+ADR-008: Product milestones, Core in monorepo, semantic contract (2026-09-06)
 ```
 
 ## Commands (when implemented)

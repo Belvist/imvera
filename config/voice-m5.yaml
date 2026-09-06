@@ -1,0 +1,42 @@
+profile_id: m5-mlx
+description: Apple Silicon MLX local voice profile (engineering candidate)
+
+ports:
+  stt: 9101
+  tts: 9102
+  llm: 9103
+
+models:
+  asr:
+    id: mlx-community/Qwen3-ASR-0.6B-8bit
+    language: Russian
+  llm:
+    id: mlx-community/Qwen3-4B-4bit
+    max_tokens_interpret: 512
+    max_tokens_render: 120
+    enable_thinking: false
+  tts:
+    id: mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit
+    voice: serena
+    lang_code: Russian
+    streaming_interval: 0.32
+  vad:
+    onnx: silero_vad
+
+limits:
+  max_active_calls: 1
+  queue_depth: 4
+  stt_deadline_s: 12.0
+  llm_deadline_s: 15.0
+  tts_deadline_s: 20.0
+  playback_buffer_ms: 200
+
+audio:
+  internal_sample_rate: 16000
+  frame_ms: 20
+
+sip:
+  vera_extension: "7000"
+  dev_account: "1001"
+  context: imvera-local
+  stasis_app: imvera

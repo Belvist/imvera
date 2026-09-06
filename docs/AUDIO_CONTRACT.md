@@ -76,16 +76,14 @@ Engine: faster-whisper large-v3-turbo (hypothesis — ADR-003)
 
 Whisper family commonly uses 16 kHz internally; resampling is **our** responsibility.
 
-### TTS branch (Silero v5_5_ru)
+### TTS branch (ADR-006 — CosyVoice3 primary candidate)
 
-Official supported `sample_rate` values: **8000, 24000, 48000** — not 16000.
+Legacy Silero v5_5_ru (ADR-002) remains a benchmark baseline, not the active production default.
 
 ```text
-Option A: Silero apply_tts @ 8000 Hz → inject to PSTN path (no rate change)
-Option B: Silero apply_tts @ 24000 Hz → high-quality resample → 8000 Hz → PSTN
+Primary: CosyVoice3 / ADR-006 winner @ negotiated rate → resample if needed → wire
+Fallback selection: only via documented benchmark on target hardware
 ```
-
-Selection: **ADR-002a benchmark** on real PSTN calls (Phase 3).
 
 ### Resampling quality
 
@@ -110,9 +108,15 @@ Silero implementation may synthesize full phrase then slice PCM into chunks for 
 ## 4. Frame timing
 
 ```text
-PSTN frame:     20 ms @ 8 kHz = 160 samples = 320 bytes PCM16
-Runtime queue:  20 ms frames preferred for playback pacing
+PCM16 mono frame (20 ms):
+  @ 16 kHz (STT internal): 320 samples = 640 bytes
+  @  8 kHz (PSTN):         160 samples = 320 bytes
+
+pcm16_frame_bytes(16000) == 640
+pcm16_frame_bytes(8000)  == 320
 ```
+
+Runtime playback queue target: ~200 ms buffered audio (calibration parameter, ADR-008).
 
 Asterisk `chan_websocket`: respect `MEDIA_WEBSOCKET_OPTIMAL_FRAME_SIZE` and `MEDIA_XOFF`/`MEDIA_XON` flow control.
 
