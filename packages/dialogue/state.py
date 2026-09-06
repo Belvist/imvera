@@ -24,6 +24,7 @@ class DialogueState(BaseModel):
     goodbye_count: int = 0
     goodbye_confirmed: bool = False
     closing_requested: bool = False
+    awaiting_goodbye_confirm: bool = False
     call_ended_early: bool = False
     consent_declined: bool = False
     elder_display_name: str = "Анной Петровной"

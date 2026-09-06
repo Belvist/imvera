@@ -39,7 +39,17 @@ class Planner:
         turn_id: int,
     ) -> TurnProposal:
         interp = interpret_user_turn(state, user_text)
+
+        if interp.requests_goodbye or interp.confirms_goodbye or interp.declines_goodbye:
+            return Planner._handle_closing_turn(state, user_text, turn_id, generation_id, interp)
+
+        if interp.requests_repeat:
+            return Planner._prompt_repeat(state, turn_id, generation_id)
+
         state = Planner._apply_interpretation(state, interp)
+        if state.consent_declined and state.fsm_state == FsmState.FINAL_CLASSIFICATION:
+            return Planner._prompt_for_state(state, turn_id, generation_id)
+
         Planner._advance_when_ready(state)
         return Planner._prompt_for_state(state, turn_id, generation_id)
 
@@ -126,6 +136,12 @@ class Planner:
             )
 
         if state.fsm_state == FsmState.FINAL_CLASSIFICATION:
+            if state.consent_declined:
+                return TurnProposal(
+                    **base,
+                    speech="Поняла. Без вашего согласия больше не буду звонить. До свидания.",
+                    intent="consent_declined_final",
+                )
             return TurnProposal(
                 **base,
                 speech=_GOODBYE_FINAL,
@@ -160,6 +176,8 @@ class Planner:
         if interp.sets_consent == ConsentState.DECLINED:
             state.consent_declined = True
             state.mandatory_checks["consent"] = False
+            state.fsm_state = FsmState.FINAL_CLASSIFICATION
+            state.call_ended_early = True
             return state
 
         if interp.sets_consent == ConsentState.ACTIVE:
@@ -191,24 +209,60 @@ class Planner:
         return not state.mandatory_remaining() and state.fsm_state in closing_states
 
     @staticmethod
-    def plan_closing(
+    def _prompt_repeat(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        speech = state.pending_question or "Повторите, пожалуйста."
+        intent = "repeat_question"
+        if state.pending_slot:
+            intent = f"repeat_{state.pending_slot}"
+        elif state.fsm_state == FsmState.CHECK_CONSENT:
+            speech = (
+                "Вы согласны получать регулярные звонки от IMVERA? "
+                "Это важно — звонки только с вашего согласия."
+            )
+            intent = "repeat_consent"
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=speech,
+            intent=intent,
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+        )
+
+    @staticmethod
+    def _handle_closing_turn(
         state: DialogueState,
         user_text: str,
         turn_id: int,
         generation_id: str,
+        interp: UserInterpretation | None = None,
     ) -> TurnProposal:
-        """Goodbye sub-flow — does not corrupt main FSM when mandatory incomplete."""
         saved_fsm = state.fsm_state
         normalized = user_text.lower().strip()
-        if any(marker in normalized for marker in _GOODBYE_MARKERS):
+
+        if interp and interp.declines_goodbye:
+            state.awaiting_goodbye_confirm = False
+            state.closing_requested = False
+            state.goodbye_count = 0
+            state.fsm_state = saved_fsm
+            return Planner._prompt_for_state(state, turn_id, generation_id)
+
+        if interp and interp.confirms_goodbye:
+            state.goodbye_count = max(state.goodbye_count, 2)
+        elif any(marker in normalized for marker in _GOODBYE_MARKERS):
             state.goodbye_count += 1
             state.closing_requested = True
 
         can_close = Planner._may_enter_closing_fsm(state)
 
-        if state.goodbye_count >= 2:
+        if state.goodbye_count >= 2 or (interp and interp.confirms_goodbye):
             state.goodbye_confirmed = True
             state.call_ended_early = bool(state.mandatory_remaining())
+            state.awaiting_goodbye_confirm = False
             state.fsm_state = FsmState.FINAL_CLASSIFICATION
             return TurnProposal(
                 turn_id=turn_id,
@@ -219,10 +273,10 @@ class Planner:
                 mandatory_remaining=state.mandatory_remaining(),
             )
 
+        state.awaiting_goodbye_confirm = True
         if state.goodbye_count >= 1 and can_close and state.fsm_state == FsmState.SUMMARY:
             state.fsm_state = FsmState.GOODBYE
-
-        if not can_close:
+        elif not can_close:
             state.fsm_state = saved_fsm
 
         return TurnProposal(
@@ -233,3 +287,13 @@ class Planner:
             fsm_state=state.fsm_state,
             mandatory_remaining=state.mandatory_remaining(),
         )
+
+    @staticmethod
+    def plan_closing(
+        state: DialogueState,
+        user_text: str,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        """Goodbye sub-flow — prefer plan_after_user for unified routing."""
+        return Planner._handle_closing_turn(state, user_text, turn_id, generation_id)

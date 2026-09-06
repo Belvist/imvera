@@ -1,4 +1,4 @@
-"""Deterministic safety pattern matching (Russian) with context."""
+"""Deterministic safety pattern matching (Russian) with per-clause context."""
 
 import re
 
@@ -26,6 +26,12 @@ _THIRD_PARTY = re.compile(
 )
 _PAST_EVENT = re.compile(r"\b(вчера|позавчера|на\s+прошлой\s+неделе|раньше|давно)\b", re.I)
 _SELF = re.compile(r"\b(я|мне|меня)\b", re.I)
+_CLAUSE_SPLIT = re.compile(r"[,;]|\s+но\s+|\s+а\s+", re.I)
+
+
+def _split_clauses(text: str) -> list[str]:
+    parts = _CLAUSE_SPLIT.split(text.lower().strip())
+    return [part.strip() for part in parts if part.strip()]
 
 
 def _negation_before(text: str, match_start: int) -> bool:
@@ -40,43 +46,44 @@ def _negation_before(text: str, match_start: int) -> bool:
     return False
 
 
-def _is_third_party_event(text: str, match_start: int) -> bool:
-    """Another person's event — not the elder's current situation."""
-    if not _THIRD_PARTY.search(text):
+def _fall_applies_in_clause(clause: str, match_start: int) -> bool:
+    if _negation_before(clause, match_start):
         return False
-    if _SELF.search(text[: match_start + 1]):
+    if _SELF.search(clause):
+        return True
+    if _THIRD_PARTY.search(clause) and not _SELF.search(clause):
+        if _PAST_EVENT.search(clause):
+            return False
         return False
     return True
 
 
-def _is_past_reported_event(text: str) -> bool:
-    """Past narrative about someone else (e.g. «вчера соседка упала»)."""
-    return bool(_PAST_EVENT.search(text) and _THIRD_PARTY.search(text))
-
-
-def _match_signal(pattern: re.Pattern[str], text: str, signal_id: str) -> bool:
-    match = pattern.search(text)
+def _match_signal_in_clause(
+    pattern: re.Pattern[str],
+    clause: str,
+    signal_id: str,
+) -> bool:
+    match = pattern.search(clause)
     if not match:
         return False
     if signal_id == "fall":
-        if _is_past_reported_event(text):
-            return False
-        if _is_third_party_event(text, match.start()):
-            return False
-        if _negation_before(text, match.start()):
-            return False
+        return _fall_applies_in_clause(clause, match.start())
     return True
 
 
 def match_deterministic_signals(text: str) -> list[str]:
-    """Return signal ids found in normalized transcript."""
+    """Return signal ids found in normalized transcript (clause-aware)."""
     if not text or not text.strip():
         return []
-    normalized = text.lower().strip()
     found: list[str] = []
-    for signal_id, pattern in RED_PATTERNS + YELLOW_PATTERNS:
-        if _match_signal(pattern, normalized, signal_id):
-            found.append(signal_id)
+    clauses = _split_clauses(text)
+    if not clauses:
+        clauses = [text.lower().strip()]
+    for clause in clauses:
+        for signal_id, pattern in RED_PATTERNS + YELLOW_PATTERNS:
+            if _match_signal_in_clause(pattern, clause, signal_id):
+                if signal_id not in found:
+                    found.append(signal_id)
     return found
 
 

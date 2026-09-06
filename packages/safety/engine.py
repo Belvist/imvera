@@ -43,6 +43,15 @@ def _recompute_active_risk(safety: SafetySnapshot) -> RiskLevel:
     return level
 
 
+def _register_episode(safety: SafetySnapshot, level: RiskLevel) -> None:
+    safety.episode_seq += 1
+    episode_id = f"ep-{safety.episode_seq}"
+    safety.active_episode_id = episode_id
+    safety.episode_levels[episode_id] = level
+    safety.active_risk = _recompute_active_risk(safety)
+    safety.signal_resolution = SignalResolution.UNRESOLVED
+
+
 class SafetyEngine:
     """Merge deterministic + semantic signals. Deterministic rules own RED."""
 
@@ -62,12 +71,9 @@ class SafetyEngine:
         safety.highest_signal_seen = _max_level(safety.highest_signal_seen, level)
 
         if signals and _at_least(level, RiskLevel.YELLOW):
-            safety.episode_seq += 1
-            episode_id = f"ep-{safety.episode_seq}"
-            safety.active_episode_id = episode_id
-            safety.episode_levels[episode_id] = level
-            safety.active_risk = _recompute_active_risk(safety)
-            safety.signal_resolution = SignalResolution.UNRESOLVED
+            _register_episode(safety, level)
+        elif semantic_signals and level == RiskLevel.POSSIBLE:
+            _register_episode(safety, RiskLevel.POSSIBLE)
         elif level > RiskLevel.NONE:
             safety.active_risk = _max_level(safety.active_risk, level)
 
@@ -76,11 +82,12 @@ class SafetyEngine:
     @staticmethod
     def confirm_red(safety: SafetySnapshot) -> SafetySnapshot:
         safety.signal_resolution = SignalResolution.CONFIRMED
-        safety.active_risk = RiskLevel.RED
         safety.highest_signal_seen = RiskLevel.RED
         if safety.active_episode_id:
             safety.episode_levels[safety.active_episode_id] = RiskLevel.RED
-            safety.active_risk = _recompute_active_risk(safety)
+        else:
+            _register_episode(safety, RiskLevel.RED)
+        safety.active_risk = _recompute_active_risk(safety)
         return safety
 
     @staticmethod
@@ -88,7 +95,7 @@ class SafetyEngine:
         safety: SafetySnapshot,
         episode_id: str | None = None,
     ) -> SafetySnapshot:
-        """Dismiss one episode only; newer non-dismissed episodes keep active_risk."""
+        """Dismiss one episode only; other episodes (incl. POSSIBLE) remain active."""
         ep = episode_id or safety.active_episode_id
         if ep and ep not in safety.dismissed_episode_ids:
             safety.dismissed_episode_ids.append(ep)
