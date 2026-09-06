@@ -19,7 +19,7 @@ models:
     id: mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit
     voice: serena
     lang_code: Russian
-    streaming_interval: 0.32
+    streaming_interval: 0.16
   vad:
     onnx: silero_vad
 

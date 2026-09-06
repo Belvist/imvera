@@ -91,7 +91,6 @@ async def _handle_stasis_start(channel: dict) -> None:
     await _register_gateway(call_id, channel_id)
     await _ari.answer(channel_id)
     await _ari.create_bridge(bridge_id)
-    await _ari.add_to_bridge(bridge_id, channel_id)
 
     snoop = await _ari.snoop_channel(channel_id, STASIS_APP, spy="in", whisper="none")
     snoop_id = snoop["id"]
@@ -104,7 +103,7 @@ async def _handle_stasis_start(channel: dict) -> None:
         direction="both",
     )
     inject = await _ari.create_external_media(
-        STASIS_APP, "imvera_inject", format="ulaw", direction="in"
+        STASIS_APP, "imvera_inject", format="ulaw", direction="both"
     )
     capture_id = capture["id"]
     inject_id = inject["id"]
@@ -126,8 +125,9 @@ async def _handle_stasis_start(channel: dict) -> None:
     await _ari.add_to_bridge(capture_bridge_id, snoop_id)
     await _ari.add_to_bridge(capture_bridge_id, capture_id)
     await _ari.add_to_bridge(bridge_id, inject_id)
+    await _ari.add_to_bridge(bridge_id, channel_id)
 
-    if os.environ.get("IMVERA_SIP_BEEP_TEST", "1") == "1":
+    if os.environ.get("IMVERA_SIP_BEEP_TEST", "0") == "1":
         try:
             await _ari.play_sound(channel_id, "sound:beep")
         except httpx.HTTPError:
