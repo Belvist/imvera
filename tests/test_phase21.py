@@ -52,6 +52,14 @@ def test_llm_semantic_red_label_is_possible_not_red() -> None:
     assert safety.active_risk == RiskLevel.POSSIBLE
 
 
+def test_llm_semantic_yellow_concern_is_possible_not_yellow() -> None:
+    safety = SafetySnapshot()
+    SafetyEngine.ingest_transcript(safety, "всё нормально", semantic_signals=["yellow_concern"])
+    assert safety.active_risk == RiskLevel.POSSIBLE
+    assert safety.active_risk != RiskLevel.YELLOW
+    assert safety.highest_signal_seen == RiskLevel.POSSIBLE
+
+
 def test_deterministic_fall_still_red() -> None:
     safety = SafetySnapshot()
     SafetyEngine.ingest_transcript(safety, "я упала")
@@ -165,3 +173,109 @@ def test_slot_fill_sets_mandatory_for_mood() -> None:
     )
     assert state.slots["mood"] == SlotStatus.FILLED
     assert state.mandatory_checks["mood"] is True
+
+
+def test_planner_arms_pending_slot_when_asking_wellness() -> None:
+    state = DialogueState(call_id="pending", fsm_state=FsmState.DAILY_CHECK)
+    proposal = Planner.plan_after_user(
+        state,
+        user_text="",
+        judgement=AnswerJudgement.NO_ANSWER,
+        generation_id="g1",
+        turn_id=1,
+    )
+    assert state.pending_slot == "wellness"
+    assert state.pending_question is not None
+    assert "чувствуете" in proposal.speech.lower()
+
+
+def test_sequential_slot_questions_fill_all_four_slots() -> None:
+    state = DialogueState(call_id="slots", fsm_state=FsmState.DAILY_CHECK)
+    turn = 0
+    gid = "g-seq"
+    answers = {
+        "wellness": "нормально",
+        "mood": "хорошее",
+        "sleep": "нормально спал",
+        "plans": "нигде не буду",
+    }
+
+    for slot, answer in answers.items():
+        turn += 1
+        question = Planner.plan_after_user(
+            state, "", AnswerJudgement.NO_ANSWER, gid, turn
+        )
+        assert state.pending_slot == slot
+        assert slot in question.intent
+
+        turn += 1
+        Planner.plan_after_user(state, answer, AnswerJudgement.VALID, gid, turn)
+        assert state.slots[slot] == SlotStatus.FILLED
+        assert state.mandatory_checks[slot] is True
+
+    assert state.mandatory_remaining() == ["identity", "consent", "can_talk"]
+
+
+def test_sequential_happy_path_call_to_green() -> None:
+    """Full pilot call without manually presetting internal planner fields."""
+    state = DialogueState(call_id="happy", fsm_state=FsmState.IDENTIFY_PERSON)
+    turn = 0
+    gid = "g-happy"
+
+    def user_says(text: str) -> None:
+        nonlocal turn
+        turn += 1
+        Planner.plan_after_user(state, text, AnswerJudgement.VALID, gid, turn)
+
+    def vera_prompt() -> None:
+        nonlocal turn
+        turn += 1
+        Planner.plan_after_user(state, "", AnswerJudgement.NO_ANSWER, gid, turn)
+
+    user_says("да, это я")
+    assert state.fsm_state == FsmState.CHECK_CONSENT
+    assert state.mandatory_checks["identity"] is True
+
+    user_says("да, звоните")
+    assert state.fsm_state == FsmState.GREETING
+    assert state.mandatory_checks["consent"] is True
+
+    vera_prompt()
+    assert state.greeted is True
+
+    vera_prompt()
+    assert state.fsm_state == FsmState.CHECK_CAN_TALK
+
+    user_says("да, удобно говорить")
+    assert state.fsm_state == FsmState.DAILY_CHECK
+    assert state.mandatory_checks["can_talk"] is True
+
+    for slot, answer in (
+        ("wellness", "нормально"),
+        ("mood", "хорошее"),
+        ("sleep", "спал нормально"),
+        ("plans", "дома посижу"),
+    ):
+        Planner.plan_after_user(
+            state, "", AnswerJudgement.NO_ANSWER, gid, turn + 1
+        )
+        turn += 1
+        assert state.pending_slot == slot
+        Planner.plan_after_user(state, answer, AnswerJudgement.VALID, gid, turn + 1)
+        turn += 1
+        assert state.slots[slot] == SlotStatus.FILLED
+
+    while state.fsm_state not in (FsmState.SUMMARY, FsmState.GOODBYE):
+        vera_prompt()
+
+    assert state.fsm_state == FsmState.SUMMARY
+    assert state.mandatory_remaining() == []
+
+    Planner.plan_closing(state, "до свидания", turn + 1, gid)
+    turn += 1
+    Planner.plan_closing(state, "до свидания", turn + 1, gid)
+    assert state.fsm_state == FsmState.FINAL_CLASSIFICATION
+    assert state.goodbye_confirmed is True
+
+    snap = _answered(care_state=CareState.GREEN, mandatory_checks=dict(state.mandatory_checks))
+    assert StatusEngine.resolve(snap) == PublicCallStatus.GREEN

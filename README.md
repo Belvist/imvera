@@ -16,8 +16,8 @@ Control confirmation → CONFIRMED RED.
 |-------|--------|
 | 0 Agent system | ✅ |
 | 1 Architecture/contracts | 🟡 ADR STT/TTS updated; CI added |
-| 2 Domain core | 🟡 Phase 2.1 correctness in progress |
-| 3 Speech lab (Qwen STT + CosyVoice/Qwen TTS) | ⛔ after Phase 2.1 gate |
+| 2 Domain core | ✅ Phase 2.1 gate (CI + happy-path) |
+| 3A STT lab (Qwen3-ASR benchmark) | next |
 | 4 Realtime streaming | ❌ |
 | 5 Asterisk | ❌ |
 

@@ -29,15 +29,10 @@ def _level_from_deterministic(signals: list[str]) -> RiskLevel:
 
 
 def _level_from_semantic(semantic_signals: list[str]) -> RiskLevel:
-    """LLM may flag candidates only — never authority for RED (AGENTS.md)."""
-    level = RiskLevel.NONE
-    for sig in semantic_signals:
-        lower = sig.lower()
-        if "concern" in lower or "yellow" in lower:
-            level = _max_level(level, RiskLevel.YELLOW)
-        elif any(token in lower for token in ("possible", "candidate", "fall", "red")):
-            level = _max_level(level, RiskLevel.POSSIBLE)
-    return level
+    """LLM may flag candidates only — no RED/YELLOW/GREEN authority."""
+    if not semantic_signals:
+        return RiskLevel.NONE
+    return RiskLevel.POSSIBLE
 
 
 class SafetyEngine:

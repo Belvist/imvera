@@ -32,6 +32,7 @@ class Planner:
 
         open_slot = Planner._next_open_slot(state)
         if state.fsm_state == FsmState.DAILY_CHECK and open_slot:
+            Planner._arm_pending_slot(state, open_slot)
             return TurnProposal(
                 turn_id=turn_id,
                 generation_id=generation_id,
@@ -63,6 +64,11 @@ class Planner:
         )
 
     @staticmethod
+    def _arm_pending_slot(state: DialogueState, slot: str) -> None:
+        state.pending_slot = slot
+        state.pending_question = _SLOT_QUESTIONS[slot]
+
+    @staticmethod
     def _next_open_slot(state: DialogueState) -> str | None:
         for slot in PILOT_SLOT_CHECKS:
             if state.slots[slot] == SlotStatus.OPEN:
@@ -87,11 +93,6 @@ class Planner:
                 state.pending_question = None
         elif judgement in (AnswerJudgement.NO_ANSWER, AnswerJudgement.BACKCHANNEL):
             pass
-        elif state.fsm_state == FsmState.DAILY_CHECK:
-            open_slot = Planner._next_open_slot(state)
-            if open_slot:
-                state.pending_slot = open_slot
-                state.pending_question = _SLOT_QUESTIONS[open_slot]
         return state
 
     @staticmethod
