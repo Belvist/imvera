@@ -25,7 +25,8 @@ from services.inference.common import (
     mount_health,
     new_request_id,
 )
-from services.tts.voice_refs import resolve_tts_ref
+from services.tts.gen_params import build_mlx_gen_kwargs, resolve_model_id, tts_engine
+from services.tts.silero_lab import SILERO_WARNING, synthesize_silero
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "voice-m5.yaml"
 _tts = None
@@ -61,29 +62,62 @@ def _float_to_pcm16(audio: np.ndarray) -> bytes:
     return (arr * 32767.0).astype(np.int16).tobytes()
 
 
-def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
-    cfg = _load_config()
-    tts_cfg = cfg["models"]["tts"]
+def _chunk_pcm(pcm: bytes, sample_rate: int, frame_ms: int = 160) -> list[tuple[bytes, int]]:
+    """Slice PCM into ~frame_ms chunks for streaming contract."""
+    frame_samples = max(1, int(sample_rate * frame_ms / 1000))
+    frame_bytes = frame_samples * 2
+    chunks: list[tuple[bytes, int]] = []
+    for offset in range(0, len(pcm), frame_bytes):
+        chunks.append((pcm[offset : offset + frame_bytes], sample_rate))
+    if not chunks:
+        chunks.append((b"", sample_rate))
+    return chunks
+
+
+def _produce_silero_chunks(
+    req: SynthesizeRequest, out_q: queue.Queue, tts_cfg: dict[str, Any]
+) -> None:
+    silero_cfg = dict(tts_cfg.get("silero_lab") or {})
+    seq = 0
+    try:
+        audio, sample_rate = synthesize_silero(req.text, silero_cfg)
+        pcm = _float_to_pcm16(audio)
+        for chunk_pcm, sr in _chunk_pcm(pcm, sample_rate):
+            if req.generation_id in _cancelled:
+                break
+            out_q.put(
+                {
+                    "sequence": seq,
+                    "sample_rate": sr,
+                    "pcm_b64": base64.b64encode(chunk_pcm).decode("ascii"),
+                    "is_last": False,
+                }
+            )
+            seq += 1
+    finally:
+        out_q.put(None)
+
+
+def _produce_mlx_chunks(
+    req: SynthesizeRequest, out_q: queue.Queue, tts_cfg: dict[str, Any]
+) -> None:
     voice = req.voice or tts_cfg["voice"]
     lang = req.language or tts_cfg["lang_code"]
-    ref_path, ref_text, ref_id = resolve_tts_ref(tts_cfg, CONFIG_PATH)
-    gen_kwargs: dict[str, Any] = {
-        "text": req.text,
-        "voice": voice,
-        "lang_code": lang,
-        "stream": True,
-        "streaming_interval": tts_cfg.get("streaming_interval", 0.32),
-    }
-    if ref_path is not None:
-        if ref_text:
-            gen_kwargs["ref_audio"] = str(ref_path)
-            gen_kwargs["ref_text"] = ref_text
-        else:
-            # ICL cloning requires ref_text; mlx_audio resamples ref_audio to 24 kHz.
-            print(
-                f"WARNING: ref_audio {ref_path} ignored — ref_text missing "
-                f"(set IMVERA_TTS_REF_TEXT or manifest entry for {ref_id or ref_path.name})"
-            )
+    gen_kwargs, ref_id = build_mlx_gen_kwargs(
+        tts_cfg,
+        CONFIG_PATH,
+        text=req.text,
+        voice=voice,
+        lang_code=lang,
+        stream=True,
+    )
+    if ref_id:
+        print(f"TTS clone ref={ref_id} temp={gen_kwargs.get('temperature')}")
+    elif gen_kwargs.get("instruct"):
+        print(f"TTS preset voice={voice} instruct=on temp={gen_kwargs.get('temperature')}")
+    else:
+        print(f"TTS preset voice={voice} temp={gen_kwargs.get('temperature')}")
+
     seq = 0
     try:
         for result in _tts.generate(**gen_kwargs):
@@ -107,16 +141,42 @@ def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
         out_q.put(None)
 
 
+def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
+    cfg = _load_config()
+    tts_cfg = cfg["models"]["tts"]
+    engine = tts_engine(tts_cfg)
+    if engine == "silero_lab":
+        _produce_silero_chunks(req, out_q, tts_cfg)
+    else:
+        _produce_mlx_chunks(req, out_q, tts_cfg)
+
+
 @app.on_event("startup")
 def warmup() -> None:
     global _tts
     cfg = _load_config()
-    model_id = cfg["models"]["tts"]["id"]
+    tts_cfg = cfg["models"]["tts"]
+    engine = tts_engine(tts_cfg)
+    if engine == "silero_lab":
+        try:
+            from services.tts.silero_lab import load_silero
+
+            load_silero(tts_cfg.get("silero_lab") or {})
+            speaker = (tts_cfg.get("silero_lab") or {}).get("speaker", "kseniya")
+            state.model_revision = f"silero_lab:{speaker}"
+            state.ready = True
+            print(f"WARNING: {SILERO_WARNING}")
+        except Exception as exc:
+            state.warmup_error = str(exc)
+            state.ready = False
+        return
+
+    model_id = resolve_model_id(tts_cfg)
     try:
         from mlx_audio.tts.utils import load_model
 
         _tts = load_model(model_id)
-        state.model_revision = model_id
+        state.model_revision = f"{engine}:{model_id}"
         state.ready = True
     except Exception as exc:
         state.warmup_error = str(exc)
@@ -158,8 +218,12 @@ async def _ndjson_stream(req: SynthesizeRequest) -> AsyncIterator[bytes]:
 
 @app.post("/v1/synthesize")
 async def synthesize(req: SynthesizeRequest) -> StreamingResponse:
-    if not state.ready or _tts is None:
+    cfg = _load_config()
+    engine = tts_engine(cfg["models"]["tts"])
+    if engine != "silero_lab" and (not state.ready or _tts is None):
         raise HTTPException(503, detail=state.warmup_error or "not ready")
+    if engine == "silero_lab" and not state.ready:
+        raise HTTPException(503, detail=state.warmup_error or "silero lab not ready")
     return StreamingResponse(_ndjson_stream(req), media_type="application/x-ndjson")
 
 

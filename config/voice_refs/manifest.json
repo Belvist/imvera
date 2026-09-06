@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "default_ref": "fleurs_ru_female_1",
-  "notes": "Zero-shot refs for Qwen3-TTS CustomVoice (not trained voices). Replace bootstrap entries with licensed talent recordings before production.",
+  "default_ref": "bootstrap_serena_ru",
+  "notes": "Zero-shot refs for Qwen3-TTS. FLEURS clones on CustomVoice often sound uncanny — prefer bootstrap or preset+instruct for lab. Silero kseniya: NC license, lab compare only.",
   "refs": [
     {
       "id": "fleurs_ru_female_1",
@@ -17,7 +17,7 @@
       "duration_s": 5.46,
       "sample_rate_hz": 24000,
       "kind": "human",
-      "recommended": true
+      "recommended": false
     },
     {
       "id": "fleurs_ru_female_2",
@@ -63,7 +63,7 @@
       "duration_s": 5.12,
       "sample_rate_hz": 24000,
       "kind": "bootstrap",
-      "recommended": false
+      "recommended": true
     }
   ]
 }

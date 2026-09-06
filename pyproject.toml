@@ -33,6 +33,10 @@ mlx = [
     "mlx-audio",
     "numpy>=1.26",
     "huggingface_hub>=0.24",
+    "soundfile>=0.12",
+]
+lab-silero = [
+    "torch>=2.2",
 ]
 sip-lab = [
     "pyVoIP==1.6.8",
