@@ -8,7 +8,7 @@ services:
       dockerfile: docker/asterisk/Dockerfile
     container_name: imvera-asterisk
     ports:
-      - "127.0.0.1:5060:5060/udp"
+      - "127.0.0.1:5062:5060/udp"
       - "127.0.0.1:8088:8088"
       - "127.0.0.1:10000-10100:10000-10100/udp"
     volumes:

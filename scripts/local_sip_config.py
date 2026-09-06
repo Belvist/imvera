@@ -17,11 +17,13 @@ def load_or_create() -> dict:
     ASTERISK_DIR.mkdir(parents=True, exist_ok=True)
     if ZOIPER_JSON.exists():
         data = json.loads(ZOIPER_JSON.read_text())
+        if data.get("port") == 5060:
+            data["port"] = 5062
     else:
         data = {
             "sip_server": "127.0.0.1",
             "transport": "UDP",
-            "port": 5060,
+            "port": 5062,
             "username": "1001",
             "password": secrets.token_urlsafe(12),
             "vera_extension": "7000",
@@ -53,7 +55,7 @@ bind=0.0.0.0:5060
 type=endpoint
 context=imvera-local
 disallow=all
-allow=ulaw,alaw,slin16
+allow=slin16,ulaw,alaw
 auth=1001
 aors=1001
 direct_media=no
@@ -107,21 +109,25 @@ exten => {cfg.get('vera_extension', '7000')},1,NoOp(IMVERA voice entry)
 
     (ASTERISK_DIR / "websocket_client.conf").write_text(
         f"""; IMVERA voice gateway — generated, do not commit secrets
-[imvera-capture]
+[imvera_capture]
 type = websocket_client
 uri = ws://{gateway_host}/asterisk/capture
 protocols = media
-transport_data = f(json)
-encryption = no
+connection_type = per_call_config
+connection_timeout = 5000
+reconnect_interval = 500
+reconnect_attempts = 3
 tls_enabled = no
 verify_server_cert = no
 
-[imvera-inject]
+[imvera_inject]
 type = websocket_client
 uri = ws://{gateway_host}/asterisk/inject
 protocols = media
-transport_data = f(json)
-encryption = no
+connection_type = per_call_config
+connection_timeout = 5000
+reconnect_interval = 500
+reconnect_attempts = 3
 tls_enabled = no
 verify_server_cert = no
 """
