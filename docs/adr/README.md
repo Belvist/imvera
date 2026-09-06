@@ -14,5 +14,6 @@ Record irreversible technical decisions here.
 | [005](005-status-precedence.md) | 4 axes + false-alarm protocol | accepted |
 | [006](006-tts-benchmark-cosyvoice-qwen.md) | TTS: CosyVoice3 vs Qwen3-TTS | accepted |
 | [007](007-unified-conversation-loop.md) | Unified conversation loop + CallSession | accepted |
+| [008](008-product-milestones-voice-core.md) | Product milestones, Core boundary, semantic contract | accepted |
 
 Master plan: [PLAN.md](../PLAN.md) v1.2

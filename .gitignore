@@ -29,6 +29,8 @@ recordings/
 models/
 *.pt
 *.gguf
+.run/
+config/local/
 
 # Logs
 *.log
