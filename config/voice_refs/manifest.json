@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "default_ref": "fleurs_ru_female_1",
+  "notes": "Zero-shot refs for Qwen3-TTS CustomVoice (not trained voices). Replace bootstrap entries with licensed talent recordings before production.",
+  "refs": [
+    {
+      "id": "fleurs_ru_female_1",
+      "file": "config/voice_refs/fleurs_ru_female_1.wav",
+      "ref_text": "эта идея пришла из китая где излюбленным цветком был цвет сливы",
+      "source": "google/fleurs ru_ru train split (speaker gender=female)",
+      "source_url": "https://huggingface.co/datasets/google/fleurs",
+      "license": "CC-BY-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "attribution": "Speech from FLEURS Russian (Google, CC BY 4.0)",
+      "speaker_gender": "female",
+      "language": "ru",
+      "duration_s": 5.46,
+      "sample_rate_hz": 24000,
+      "kind": "human",
+      "recommended": true
+    },
+    {
+      "id": "fleurs_ru_female_2",
+      "file": "config/voice_refs/fleurs_ru_female_2.wav",
+      "ref_text": "вы можете заиметь себе большие проблемы если вас используют в качестве",
+      "source": "google/fleurs ru_ru train split (speaker gender=female)",
+      "source_url": "https://huggingface.co/datasets/google/fleurs",
+      "license": "CC-BY-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "attribution": "Speech from FLEURS Russian (Google, CC BY 4.0)",
+      "speaker_gender": "female",
+      "language": "ru",
+      "duration_s": 8.16,
+      "sample_rate_hz": 24000,
+      "kind": "human",
+      "recommended": false
+    },
+    {
+      "id": "bootstrap_vivian_ru",
+      "file": "config/voice_refs/bootstrap_vivian_ru.wav",
+      "ref_text": "Здравствуйте, меня зовут Вера. Я звоню, чтобы узнать, как вы себя чувствуете сегодня.",
+      "source": "Synthesized with mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit preset vivian",
+      "license": "project-bootstrap",
+      "license_url": null,
+      "attribution": "IMVERA lab bootstrap — replace before production",
+      "speaker_gender": "female",
+      "language": "ru",
+      "duration_s": 7.04,
+      "sample_rate_hz": 24000,
+      "kind": "bootstrap",
+      "recommended": false
+    },
+    {
+      "id": "bootstrap_serena_ru",
+      "file": "config/voice_refs/bootstrap_serena_ru.wav",
+      "ref_text": "Добрый день! Расскажите, пожалуйста, принимали ли вы лекарства утром, как обычно?",
+      "source": "Synthesized with mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit preset serena",
+      "license": "project-bootstrap",
+      "license_url": null,
+      "attribution": "IMVERA lab bootstrap — replace before production",
+      "speaker_gender": "female",
+      "language": "ru",
+      "duration_s": 5.12,
+      "sample_rate_hz": 24000,
+      "kind": "bootstrap",
+      "recommended": false
+    }
+  ]
+}
