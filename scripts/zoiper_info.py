@@ -8,6 +8,11 @@ import subprocess
 
 from scripts.local_sip_config import load_or_create
 
+try:
+    from packages.voice_runtime.profile import audio_settings
+except ImportError:
+    audio_settings = None  # type: ignore[assignment,misc]
+
 
 def _port_conflict_warnings() -> list[str]:
     warnings: list[str] = []
@@ -61,8 +66,18 @@ def main() -> int:
     print(f"  Password:       {data['password']}")
     print(f"  Realm (auth):   127.0.0.1  (from Asterisk — leave as-is if asked)")
     print("  Disable:        DNS SRV lookup, outbound proxy")
-    print("  Codec (lab):    Audio settings → enable **L16/16000** (slin16), move above PCMU/PCMA")
-    print("                  If only G.711: audio stays narrowband (8 kHz) — expected")
+    if audio_settings:
+        audio = audio_settings()
+        inject_fmt = audio["inject_format"]
+        out_sr = audio["output_sample_rate"]
+        print(
+            f"  Codec (lab):    Audio settings → enable **L16/{out_sr}** ({inject_fmt}), "
+            "move above PCMU/PCMA"
+        )
+        print("                  Fallback wideband: L16/24000 (slin24) or L16/16000 (slin16)")
+    else:
+        print("  Codec (lab):    Audio settings → enable **L16/48000** (slin48), move above PCMU/PCMA")
+    print("                  If only G.711: audio stays narrowband (8 kHz) — Nokia-phone quality")
     print("  STUN:           Don't use STUN (Advanced) — critical for Docker RTP")
     print("\n--- Why silence on 127.0.0.1 ---")
     print("  Asterisk runs in Docker. Zoiper on 127.0.0.1 → RTP goes to container loopback.")

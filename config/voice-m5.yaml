@@ -37,8 +37,15 @@ limits:
   playback_buffer_ms: 200
 
 audio:
+  # STT/VAD branch — Silero + ASR expect 16 kHz; do not raise for SIP lab wideband.
   internal_sample_rate: 16000
+  # SIP lab downlink: slin48 @ 48 kHz on chan_websocket inject (TTS ~24 kHz → upsample once).
+  # PSTN prod trunks: set inject_format=ulaw via IMVERA_INJECT_FORMAT.
+  inject_format: slin48
+  capture_format: slin16
+  output_sample_rate: 48000
   frame_ms: 20
+  sip_codecs: slin48,slin24,slin16,ulaw,alaw
 
 sip:
   vera_extension: "7000"

@@ -24,6 +24,7 @@ from packages.dialogue.validator import Validator
 from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler
 from packages.voice_runtime.endpointing import SpeechSegmentCollector
 from packages.voice_runtime.playback import PlaybackQueue
+from packages.voice_runtime.profile import audio_settings
 from packages.voice_runtime.silero_vad import create_vad
 from services.llm.http_provider import HttpLLMProvider
 from services.stt.http_provider import HttpSTTProvider
@@ -625,6 +626,20 @@ def build_call_actor(
         family_id=family_id,
         elder_display_name=elder_name,
     )
+    profile_audio = audio_settings()
+    profile_limits = {}
+    try:
+        from packages.voice_runtime.profile import load_profile
+
+        profile_limits = load_profile().get("limits") or {}
+    except OSError:
+        pass
+    playback_buffer_ms = int(
+        os.environ.get(
+            "IMVERA_PLAYBACK_BUFFER_MS",
+            str(profile_limits.get("playback_buffer_ms", 60)),
+        )
+    )
     return CallActor(
         call_id=call_id,
         family_id=family_id,
@@ -634,7 +649,9 @@ def build_call_actor(
         llm=HttpLLMProvider(llm_url),
         media=media,
         config=CallActorConfig(
-            playback_buffer_ms=int(os.environ.get("IMVERA_PLAYBACK_BUFFER_MS", "60")),
+            target_sample_rate=profile_audio["internal_sample_rate"],
+            frame_ms=profile_audio["frame_ms"],
+            playback_buffer_ms=playback_buffer_ms,
             telephony_stream=os.environ.get("IMVERA_TELEPHONY_STREAM", "1") == "1",
         ),
     )

@@ -11,6 +11,7 @@ import time
 import httpx
 
 from packages.telephony.asterisk import is_stasis_app_registered, normalize_ari_http_root
+from packages.voice_runtime.profile import apply_audio_env, audio_settings
 from scripts.local_sip_config import load_or_create
 from scripts.voice_process import ROOT, is_running, start
 
@@ -113,6 +114,7 @@ def _verify_asterisk_modules() -> bool:
             import httpx
 
             for name in ("imvera_capture", "imvera_inject"):
+                fmt = audio_settings()["capture_format" if name == "imvera_capture" else "inject_format"]
                 r = httpx.post(
                     f"{http_root}/ari/channels/externalMedia",
                     params={
@@ -120,7 +122,7 @@ def _verify_asterisk_modules() -> bool:
                         "external_host": name,
                         "transport": "websocket",
                         "encapsulation": "none",
-                        "format": "slin16",
+                        "format": fmt,
                         "direction": "both",
                         "connection_type": "client",
                         "transport_data": "f(json)",
@@ -164,7 +166,7 @@ def main() -> int:
     if code != 0:
         return code
 
-    env = os.environ.copy()
+    env = apply_audio_env(os.environ.copy())
     env.setdefault("IMVERA_STT_URL", "http://127.0.0.1:9101")
     env.setdefault("IMVERA_TTS_URL", "http://127.0.0.1:9102")
     env.setdefault("IMVERA_LLM_URL", "http://127.0.0.1:9103")
@@ -217,6 +219,9 @@ def main() -> int:
         print("WARN: pjsip reload failed", file=sys.stderr)
 
     print("\nVoice stack up.")
+    audio = audio_settings()
+    print(f"  Inject format: {audio['inject_format']} ({audio['output_sample_rate']} Hz)")
+    print(f"  Capture format: {audio['capture_format']} (STT resamples to {audio['internal_sample_rate']} Hz)")
     print(f"  Zoiper: {cfg['username']}@{cfg['sip_server']}:{cfg['port']}")
     print(f"  Password: {cfg['password']}")
     print(f"  Dial: {cfg['vera_extension']}")

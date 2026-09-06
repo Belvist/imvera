@@ -9,11 +9,23 @@ import socket
 import subprocess
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 ZOIPER_JSON = ROOT / "config" / "local" / "zoiper.json"
 ASTERISK_DIR = ROOT / "config" / "local" / "asterisk"
+VOICE_PROFILE = ROOT / "config" / "voice-m5.yaml"
 ARI_USER = "imvera"
 STASIS_APP = "imvera"
+
+
+def _sip_codecs() -> str:
+    try:
+        with VOICE_PROFILE.open(encoding="utf-8") as fh:
+            audio = yaml.safe_load(fh).get("audio") or {}
+        return str(audio.get("sip_codecs", "slin48,slin24,slin16,ulaw,alaw"))
+    except OSError:
+        return "slin48,slin24,slin16,ulaw,alaw"
 
 
 def detect_media_host() -> str:
@@ -74,6 +86,7 @@ def render_asterisk_configs(cfg: dict) -> None:
     media_host = detect_media_host()
     cfg["media_host"] = media_host
 
+    sip_codecs = _sip_codecs()
     (ASTERISK_DIR / "pjsip.conf").write_text(
         f"""[global]
 type=global
@@ -103,7 +116,7 @@ external_signaling_address=127.0.0.1
 type=endpoint
 context=imvera-local
 disallow=all
-allow=slin16,ulaw,alaw
+allow={sip_codecs}
 auth=1001
 aors=1001
 from_domain=127.0.0.1
