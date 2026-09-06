@@ -33,8 +33,6 @@ ASTERISK_APP_HTTP = os.environ.get("IMVERA_ASTERISK_APP_HTTP", "http://127.0.0.1
 ASTERISK_HTTP = os.environ.get("IMVERA_ASTERISK_HTTP", "http://127.0.0.1:8088")
 WS_DIAG = os.environ.get("IMVERA_WS_DIAG", "0") == "1"
 WS_DIAG_DIR = Path(__file__).resolve().parents[2] / ".run" / "ws-diag"
-INJECT_STREAM_FLUSH = os.environ.get("IMVERA_INJECT_STREAM_FLUSH", "1") == "1"
-INJECT_FLUSH_INTERVAL = max(1, int(os.environ.get("IMVERA_INJECT_FLUSH_INTERVAL", "4")))
 INJECT_PACE = os.environ.get("IMVERA_INJECT_PACE", "1") == "1"
 CAPTURE_DIAG = os.environ.get("IMVERA_CAPTURE_DIAG", "0") == "1"
 
@@ -82,7 +80,6 @@ class CallSession:
     capture_rms_peak: float = 0.0
     inject_bytes_sent: int = 0
     _inject_first_logged: bool = False
-    _inject_frames_since_flush: int = 0
     _capture_task: asyncio.Task | None = None
     _inject_buf: bytearray = field(default_factory=bytearray)
 
@@ -121,28 +118,21 @@ def _pcm_rms(pcm: bytes) -> float:
 
 
 async def _send_inject_payload(
-    session: CallSession, call_id: str, payload: bytes, *, force_flush: bool = False
+    session: CallSession, call_id: str, payload: bytes
 ) -> None:
     if session.inject_ws is None:
         return
     await session.inject_ws.send_bytes(payload)
     session.inject_bytes_sent += len(payload)
-    session._inject_frames_since_flush += 1
     if INJECT_PACE and session.ptime_ms > 0:
         await asyncio.sleep(session.ptime_ms / 1000.0)
-    if INJECT_STREAM_FLUSH and (
-        force_flush or session._inject_frames_since_flush >= INJECT_FLUSH_INTERVAL
-    ):
-        await session.inject_ws.send_text(flush_media_command())
-        session._inject_frames_since_flush = 0
     if not session._inject_first_logged:
         session._inject_first_logged = True
         log.info(
-            "inject first frame call_id=%s bytes=%s enc=%s stream_flush=%s",
+            "inject first frame call_id=%s bytes=%s enc=%s",
             call_id,
             len(payload),
             session.inject_encoding,
-            INJECT_STREAM_FLUSH,
         )
 
 
@@ -210,6 +200,24 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
                 payload = chunk
             await _send_inject_payload(session, call_id, payload)
 
+    async def _emit_tail_pcm(*, discard: bool) -> None:
+        if not session._inject_buf:
+            return
+        chunk = bytes(session._inject_buf)
+        session._inject_buf.clear()
+        if discard:
+            return
+        if len(chunk) % 2:
+            chunk += b"\x00"
+        if session.inject_encoding in ("ulaw", "alaw"):
+            if session.inject_encoding == "ulaw":
+                payload = audioop.lin2ulaw(chunk, 2)
+            else:
+                payload = audioop.lin2alaw(chunk, 2)
+        else:
+            payload = chunk
+        await _send_inject_payload(session, call_id, payload)
+
     async def prime_downlink() -> None:
         if session.inject_ws is None:
             return
@@ -220,28 +228,28 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
         else:
             payload = bytes(session.inject_frame_size)
         for _ in range(3):
-            await _send_inject_payload(session, call_id, payload, force_flush=True)
+            await _send_inject_payload(session, call_id, payload)
 
-    async def flush() -> None:
+    async def finish_downlink() -> None:
         if session.inject_ws is None:
             return
-        if session._inject_buf:
-            chunk = bytes(session._inject_buf)
-            session._inject_buf.clear()
-            if len(chunk) % 2:
-                chunk += b"\x00"
-            if session.inject_encoding in ("ulaw", "alaw"):
-                if session.inject_encoding == "ulaw":
-                    payload = audioop.lin2ulaw(chunk, 2)
-                else:
-                    payload = audioop.lin2alaw(chunk, 2)
-            else:
-                payload = chunk
-            await _send_inject_payload(session, call_id, payload, force_flush=True)
-        elif INJECT_STREAM_FLUSH:
-            await session.inject_ws.send_text(flush_media_command())
-            session._inject_frames_since_flush = 0
-        log.info("inject flush call_id=%s bytes_sent=%s", call_id, session.inject_bytes_sent)
+        await _emit_tail_pcm(discard=False)
+        log.info(
+            "inject finish call_id=%s bytes_sent=%s",
+            call_id,
+            session.inject_bytes_sent,
+        )
+
+    async def abort_downlink() -> None:
+        if session.inject_ws is None:
+            return
+        session._inject_buf.clear()
+        await session.inject_ws.send_text(flush_media_command())
+        log.info(
+            "inject abort call_id=%s bytes_sent=%s",
+            call_id,
+            session.inject_bytes_sent,
+        )
 
     async def hangup() -> None:
         try:
@@ -262,7 +270,8 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
         llm,
         MediaCallbacks(
             send_pcm=send_pcm,
-            flush=flush,
+            flush=abort_downlink,
+            finish=finish_downlink,
             hangup=hangup,
             emit=emit,
             prime_downlink=prime_downlink,
@@ -377,15 +386,15 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
                     continue
                 if is_media_start(data):
                     fmt = parse_media_start(data)
-                    session.inject_sample_rate = fmt.sample_rate
-                    session.inject_frame_size = fmt.frame_size_bytes
-                    session.inject_encoding = fmt.encoding
                     session.ptime_ms = fmt.ptime_ms
                     if role == "capture":
                         session.capture_sample_rate = fmt.sample_rate
                         session.capture_frame_size = fmt.frame_size_bytes
                         session.capture_ready = True
                     else:
+                        session.inject_sample_rate = fmt.sample_rate
+                        session.inject_frame_size = fmt.frame_size_bytes
+                        session.inject_encoding = fmt.encoding
                         session.inject_ready = True
                     await _maybe_media_ready(session)
             elif "bytes" in message and message["bytes"] and role == "capture":
