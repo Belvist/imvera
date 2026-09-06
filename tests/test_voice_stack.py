@@ -205,13 +205,31 @@ def test_playback_splits_frames() -> None:
     assert all(len(p) == len(frame) for p in parts)
 
 
-def test_inject_format_defaults_to_slin16(monkeypatch) -> None:
+def test_media_start_parse_slin48():
+    msg = {
+        "event": "MEDIA_START",
+        "format": "slin48",
+        "optimal_frame_size": 1920,
+        "ptime": 20,
+    }
+    fmt = parse_media_start(msg)
+    assert fmt.sample_rate == 48000
+    assert fmt.frame_size_bytes == 1920
+    assert fmt.encoding == "slin48"
+
+
+def test_inject_format_defaults_to_slin48(monkeypatch) -> None:
     monkeypatch.delenv("IMVERA_INJECT_FORMAT", raising=False)
+    monkeypatch.delenv("IMVERA_CAPTURE_FORMAT", raising=False)
+    from packages.voice_runtime.profile import load_profile
+
+    load_profile.cache_clear()
     import importlib
 
     mod = importlib.import_module("services.asterisk_app.main")
     importlib.reload(mod)
-    assert mod.INJECT_FORMAT == "slin16"
+    assert mod.INJECT_FORMAT == "slin48"
+    assert mod.CAPTURE_FORMAT == "slin16"
 
 
 def test_snoop_uses_both_directions() -> None:

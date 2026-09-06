@@ -14,13 +14,16 @@ import websockets
 from fastapi import FastAPI
 
 from packages.telephony.asterisk import AsteriskARI, ari_events_ws_url
+from packages.voice_runtime.profile import audio_settings
 
 app = FastAPI(title="IMVERA Asterisk Stasis App")
 STASIS_APP = os.environ.get("IMVERA_STASIS_APP", "imvera")
 GATEWAY_HTTP = os.environ.get("IMVERA_VOICE_GATEWAY_HTTP", "http://127.0.0.1:9200")
-# slin16 @ 16 kHz on inject leg — avoids 24k→8k downsample + μ-law in gateway.
-# Set IMVERA_INJECT_FORMAT=ulaw for narrowband PSTN trunk paths.
-INJECT_FORMAT = os.environ.get("IMVERA_INJECT_FORMAT", "slin16")
+# SIP lab default: slin48 @ 48 kHz inject — TTS ~24 kHz upsampled once, not 24→16→8.
+# PSTN narrowband: IMVERA_INJECT_FORMAT=ulaw
+_profile_audio = audio_settings()
+INJECT_FORMAT = _profile_audio["inject_format"]
+CAPTURE_FORMAT = _profile_audio["capture_format"]
 _ari = AsteriskARI()
 
 
@@ -103,7 +106,7 @@ async def _handle_stasis_start(channel: dict) -> None:
     capture = await _ari.create_external_media(
         STASIS_APP,
         "imvera_capture",
-        format="slin16",
+        format=CAPTURE_FORMAT,
         direction="both",
     )
     inject = await _ari.create_external_media(
