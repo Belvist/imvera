@@ -15,6 +15,8 @@ class PlaybackState(StrEnum):
     GENERATING = "generating"
     INTERRUPTED = "interrupted"
     COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 @dataclass
@@ -26,6 +28,7 @@ class PlaybackLedger:
     queued_samples: int = 0
     sent_samples: int = 0
     generation_done: bool = False
+    generation_outcome: str | None = None
     interrupted: bool = False
     state: PlaybackState = PlaybackState.IDLE
 
@@ -95,7 +98,10 @@ class PlaybackQueue:
         if self._ledger:
             self._ledger.generated_samples += samples
             self._ledger.state = PlaybackState.PLAYING
+        loop = asyncio.get_running_loop()
         for frame_pcm in split_pcm_frames(chunk.pcm_s16le, chunk.sample_rate, self.frame_ms):
+            if chunk.generation_id in self._cancelled_generations:
+                return False
             frame_samples = len(frame_pcm) // 2
             env = AudioEnvelope(
                 call_id=chunk.call_id,
@@ -105,7 +111,20 @@ class PlaybackQueue:
                 sample_rate=chunk.sample_rate,
                 pcm_s16le=frame_pcm,
             )
-            await self._queue.put(env)
+            deadline = loop.time() + 5.0
+            while True:
+                if chunk.generation_id in self._cancelled_generations:
+                    return False
+                try:
+                    self._queue.put_nowait(env)
+                    break
+                except asyncio.QueueFull:
+                    if loop.time() >= deadline:
+                        if self._ledger:
+                            self._ledger.state = PlaybackState.FAILED
+                            self._ledger.generation_outcome = "failed"
+                        return False
+                    await asyncio.sleep(0.01)
             if self._ledger:
                 self._ledger.queued_samples += frame_samples
         return True
@@ -119,17 +138,26 @@ class PlaybackQueue:
             self._ledger.sent_samples += len(chunk.pcm_s16le) // 2
         return chunk
 
-    def mark_generation_done(self) -> None:
+    def mark_generation_done(self, outcome: str = "success") -> None:
         if self._ledger:
             self._ledger.generation_done = True
+            self._ledger.generation_outcome = outcome
+            if outcome == "success":
+                self._ledger.state = PlaybackState.PLAYING
+            elif outcome == "cancelled":
+                self._ledger.state = PlaybackState.CANCELLED
+            else:
+                self._ledger.state = PlaybackState.FAILED
 
     def playback_complete(self) -> bool:
         if not self._ledger or self._ledger.interrupted:
             return False
+        if self._ledger.generation_outcome not in (None, "success"):
+            return False
         return self._ledger.generation_done and self._queue.empty()
 
     def mark_completed(self) -> None:
-        if self._ledger and not self._ledger.interrupted:
+        if self._ledger and not self._ledger.interrupted and self._ledger.sent_samples > 0:
             self._ledger.state = PlaybackState.COMPLETED
 
     @property

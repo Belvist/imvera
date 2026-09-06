@@ -16,7 +16,7 @@ from packages.dialogue.state import DialogueState
 from packages.telephony.asterisk import _json_or_empty, ari_rest_base, normalize_ari_http_root
 from packages.telephony.ws_protocol import flush_media_command, is_media_start, parse_media_start
 from packages.voice_runtime.audio import AudioEnvelope, pcm16_frame_bytes
-from packages.voice_runtime.playback import PlaybackQueue, split_pcm_frames
+from packages.voice_runtime.playback import PlaybackQueue, PlaybackState, split_pcm_frames
 
 
 def test_ari_base_normalization():
@@ -148,6 +148,17 @@ async def test_playback_queue_no_loss():
     assert await q.enqueue_wait(chunk)
     await task
     assert total_out == len(data)
+
+
+@pytest.mark.asyncio
+async def test_playback_zero_sent_not_completed():
+    q = PlaybackQueue("c1", buffer_limit_ms=200, sample_rate=16000, frame_ms=20)
+    q.begin_phrase("g1", "p1", "hello")
+    q.mark_generation_done("failed")
+    assert not q.playback_complete()
+    q.mark_completed()
+    assert q._ledger is not None
+    assert q._ledger.state != PlaybackState.COMPLETED
 
 
 def test_playback_splits_frames():

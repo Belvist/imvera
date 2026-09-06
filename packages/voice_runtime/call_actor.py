@@ -80,6 +80,7 @@ class CallActor:
     _collector: SpeechSegmentCollector | None = None
     _playback: PlaybackQueue | None = None
     _active_generation: str | None = None
+    _render_generation: str | None = None
     _tts_task: asyncio.Task | None = None
     _utterance_seq: int = 0
     _delivered_phrases: list[str] = field(default_factory=list)
@@ -91,6 +92,7 @@ class CallActor:
     _inflight_utterances: set[int] = field(default_factory=set)
     _hangup_after_playback: bool = False
     _transport_closed: bool = False
+    _capture_lost: bool = False
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._run())
@@ -113,9 +115,21 @@ class CallActor:
             self._pending_open = None
 
     async def push_pcm(self, pcm: bytes, sample_rate: int) -> None:
-        if self._stopped or self._transport_closed:
+        if self._stopped or self._transport_closed or self._capture_lost:
             return
         await self._queue.put(ActorEvent(ActorEventType.PCM, pcm=pcm, sample_rate=sample_rate))
+
+    async def on_capture_lost(self) -> None:
+        if self._stopped or self._transport_closed or self._capture_lost:
+            return
+        self._capture_lost = True
+        await self.media.emit(
+            RuntimeEvent(self.call_id, RuntimeEventType.CAPTURE_LOST, {})
+        )
+        self._transport_closed = True
+        await self._interrupt_playback(flush=False)
+        await self._finalize_disconnect()
+        await self.media.hangup()
 
     async def _run(self) -> None:
         open_result = await asyncio.to_thread(self.session.start)
@@ -133,6 +147,9 @@ class CallActor:
             if event.kind == ActorEventType.STOP:
                 await self._interrupt_playback(flush=False)
                 await self._finalize_disconnect()
+                await self.media.emit(
+                    RuntimeEvent(self.call_id, RuntimeEventType.CALL_ENDED, {})
+                )
                 await self.media.emit(
                     RuntimeEvent(
                         self.call_id, RuntimeEventType.TRANSPORT_DISCONNECTED, {}
@@ -334,6 +351,9 @@ class CallActor:
                 await self._maybe_hangup_when_idle()
             return
 
+        render_generation = f"g-{uuid.uuid4().hex[:8]}"
+        self._render_generation = render_generation
+
         rendered = planner_text
         try:
             facts = [
@@ -354,6 +374,9 @@ class CallActor:
         except Exception:
             rendered = planner_text
 
+        if self._render_generation != render_generation or self._stopped or self._transport_closed:
+            return
+
         proposal = TurnProposal(
             turn_id=result.proposal.turn_id,
             generation_id=result.proposal.generation_id,
@@ -367,11 +390,14 @@ class CallActor:
             if self._hangup_after_playback:
                 await self._maybe_hangup_when_idle()
             return
-        await self._speak_phrase(validated.speech)
+        if self._render_generation != render_generation:
+            return
+        await self._speak_phrase(validated.speech, render_generation)
 
     async def _interrupt_playback(self, *, flush: bool) -> None:
         if flush:
             asyncio.create_task(self.media.flush())
+        self._render_generation = None
         if not self._playback or not self._active_generation:
             return
         gen = self._active_generation
@@ -391,8 +417,14 @@ class CallActor:
             k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
         }
 
-    async def _speak_phrase(self, text: str) -> None:
-        if not text or not self._playback or self._stopped or self._transport_closed:
+    async def _speak_phrase(self, text: str, render_generation: str) -> None:
+        if (
+            not text
+            or not self._playback
+            or self._stopped
+            or self._transport_closed
+            or self._render_generation != render_generation
+        ):
             return
         generation_id = f"g-{uuid.uuid4().hex[:8]}"
         phrase_id = f"p-{uuid.uuid4().hex[:8]}"
@@ -403,6 +435,7 @@ class CallActor:
 
         async def _run_tts() -> None:
             nonlocal seq
+            outcome = "success"
             try:
                 async for chunk in self.tts.synthesize(
                     text,
@@ -411,7 +444,12 @@ class CallActor:
                     phrase_id=phrase_id,
                     deadline=deadline,
                 ):
-                    if generation_id != self._active_generation or self._stopped:
+                    if (
+                        generation_id != self._active_generation
+                        or self._render_generation != render_generation
+                        or self._stopped
+                    ):
+                        outcome = "cancelled"
                         break
                     out_pcm = self._resample_tts_chunk(
                         generation_id, chunk.pcm_s16le, chunk.sample_rate
@@ -426,10 +464,18 @@ class CallActor:
                     )
                     seq += 1
                     if self._playback:
-                        await self._playback.enqueue_wait(env)
+                        enqueued = await self._playback.enqueue_wait(env)
+                        if not enqueued:
+                            outcome = "cancelled" if outcome == "success" else outcome
+                            break
+            except asyncio.CancelledError:
+                outcome = "cancelled"
+                raise
+            except Exception:
+                outcome = "failed"
             finally:
                 if self._playback and generation_id == self._active_generation:
-                    self._playback.mark_generation_done()
+                    self._playback.mark_generation_done(outcome)
 
         self._tts_task = asyncio.create_task(_run_tts())
         await self.media.emit(
@@ -461,6 +507,9 @@ class CallActor:
         ledger = self._playback._ledger
         if not ledger:
             return
+        if ledger.sent_samples <= 0 or ledger.generation_outcome != "success":
+            self._active_generation = None
+            return
         self._playback.mark_completed()
         spoken = ledger.canonical_text
         if spoken and (not self._delivered_phrases or self._delivered_phrases[-1] != spoken):
@@ -473,6 +522,7 @@ class CallActor:
                     "generation_id": gen,
                     "sent_samples": ledger.sent_samples,
                     "queued_samples": ledger.queued_samples,
+                    "generated_samples": ledger.generated_samples,
                 },
             )
         )
@@ -480,8 +530,6 @@ class CallActor:
         self._tts_resamplers = {
             k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
         }
-        pacing_tail = ledger.sent_samples / max(self._output_sample_rate, 1)
-        await asyncio.sleep(min(pacing_tail, 2.0))
         if self._hangup_after_playback:
             await self._maybe_hangup_when_idle()
 

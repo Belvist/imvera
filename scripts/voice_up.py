@@ -112,7 +112,7 @@ def _verify_asterisk_modules() -> bool:
             http_root = normalize_ari_http_root("http://127.0.0.1:8088")
             import httpx
 
-            for name in ("imvera_inject",):
+            for name in ("imvera_capture", "imvera_inject"):
                 r = httpx.post(
                     f"{http_root}/ari/channels/externalMedia",
                     params={
@@ -141,7 +141,7 @@ def _verify_asterisk_modules() -> bool:
                         auth=auth,
                         timeout=5.0,
                     )
-            print("  Asterisk websocket client: imvera_inject")
+            print("  Asterisk websocket client: imvera_capture, imvera_inject")
         except httpx.HTTPError as exc:
             print(f"BLOCKED: cannot verify websocket_client connections: {exc}", file=sys.stderr)
             return False

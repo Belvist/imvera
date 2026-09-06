@@ -75,6 +75,24 @@ async def ready() -> dict:
     return {"status": "ok", "stt": stt, "tts": tts, "llm": llm}
 
 
+@app.get("/internal/calls/active")
+async def list_active_calls() -> dict:
+    return {"calls": list(_sessions.keys())}
+
+
+@app.get("/internal/calls/{call_id}/status")
+async def call_status(call_id: str) -> dict:
+    session = _sessions.get(call_id)
+    if not session:
+        raise HTTPException(404, detail="call not found")
+    return {
+        "call_id": call_id,
+        "capture_bytes": session.capture_bytes,
+        "capture_ready": session.capture_ready,
+        "inject_ready": session.inject_ready,
+    }
+
+
 @app.get("/internal/calls/{call_id}/trace")
 async def call_trace(call_id: str) -> dict:
     from packages.voice_runtime.trace import trace_path
@@ -148,6 +166,8 @@ async def _maybe_media_ready(session: CallSession) -> None:
 
 async def _run_incoming_capture(session: CallSession, connection_id: str) -> None:
     ws_url = f"{ASTERISK_HTTP.replace('http://', 'ws://')}/media/{connection_id}"
+    loop = asyncio.get_running_loop()
+    started = loop.time()
     try:
         async with websockets.connect(ws_url, open_timeout=10) as ws:
             while True:
@@ -170,6 +190,12 @@ async def _run_incoming_capture(session: CallSession, connection_id: str) -> Non
         log.warning("incoming capture ended for %s: %s", session.call_id, exc)
     finally:
         session.capture_ready = False
+        if (
+            session.media_ready.is_set()
+            and session.capture_bytes == 0
+            and loop.time() - started > 1.0
+        ):
+            await session.actor.on_capture_lost()
 
 
 @app.post("/internal/calls/{call_id}/attach_incoming_capture")

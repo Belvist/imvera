@@ -56,6 +56,9 @@ voice-e2e:
 voice-sip-e2e:
 	@$(PYTHON) scripts/voice_sip_e2e.py
 
+voice-sip-downlink:
+	@$(PYTHON) scripts/voice_sip_e2e.py --downlink-only
+
 up:
 	$(COMPOSE) up -d --build
 

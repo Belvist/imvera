@@ -99,27 +99,28 @@ async def _handle_stasis_start(channel: dict) -> None:
 
     capture = await _ari.create_external_media(
         STASIS_APP,
-        "INCOMING",
+        "imvera_capture",
         format="slin16",
-        direction="out",
-        connection_type="server",
+        direction="both",
     )
     inject = await _ari.create_external_media(
-        STASIS_APP, "imvera_inject", format="slin16", direction="in"
+        STASIS_APP, "imvera_inject", format="slin16", direction="both"
     )
     capture_id = capture["id"]
     inject_id = inject["id"]
-    connection_id = capture.get("channelvars", {}).get("MEDIA_WEBSOCKET_CONNECTION_ID", "")
-    if not connection_id:
-        connection_id = await _ari.get_channel_variable(
-            capture_id, "MEDIA_WEBSOCKET_CONNECTION_ID"
-        )
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        await client.post(
-            f"{GATEWAY_HTTP}/internal/calls/{call_id}/attach_incoming_capture",
-            json={"connection_id": connection_id},
-        )
+    # Let chan_websocket clients connect before bridging audio paths.
+    for _ in range(50):
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                r = await client.get(f"{GATEWAY_HTTP}/internal/calls/{call_id}/status")
+                if r.status_code == 200:
+                    body = r.json()
+                    if body.get("capture_ready") and body.get("inject_ready"):
+                        break
+        except httpx.HTTPError:
+            pass
+        await asyncio.sleep(0.1)
 
     await _ari.create_bridge(capture_bridge_id)
     await _ari.add_to_bridge(capture_bridge_id, snoop_id)
