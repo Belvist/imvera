@@ -6,6 +6,7 @@
 
 1. **FSM owns the scenario** — LLM does not skip mandatory stages.
 2. **LLM renders speech only** — no authority on RED/GREEN/public status; semantic hints cap at `POSSIBLE` in SafetyEngine.
+3. **Structured interpretation** — `packages/dialogue/interpretation.py` derives affirm/deny/slot-fill from text; Planner does not trust external `VALID` alone.
 3. **Slots close only on VALID semantic answers** — see judgement rules.
 4. **One pending question** at a time.
 
