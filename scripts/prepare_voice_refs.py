@@ -149,7 +149,7 @@ def build_manifest(
     bootstrap_entries: list[dict[str, Any]],
 ) -> dict[str, Any]:
     refs = fleurs_entries + bootstrap_entries
-    default_ref = "fleurs_ru_female_1"
+    default_ref = "bootstrap_serena_ru"
     if not any(r["id"] == default_ref for r in refs):
         default_ref = refs[0]["id"] if refs else None
     return {

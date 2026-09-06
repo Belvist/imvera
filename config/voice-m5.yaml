@@ -16,15 +16,42 @@ models:
     max_tokens_render: 120
     enable_thinking: false
   tts:
+    # Engine: mlx_customvoice (preset/clone) | mlx_base_clone (workbench ref) | silero_lab (NC, lab only)
+    engine: mlx_customvoice
     id: mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit
-    # Preset fallback when cloning disabled (IMVERA_TTS_USE_REF=0): serena | vivian
-    voice: vivian
+    base_model_id: mlx-community/Qwen3-TTS-12Hz-0.6B-Base-bf16
+    # Warm preset default — FLEURS zero-shot clone on CustomVoice often sounds uncanny/mocky.
+    voice: serena
     lang_code: Russian
     streaming_interval: 0.16
-    # Zero-shot clone (not trained model). See config/voice_refs/manifest.json
-    ref_id: fleurs_ru_female_1
-    ref_audio: config/voice_refs/fleurs_ru_female_1.wav
-    ref_text: "эта идея пришла из китая где излюбленным цветком был цвет сливы"
+    use_ref: false
+    ref_id: bootstrap_serena_ru
+    ref_audio: config/voice_refs/bootstrap_serena_ru.wav
+    ref_text: "Добрый день! Расскажите, пожалуйста, принимали ли вы лекарства утром, как обычно?"
+    generation:
+      temperature: 0.65
+      speed: 0.95
+      top_p: 0.92
+      top_k: 40
+      repetition_penalty: 1.03
+      instruct: >-
+        Тёплый спокойный голос без иронии и насмешки. Говорите бережно и естественно,
+        как заботливая знакомая пожилому человеку. Без театральности и карикатурной интонации.
+    profiles:
+      reference_clone:
+        engine: mlx_base_clone
+        use_ref: true
+        notes: >-
+          Use after IMVERA_Voice_Workbench clone QA (verified_transcript). Loads Base model,
+          not CustomVoice — better zero-shot cloning per Qwen docs.
+    silero_lab:
+      # CC BY-NC-SA 4.0 — LOCAL LAB ONLY (ADR-002). Requires IMVERA_SILERO_LAB_ACK=1.
+      model: v5_5_ru
+      speaker: kseniya
+      language: ru
+      sample_rate: 24000
+      license: CC-BY-NC-SA-4.0
+      license_warning: Non-commercial — not for production or pilot
   vad:
     onnx: silero_vad
 

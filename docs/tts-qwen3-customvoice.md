@@ -5,19 +5,43 @@ Worker: `services/tts/worker.py`
 Config: `config/voice-m5.yaml`  
 Voice refs: `config/voice_refs/` + `manifest.json`
 
+## Default (2026-09-07) — warmer, less mocky
+
+Lab default is **preset `serena` + warm `instruct`**, cloning **off** (`use_ref: false`).
+
+Why: zero-shot FLEURS clone on CustomVoice often sounds uncanny or «как будто прикалываются» — mlx_audio warns cloning is unreliable on CustomVoice checkpoints.
+
+| Parameter | Default | Notes |
+|-----------|---------|--------|
+| `voice` | `serena` | Female preset |
+| `use_ref` | `false` | Enable clone via config or env |
+| `generation.temperature` | `0.65` | Lower than mlx default 0.9 |
+| `generation.speed` | `0.95` | Slightly slower |
+| `generation.instruct` | warm Russian | No irony / caricature |
+
 ## Built-in presets (`voice` in config)
 
 Verified via `mlx_audio` `Model.generate(voice=..., lang_code="Russian")`:
 
 | Preset | Notes |
 |--------|--------|
-| `serena` | Female |
-| `vivian` | Female — lab preset fallback when cloning disabled |
+| `serena` | Female — **lab default** |
+| `vivian` | Female — alternate preset |
 | `ono_anna` | Female (Japanese-tuned name; Russian not evaluated) |
 | `sohee` | Female (Korean-tuned) |
 | `ryan`, `aiden`, `eric`, `dylan`, `uncle_fu` | Male |
 
 **NOT VERIFIED:** which preset is best for elderly Russian phone speech. Per `ai-model-evaluation` skill, run internal listen test (≥3 raters) before production claim.
+
+## Engines (`tts.engine`)
+
+| Engine | Model | Use |
+|--------|-------|-----|
+| `mlx_customvoice` | CustomVoice-8bit | Default lab — presets + optional clone |
+| `mlx_base_clone` | Base-bf16 | Workbench `reference_clone` path — better cloning |
+| `silero_lab` | Silero v5_5_ru kseniya | **NC license — local lab only** |
+
+Silero requires `IMVERA_SILERO_LAB_ACK=1` and `pip install -e ".[lab-silero]"`. See ADR-002.
 
 ## Voice cloning (`ref_audio` + `ref_text`)
 
@@ -35,56 +59,64 @@ Verified via `mlx_audio` `Model.generate(voice=..., lang_code="Russian")`:
 | `ref_text` | **Required** for ICL mode — must match spoken words in ref |
 | Quality | Clean speech; accurate transcript beats longer noisy clip |
 
-### Bundled Russian female references (no user WAV needed)
-
-Prepared by `make voice-refs-prepare` / `scripts/prepare_voice_refs.py`:
+### Bundled Russian female references
 
 | ID | Kind | License | Notes |
 |----|------|---------|--------|
-| `fleurs_ru_female_1` | Human | CC-BY-4.0 | **Default** — FLEURS `ru_ru`, gender=female |
+| `bootstrap_serena_ru` | Bootstrap | project-bootstrap | **Default ref** when cloning enabled |
+| `bootstrap_vivian_ru` | Bootstrap | project-bootstrap | Vera greeting phrase |
+| `fleurs_ru_female_1` | Human | CC-BY-4.0 | Previous default — often sounds uncanny on CustomVoice |
 | `fleurs_ru_female_2` | Human | CC-BY-4.0 | Alternate FLEURS clip |
-| `bootstrap_vivian_ru` | Bootstrap | project-bootstrap | Synthesized from `vivian` preset — replace for prod |
-| `bootstrap_serena_ru` | Bootstrap | project-bootstrap | Synthesized from `serena` preset — replace for prod |
 
 See `config/voice_refs/manifest.json` for `ref_text`, duration, attribution.
-
-**Honest scope:** this is zero-shot cloning, not a fine-tuned Vera model. Quality varies; bootstrap refs are a dev fallback only.
 
 ### Config
 
 ```yaml
 tts:
-  voice: vivian          # preset fallback when cloning off
-  ref_id: fleurs_ru_female_1
-  ref_audio: config/voice_refs/fleurs_ru_female_1.wav
-  ref_text: "эта идея пришла из китая где излюбленным цветком был цвет сливы"
+  engine: mlx_customvoice
+  voice: serena
+  use_ref: false
+  ref_id: bootstrap_serena_ru
+  generation:
+    temperature: 0.65
+    speed: 0.95
+    instruct: "Тёплый спокойный голос без иронии..."
 ```
 
-When `ref_audio` + `ref_text` resolve and file exists, preset `voice` is ignored for timbre (still passed to mlx).
+When `use_ref: true` (or `IMVERA_TTS_USE_REF=1`) and ref resolves, preset timbre is overridden by clone.
 
 ### Environment overrides
 
 | Variable | Effect |
 |----------|--------|
+| `IMVERA_TTS_ENGINE` | `mlx_customvoice` \| `mlx_base_clone` \| `silero_lab` |
 | `IMVERA_TTS_REF_ID` | Manifest ref id (loads file + `ref_text`) |
 | `IMVERA_TTS_REF_AUDIO` | Path to WAV (repo-relative or absolute) |
 | `IMVERA_TTS_REF_TEXT` | Transcript for env audio path |
-| `IMVERA_TTS_USE_REF=0` | Disable cloning; use preset `voice` only |
+| `IMVERA_TTS_USE_REF` | `1` / `0` — enable/disable cloning from config |
+| `IMVERA_TTS_TEMPERATURE` | Override sampling temperature |
+| `IMVERA_TTS_SPEED` | Override speed |
+| `IMVERA_TTS_INSTRUCT` | Override style instruct |
+| `IMVERA_SILERO_LAB_ACK` | Must be `1` to enable Silero lab engine |
 
-Resolution order: env ref id → env audio → config `ref_id` → config `ref_audio` → manifest `default_ref`.
-
-### Preview
+### Preview & A/B compare
 
 ```bash
 make tts-preview-list
 make tts-preview
-python scripts/tts_preview.py --ref-id bootstrap_vivian_ru --out /tmp/vera.wav
-python scripts/tts_preview.py --worker http://127.0.0.1:9102 --out /tmp/worker.wav
+make tts-preview-compare
+python scripts/tts_preview.py --no-ref --preset serena --out /tmp/vera.wav
+python scripts/tts_preview.py --ref-id fleurs_ru_female_1 --out /tmp/fleurs.wav
+python scripts/tts_compare.py --out /tmp/imvera_tts_compare
+IMVERA_SILERO_LAB_ACK=1 python scripts/tts_compare.py --include-silero
 ```
+
+Open `/tmp/imvera_tts_compare/listen.html` for side-by-side listen test.
 
 ### Production gate
 
-1. Replace bootstrap refs with **licensed** talent recordings (or CC0/Common Voice with documented consent path).
+1. Replace bootstrap refs with **licensed** talent recordings (or documented consent path).
 2. Benchmark vs presets on phone-bandwidth fixtures (`tools/voice_lab/`).
 3. Internal MOS listen test (≥3 raters) per `ai-model-evaluation` skill.
-4. ADR + license check before pilot claim.
+4. ADR + license check before pilot claim. **Silero NC is not a production path.**

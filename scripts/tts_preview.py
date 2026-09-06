@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preview TTS output — direct MLX or via running worker."""
+"""Preview TTS output — direct MLX, Silero lab, or via running worker."""
 
 from __future__ import annotations
 
@@ -11,63 +11,13 @@ import uuid
 from pathlib import Path
 
 import httpx
-import yaml
+
+from services.tts.preview import synthesize_preview
+from services.tts.voice_refs import load_manifest
 
 ROOT = Path(__file__).resolve().parent.parent
 CFG = ROOT / "config" / "voice-m5.yaml"
 DEFAULT_TEXT = "Вера на связи. Скажите, пожалуйста, как вы спали этой ночью?"
-
-
-def _load_cfg() -> dict:
-    with CFG.open(encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
-
-def preview_direct(
-    text: str,
-    ref_id: str | None,
-    preset: str | None,
-    out_path: Path,
-) -> None:
-    import numpy as np
-    import soundfile as sf
-    from mlx_audio.tts.utils import load_model
-
-    from services.tts.voice_refs import resolve_tts_ref
-
-    cfg = _load_cfg()
-    tts_cfg = dict(cfg["models"]["tts"])
-    if ref_id:
-        tts_cfg["ref_id"] = ref_id
-    if preset:
-        tts_cfg["voice"] = preset
-
-    ref_path, ref_text, resolved_id = resolve_tts_ref(tts_cfg, CFG)
-    voice = preset or tts_cfg.get("voice", "vivian")
-
-    gen_kwargs: dict = {
-        "text": text,
-        "voice": voice,
-        "lang_code": tts_cfg.get("lang_code", "Russian"),
-        "stream": False,
-    }
-    if ref_path is not None and ref_text:
-        gen_kwargs["ref_audio"] = str(ref_path)
-        gen_kwargs["ref_text"] = ref_text
-        print(f"clone ref={resolved_id or ref_path.name}")
-    else:
-        print(f"preset voice={voice}")
-
-    model = load_model(tts_cfg["id"])
-    chunks = []
-    sr = 24000
-    for result in model.generate(**gen_kwargs):
-        chunks.append(np.asarray(result.audio, dtype=np.float32))
-        sr = int(result.sample_rate)
-    audio = np.concatenate(chunks)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    sf.write(out_path, audio, sr, subtype="PCM_16")
-    print(f"wrote {out_path} ({len(audio)/sr:.2f}s @ {sr}Hz)")
 
 
 def preview_worker(text: str, worker_url: str, out_path: Path) -> None:
@@ -106,8 +56,6 @@ def preview_worker(text: str, worker_url: str, out_path: Path) -> None:
 
 
 def list_refs() -> None:
-    from services.tts.voice_refs import load_manifest
-
     manifest = load_manifest(CFG)
     print(f"default_ref: {manifest.get('default_ref')}")
     for entry in manifest.get("refs", []):
@@ -121,8 +69,11 @@ def list_refs() -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--text", default=DEFAULT_TEXT, help="Russian phrase to synthesize")
-    parser.add_argument("--ref-id", help="Manifest ref id (default from config/manifest)")
+    parser.add_argument("--ref-id", help="Manifest ref id (enables clone for this preview)")
     parser.add_argument("--preset", help="Override preset voice when not cloning")
+    parser.add_argument("--no-ref", action="store_true", help="Force preset mode (no clone)")
+    parser.add_argument("--engine", choices=["mlx_customvoice", "mlx_base_clone", "silero_lab"])
+    parser.add_argument("--temperature", type=float, help="Override sampling temperature")
     parser.add_argument("--out", type=Path, default=Path("/tmp/imvera_tts_preview.wav"))
     parser.add_argument("--worker", help="Use running TTS worker URL instead of direct MLX")
     parser.add_argument("--list-refs", action="store_true", help="List manifest refs and exit")
@@ -136,7 +87,20 @@ def main() -> int:
         if args.worker:
             preview_worker(args.text, args.worker, args.out)
         else:
-            preview_direct(args.text, args.ref_id, args.preset, args.out)
+            mode = synthesize_preview(
+                args.text,
+                args.out,
+                ref_id=args.ref_id,
+                preset=args.preset,
+                use_ref=False if args.no_ref else None,
+                engine=args.engine,
+                temperature=args.temperature,
+            )
+            import soundfile as sf
+
+            info = sf.info(args.out)
+            print(f"{mode}")
+            print(f"wrote {args.out} ({info.duration:.2f}s @ {info.samplerate}Hz)")
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

@@ -60,6 +60,8 @@ def lookup_manifest_ref(
 def resolve_tts_ref(
     tts_cfg: dict[str, Any],
     config_path: Path,
+    *,
+    force: bool = False,
 ) -> tuple[Path | None, str | None, str | None]:
     """
     Resolve reference audio for zero-shot cloning.
@@ -72,7 +74,18 @@ def resolve_tts_ref(
       5. tts.ref_audio (+ tts.ref_text) in config
       6. manifest default_ref
     """
-    if os.environ.get("IMVERA_TTS_USE_REF", "1").strip().lower() in {"0", "false", "no"}:
+    if os.environ.get("IMVERA_TTS_USE_REF", "").strip().lower() in {"0", "false", "no"}:
+        if not force:
+            return None, None, None
+
+    cfg_use_ref = tts_cfg.get("use_ref")
+    if (
+        not force
+        and cfg_use_ref is False
+        and not os.environ.get("IMVERA_TTS_USE_REF", "").strip()
+        and not os.environ.get("IMVERA_TTS_REF_ID", "").strip()
+        and not os.environ.get("IMVERA_TTS_REF_AUDIO", "").strip()
+    ):
         return None, None, None
 
     manifest = load_manifest(config_path)

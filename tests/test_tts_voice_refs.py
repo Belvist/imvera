@@ -26,7 +26,7 @@ def _tts_cfg() -> dict:
 def test_manifest_exists_with_default_ref() -> None:
     manifest = load_manifest(CFG)
     assert manifest_path(CFG).exists()
-    assert manifest.get("default_ref") == "fleurs_ru_female_1"
+    assert manifest.get("default_ref") == "bootstrap_serena_ru"
     ids = {r["id"] for r in manifest["refs"]}
     assert "fleurs_ru_female_1" in ids
     assert "bootstrap_vivian_ru" in ids
@@ -50,9 +50,17 @@ def test_lookup_manifest_ref() -> None:
 
 def test_resolve_tts_ref_from_config() -> None:
     path, text, ref_id = resolve_tts_ref(_tts_cfg(), CFG)
-    assert ref_id == "fleurs_ru_female_1"
-    assert path is not None and path.name == "fleurs_ru_female_1.wav"
-    assert text and "китая" in text
+    assert path is None and text is None and ref_id is None
+
+
+def test_resolve_tts_ref_when_use_ref_enabled() -> None:
+    cfg = _tts_cfg()
+    cfg = dict(cfg)
+    cfg["use_ref"] = True
+    path, text, ref_id = resolve_tts_ref(cfg, CFG)
+    assert ref_id == "bootstrap_serena_ru"
+    assert path is not None and path.name == "bootstrap_serena_ru.wav"
+    assert text and "лекарства" in text
 
 
 def test_resolve_tts_ref_env_override(monkeypatch) -> None:
