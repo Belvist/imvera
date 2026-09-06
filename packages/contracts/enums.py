@@ -1,0 +1,91 @@
+"""Domain enumerations — Architecture Freeze v1."""
+
+from enum import StrEnum
+
+
+class PublicCallStatus(StrEnum):
+    GREEN = "GREEN"
+    YELLOW = "YELLOW"
+    RED = "RED"
+    NO_CONTACT = "NO_CONTACT"
+    TECHNICAL = "TECHNICAL"
+    DECLINED = "DECLINED"
+
+
+class DeliveryState(StrEnum):
+    NOT_ATTEMPTED = "NOT_ATTEMPTED"
+    RINGING = "RINGING"
+    ANSWERED = "ANSWERED"
+    NOT_ANSWERED = "NOT_ANSWERED"
+    FAILED = "FAILED"
+
+
+class TechnicalState(StrEnum):
+    OK = "OK"
+    DEGRADED = "DEGRADED"
+    FAILED = "FAILED"
+
+
+class CareState(StrEnum):
+    UNKNOWN = "UNKNOWN"
+    GREEN = "GREEN"
+    YELLOW = "YELLOW"
+    RED = "RED"
+
+
+class ConsentState(StrEnum):
+    UNKNOWN = "UNKNOWN"
+    ACTIVE = "ACTIVE"
+    DECLINED = "DECLINED"
+
+
+class RiskLevel(StrEnum):
+    NONE = "NONE"
+    POSSIBLE = "POSSIBLE"
+    YELLOW = "YELLOW"
+    RED = "RED"
+
+
+class SignalResolution(StrEnum):
+    UNRESOLVED = "UNRESOLVED"
+    CONFIRMED = "CONFIRMED"
+    CONFIRMED_FALSE_ALARM = "CONFIRMED_FALSE_ALARM"
+
+
+class FsmState(StrEnum):
+    CALL_START = "CALL_START"
+    IDENTIFY_PERSON = "IDENTIFY_PERSON"
+    CHECK_CONSENT = "CHECK_CONSENT"
+    GREETING = "GREETING"
+    CHECK_CAN_TALK = "CHECK_CAN_TALK"
+    DAILY_CHECK = "DAILY_CHECK"
+    FOLLOW_UP = "FOLLOW_UP"
+    RISK_REVIEW = "RISK_REVIEW"
+    SUMMARY = "SUMMARY"
+    GOODBYE = "GOODBYE"
+    FINAL_CLASSIFICATION = "FINAL_CLASSIFICATION"
+    RED_SIGNAL = "RED_SIGNAL"
+    CONFIRM_SITUATION = "CONFIRM_SITUATION"
+    INCIDENT_REQUESTED = "INCIDENT_REQUESTED"
+    ESCALATION_HANDOFF = "ESCALATION_HANDOFF"
+
+
+class SlotStatus(StrEnum):
+    OPEN = "OPEN"
+    FILLED = "FILLED"
+    DECLINED = "DECLINED"
+
+
+class AnswerJudgement(StrEnum):
+    VALID = "VALID"
+    NO_ANSWER = "NO_ANSWER"
+    BACKCHANNEL = "BACKCHANNEL"
+    SIDE_TOPIC = "SIDE_TOPIC"
+    UNCLEAR = "UNCLEAR"
+    DECLINE = "DECLINE"
+
+
+class AsrQuality(StrEnum):
+    GOOD = "GOOD"
+    LOW = "LOW"
+    UNUSABLE = "UNUSABLE"

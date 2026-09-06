@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "imvera-voiseup"
+version = "0.1.0"
+description = "IMVERA voice + telephony stack (greenfield)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["packages"]
+
+[tool.hatch.build.targets.sdist]
+include = ["packages", "services", "tests", "docs", "docker"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

@@ -1,0 +1,31 @@
+---
+description: IMVERA VoiseUp core constitution — always apply
+alwaysApply: true
+---
+
+# VoiseUp Project Core
+
+Greenfield IMVERA voice + telephony. **No legacy voice codebase.**
+
+Before coding: read `AGENTS.md` and `PROJECT_CONTEXT.md`.
+
+## Non-negotiables
+
+- ONE owner per layer: Planner / State / Renderer / Validator / Realtime / Transport
+- Transport (SIP/RTP) never generates Vera speech
+- Voiseup emits events; Core owns verdicts (GREEN/YELLOW/RED)
+- `canonical_assistant_text == phone_spoken_text`
+- Report CHANGED / VERIFIED / NOT VERIFIED / REMAINING RISKS / NEXT GATE — never bare «готово»
+- Runtime truth before production bug fixes (SHA, engine, endpoints, flags)
+
+## Forbidden
+
+- Dual FSM or dual dialogue brain
+- Hidden/silent fallbacks
+- tests green == production ready
+- TECHNICAL/NO_CONTACT → GREEN
+- Stubs (`pass`, fake `ok`, TODO) in production paths
+
+## Skills
+
+Use `.agents/skills/` for workflows. Match skill to task per `AGENTS.md` skills map.

@@ -1,0 +1,80 @@
+# IMVERA VoiseUp — dev stack (Architecture Freeze v1)
+# Usage: make up | make down | make logs
+
+name: imvera
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: imvera-db
+    environment:
+      POSTGRES_DB: ${IMVERA_PG_DB:-imvera}
+      POSTGRES_USER: ${IMVERA_PG_USER:-imvera}
+      POSTGRES_PASSWORD: ${IMVERA_PG_PASSWORD:-imvera_dev_change_me}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${IMVERA_PG_USER:-imvera}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  cache:
+    image: redis:7-alpine
+    container_name: imvera-cache
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  storage:
+    image: minio/minio:latest
+    container_name: imvera-storage
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${IMVERA_S3_ACCESS_KEY:-imvera_dev}
+      MINIO_ROOT_PASSWORD: ${IMVERA_S3_SECRET_KEY:-imvera_dev_secret_change_me}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: imvera/api:dev
+    container_name: imvera-api
+    environment:
+      IMVERA_PG_URL: postgresql://${IMVERA_PG_USER:-imvera}:${IMVERA_PG_PASSWORD:-imvera_dev_change_me}@db:5432/${IMVERA_PG_DB:-imvera}
+      IMVERA_REDIS_URL: redis://cache:6379/0
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
