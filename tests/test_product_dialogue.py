@@ -1,12 +1,14 @@
 """Product dialogue regression tests — Phase A fixes on e599c52 audit."""
 
+from packages.contracts.core import DeliveryStage
 from packages.contracts.enums import FsmState, RiskLevel, SlotStatus
+from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.planner import Planner
 from packages.dialogue.session import CallSession
 
 
 def _session_through_wellness() -> CallSession:
-    session = CallSession(call_id="audit")
+    session = CallSession(call_id="audit", family_id="fam-test")
     session.start()
     session.state.mandatory_checks.update(
         {"identity": True, "consent": True, "can_talk": True}
@@ -88,7 +90,8 @@ def test_red_turn_not_hijacked_by_slot_unclear() -> None:
 
 
 def test_facts_persisted_to_store() -> None:
-    session = CallSession(call_id="persist", family_id="fam-1")
+    store = InMemoryCallRecordStore()
+    session = CallSession(call_id="persist", family_id="fam-1", store=store)
     session.start()
     session.state.mandatory_checks.update({"identity": True, "consent": True, "can_talk": True})
     session.state.greeted = True
@@ -97,12 +100,17 @@ def test_facts_persisted_to_store() -> None:
     session.handle_user_text("нормально")
     result = session.get_persisted_result()
     assert result is not None
+    assert result.family_id == "fam-1"
     assert "wellness" in result.facts
-    assert result.delivery_stage.value == "PERSISTED"
+    session.handle_user_text("не звоните больше")
+    final = session.get_persisted_result()
+    assert final is not None
+    assert final.delivery_stage == DeliveryStage.PERSISTED
+    assert final.call_ended is True
 
 
 def test_terminal_allo_no_repeat_goodbye() -> None:
-    session = CallSession(call_id="term")
+    session = CallSession(call_id="term", family_id="fam-test")
     session.start()
     session.state.fsm_state = FsmState.FINAL_CLASSIFICATION
     session.state.goodbye_confirmed = True
@@ -112,5 +120,5 @@ def test_terminal_allo_no_repeat_goodbye() -> None:
 
 
 def test_interpreter_provider_in_path() -> None:
-    session = CallSession(call_id="interp")
+    session = CallSession(call_id="interp", family_id="fam-test")
     assert session.interpreter.provider_name == "rule_baseline_v1"

@@ -1,5 +1,6 @@
 """Planner — decides what to do next (not how to say it)."""
 
+from packages.contracts.core import TerminationReason
 from packages.contracts.enums import ConsentState, FsmState, SlotStatus
 from packages.contracts.mandatory import PILOT_SLOT_CHECKS
 from packages.contracts.turn import TurnProposal
@@ -21,7 +22,8 @@ _RED_SAFETY_PROMPT = (
     "Я записала ваше сообщение и передам его близким. "
     "Правильно я поняла смысл?"
 )
-_RED_CLARIFY = "Спасибо, я уточнила. Информация будет передана близким."
+_RED_CLARIFY = "Спасибо за уточнение."
+_RED_FALSE_ALARM_ACK = "Поняла, это относилось к другому человеку."
 _SLOT_ALT_CLOSE = (
     "Кажется, сейчас не очень удобно. Можем закончить — "
     "или скажите коротко, как вы себя чувствуете?"
@@ -61,9 +63,6 @@ class Planner:
         if interp is None:
             interp = interpret_user_turn(state, user_text)
 
-        if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
-            return Planner._handle_risk_turn(state, interp, turn_id, generation_id)
-
         if interp.revoke_consent:
             return Planner._handle_revoke_consent(state, turn_id, generation_id)
 
@@ -81,6 +80,9 @@ class Planner:
 
         if interp.requests_repeat:
             return Planner._prompt_repeat(state, turn_id, generation_id)
+
+        if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
+            return Planner._handle_risk_turn(state, interp, turn_id, generation_id)
 
         if (
             interp.judgement.name == "UNCLEAR"
@@ -128,6 +130,7 @@ class Planner:
         state.fsm_state = FsmState.FINAL_CLASSIFICATION
         state.goodbye_confirmed = True
         state.final_action_done = True
+        state.termination_reason = TerminationReason.CONSENT_REVOKED
         state.bump_version()
         return TurnProposal(
             turn_id=turn_id,
@@ -149,6 +152,7 @@ class Planner:
         state.fsm_state = FsmState.FINAL_CLASSIFICATION
         state.goodbye_confirmed = True
         state.final_action_done = True
+        state.termination_reason = TerminationReason.WRONG_PERSON
         state.bump_version()
         return TurnProposal(
             turn_id=turn_id,
@@ -166,6 +170,19 @@ class Planner:
         turn_id: int,
         generation_id: str,
     ) -> TurnProposal:
+        if interp.risk_false_alarm:
+            state.fsm_state = FsmState.DAILY_CHECK
+            state.risk_handling = False
+            state.risk_source_quote = None
+            state.bump_version()
+            return TurnProposal(
+                turn_id=turn_id,
+                generation_id=generation_id,
+                fsm_state=state.fsm_state,
+                mandatory_remaining=state.mandatory_remaining(),
+                speech=_RED_FALSE_ALARM_ACK,
+                intent="red_false_alarm",
+            )
         if state.fsm_state == FsmState.RED_SIGNAL and interp.affirms:
             state.fsm_state = FsmState.CONFIRM_SITUATION
             state.bump_version()
@@ -234,6 +251,8 @@ class Planner:
         state.call_ended_early = True
         state.fsm_state = FsmState.FINAL_CLASSIFICATION
         state.goodbye_confirmed = True
+        state.final_action_done = True
+        state.termination_reason = TerminationReason.DEFERRED
         state.bump_version()
         return TurnProposal(
             turn_id=turn_id,
@@ -399,7 +418,7 @@ class Planner:
             )
 
         if state.fsm_state == FsmState.FINAL_CLASSIFICATION:
-            if state.final_action_done:
+            if state.call_finalized:
                 return Planner._terminal_noop(state, turn_id, generation_id)
             if state.consent_declined or state.call_revoked:
                 return TurnProposal(
@@ -456,6 +475,9 @@ class Planner:
             state.mandatory_checks["consent"] = False
             state.fsm_state = FsmState.FINAL_CLASSIFICATION
             state.call_ended_early = True
+            state.final_action_done = True
+            state.goodbye_confirmed = True
+            state.termination_reason = TerminationReason.CONSENT_DECLINED
             state.bump_version()
             return state
 
@@ -566,6 +588,11 @@ class Planner:
             state.awaiting_goodbye_confirm = False
             state.fsm_state = FsmState.FINAL_CLASSIFICATION
             state.final_action_done = True
+            state.termination_reason = (
+                TerminationReason.EARLY_GOODBYE
+                if state.mandatory_remaining()
+                else TerminationReason.COMPLETED
+            )
             state.bump_version()
             return TurnProposal(
                 turn_id=turn_id,

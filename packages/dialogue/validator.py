@@ -66,7 +66,7 @@ class Validator:
                 )
 
         for phrase in _FORBIDDEN_UNCONFIRMED:
-            if phrase in lower and "red_clarified" not in proposal.intent:
+            if phrase in lower:
                 return ValidatedTurn(
                     turn_id=proposal.turn_id,
                     generation_id=proposal.generation_id,

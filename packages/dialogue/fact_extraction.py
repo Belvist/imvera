@@ -31,6 +31,15 @@ def _clauses(text: str) -> list[str]:
 
 def _classify_clause(clause: str, pending_slot: str | None) -> str | None:
     lower = clause.lower()
+    if pending_slot and len(lower.split()) <= 4:
+        short_by_slot = {
+            "mood": lower in {"хорошо", "нормально", "отлично", "грустно", "плохо", "весело"},
+            "wellness": lower in {"хорошо", "нормально", "отлично", "плохо", "нехорошо"},
+            "sleep": bool(_SLEEP.search(lower)),
+            "plans": bool(_PLANS.search(lower)) or lower in {"дома", "нигде"},
+        }
+        if short_by_slot.get(pending_slot):
+            return pending_slot
     if _NARRATIVE.search(lower) and not (_WELLNESS.search(lower) or _SLEEP.search(lower)):
         return None
     if _SLEEP.search(lower):

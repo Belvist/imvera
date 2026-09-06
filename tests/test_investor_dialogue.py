@@ -19,7 +19,7 @@ def _wellness_pending_state() -> DialogueState:
 
 
 def _session_through_wellness() -> CallSession:
-    session = CallSession(call_id="audit")
+    session = CallSession(call_id="audit", family_id="fam-test")
     session.start()
     session.state.mandatory_checks.update(
         {"identity": True, "consent": True, "can_talk": True}
@@ -88,7 +88,7 @@ def test_revoke_consent_from_daily_check() -> None:
 
 
 def test_ne_seychas_defers_not_repeat_can_talk() -> None:
-    session = CallSession(call_id="defer")
+    session = CallSession(call_id="defer", family_id="fam-test")
     session.start()
     session.state.fsm_state = FsmState.CHECK_CAN_TALK
     result = session.handle_user_text("не сейчас")
@@ -100,7 +100,7 @@ def test_ne_seychas_defers_not_repeat_can_talk() -> None:
 
 
 def test_wrong_number_ends_identify() -> None:
-    session = CallSession(call_id="wrong")
+    session = CallSession(call_id="wrong", family_id="fam-test")
     session.start()
     result = session.handle_user_text("нет, вы ошиблись номером")
     assert session.state.wrong_person is True
@@ -109,7 +109,7 @@ def test_wrong_number_ends_identify() -> None:
 
 
 def test_da_vy_chto_not_consent() -> None:
-    session = CallSession(call_id="consent")
+    session = CallSession(call_id="consent", family_id="fam-test")
     session.start()
     session.state.fsm_state = FsmState.CHECK_CONSENT
     session.handle_user_text("да вы что")
@@ -118,7 +118,7 @@ def test_da_vy_chto_not_consent() -> None:
 
 
 def test_terminal_allo_no_repeat_goodbye() -> None:
-    session = CallSession(call_id="term")
+    session = CallSession(call_id="term", family_id="fam-test")
     session.start()
     session.state.fsm_state = FsmState.FINAL_CLASSIFICATION
     session.state.goodbye_confirmed = True
