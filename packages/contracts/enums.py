@@ -76,6 +76,19 @@ class SlotStatus(StrEnum):
     DECLINED = "DECLINED"
 
 
+class DialogueAct(StrEnum):
+    ANSWER = "answer"
+    QUESTION = "question"
+    REPEAT = "repeat"
+    BACKCHANNEL = "backchannel"
+    DEFER = "defer"
+    STOP_CALL = "stop_call"
+    REVOKE_CONSENT = "revoke_consent"
+    WRONG_PERSON = "wrong_person"
+    CORRECTION = "correction"
+    UNCLEAR = "unclear"
+
+
 class AnswerJudgement(StrEnum):
     VALID = "VALID"
     NO_ANSWER = "NO_ANSWER"

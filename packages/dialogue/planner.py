@@ -3,13 +3,27 @@
 from packages.contracts.enums import ConsentState, FsmState, SlotStatus
 from packages.contracts.mandatory import PILOT_SLOT_CHECKS
 from packages.contracts.turn import TurnProposal
+from packages.dialogue.facts import FactRecord
 from packages.dialogue.fsm import CallFsm
 from packages.dialogue.interpretation import UserInterpretation, interpret_user_turn
 from packages.dialogue.state import DialogueState
 
 _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
 _GOODBYE_FINAL = "До свидания. Хорошего дня."
-_GOODBYE_MARKERS = ("до свидания", "пока", "всего доброго")
+_GOODBYE_MARKERS = ("до свидания", "всего доброго")
+_MAX_SLOT_UNCLEAR = 2
+
+_VERA_INTRO = "Я Вера, голосовой помощник IMVERA."
+_DEFER_ACK = "Поняла. Поговорим в другой раз. До свидания."
+_WRONG_PERSON_FINAL = "Извините, видимо, ошиблись номером. До свидания."
+_REVOKE_FINAL = "Поняла. Без вашего согласия больше не буду звонить. До свидания."
+_RED_SAFETY_PROMPT = (
+    "Мне важно убедиться: вы сейчас в безопасности? Нужна ли вам помощь?"
+)
+_SLOT_ALT_CLOSE = (
+    "Кажется, сейчас не очень удобно. Можем закончить — "
+    "или скажите коротко, как вы себя чувствуете?"
+)
 
 _SLOT_QUESTIONS: dict[str, str] = {
     "wellness": "Расскажите, как вы себя чувствуете сейчас?",
@@ -37,8 +51,25 @@ class Planner:
         user_text: str,
         generation_id: str,
         turn_id: int,
+        interp: UserInterpretation | None = None,
     ) -> TurnProposal:
-        interp = interpret_user_turn(state, user_text)
+        if state.is_terminal() and state.goodbye_confirmed:
+            return Planner._terminal_noop(state, turn_id, generation_id)
+
+        if interp is None:
+            interp = interpret_user_turn(state, user_text)
+
+        if interp.revoke_consent:
+            return Planner._handle_revoke_consent(state, turn_id, generation_id)
+
+        if interp.wrong_person:
+            return Planner._handle_wrong_person(state, turn_id, generation_id)
+
+        if interp.defers_call and state.fsm_state == FsmState.CHECK_CAN_TALK:
+            return Planner._handle_defer(state, turn_id, generation_id)
+
+        if interp.asks_who_are_you:
+            return Planner._handle_who_are_you(state, turn_id, generation_id)
 
         if interp.requests_goodbye or interp.confirms_goodbye or interp.declines_goodbye:
             return Planner._handle_closing_turn(state, user_text, turn_id, generation_id, interp)
@@ -46,12 +77,137 @@ class Planner:
         if interp.requests_repeat:
             return Planner._prompt_repeat(state, turn_id, generation_id)
 
-        state = Planner._apply_interpretation(state, interp)
+        if interp.judgement.name == "UNCLEAR" and state.pending_slot:
+            slot = state.pending_slot
+            count = state.slot_unclear_counts.get(slot, 0) + 1
+            state.slot_unclear_counts[slot] = count
+            if count > _MAX_SLOT_UNCLEAR:
+                return Planner._slot_unclear_limit(state, turn_id, generation_id)
+
+        state = Planner._apply_interpretation(state, interp, turn_id)
         if state.consent_declined and state.fsm_state == FsmState.FINAL_CLASSIFICATION:
             return Planner._prompt_for_state(state, turn_id, generation_id)
 
         Planner._advance_when_ready(state)
         return Planner._prompt_for_state(state, turn_id, generation_id)
+
+    @staticmethod
+    def _terminal_noop(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech="",
+            intent="terminal_noop",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+        )
+
+    @staticmethod
+    def _handle_revoke_consent(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        state.consent_declined = True
+        state.call_revoked = True
+        state.mandatory_checks["consent"] = False
+        state.call_ended_early = True
+        state.fsm_state = FsmState.FINAL_CLASSIFICATION
+        state.goodbye_confirmed = True
+        state.bump_version()
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=_REVOKE_FINAL,
+            intent="revoke_consent_final",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+        )
+
+    @staticmethod
+    def _handle_wrong_person(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        state.wrong_person = True
+        state.call_ended_early = True
+        state.fsm_state = FsmState.FINAL_CLASSIFICATION
+        state.goodbye_confirmed = True
+        state.bump_version()
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=_WRONG_PERSON_FINAL,
+            intent="wrong_person_final",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+        )
+
+    @staticmethod
+    def _handle_defer(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        state.call_deferred = True
+        state.call_ended_early = True
+        state.fsm_state = FsmState.FINAL_CLASSIFICATION
+        state.goodbye_confirmed = True
+        state.bump_version()
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=_DEFER_ACK,
+            intent="defer_call_final",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+        )
+
+    @staticmethod
+    def _handle_who_are_you(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        resume = state.pending_question or ""
+        if state.fsm_state == FsmState.IDENTIFY_PERSON:
+            resume = f"Я разговариваю с {state.elder_display_name}?"
+        elif state.fsm_state == FsmState.CHECK_CAN_TALK:
+            resume = "Вам сейчас удобно немного поговорить?"
+        elif state.fsm_state == FsmState.CHECK_CONSENT:
+            resume = (
+                "Вы согласны получать регулярные звонки от IMVERA? "
+                "Это важно — звонки только с вашего согласия."
+            )
+        speech = f"{_VERA_INTRO} {resume}".strip()
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=speech,
+            intent="explain_vera_resume",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+        )
+
+    @staticmethod
+    def _slot_unclear_limit(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=_SLOT_ALT_CLOSE,
+            intent="slot_unclear_limit",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+        )
 
     @staticmethod
     def _advance_when_ready(state: DialogueState) -> None:
@@ -85,7 +241,8 @@ class Planner:
             return TurnProposal(
                 **base,
                 speech=(
-                    f"Здравствуйте. Я разговариваю с {state.elder_display_name}?"
+                    f"Здравствуйте. Я Вера, голосовой помощник IMVERA. "
+                    f"Я разговариваю с {state.elder_display_name}?"
                 ),
                 intent="confirm_identity",
             )
@@ -131,16 +288,35 @@ class Planner:
         if state.fsm_state == FsmState.SUMMARY:
             return TurnProposal(
                 **base,
-                speech="Спасибо за разговор. Я всё записала.",
+                speech="Спасибо за разговор.",
                 intent="summary",
             )
 
+        if state.fsm_state == FsmState.RED_SIGNAL:
+            return TurnProposal(
+                **base,
+                speech=_RED_SAFETY_PROMPT,
+                intent="red_confirm_safety",
+            )
+
         if state.fsm_state == FsmState.FINAL_CLASSIFICATION:
-            if state.consent_declined:
+            if state.consent_declined or state.call_revoked:
                 return TurnProposal(
                     **base,
-                    speech="Поняла. Без вашего согласия больше не буду звонить. До свидания.",
+                    speech=_REVOKE_FINAL,
                     intent="consent_declined_final",
+                )
+            if state.wrong_person:
+                return TurnProposal(
+                    **base,
+                    speech=_WRONG_PERSON_FINAL,
+                    intent="wrong_person_final",
+                )
+            if state.call_deferred:
+                return TurnProposal(
+                    **base,
+                    speech=_DEFER_ACK,
+                    intent="defer_call_final",
                 )
             return TurnProposal(
                 **base,
@@ -170,6 +346,7 @@ class Planner:
     def _apply_interpretation(
         state: DialogueState,
         interp: UserInterpretation,
+        turn_id: int,
     ) -> DialogueState:
         from packages.contracts.enums import AnswerJudgement
 
@@ -178,6 +355,7 @@ class Planner:
             state.mandatory_checks["consent"] = False
             state.fsm_state = FsmState.FINAL_CLASSIFICATION
             state.call_ended_early = True
+            state.bump_version()
             return state
 
         if interp.sets_consent == ConsentState.ACTIVE:
@@ -196,10 +374,23 @@ class Planner:
             and state.pending_slot in state.slots
             and interp.judgement == AnswerJudgement.VALID
         ):
-            state.slots[state.pending_slot] = SlotStatus.FILLED
-            state.mandatory_checks[state.pending_slot] = True
+            slot = state.pending_slot
+            value = interp.slot_value or ""
+            prev = state.facts.get(slot)
+            revision = (prev.revision + 1) if prev else 1
+            state.facts[slot] = FactRecord(
+                field=slot,
+                value=value,
+                source_quote=value,
+                turn_id=turn_id,
+                revision=revision,
+            )
+            state.slots[slot] = SlotStatus.FILLED
+            state.mandatory_checks[slot] = True
             state.pending_slot = None
             state.pending_question = None
+            state.slot_unclear_counts.pop(slot, None)
+            state.bump_version()
 
         return state
 
@@ -224,6 +415,9 @@ class Planner:
                 "Это важно — звонки только с вашего согласия."
             )
             intent = "repeat_consent"
+        elif state.fsm_state == FsmState.CHECK_CAN_TALK:
+            speech = "Вам сейчас удобно немного поговорить?"
+            intent = "repeat_can_talk"
         return TurnProposal(
             turn_id=turn_id,
             generation_id=generation_id,
@@ -256,6 +450,9 @@ class Planner:
         elif any(marker in normalized for marker in _GOODBYE_MARKERS):
             state.goodbye_count += 1
             state.closing_requested = True
+        elif interp and interp.requests_goodbye:
+            state.goodbye_count += 1
+            state.closing_requested = True
 
         can_close = Planner._may_enter_closing_fsm(state)
 
@@ -264,6 +461,7 @@ class Planner:
             state.call_ended_early = bool(state.mandatory_remaining())
             state.awaiting_goodbye_confirm = False
             state.fsm_state = FsmState.FINAL_CLASSIFICATION
+            state.bump_version()
             return TurnProposal(
                 turn_id=turn_id,
                 generation_id=generation_id,

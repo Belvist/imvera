@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+from packages.contracts.interpretation import TurnInterpretation
 from packages.contracts.stt import STTPartial, STTResult
 
 
@@ -69,6 +70,22 @@ class TTSProvider(Protocol):
     ) -> AsyncIterator[AudioChunk]: ...
 
     async def cancel(self, generation_id: str) -> None: ...
+
+
+@runtime_checkable
+class InterpretationProvider(Protocol):
+    """Semantic interpreter — proposes TurnInterpretation; policy commits facts."""
+
+    async def interpret_turn(
+        self,
+        *,
+        call_id: str,
+        turn_id: int,
+        user_text: str,
+        planner_context: dict,
+        state_version: int,
+        deadline: float,
+    ) -> TurnInterpretation: ...
 
 
 @runtime_checkable

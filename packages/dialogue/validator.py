@@ -12,6 +12,17 @@ class Validator:
         speech = proposal.speech.strip()
         notes: list[str] = []
 
+        if not speech and proposal.intent == "terminal_noop":
+            return ValidatedTurn(
+                turn_id=proposal.turn_id,
+                generation_id=proposal.generation_id,
+                speech=speech,
+                intent=proposal.intent,
+                fsm_state=proposal.fsm_state,
+                allowed=True,
+                validator_notes="terminal noop",
+            )
+
         if not speech:
             return ValidatedTurn(
                 turn_id=proposal.turn_id,
