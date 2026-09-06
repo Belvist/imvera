@@ -21,6 +21,24 @@ def main() -> int:
         cfg["models"]["llm"]["id"],
         cfg["models"]["tts"]["id"],
     ]
+    vad_path = ROOT / "config" / "models" / "silero_vad.onnx"
+    vad_path.parent.mkdir(parents=True, exist_ok=True)
+    if not vad_path.exists():
+        print("Preparing silero_vad.onnx...")
+        code = subprocess.call(
+            [
+                sys.executable,
+                "-m",
+                "huggingface_hub.cli",
+                "download",
+                "onnx-community/silero-vad",
+                "silero_vad.onnx",
+                "--local-dir",
+                str(vad_path.parent),
+            ],
+        )
+        if code != 0:
+            print("Warning: silero VAD download failed — energy VAD fallback will be used.")
     for model_id in models:
         print(f"Preparing {model_id}...")
         code = subprocess.call(

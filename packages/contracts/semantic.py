@@ -93,6 +93,18 @@ class SemanticPayload(StrictModel):
     user_question: str | None = None
 
 
+ActiveQuestionKind = Literal[
+    "identity",
+    "consent",
+    "can_talk",
+    "slot",
+    "risk",
+    "clarify",
+    "goodbye",
+    "none",
+]
+
+
 class TurnContext(StrictModel):
     call_id: str
     turn_id: int
@@ -103,6 +115,7 @@ class TurnContext(StrictModel):
     pending_question_id: str | None
     pending_question: str | None
     pending_question_delivery: Literal["complete", "partial", "unknown"]
+    active_question_kind: ActiveQuestionKind = "none"
     confirmed_facts: tuple[ConfirmedFact, ...] = ()
     risk_episodes: tuple[RiskEpisodeContext, ...] = ()
     delivered_assistant_phrases: tuple[str, ...] = ()

@@ -323,6 +323,15 @@ class CallSession:
             persist_error=error,
         )
 
+    def finalize_if_needed(self) -> tuple[bool, str | None]:
+        if not self.state.final_action_done and not self.state.call_finalized:
+            self.state.final_action_done = True
+            if self.state.termination_reason is None:
+                from packages.contracts.core import TerminationReason
+
+                self.state.termination_reason = TerminationReason.DISCONNECTED
+        return self._finalize_call_if_needed()
+
     def get_persisted_result(self) -> CallResultSnapshot | None:
         return self.store.get_call_result(self.state.call_id, self.state.family_id)
 

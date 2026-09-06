@@ -133,8 +133,9 @@ def test_red_interrupt_gets_product_compliant_prompt() -> None:
     CallFsm.interrupt_red(state, source_quote="я упала")
     proposal = Planner.plan_vera_turn(state, 1, "g1")
     assert proposal.intent == "red_confirm_safety"
-    assert "передам" in proposal.speech.lower()
+    assert "передам" not in proposal.speech.lower()
     assert "помощ" not in proposal.speech.lower()
+    assert "понимаю" in proposal.speech.lower()
 
 
 def test_multi_fact_phrase_stores_wellness() -> None:

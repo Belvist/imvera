@@ -1,4 +1,4 @@
-# Voice lab overlay — Asterisk for Zoiper (ADR-008 scoped)
+# Voice lab overlay — Asterisk for Zoiper (ADR-001)
 name: imvera-voice
 
 services:
@@ -11,6 +11,13 @@ services:
       - "127.0.0.1:5060:5060/udp"
       - "127.0.0.1:8088:8088"
       - "127.0.0.1:10000-10100:10000-10100/udp"
+    volumes:
+      - ../config/local/asterisk/pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ../config/local/asterisk/ari.conf:/etc/asterisk/ari.conf:ro
+      - ../config/local/asterisk/http.conf:/etc/asterisk/http.conf:ro
+      - ../config/local/asterisk/rtp.conf:/etc/asterisk/rtp.conf:ro
+      - ../config/local/asterisk/extensions.conf:/etc/asterisk/extensions.conf:ro
+      - ../config/local/asterisk/websocket_client.conf:/etc/asterisk/websocket_client.conf:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

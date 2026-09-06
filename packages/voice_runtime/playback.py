@@ -1,4 +1,4 @@
-"""Playback queue with generation-scoped cancellation."""
+"""Playback queue — frame splitting, pacing, generation ledger."""
 
 from __future__ import annotations
 
@@ -7,12 +7,13 @@ from collections import deque
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from packages.voice_runtime.audio import AudioEnvelope
+from packages.voice_runtime.audio import AudioEnvelope, pcm16_frame_bytes
 
 
 class PlaybackState(StrEnum):
     IDLE = "idle"
     PLAYING = "playing"
+    GENERATING = "generating"
     INTERRUPTED = "interrupted"
     COMPLETED = "completed"
 
@@ -25,16 +26,29 @@ class PlaybackLedger:
     generated_samples: int = 0
     queued_samples: int = 0
     sent_samples: int = 0
-    reported_samples: int = 0
+    generation_done: bool = False
     interrupted: bool = False
     state: PlaybackState = PlaybackState.IDLE
+
+
+def split_pcm_frames(pcm_s16le: bytes, sample_rate: int, frame_ms: int = 20) -> list[bytes]:
+    frame_bytes = pcm16_frame_bytes(sample_rate, frame_ms)
+    frames: list[bytes] = []
+    offset = 0
+    while offset + frame_bytes <= len(pcm_s16le):
+        frames.append(pcm_s16le[offset : offset + frame_bytes])
+        offset += frame_bytes
+    if offset < len(pcm_s16le):
+        frames.append(pcm_s16le[offset:])
+    return frames
 
 
 @dataclass
 class PlaybackQueue:
     call_id: str
-    buffer_limit_ms: int = 200
+    buffer_limit_ms: int = 800
     sample_rate: int = 16000
+    frame_ms: int = 20
     _active_generation: str | None = None
     _queue: deque[AudioEnvelope] = field(default_factory=deque)
     _ledger: PlaybackLedger | None = None
@@ -46,7 +60,7 @@ class PlaybackQueue:
             phrase_id=phrase_id,
             generation_id=generation_id,
             canonical_text=canonical_text,
-            state=PlaybackState.PLAYING,
+            state=PlaybackState.GENERATING,
         )
         self._queue.clear()
 
@@ -66,12 +80,26 @@ class PlaybackQueue:
             return False
         samples = len(chunk.pcm_s16le) // 2
         if self._ledger:
-            self._ledger.queued_samples += samples
-        max_samples = self.sample_rate * self.buffer_limit_ms // 1000
-        queued = sum(len(c.pcm_s16le) // 2 for c in self._queue)
-        if queued + samples > max_samples:
-            return False
-        self._queue.append(chunk)
+            self._ledger.generated_samples += samples
+            self._ledger.state = PlaybackState.PLAYING
+        for frame_pcm in split_pcm_frames(chunk.pcm_s16le, chunk.sample_rate, self.frame_ms):
+            frame_samples = len(frame_pcm) // 2
+            if self._ledger:
+                self._ledger.queued_samples += frame_samples
+            max_samples = self.sample_rate * self.buffer_limit_ms // 1000
+            queued = sum(len(c.pcm_s16le) // 2 for c in self._queue)
+            if queued + frame_samples > max_samples:
+                return False
+            self._queue.append(
+                AudioEnvelope(
+                    call_id=chunk.call_id,
+                    generation_id=chunk.generation_id,
+                    phrase_id=chunk.phrase_id,
+                    sequence=chunk.sequence,
+                    sample_rate=chunk.sample_rate,
+                    pcm_s16le=frame_pcm,
+                )
+            )
         return True
 
     def pop(self) -> AudioEnvelope | None:
@@ -82,14 +110,23 @@ class PlaybackQueue:
             self._ledger.sent_samples += len(chunk.pcm_s16le) // 2
         return chunk
 
-    async def drain_to(self, send_fn) -> None:
+    def mark_generation_done(self) -> None:
+        if self._ledger:
+            self._ledger.generation_done = True
+
+    def playback_complete(self) -> bool:
+        if not self._ledger or self._ledger.interrupted:
+            return False
+        return self._ledger.generation_done and not self._queue
+
+    def mark_completed(self) -> None:
+        if self._ledger and not self._ledger.interrupted:
+            self._ledger.state = PlaybackState.COMPLETED
+
+    async def drain_to(self, send_fn, frame_ms: int) -> None:
         while self._queue:
             chunk = self.pop()
             if chunk is None:
                 break
             await send_fn(chunk)
-            await asyncio.sleep(0)
-
-    def mark_completed(self) -> None:
-        if self._ledger and not self._ledger.interrupted:
-            self._ledger.state = PlaybackState.COMPLETED
+            await asyncio.sleep(frame_ms / 1000.0)

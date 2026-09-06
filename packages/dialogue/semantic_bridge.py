@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from packages.contracts.enums import AnswerJudgement, ConsentState, DialogueAct
 from packages.contracts.interpretation import FactCandidate
-from packages.contracts.semantic import SemanticPayload, evidence_matches
+from packages.contracts.semantic import ActiveQuestionKind, SemanticPayload, evidence_matches
 from packages.dialogue.interpretation import UserInterpretation
 
 
 def semantic_to_user_interpretation(
     raw_text: str,
     payload: SemanticPayload,
+    *,
+    active_question_kind: ActiveQuestionKind = "none",
 ) -> UserInterpretation:
     if payload.control == "stop_call":
         return UserInterpretation(
@@ -39,20 +41,53 @@ def semantic_to_user_interpretation(
             defers_call=True,
         )
 
-    if payload.consent_answer == "yes":
-        return UserInterpretation(
-            judgement=AnswerJudgement.VALID,
-            dialogue_act=DialogueAct.ANSWER,
-            affirms=True,
-            sets_consent=ConsentState.ACTIVE,
-        )
-    if payload.consent_answer == "no":
-        return UserInterpretation(
-            judgement=AnswerJudgement.DECLINE,
-            dialogue_act=DialogueAct.ANSWER,
-            declines=True,
-            sets_consent=ConsentState.DECLINED,
-        )
+    if active_question_kind == "identity":
+        if payload.consent_answer == "yes" or (
+            payload.dialogue_act == "answer" and payload.answers_pending_question
+        ):
+            return UserInterpretation(
+                judgement=AnswerJudgement.VALID,
+                dialogue_act=DialogueAct.ANSWER,
+                affirms=True,
+                confirms_identity=True,
+            )
+        if payload.consent_answer == "no":
+            return UserInterpretation(
+                judgement=AnswerJudgement.DECLINE,
+                dialogue_act=DialogueAct.ANSWER,
+                declines=True,
+            )
+
+    if active_question_kind == "consent":
+        if payload.consent_answer == "yes":
+            return UserInterpretation(
+                judgement=AnswerJudgement.VALID,
+                dialogue_act=DialogueAct.ANSWER,
+                affirms=True,
+                sets_consent=ConsentState.ACTIVE,
+            )
+        if payload.consent_answer == "no":
+            return UserInterpretation(
+                judgement=AnswerJudgement.DECLINE,
+                dialogue_act=DialogueAct.ANSWER,
+                declines=True,
+                sets_consent=ConsentState.DECLINED,
+            )
+
+    if active_question_kind == "can_talk":
+        if payload.consent_answer == "yes":
+            return UserInterpretation(
+                judgement=AnswerJudgement.VALID,
+                dialogue_act=DialogueAct.ANSWER,
+                affirms=True,
+                confirms_can_talk=True,
+            )
+        if payload.consent_answer == "no":
+            return UserInterpretation(
+                judgement=AnswerJudgement.DECLINE,
+                dialogue_act=DialogueAct.ANSWER,
+                declines=True,
+            )
 
     if payload.user_question:
         return UserInterpretation(
@@ -64,6 +99,8 @@ def semantic_to_user_interpretation(
     candidates: list[FactCandidate] = []
     for fact in payload.facts:
         if not evidence_matches(raw_text, fact.evidence):
+            continue
+        if fact.subject == "other":
             continue
         candidates.append(
             FactCandidate(
@@ -98,6 +135,13 @@ def semantic_to_user_interpretation(
             fills_pending_slot=any(c.answers_pending for c in candidates),
             slot_value=primary.value,
             fact_candidates=candidates,
+        )
+
+    if payload.dialogue_act == "repeat":
+        return UserInterpretation(
+            judgement=AnswerJudgement.VALID,
+            dialogue_act=DialogueAct.REPEAT,
+            requests_repeat=True,
         )
 
     if payload.dialogue_act == "backchannel":

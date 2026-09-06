@@ -1,33 +1,19 @@
 #!/usr/bin/env python3
-"""Generate local Zoiper SIP account credentials."""
+"""Generate local Zoiper SIP account and sync Asterisk configs."""
 
 from __future__ import annotations
 
 import json
-import secrets
-from pathlib import Path
+import sys
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "config" / "local" / "zoiper.json"
+from scripts.local_sip_config import load_or_create
 
 
 def main() -> int:
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    if OUT.exists():
-        data = json.loads(OUT.read_text())
-    else:
-        data = {
-            "sip_server": "127.0.0.1",
-            "transport": "UDP",
-            "port": 5060,
-            "username": "1001",
-            "password": secrets.token_urlsafe(12),
-            "vera_extension": "7000",
-        }
-        OUT.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    data = load_or_create()
     print(json.dumps(data, indent=2, ensure_ascii=False))
-    print(f"\nSaved to {OUT}")
-    print("Dial extension 7000 to reach Vera.")
+    print("\nAsterisk configs rendered to config/local/asterisk/")
+    print(f"Dial extension {data['vera_extension']} to reach Vera.")
     return 0
 
 
