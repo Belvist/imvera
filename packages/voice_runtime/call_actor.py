@@ -102,6 +102,7 @@ class CallActor:
     _output_sample_rate: int = 16000
     _output_frame_bytes: int = 640
     _inflight_utterances: set[int] = field(default_factory=set)
+    _last_applied_utterance_seq: int = 0
     _hangup_after_playback: bool = False
     _transport_closed: bool = False
     _capture_lost: bool = False
@@ -275,7 +276,6 @@ class CallActor:
         self._utterance_seq = utterance_seq
         utterance_id = f"u-{utterance_seq}"
         turn_id = self.session.turn_id + 1
-        captured_version = self.session.state.state_version
         deadline = time.monotonic() + self.config.stt_deadline_s
         try:
             stt_result = await self.stt.transcribe_final(
@@ -343,22 +343,24 @@ class CallActor:
         )
         qkind = active_question_kind(self.session.state)
         interp = semantic_to_user_interpretation(
-            text, semantic.payload, active_question_kind=qkind
+            text,
+            semantic.payload,
+            active_question_kind=qkind,
+            pending_slot=self.session.state.pending_slot,
         )
         legacy_contract: TurnInterpretation = to_turn_interpretation(
             self.session.state,
             turn_id,
             text,
             interp,
-            state_version=captured_version,
+            state_version=self.session.state.state_version,
             asr_quality=stt_result.asr_quality,
         )
 
         async with self._policy_lock:
+            while self._last_applied_utterance_seq + 1 < utterance_seq:
+                await asyncio.sleep(0)
             if self._stopped or self._transport_closed:
-                self._inflight_utterances.discard(utterance_seq)
-                return
-            if self.session.state.state_version != captured_version:
                 self._inflight_utterances.discard(utterance_seq)
                 return
             result = await asyncio.to_thread(
@@ -366,7 +368,9 @@ class CallActor:
                 text,
                 interp=interp,
                 contract=legacy_contract,
+                utterance_id=utterance_id,
             )
+            self._last_applied_utterance_seq = utterance_seq
 
         self._inflight_utterances.discard(utterance_seq)
         if self._stopped or self._transport_closed:
@@ -385,6 +389,8 @@ class CallActor:
         )
         if result.proposal.intent.endswith("_final") or self.session.state.final_action_done:
             self._hangup_after_playback = True
+        if self._inflight_utterances:
+            return
         await self._deliver_session_turn(result)
 
     async def _deliver_session_turn(self, result: SessionTurnResult) -> None:
@@ -405,7 +411,12 @@ class CallActor:
         try:
             if result.proposal.intent not in _SKIP_RENDER_INTENTS:
                 facts = [
-                    {"field": k, "value": v.value, "quote": v.source_quote}
+                    {
+                        "field": k,
+                        "value": v.value,
+                        "quote": v.source_quote,
+                        "source_utterance_id": v.source_utterance_id,
+                    }
                     for k, v in self.session.state.facts.items()
                 ]
                 rendered_llm = await self.llm.render_text(
@@ -413,6 +424,9 @@ class CallActor:
                         "intent": result.proposal.intent,
                         "fsm_state": result.proposal.fsm_state.value,
                         "planner_text": planner_text,
+                        "user_text": result.user_text,
+                        "pending_question": self.session.state.pending_question,
+                        "delivered_phrases": list(self._delivered_phrases[-6:]),
                     },
                     facts,
                     time.monotonic() + self.config.llm_deadline_s,
@@ -589,6 +603,8 @@ class CallActor:
         spoken = ledger.canonical_text
         if spoken and (not self._delivered_phrases or self._delivered_phrases[-1] != spoken):
             self._delivered_phrases.append(spoken)
+            if self.session.state.pending_question:
+                self.session.state.pending_question_delivered = True
         finish = self.media.finish or self.media.flush
         await finish()
         await self.media.emit(

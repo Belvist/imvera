@@ -53,6 +53,8 @@ class Planner:
         generation_id: str,
         turn_id: int,
         interp: UserInterpretation | None = None,
+        *,
+        utterance_id: str = "",
     ) -> TurnProposal:
         if state.is_terminal() and state.goodbye_confirmed:
             return Planner._terminal_noop(state, turn_id, generation_id)
@@ -66,8 +68,20 @@ class Planner:
         if interp.wrong_person:
             return Planner._handle_wrong_person(state, turn_id, generation_id)
 
-        if interp.defers_call and state.fsm_state == FsmState.CHECK_CAN_TALK:
+        if interp.defers_call and not state.is_terminal():
             return Planner._handle_defer(state, turn_id, generation_id)
+
+        if (
+            interp.declines
+            and state.fsm_state == FsmState.CHECK_CAN_TALK
+            and not state.mandatory_checks.get("can_talk")
+        ):
+            return Planner._handle_can_talk_decline(state, turn_id, generation_id)
+
+        if interp.fact_candidates:
+            Planner._apply_interpretation(
+                state, interp, turn_id, utterance_id=utterance_id
+            )
 
         if interp.asks_who_are_you:
             return Planner._handle_who_are_you(state, turn_id, generation_id)
@@ -92,7 +106,9 @@ class Planner:
             if count > _MAX_SLOT_UNCLEAR:
                 return Planner._slot_unclear_limit(state, turn_id, generation_id)
 
-        state = Planner._apply_interpretation(state, interp, turn_id)
+        state = Planner._apply_interpretation(
+            state, interp, turn_id, utterance_id=utterance_id, skip_facts=True
+        )
         if state.consent_declined and state.fsm_state == FsmState.FINAL_CLASSIFICATION:
             return Planner._prompt_for_state(state, turn_id, generation_id)
 
@@ -216,13 +232,39 @@ class Planner:
         )
 
     @staticmethod
+    def _handle_can_talk_decline(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        state.mandatory_checks["can_talk"] = False
+        state.call_ended_early = True
+        state.fsm_state = FsmState.FINAL_CLASSIFICATION
+        state.goodbye_confirmed = True
+        state.final_action_done = True
+        state.termination_reason = TerminationReason.DEFERRED
+        state.bump_version()
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=_DEFER_ACK,
+            intent="can_talk_declined_final",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+        )
+
+    @staticmethod
     def _commit_fact(
         state: DialogueState,
         field: str,
         value: str,
         source_quote: str,
         turn_id: int,
+        *,
+        utterance_id: str = "",
         negated: bool = False,
+        temporal_scope: str = "now",
+        subject: str = "elder",
     ) -> None:
         prev = state.facts.get(field)
         revision = (prev.revision + 1) if prev else 1
@@ -231,6 +273,9 @@ class Planner:
             value=value,
             source_quote=source_quote,
             turn_id=turn_id,
+            source_utterance_id=utterance_id,
+            subject=subject,
+            temporal_scope=temporal_scope,
             revision=revision,
             negated=negated,
         )
@@ -451,6 +496,7 @@ class Planner:
     def _arm_pending_slot(state: DialogueState, slot: str) -> None:
         state.pending_slot = slot
         state.pending_question = _SLOT_QUESTIONS[slot]
+        state.pending_question_delivered = False
 
     @staticmethod
     def _next_open_slot(state: DialogueState) -> str | None:
@@ -464,6 +510,9 @@ class Planner:
         state: DialogueState,
         interp: UserInterpretation,
         turn_id: int,
+        *,
+        utterance_id: str = "",
+        skip_facts: bool = False,
     ) -> DialogueState:
         from packages.contracts.enums import AnswerJudgement
 
@@ -488,7 +537,10 @@ class Planner:
         if interp.confirms_can_talk:
             state.mandatory_checks["can_talk"] = True
 
-        if interp.fact_candidates and interp.judgement == AnswerJudgement.VALID:
+        if skip_facts:
+            return state
+
+        if interp.fact_candidates:
             for cand in interp.fact_candidates:
                 Planner._commit_fact(
                     state,
@@ -496,11 +548,13 @@ class Planner:
                     cand.value,
                     cand.source_quote,
                     turn_id,
-                    cand.negated,
+                    utterance_id=utterance_id,
+                    negated=cand.negated,
                 )
             if state.pending_slot and state.pending_slot in state.facts:
                 state.pending_slot = None
                 state.pending_question = None
+                state.pending_question_delivered = False
             state.bump_version()
         elif (
             interp.fills_pending_slot
@@ -510,9 +564,12 @@ class Planner:
         ):
             slot = state.pending_slot
             value = interp.slot_value or ""
-            Planner._commit_fact(state, slot, value, value, turn_id)
+            Planner._commit_fact(
+                state, slot, value, value, turn_id, utterance_id=utterance_id
+            )
             state.pending_slot = None
             state.pending_question = None
+            state.pending_question_delivered = False
             state.bump_version()
 
         return state

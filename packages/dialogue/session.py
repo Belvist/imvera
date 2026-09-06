@@ -197,6 +197,7 @@ class CallSession:
         *,
         interp: UserInterpretation | None = None,
         contract: TurnInterpretation | None = None,
+        utterance_id: str | None = None,
     ) -> SessionTurnResult:
         if self.state.call_finalized:
             gen = self._next_generation_id()
@@ -235,7 +236,9 @@ class CallSession:
                 state_version=self.state.state_version,
             )
 
-        return self._apply_user_turn(user_text, next_turn, interp, contract)
+        return self._apply_user_turn(
+            user_text, next_turn, interp, contract, utterance_id=utterance_id
+        )
 
     def _apply_user_turn(
         self,
@@ -243,6 +246,8 @@ class CallSession:
         next_turn: int,
         interp: UserInterpretation,
         contract: TurnInterpretation,
+        *,
+        utterance_id: str | None = None,
     ) -> SessionTurnResult:
         allow_new = not (
             self.state.risk_handling and self.state.fsm_state == FsmState.CONFIRM_SITUATION
@@ -272,9 +277,29 @@ class CallSession:
                 return self._failed_turn(user_text, interp, contract, err or "risk persist")
 
         self.turn_id = next_turn
+        uid = utterance_id or f"u-{self.turn_id}"
+        self.state.last_committed_utterance_id = uid
         gen = self._next_generation_id()
         proposal = Planner.plan_after_user(
-            self.state, user_text, gen, self.turn_id, interp=interp
+            self.state,
+            user_text,
+            gen,
+            self.turn_id,
+            interp=interp,
+            utterance_id=uid,
+        )
+        self._append_event(
+            "PLANNER_DECISION",
+            {
+                "turn_id": self.turn_id,
+                "utterance_id": uid,
+                "intent": proposal.intent,
+                "fsm_state": proposal.fsm_state.value,
+                "state_version": self.state.state_version,
+                "pending_slot": self.state.pending_slot,
+                "user_act": interp.dialogue_act.value,
+            },
+            idempotency_key=f"{self.state.call_id}:planner:{uid}",
         )
         validated = Validator.validate(proposal)
 

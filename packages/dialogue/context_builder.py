@@ -38,6 +38,8 @@ def active_question_kind(state: DialogueState) -> ActiveQuestionKind:
 
 
 def _pending_question_text(state: DialogueState) -> str | None:
+    if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
+        return state.risk_source_quote or "Расскажите, что произошло?"
     if state.pending_question:
         return state.pending_question
     if state.fsm_state == FsmState.IDENTIFY_PERSON:
@@ -49,8 +51,10 @@ def _pending_question_text(state: DialogueState) -> str | None:
         )
     if state.fsm_state == FsmState.CHECK_CAN_TALK:
         return "Вам сейчас удобно немного поговорить?"
-    if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
-        return state.risk_source_quote
+    if state.awaiting_goodbye_confirm:
+        from packages.dialogue.planner import _GOODBYE_CONFIRM
+
+        return _GOODBYE_CONFIRM
     if state.pending_slot:
         from packages.dialogue.planner import _SLOT_QUESTIONS
 
@@ -66,7 +70,7 @@ def build_turn_context(
     raw_text: str,
     asr_quality: AsrQuality = AsrQuality.GOOD,
     delivered_phrases: tuple[str, ...] = (),
-    question_delivery: str = "complete",
+    question_delivery: str | None = None,
 ) -> TurnContext:
     confirmed: list[ConfirmedFact] = []
     for field, fact in state.facts.items():
@@ -74,16 +78,19 @@ def build_turn_context(
         if start < 0:
             start = 0
         end = start + len(fact.source_quote or fact.value)
+        source_uid = fact.source_utterance_id or state.last_committed_utterance_id
         confirmed.append(
             ConfirmedFact(
                 observation_id=f"{state.call_id}:{field}:r{fact.revision}",
-                source_utterance_id=utterance_id,
+                source_utterance_id=source_uid,
                 revision=fact.revision,
                 fact=FactCandidate(
                     field=field,
                     value=fact.value,
                     subject="speaker" if fact.subject == "elder" else fact.subject,
-                    temporal_scope="today",
+                    temporal_scope=fact.temporal_scope
+                    if fact.temporal_scope in ("now", "today", "past", "unknown")
+                    else "today",
                     negated=fact.negated,
                     evidence=Evidence(
                         start=start,
@@ -98,8 +105,14 @@ def build_turn_context(
         state.fsm_state.value if state.fsm_state != FsmState.CALL_START else None
     )
     qkind = active_question_kind(state)
-    delivery: str = question_delivery
-    if delivery == "complete" and qkind == "none":
+    delivery: str
+    if question_delivery is not None:
+        delivery = question_delivery
+    elif qkind == "none":
+        delivery = "unknown"
+    elif state.pending_question_delivered:
+        delivery = "complete"
+    else:
         delivery = "unknown"
 
     return TurnContext(

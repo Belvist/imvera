@@ -44,6 +44,8 @@ class DialogueState(BaseModel):
     termination_reason: TerminationReason | None = None
     family_id: str = ""
     slot_unclear_counts: dict[str, int] = Field(default_factory=dict)
+    pending_question_delivered: bool = False
+    last_committed_utterance_id: str = ""
 
     def bump_version(self) -> None:
         self.state_version += 1
