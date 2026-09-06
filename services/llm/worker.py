@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from packages.contracts.semantic import SemanticPayload
 from services.inference.common import (
     InferenceExecutor,
     WorkerState,
@@ -23,21 +24,11 @@ from services.inference.common import (
 )
 from services.llm.prompts import INTERPRETER_SYSTEM, RENDERER_SYSTEM
 
-SEMANTIC_SCHEMA_HINT = """Верни ТОЛЬКО JSON SemanticPayload (без call_id и прочих полей контекста):
-{
-  "dialogue_act": "answer|question|correction|repeat|backchannel|unclear",
-  "control": "none|stop_call|revoke_consent|defer|wrong_person",
-  "consent_answer": "yes|no|unclear|not_applicable",
-  "facts": [{
-    "field":"mood","value":"...","subject":"speaker",
-    "temporal_scope":"today","negated":false,
-    "evidence":{"start":0,"end":6,"quote":"хорошо"}
-  }],
-  "risk_candidates": [],
-  "answers_pending_question": true,
-  "needs_clarification": false,
-  "user_question": null
-}"""
+SEMANTIC_SCHEMA_HINT = (
+    "Верни ТОЛЬКО JSON SemanticPayload (без call_id и прочих полей контекста). "
+    "Схема:\n"
+    + json.dumps(SemanticPayload.model_json_schema(), ensure_ascii=False, indent=2)
+)
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "voice-m5.yaml"
 _model = None

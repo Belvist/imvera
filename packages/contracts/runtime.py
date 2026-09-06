@@ -30,6 +30,8 @@ class RuntimeEventType(StrEnum):
     CALL_STOP_REQUESTED = "call.stop_requested"
     PROVIDER_TIMEOUT = "provider.timeout"
     CALL_DEADLINE_REACHED = "call.deadline_reached"
+    CALL_ENDED = "call.ended"
+    CAPTURE_LOST = "capture.lost"
 
 
 @dataclass(frozen=True)
