@@ -70,14 +70,20 @@ def main() -> int:
         audio = audio_settings()
         inject_fmt = audio["inject_format"]
         out_sr = audio["output_sample_rate"]
+        sip_codecs = audio.get("sip_codecs", "g722")
         print(
-            f"  Codec (lab):    Audio settings → enable **L16/{out_sr}** ({inject_fmt}), "
-            "move above PCMU/PCMA"
+            f"  Codec (lab):    Account → Advanced → enable **G.722** (wideband 16 kHz), "
+            "disable PCMU/PCMA"
         )
-        print("                  Fallback wideband: L16/24000 (slin24) or L16/16000 (slin16)")
+        print(
+            f"                  Asterisk inject leg: {inject_fmt} @ {out_sr} Hz "
+            f"(chan_websocket — not what Zoiper hears on RTP)"
+        )
+        print(f"                  Server allow for 1001: {sip_codecs} (no G.711)")
+        print("                  Zoiper Mac **cannot** do L16/48000 — use browser WS for full rate")
     else:
-        print("  Codec (lab):    Audio settings → enable **L16/48000** (slin48), move above PCMU/PCMA")
-    print("                  If only G.711: audio stays narrowband (8 kHz) — Nokia-phone quality")
+        print("  Codec (lab):    enable G.722, disable PCMU/PCMA (Zoiper has no L16/48000)")
+    print("                  If only G.711 negotiates: audio stays 8 kHz — Nokia-phone quality")
     print("  STUN:           Don't use STUN (Advanced) — critical for Docker RTP")
     print("\n--- Why silence on 127.0.0.1 ---")
     print("  Asterisk runs in Docker. Zoiper on 127.0.0.1 → RTP goes to container loopback.")

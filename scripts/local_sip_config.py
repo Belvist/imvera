@@ -23,9 +23,18 @@ def _sip_codecs() -> str:
     try:
         with VOICE_PROFILE.open(encoding="utf-8") as fh:
             audio = yaml.safe_load(fh).get("audio") or {}
-        return str(audio.get("sip_codecs", "slin48,slin24,slin16,ulaw,alaw"))
+        return str(audio.get("sip_codecs", "g722,slin48,slin24,slin16"))
     except OSError:
-        return "slin48,slin24,slin16,ulaw,alaw"
+        return "g722,slin48,slin24,slin16"
+
+
+def _sip_codecs_e2e() -> str:
+    try:
+        with VOICE_PROFILE.open(encoding="utf-8") as fh:
+            audio = yaml.safe_load(fh).get("audio") or {}
+        return str(audio.get("sip_codecs_e2e", "ulaw,alaw"))
+    except OSError:
+        return "ulaw,alaw"
 
 
 def detect_media_host() -> str:
@@ -87,6 +96,8 @@ def render_asterisk_configs(cfg: dict) -> None:
     cfg["media_host"] = media_host
 
     sip_codecs = _sip_codecs()
+    sip_codecs_e2e = _sip_codecs_e2e()
+    e2e_user = "1002"
     (ASTERISK_DIR / "pjsip.conf").write_text(
         f"""[global]
 type=global
@@ -134,6 +145,32 @@ username=1001
 realm=127.0.0.1
 
 [1001]
+type=aor
+max_contacts=10
+remove_existing=yes
+
+[{e2e_user}]
+type=endpoint
+context=imvera-local
+disallow=all
+allow={sip_codecs_e2e}
+auth={e2e_user}
+aors={e2e_user}
+from_domain=127.0.0.1
+direct_media=no
+rtp_symmetric=yes
+force_rport=yes
+media_use_received_transport=yes
+rtp_keepalive=10
+
+[{e2e_user}]
+type=auth
+auth_type=userpass
+password={sip_pass}
+username={e2e_user}
+realm=127.0.0.1
+
+[{e2e_user}]
 type=aor
 max_contacts=10
 remove_existing=yes
@@ -214,6 +251,12 @@ verify_server_cert = no
     cfg["sip_server"] = "127.0.0.1"
     cfg["media_host"] = media_host
     zoiper_host = media_host
+    cfg["e2e_account"] = {
+        "username": e2e_user,
+        "password": sip_pass,
+        "codecs": sip_codecs_e2e,
+        "note": "PyVoIP automated SIP e2e only — not for Zoiper",
+    }
     cfg["zoiper_setup"] = {
         "host": zoiper_host,
         "port": cfg.get("port", 5062),

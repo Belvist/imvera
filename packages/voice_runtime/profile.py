@@ -62,9 +62,8 @@ def audio_settings() -> dict[str, Any]:
         audio.get("output_sample_rate") or _format_sample_rate(inject_format)
     )
     frame_ms = int(audio.get("frame_ms", 20))
-    sip_codecs = str(
-        audio.get("sip_codecs", "slin48,slin24,slin16,ulaw,alaw")
-    )
+    sip_codecs = str(audio.get("sip_codecs", "g722,slin48,slin24,slin16"))
+    sip_codecs_e2e = str(audio.get("sip_codecs_e2e", "ulaw,alaw"))
     return {
         "internal_sample_rate": internal_sr,
         "output_sample_rate": output_sr,
@@ -72,6 +71,7 @@ def audio_settings() -> dict[str, Any]:
         "capture_format": capture_format,
         "frame_ms": frame_ms,
         "sip_codecs": sip_codecs,
+        "sip_codecs_e2e": sip_codecs_e2e,
     }
 
 
