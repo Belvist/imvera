@@ -15,6 +15,8 @@ _FORMAT_SAMPLE_RATES: dict[str, int] = {
     "slin48": 48000,
     "slin96": 96000,
     "slin192": 192000,
+    "ulaw": 8000,
+    "alaw": 8000,
 }
 
 

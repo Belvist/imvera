@@ -50,15 +50,24 @@ endpoint_identifier_order=ip,username,anonymous
 type=transport
 protocol=udp
 bind=0.0.0.0:5060
+local_net=127.0.0.1/32
+local_net=172.16.0.0/12
+local_net=192.168.0.0/16
+external_media_address=127.0.0.1
+external_signaling_address=127.0.0.1
 
 [1001]
 type=endpoint
 context=imvera-local
 disallow=all
-allow=slin16,ulaw,alaw
+allow=ulaw,alaw
 auth=1001
 aors=1001
+transport=transport-udp
 direct_media=no
+rtp_symmetric=yes
+force_rport=yes
+media_use_received_transport=yes
 
 [1001]
 type=auth
@@ -96,6 +105,7 @@ bindaddr=0.0.0.0
         """[general]
 rtpstart=10000
 rtpend=10100
+strictrtp=no
 """
     )
 

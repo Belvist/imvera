@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import audioop
 import json
 import logging
 import os
@@ -49,11 +50,16 @@ class CallSession:
     capture_ready: bool = False
     inject_ready: bool = False
     media_ready: asyncio.Event = field(default_factory=asyncio.Event)
-    sample_rate: int = 16000
-    frame_size: int = 640
+    inject_sample_rate: int = 16000
+    inject_frame_size: int = 640
+    inject_encoding: str = "slin16"
+    capture_sample_rate: int = 16000
+    capture_frame_size: int = 640
     ptime_ms: int = 20
     capture_bytes: int = 0
+    inject_bytes_sent: int = 0
     _capture_task: asyncio.Task | None = None
+    _inject_buf: bytearray = field(default_factory=bytearray)
 
 
 _sessions: dict[str, CallSession] = {}
@@ -67,6 +73,12 @@ class OpenCallRequest(BaseModel):
 
 class AttachCaptureRequest(BaseModel):
     connection_id: str
+
+
+def _pcm_frame_bytes(session: CallSession) -> int:
+    if session.inject_encoding in ("ulaw", "alaw"):
+        return session.inject_sample_rate * 2 * session.ptime_ms // 1000
+    return session.inject_frame_size
 
 
 @app.get("/health/ready")
@@ -90,6 +102,7 @@ async def call_status(call_id: str) -> dict:
         "capture_bytes": session.capture_bytes,
         "capture_ready": session.capture_ready,
         "inject_ready": session.inject_ready,
+        "inject_bytes_sent": session.inject_bytes_sent,
     }
 
 
@@ -115,7 +128,20 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
     async def send_pcm(pcm: bytes) -> None:
         if session.inject_ws is None:
             return
-        await session.inject_ws.send_bytes(pcm)
+        session._inject_buf.extend(pcm)
+        frame = _pcm_frame_bytes(session)
+        while len(session._inject_buf) >= frame:
+            chunk = bytes(session._inject_buf[:frame])
+            del session._inject_buf[:frame]
+            if session.inject_encoding in ("ulaw", "alaw"):
+                if session.inject_encoding == "ulaw":
+                    payload = audioop.lin2ulaw(chunk, 2)
+                else:
+                    payload = audioop.lin2alaw(chunk, 2)
+            else:
+                payload = chunk
+            await session.inject_ws.send_bytes(payload)
+            session.inject_bytes_sent += len(payload)
 
     async def flush() -> None:
         if session.inject_ws is None:
@@ -161,7 +187,9 @@ async def close_call(call_id: str) -> dict:
 async def _maybe_media_ready(session: CallSession) -> None:
     if session.capture_ready and session.inject_ready and not session.media_ready.is_set():
         session.media_ready.set()
-        await session.actor.on_media_ready(session.sample_rate, session.frame_size)
+        await session.actor.on_media_ready(
+            session.inject_sample_rate, session.inject_frame_size
+        )
 
 
 async def _run_incoming_capture(session: CallSession, connection_id: str) -> None:
@@ -174,15 +202,15 @@ async def _run_incoming_capture(session: CallSession, connection_id: str) -> Non
                 message = await ws.recv()
                 if isinstance(message, bytes):
                     session.capture_bytes += len(message)
-                    await session.actor.push_pcm(message, session.sample_rate)
+                    await session.actor.push_pcm(message, session.capture_sample_rate)
                     continue
                 if not is_control_message(message):
                     continue
                 data = json.loads(message)
                 if is_media_start(data):
                     fmt = parse_media_start(data)
-                    session.sample_rate = fmt.sample_rate
-                    session.frame_size = fmt.frame_size_bytes
+                    session.capture_sample_rate = fmt.sample_rate
+                    session.capture_frame_size = fmt.frame_size_bytes
                     session.ptime_ms = fmt.ptime_ms
                     session.capture_ready = True
                     await _maybe_media_ready(session)
@@ -230,17 +258,22 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
                 data = json.loads(raw)
                 if is_media_start(data):
                     fmt = parse_media_start(data)
-                    session.sample_rate = fmt.sample_rate
-                    session.frame_size = fmt.frame_size_bytes
+                    session.inject_sample_rate = fmt.sample_rate
+                    session.inject_frame_size = fmt.frame_size_bytes
+                    session.inject_encoding = fmt.encoding
                     session.ptime_ms = fmt.ptime_ms
                     if role == "capture":
+                        session.capture_sample_rate = fmt.sample_rate
+                        session.capture_frame_size = fmt.frame_size_bytes
                         session.capture_ready = True
                     else:
                         session.inject_ready = True
                     await _maybe_media_ready(session)
             elif "bytes" in message and message["bytes"] and role == "capture":
                 session.capture_bytes += len(message["bytes"])
-                await session.actor.push_pcm(message["bytes"], session.sample_rate)
+                await session.actor.push_pcm(
+                    message["bytes"], session.capture_sample_rate
+                )
     except WebSocketDisconnect:
         pass
     finally:
