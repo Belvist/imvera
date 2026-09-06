@@ -16,7 +16,9 @@ def test_audio_settings_sip_lab_defaults() -> None:
     assert audio["inject_format"] == "slin48"
     assert audio["capture_format"] == "slin16"
     assert audio["output_sample_rate"] == 48000
-    assert "slin48" in audio["sip_codecs"]
+    assert "g722" in audio["sip_codecs"]
+    assert "ulaw" not in audio["sip_codecs"].split(",")
+    assert audio["sip_codecs_e2e"] == "ulaw,alaw"
 
 
 def test_inject_format_env_override(monkeypatch: pytest.MonkeyPatch) -> None:

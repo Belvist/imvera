@@ -45,7 +45,11 @@ audio:
   capture_format: slin16
   output_sample_rate: 48000
   frame_ms: 20
-  sip_codecs: slin48,slin24,slin16,ulaw,alaw
+  # Zoiper 5 Mac has no L16/48000 — lab wideband is G.722 @ 16 kHz (not slin48 on RTP leg).
+  # Full 48 kHz: browser WS client (gateway /media/{call_id}) or slin48 SIP softphone.
+  sip_codecs: g722,slin48,slin24,slin16
+  # PyVoIP SIP e2e (scripts/voice_sip_e2e.py) — account 1002, G.711 only.
+  sip_codecs_e2e: ulaw,alaw
 
 sip:
   vera_extension: "7000"

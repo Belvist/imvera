@@ -229,13 +229,16 @@ def _run_sip_session(
     from pyVoIP.VoIP import CallState, VoIPPhone
 
     cfg = json.loads((ROOT / "config/local/zoiper.json").read_text())
+    e2e = cfg.get("e2e_account") or {}
+    sip_user = e2e.get("username") or cfg["username"]
+    sip_pass = e2e.get("password") or cfg["password"]
     media_host = cfg.get("media_host") or cfg["sip_server"]
     sip_server = cfg.get("sip_server") or media_host
     phone = VoIPPhone(
         sip_server,
         cfg["port"],
-        cfg["username"],
-        cfg["password"],
+        sip_user,
+        sip_pass,
         myIP=media_host,
         sipPort=5075,
         rtpPortLow=13000,
