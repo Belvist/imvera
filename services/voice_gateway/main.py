@@ -8,6 +8,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import httpx
 import uvicorn
@@ -18,8 +19,8 @@ from pydantic import BaseModel, Field
 from packages.contracts.runtime import RuntimeEvent
 from packages.telephony.ws_protocol import (
     flush_media_command,
-    is_control_message,
     is_media_start,
+    parse_control_message,
     parse_media_start,
 )
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks, build_call_actor
@@ -30,6 +31,25 @@ log = logging.getLogger("voice_gateway")
 
 ASTERISK_APP_HTTP = os.environ.get("IMVERA_ASTERISK_APP_HTTP", "http://127.0.0.1:9201")
 ASTERISK_HTTP = os.environ.get("IMVERA_ASTERISK_HTTP", "http://127.0.0.1:8088")
+WS_DIAG = os.environ.get("IMVERA_WS_DIAG", "0") == "1"
+WS_DIAG_DIR = Path(__file__).resolve().parents[2] / ".run" / "ws-diag"
+INJECT_STREAM_FLUSH = os.environ.get("IMVERA_INJECT_STREAM_FLUSH", "1") == "1"
+INJECT_FLUSH_INTERVAL = max(1, int(os.environ.get("IMVERA_INJECT_FLUSH_INTERVAL", "4")))
+
+
+def _log_ws_control(call_id: str, role: str, raw: str, parsed: dict | None) -> None:
+    if not WS_DIAG:
+        return
+    WS_DIAG_DIR.mkdir(parents=True, exist_ok=True)
+    path = WS_DIAG_DIR / f"{call_id}.jsonl"
+    row = {
+        "role": role,
+        "raw": raw[:500],
+        "parsed_event": (parsed or {}).get("event"),
+        "format": (parsed or {}).get("format"),
+    }
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def _urls() -> tuple[str, str, str]:
@@ -58,6 +78,8 @@ class CallSession:
     ptime_ms: int = 20
     capture_bytes: int = 0
     inject_bytes_sent: int = 0
+    _inject_first_logged: bool = False
+    _inject_frames_since_flush: int = 0
     _capture_task: asyncio.Task | None = None
     _inject_buf: bytearray = field(default_factory=bytearray)
 
@@ -79,6 +101,30 @@ def _pcm_frame_bytes(session: CallSession) -> int:
     if session.inject_encoding in ("ulaw", "alaw"):
         return session.inject_sample_rate * 2 * session.ptime_ms // 1000
     return session.inject_frame_size
+
+
+async def _send_inject_payload(
+    session: CallSession, call_id: str, payload: bytes, *, force_flush: bool = False
+) -> None:
+    if session.inject_ws is None:
+        return
+    await session.inject_ws.send_bytes(payload)
+    session.inject_bytes_sent += len(payload)
+    session._inject_frames_since_flush += 1
+    if INJECT_STREAM_FLUSH and (
+        force_flush or session._inject_frames_since_flush >= INJECT_FLUSH_INTERVAL
+    ):
+        await session.inject_ws.send_text(flush_media_command())
+        session._inject_frames_since_flush = 0
+    if not session._inject_first_logged:
+        session._inject_first_logged = True
+        log.info(
+            "inject first frame call_id=%s bytes=%s enc=%s stream_flush=%s",
+            call_id,
+            len(payload),
+            session.inject_encoding,
+            INJECT_STREAM_FLUSH,
+        )
 
 
 @app.get("/health/ready")
@@ -121,6 +167,9 @@ async def call_trace(call_id: str) -> dict:
 async def open_call(call_id: str, body: OpenCallRequest) -> dict:
     if call_id in _sessions:
         raise HTTPException(409, detail="call already open")
+    for stale_id in list(_sessions.keys()):
+        log.warning("evicting stale gateway session %s for new call %s", stale_id, call_id)
+        await close_call(stale_id)
     stt, tts, llm = _urls()
     elder = body.elder_name or os.environ.get("IMVERA_ELDER_DISPLAY_NAME", "собеседником")
     session = CallSession(call_id=call_id, family_id=body.family_id, elder_name=elder, actor=None)  # type: ignore[arg-type]
@@ -140,13 +189,40 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
                     payload = audioop.lin2alaw(chunk, 2)
             else:
                 payload = chunk
-            await session.inject_ws.send_bytes(payload)
-            session.inject_bytes_sent += len(payload)
+            await _send_inject_payload(session, call_id, payload)
+
+    async def prime_downlink() -> None:
+        if session.inject_ws is None:
+            return
+        if session.inject_encoding == "ulaw":
+            payload = bytes([0xFF] * session.inject_frame_size)
+        elif session.inject_encoding == "alaw":
+            payload = bytes([0xD5] * session.inject_frame_size)
+        else:
+            payload = bytes(session.inject_frame_size)
+        for _ in range(3):
+            await _send_inject_payload(session, call_id, payload, force_flush=True)
 
     async def flush() -> None:
         if session.inject_ws is None:
             return
-        await session.inject_ws.send_text(flush_media_command())
+        if session._inject_buf:
+            chunk = bytes(session._inject_buf)
+            session._inject_buf.clear()
+            if len(chunk) % 2:
+                chunk += b"\x00"
+            if session.inject_encoding in ("ulaw", "alaw"):
+                if session.inject_encoding == "ulaw":
+                    payload = audioop.lin2ulaw(chunk, 2)
+                else:
+                    payload = audioop.lin2alaw(chunk, 2)
+            else:
+                payload = chunk
+            await _send_inject_payload(session, call_id, payload, force_flush=True)
+        elif INJECT_STREAM_FLUSH:
+            await session.inject_ws.send_text(flush_media_command())
+            session._inject_frames_since_flush = 0
+        log.info("inject flush call_id=%s bytes_sent=%s", call_id, session.inject_bytes_sent)
 
     async def hangup() -> None:
         try:
@@ -165,7 +241,13 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
         stt,
         tts,
         llm,
-        MediaCallbacks(send_pcm=send_pcm, flush=flush, hangup=hangup, emit=emit),
+        MediaCallbacks(
+            send_pcm=send_pcm,
+            flush=flush,
+            hangup=hangup,
+            emit=emit,
+            prime_downlink=prime_downlink,
+        ),
     )
     session.actor = actor
     _sessions[call_id] = session
@@ -177,7 +259,7 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
 async def close_call(call_id: str) -> dict:
     session = _sessions.pop(call_id, None)
     if session:
-        log.info("call %s capture_bytes=%s", call_id, session.capture_bytes)
+        log.info("call %s capture_bytes=%s inject_bytes_sent=%s", call_id, session.capture_bytes, session.inject_bytes_sent)
         if session._capture_task and not session._capture_task.done():
             session._capture_task.cancel()
         await session.actor.stop()
@@ -187,6 +269,13 @@ async def close_call(call_id: str) -> dict:
 async def _maybe_media_ready(session: CallSession) -> None:
     if session.capture_ready and session.inject_ready and not session.media_ready.is_set():
         session.media_ready.set()
+        log.info(
+            "media_ready call_id=%s capture_sr=%s inject_sr=%s inject_enc=%s",
+            session.call_id,
+            session.capture_sample_rate,
+            session.inject_sample_rate,
+            session.inject_encoding,
+        )
         await session.actor.on_media_ready(
             session.inject_sample_rate, session.inject_frame_size
         )
@@ -204,9 +293,11 @@ async def _run_incoming_capture(session: CallSession, connection_id: str) -> Non
                     session.capture_bytes += len(message)
                     await session.actor.push_pcm(message, session.capture_sample_rate)
                     continue
-                if not is_control_message(message):
+                text = message.decode("utf-8", errors="replace") if isinstance(message, bytes) else str(message)
+                data = parse_control_message(text)
+                _log_ws_control(session.call_id, "incoming_capture", text, data)
+                if not data:
                     continue
-                data = json.loads(message)
                 if is_media_start(data):
                     fmt = parse_media_start(data)
                     session.capture_sample_rate = fmt.sample_rate
@@ -253,9 +344,10 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
                 break
             if "text" in message and message["text"]:
                 raw = message["text"]
-                if not is_control_message(raw):
+                data = parse_control_message(raw)
+                _log_ws_control(session.call_id, role, raw, data)
+                if not data:
                     continue
-                data = json.loads(raw)
                 if is_media_start(data):
                     fmt = parse_media_start(data)
                     session.inject_sample_rate = fmt.sample_rate
@@ -288,21 +380,34 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
             _sessions.pop(session.call_id, None)
 
 
+def _session_for_leg(role: str) -> CallSession | None:
+    """Bind Asterisk WS legs to the newest session still missing that leg."""
+    candidates = list(_sessions.values())
+    for session in reversed(candidates):
+        if role == "capture" and session.capture_ws is None:
+            return session
+        if role == "inject" and session.inject_ws is None:
+            return session
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
 @app.websocket("/asterisk/capture")
 async def asterisk_capture(websocket: WebSocket) -> None:
-    if len(_sessions) != 1:
+    session = _session_for_leg("capture")
+    if session is None:
         await websocket.close(code=1013)
         return
-    session = next(iter(_sessions.values()))
     await _attach_leg(session, "capture", websocket)
 
 
 @app.websocket("/asterisk/inject")
 async def asterisk_inject(websocket: WebSocket) -> None:
-    if len(_sessions) != 1:
+    session = _session_for_leg("inject")
+    if session is None:
         await websocket.close(code=1013)
         return
-    session = next(iter(_sessions.values()))
     await _attach_leg(session, "inject", websocket)
 
 

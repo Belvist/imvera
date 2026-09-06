@@ -212,17 +212,31 @@ class _AudioTap:
         return bytes(self._buf)
 
 
+def _prime_rtp_symmetric(call) -> None:
+    """Send uplink silence so Asterisk learns client RTP source (Docker NAT)."""
+    silence = bytes([SILENCE_BYTE]) * FRAME_BYTES
+    for _ in range(30):
+        try:
+            call.write_audio(silence)
+        except Exception:
+            break
+        time.sleep(0.02)
+
+
 def _run_sip_session(
     caller_pcm: bytes, *, send_speech: bool
 ) -> tuple[str | None, bytes, str | None, int]:
     from pyVoIP.VoIP import CallState, VoIPPhone
 
     cfg = json.loads((ROOT / "config/local/zoiper.json").read_text())
+    media_host = cfg.get("media_host") or cfg["sip_server"]
+    sip_server = cfg.get("sip_server") or media_host
     phone = VoIPPhone(
-        cfg["sip_server"],
+        sip_server,
         cfg["port"],
         cfg["username"],
         cfg["password"],
+        myIP=media_host,
         sipPort=5075,
         rtpPortLow=13000,
         rtpPortHigh=13100,
@@ -250,8 +264,9 @@ def _run_sip_session(
             print("BLOCKED: no new gateway call_id after SIP answer", file=sys.stderr)
             return None, b"", sip_call_id, 0
 
+        _prime_rtp_symmetric(call)
         tap.start(call)
-        _wait_trace_types(internal_call_id, {"playback.completed"}, 30.0)
+        _wait_trace_types(internal_call_id, {"playback.completed"}, 45.0)
 
         if send_speech:
             silence = bytes([SILENCE_BYTE]) * FRAME_BYTES * 50

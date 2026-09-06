@@ -207,6 +207,14 @@ def main() -> int:
         return 1
     if not _wait_ari_registered(cfg):
         return 1
+    try:
+        subprocess.check_call(
+            ["docker", "exec", "imvera-asterisk", "asterisk", "-rx", "pjsip reload"],
+            cwd=ROOT,
+        )
+        print("  Asterisk pjsip: reloaded")
+    except subprocess.CalledProcessError:
+        print("WARN: pjsip reload failed", file=sys.stderr)
 
     print("\nVoice stack up.")
     print(f"  Zoiper: {cfg['username']}@{cfg['sip_server']}:{cfg['port']}")

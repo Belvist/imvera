@@ -36,6 +36,31 @@ def _encoding_sample_rate(encoding: str, message: dict) -> int:
     return 16000
 
 
+def parse_control_message(raw: str) -> dict | None:
+    """Parse Asterisk chan_websocket TEXT control — JSON or legacy plain-text."""
+    text = raw.strip()
+    if not text:
+        return None
+    if text.startswith("{"):
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    parts = text.split()
+    if not parts:
+        return None
+    event = parts[0]
+    payload: dict[str, str] = {"event": event}
+    for token in parts[1:]:
+        if ":" not in token:
+            continue
+        key, value = token.split(":", 1)
+        payload[key] = value
+    return payload
+
+
 def is_media_start(message: dict) -> bool:
     event = message.get("event") or message.get("type")
     return event == "MEDIA_START"
@@ -57,6 +82,8 @@ def parse_media_start(message: dict) -> MediaFormat:
     optimal = int(message.get("optimal_frame_size") or 0)
     if optimal <= 0:
         optimal = sample_rate * 2 * ptime_ms // 1000
+        if encoding in ("ulaw", "alaw"):
+            optimal = sample_rate * ptime_ms // 1000
     return MediaFormat(
         sample_rate=sample_rate,
         frame_size_bytes=optimal,
@@ -70,4 +97,4 @@ def flush_media_command() -> str:
 
 
 def is_control_message(raw: str) -> bool:
-    return raw.strip().startswith("{")
+    return parse_control_message(raw) is not None

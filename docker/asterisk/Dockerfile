@@ -8,4 +8,4 @@ COPY docker/asterisk/modules.conf /etc/asterisk/modules.conf
 COPY docker/asterisk/extensions.conf /etc/asterisk/extensions.conf
 COPY docker/asterisk/rtp.conf /etc/asterisk/rtp.conf
 
-EXPOSE 5060/udp 8088 10000-10100/udp
+EXPOSE 5060/udp 5060/tcp 8088 10000-10100/udp

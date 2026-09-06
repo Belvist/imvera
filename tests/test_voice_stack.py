@@ -43,6 +43,22 @@ def test_media_start_parse_string_format():
     assert fmt.ptime_ms == 20
 
 
+def test_plain_text_media_start_parse():
+    from packages.telephony.ws_protocol import parse_control_message
+
+    raw = (
+        "MEDIA_START connection_id:abc channel:WebSocket/imvera_inject "
+        "format:ulaw optimal_frame_size:160 ptime:20"
+    )
+    msg = parse_control_message(raw)
+    assert msg is not None
+    assert is_media_start(msg)
+    fmt = parse_media_start(msg)
+    assert fmt.encoding == "ulaw"
+    assert fmt.sample_rate == 8000
+    assert fmt.frame_size_bytes == 160
+
+
 def test_flush_media_command():
     cmd = json.loads(flush_media_command())
     assert cmd["command"] == "FLUSH_MEDIA"

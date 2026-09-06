@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -27,6 +29,12 @@ from services.llm.http_provider import HttpLLMProvider
 from services.stt.http_provider import HttpSTTProvider
 from services.tts.http_provider import HttpTTSProvider
 
+log = logging.getLogger("call_actor")
+
+_SKIP_RENDER_INTENTS = frozenset(
+    {"greeting", "confirm_identity", "confirm_consent", "check_can_talk"}
+)
+
 EmitFn = Callable[[RuntimeEvent], Awaitable[None]]
 
 
@@ -36,6 +44,7 @@ class MediaCallbacks:
     flush: Callable[[], Awaitable[None]]
     hangup: Callable[[], Awaitable[None]]
     emit: EmitFn
+    prime_downlink: Callable[[], Awaitable[None]] | None = None
 
 
 class ActorEventType(StrEnum):
@@ -56,8 +65,9 @@ class CallActorConfig:
     stt_deadline_s: float = 12.0
     llm_deadline_s: float = 15.0
     tts_deadline_s: float = 20.0
-    playback_buffer_ms: int = 800
+    playback_buffer_ms: int = 60
     frame_ms: int = 20
+    telephony_stream: bool = True
 
 
 @dataclass
@@ -95,7 +105,14 @@ class CallActor:
     _capture_lost: bool = False
 
     def start(self) -> None:
-        self._task = asyncio.create_task(self._run())
+        self._task = asyncio.create_task(self._run_wrapper())
+
+    async def _run_wrapper(self) -> None:
+        try:
+            await self._run()
+        except Exception:
+            log.exception("CallActor crashed call_id=%s", self.call_id)
+            raise
 
     async def stop(self) -> None:
         self._stopped = True
@@ -110,6 +127,8 @@ class CallActor:
         self._media_ready = True
         if self._playback_task is None:
             self._playback_task = asyncio.create_task(self._playback_pump())
+        if self.media.prime_downlink:
+            await self.media.prime_downlink()
         if self._pending_open:
             await self._deliver_session_turn(self._pending_open)
             self._pending_open = None
@@ -356,21 +375,22 @@ class CallActor:
 
         rendered = planner_text
         try:
-            facts = [
-                {"field": k, "value": v.value, "quote": v.source_quote}
-                for k, v in self.session.state.facts.items()
-            ]
-            rendered_llm = await self.llm.render_text(
-                {
-                    "intent": result.proposal.intent,
-                    "fsm_state": result.proposal.fsm_state.value,
-                    "planner_text": planner_text,
-                },
-                facts,
-                time.monotonic() + self.config.llm_deadline_s,
-            )
-            if rendered_llm:
-                rendered = rendered_llm
+            if result.proposal.intent not in _SKIP_RENDER_INTENTS:
+                facts = [
+                    {"field": k, "value": v.value, "quote": v.source_quote}
+                    for k, v in self.session.state.facts.items()
+                ]
+                rendered_llm = await self.llm.render_text(
+                    {
+                        "intent": result.proposal.intent,
+                        "fsm_state": result.proposal.fsm_state.value,
+                        "planner_text": planner_text,
+                    },
+                    facts,
+                    time.monotonic() + self.config.llm_deadline_s,
+                )
+                if rendered_llm:
+                    rendered = rendered_llm
         except Exception:
             rendered = planner_text
 
@@ -497,7 +517,8 @@ class CallActor:
                 await asyncio.sleep(0.01)
                 continue
             await self.media.send_pcm(chunk.pcm_s16le)
-            await asyncio.sleep(frame_sleep)
+            if not self.config.telephony_stream:
+                await asyncio.sleep(frame_sleep)
 
     async def _on_playback_drained(self) -> None:
         assert self._playback
@@ -514,6 +535,7 @@ class CallActor:
         spoken = ledger.canonical_text
         if spoken and (not self._delivered_phrases or self._delivered_phrases[-1] != spoken):
             self._delivered_phrases.append(spoken)
+        await self.media.flush()
         await self.media.emit(
             RuntimeEvent(
                 self.call_id,
@@ -568,4 +590,8 @@ def build_call_actor(
         tts=HttpTTSProvider(tts_url),
         llm=HttpLLMProvider(llm_url),
         media=media,
+        config=CallActorConfig(
+            playback_buffer_ms=int(os.environ.get("IMVERA_PLAYBACK_BUFFER_MS", "60")),
+            telephony_stream=os.environ.get("IMVERA_TELEPHONY_STREAM", "1") == "1",
+        ),
     )
