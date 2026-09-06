@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import array
 from dataclasses import dataclass
 
 
@@ -31,38 +32,68 @@ def belongs_to_active_output(
 
 
 class StatefulResampler:
-    """Linear resampler with carry buffer for streaming blocks."""
+    """Linear resampler — preserves fractional source phase across chunks."""
 
     def __init__(self, source_rate: int, target_rate: int) -> None:
         if source_rate <= 0 or target_rate <= 0:
             raise ValueError("rates must be positive")
         self.source_rate = source_rate
         self.target_rate = target_rate
-        self._ratio = target_rate / source_rate
+        self._step = source_rate / target_rate
         self._carry = b""
+        self._samples: array.array = array.array("h")
+        self._out_phase = 0.0
 
     def process(self, pcm_s16le: bytes) -> bytes:
         if self.source_rate == self.target_rate:
             return pcm_s16le
-        data = self._carry + pcm_s16le
-        if len(data) < 4:
-            self._carry = data
-            return b""
-        import array
+        self._append_pcm(pcm_s16le)
+        return self._emit_available()
 
-        samples = array.array("h")
-        samples.frombytes(data[: len(data) - (len(data) % 2)])
-        self._carry = data[len(samples) * 2 :]
-        if not samples:
-            return b""
-        out_len = max(1, int(len(samples) * self._ratio))
-        out = array.array("h", [0] * out_len)
-        for i in range(out_len):
-            src_idx = i / self._ratio
-            j = int(src_idx)
-            if j + 1 < len(samples):
-                frac = src_idx - j
-                out[i] = int(samples[j] * (1 - frac) + samples[j + 1] * frac)
-            else:
-                out[i] = samples[min(j, len(samples) - 1)]
+    def flush(self) -> bytes:
+        if self.source_rate == self.target_rate:
+            tail = self._carry
+            self._carry = b""
+            return tail
+        out = array.array("h")
+        if self._samples:
+            while self._out_phase < len(self._samples):
+                j = min(int(self._out_phase), len(self._samples) - 1)
+                if j + 1 < len(self._samples):
+                    frac = self._out_phase - j
+                    s0 = self._samples[j]
+                    s1 = self._samples[j + 1]
+                    out.append(int(s0 * (1.0 - frac) + s1 * frac))
+                else:
+                    out.append(self._samples[j])
+                self._out_phase += self._step
+        self._samples = array.array("h")
+        self._carry = b""
+        self._out_phase = 0.0
+        return out.tobytes()
+
+    def _append_pcm(self, pcm_s16le: bytes) -> None:
+        data = self._carry + pcm_s16le
+        if len(data) < 2:
+            self._carry = data
+            return
+        even_len = len(data) - (len(data) % 2)
+        chunk = array.array("h")
+        chunk.frombytes(data[:even_len])
+        self._carry = data[even_len:]
+        self._samples.extend(chunk)
+
+    def _emit_available(self) -> bytes:
+        out = array.array("h")
+        while self._out_phase + 1 < len(self._samples):
+            j = int(self._out_phase)
+            frac = self._out_phase - j
+            s0 = self._samples[j]
+            s1 = self._samples[j + 1]
+            out.append(int(s0 * (1.0 - frac) + s1 * frac))
+            self._out_phase += self._step
+        drop = int(self._out_phase)
+        if drop > 0:
+            self._samples = self._samples[drop:]
+            self._out_phase -= drop
         return out.tobytes()

@@ -65,15 +65,26 @@ def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
     tts_cfg = cfg["models"]["tts"]
     voice = req.voice or tts_cfg["voice"]
     lang = req.language or tts_cfg["lang_code"]
+    ref_audio = tts_cfg.get("ref_audio")
+    ref_text = tts_cfg.get("ref_text")
+    gen_kwargs: dict[str, Any] = {
+        "text": req.text,
+        "voice": voice,
+        "lang_code": lang,
+        "stream": True,
+        "streaming_interval": tts_cfg.get("streaming_interval", 0.32),
+    }
+    if ref_audio:
+        ref_path = Path(ref_audio)
+        if not ref_path.is_absolute():
+            ref_path = CONFIG_PATH.parents[1] / ref_path
+        if ref_path.exists():
+            gen_kwargs["ref_audio"] = str(ref_path)
+            if ref_text:
+                gen_kwargs["ref_text"] = ref_text
     seq = 0
     try:
-        for result in _tts.generate(
-            text=req.text,
-            voice=voice,
-            lang_code=lang,
-            stream=True,
-            streaming_interval=tts_cfg.get("streaming_interval", 0.32),
-        ):
+        for result in _tts.generate(**gen_kwargs):
             if req.generation_id in _cancelled:
                 break
             audio = getattr(result, "audio", None)

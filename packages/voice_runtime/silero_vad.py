@@ -33,8 +33,13 @@ class SileroVad:
         self._session = ort.InferenceSession(
             str(path), providers=["CPUExecutionProvider"], sess_options=opts
         )
-        self._h = np.zeros((2, 1, 64), dtype=np.float32)
-        self._c = np.zeros((2, 1, 64), dtype=np.float32)
+        inputs = {i.name for i in self._session.get_inputs()}
+        self._uses_state = "state" in inputs
+        if self._uses_state:
+            self._state = np.zeros((2, 1, 128), dtype=np.float32)
+        else:
+            self._h = np.zeros((2, 1, 64), dtype=np.float32)
+            self._c = np.zeros((2, 1, 64), dtype=np.float32)
         self._buf = b""
         self._in_speech = False
         self._speech_ms = 0
@@ -43,6 +48,14 @@ class SileroVad:
     def _probability(self, audio_f32) -> float:
         import numpy as np
 
+        if self._uses_state:
+            ort_inputs = {
+                "input": audio_f32.reshape(1, -1),
+                "state": self._state,
+                "sr": np.array(self.sample_rate, dtype=np.int64),
+            }
+            out, self._state = self._session.run(None, ort_inputs)
+            return float(out[0][0])
         ort_inputs = {
             "input": audio_f32.reshape(1, -1),
             "h": self._h,
@@ -90,6 +103,11 @@ class SileroVad:
 
 
 def create_vad(sample_rate: int, config: VadConfig | None = None) -> EnergyVad | SileroVad:
+    import os
+
+    telephony = os.environ.get("IMVERA_TELEPHONY_VAD", "1") == "1"
+    if config is None and telephony:
+        config = VadConfig(energy_threshold=180.0, min_speech_ms=80, min_silence_ms=500)
     try:
         return SileroVad(sample_rate)
     except (ImportError, FileNotFoundError, OSError, ValueError):

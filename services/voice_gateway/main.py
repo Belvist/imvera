@@ -35,6 +35,8 @@ WS_DIAG = os.environ.get("IMVERA_WS_DIAG", "0") == "1"
 WS_DIAG_DIR = Path(__file__).resolve().parents[2] / ".run" / "ws-diag"
 INJECT_STREAM_FLUSH = os.environ.get("IMVERA_INJECT_STREAM_FLUSH", "1") == "1"
 INJECT_FLUSH_INTERVAL = max(1, int(os.environ.get("IMVERA_INJECT_FLUSH_INTERVAL", "4")))
+INJECT_PACE = os.environ.get("IMVERA_INJECT_PACE", "1") == "1"
+CAPTURE_DIAG = os.environ.get("IMVERA_CAPTURE_DIAG", "0") == "1"
 
 
 def _log_ws_control(call_id: str, role: str, raw: str, parsed: dict | None) -> None:
@@ -77,6 +79,7 @@ class CallSession:
     capture_frame_size: int = 640
     ptime_ms: int = 20
     capture_bytes: int = 0
+    capture_rms_peak: float = 0.0
     inject_bytes_sent: int = 0
     _inject_first_logged: bool = False
     _inject_frames_since_flush: int = 0
@@ -103,6 +106,20 @@ def _pcm_frame_bytes(session: CallSession) -> int:
     return session.inject_frame_size
 
 
+def _pcm_rms(pcm: bytes) -> float:
+    if len(pcm) < 2:
+        return 0.0
+    import array
+    import math
+
+    samples = array.array("h")
+    samples.frombytes(pcm[: len(pcm) - (len(pcm) % 2)])
+    if not samples:
+        return 0.0
+    acc = sum(s * s for s in samples)
+    return math.sqrt(acc / len(samples))
+
+
 async def _send_inject_payload(
     session: CallSession, call_id: str, payload: bytes, *, force_flush: bool = False
 ) -> None:
@@ -111,6 +128,8 @@ async def _send_inject_payload(
     await session.inject_ws.send_bytes(payload)
     session.inject_bytes_sent += len(payload)
     session._inject_frames_since_flush += 1
+    if INJECT_PACE and session.ptime_ms > 0:
+        await asyncio.sleep(session.ptime_ms / 1000.0)
     if INJECT_STREAM_FLUSH and (
         force_flush or session._inject_frames_since_flush >= INJECT_FLUSH_INTERVAL
     ):
@@ -259,7 +278,13 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
 async def close_call(call_id: str) -> dict:
     session = _sessions.pop(call_id, None)
     if session:
-        log.info("call %s capture_bytes=%s inject_bytes_sent=%s", call_id, session.capture_bytes, session.inject_bytes_sent)
+        log.info(
+            "call %s capture_bytes=%s capture_rms_peak=%.1f inject_bytes_sent=%s",
+            call_id,
+            session.capture_bytes,
+            session.capture_rms_peak,
+            session.inject_bytes_sent,
+        )
         if session._capture_task and not session._capture_task.done():
             session._capture_task.cancel()
         await session.actor.stop()
@@ -277,7 +302,9 @@ async def _maybe_media_ready(session: CallSession) -> None:
             session.inject_encoding,
         )
         await session.actor.on_media_ready(
-            session.inject_sample_rate, session.inject_frame_size
+            session.inject_sample_rate,
+            session.inject_frame_size,
+            input_sample_rate=session.capture_sample_rate,
         )
 
 
@@ -363,6 +390,10 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
                     await _maybe_media_ready(session)
             elif "bytes" in message and message["bytes"] and role == "capture":
                 session.capture_bytes += len(message["bytes"])
+                if CAPTURE_DIAG:
+                    rms = _pcm_rms(message["bytes"])
+                    if rms > session.capture_rms_peak:
+                        session.capture_rms_peak = rms
                 await session.actor.push_pcm(
                     message["bytes"], session.capture_sample_rate
                 )

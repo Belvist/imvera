@@ -120,10 +120,17 @@ class CallActor:
         if self._task:
             await self._task
 
-    async def on_media_ready(self, sample_rate: int, frame_size: int) -> None:
-        await self._ensure_audio_chain(sample_rate)
-        self._output_sample_rate = sample_rate
-        self._output_frame_bytes = frame_size
+    async def on_media_ready(
+        self,
+        output_sample_rate: int,
+        output_frame_size: int,
+        *,
+        input_sample_rate: int | None = None,
+    ) -> None:
+        capture_rate = input_sample_rate or output_sample_rate
+        await self._ensure_audio_chain(capture_rate, output_sample_rate)
+        self._output_sample_rate = output_sample_rate
+        self._output_frame_bytes = output_frame_size
         self._media_ready = True
         if self._playback_task is None:
             self._playback_task = asyncio.create_task(self._playback_pump())
@@ -186,23 +193,30 @@ class CallActor:
             self.session.state.termination_reason = TerminationReason.DISCONNECTED
         await asyncio.to_thread(self.session.finalize_if_needed)
 
-    async def _ensure_audio_chain(self, sample_rate: int) -> None:
+    async def _ensure_audio_chain(
+        self, input_sample_rate: int, output_sample_rate: int
+    ) -> None:
         if self._input_resampler is not None:
             return
-        self._input_resampler = StatefulResampler(sample_rate, self.config.target_sample_rate)
+        self._input_resampler = StatefulResampler(
+            input_sample_rate, self.config.target_sample_rate
+        )
         self._vad = create_vad(self.config.target_sample_rate)
         self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
         self._playback = PlaybackQueue(
             self.call_id,
             buffer_limit_ms=self.config.playback_buffer_ms,
-            sample_rate=sample_rate,
+            sample_rate=output_sample_rate,
             frame_ms=self.config.frame_ms,
         )
         await self.media.emit(
             RuntimeEvent(
                 self.call_id,
                 RuntimeEventType.MEDIA_READY,
-                {"sample_rate": sample_rate},
+                {
+                    "sample_rate": output_sample_rate,
+                    "capture_sample_rate": input_sample_rate,
+                },
             )
         )
 
@@ -220,10 +234,13 @@ class CallActor:
     async def _on_pcm(self, pcm_s16le: bytes, sample_rate: int) -> None:
         if self._stopped or not self._media_ready or self._transport_closed:
             return
-        await self._ensure_audio_chain(sample_rate)
+        if self._input_resampler is None:
+            await self._ensure_audio_chain(sample_rate, self._output_sample_rate or sample_rate)
         assert self._input_resampler and self._vad and self._collector
         pcm = self._input_resampler.process(pcm_s16le)
         if not pcm:
+            return
+        if self._active_generation:
             return
         started, ended = self._vad.feed(pcm)
         if started:
@@ -495,6 +512,32 @@ class CallActor:
                 outcome = "failed"
             finally:
                 if self._playback and generation_id == self._active_generation:
+                    for key, resampler in list(self._tts_resamplers.items()):
+                        if not key.startswith(f"{generation_id}:"):
+                            continue
+                        tail_pcm = resampler.flush()
+                        if tail_pcm:
+                            tail_env = AudioEnvelope(
+                                call_id=self.call_id,
+                                generation_id=generation_id,
+                                phrase_id=phrase_id,
+                                sequence=seq,
+                                sample_rate=self._output_sample_rate,
+                                pcm_s16le=tail_pcm,
+                            )
+                            seq += 1
+                            if not await self._playback.enqueue_wait(tail_env):
+                                outcome = "cancelled"
+                    flush_env = AudioEnvelope(
+                        call_id=self.call_id,
+                        generation_id=generation_id,
+                        phrase_id=phrase_id,
+                        sequence=seq,
+                        sample_rate=self._output_sample_rate,
+                        pcm_s16le=b"",
+                    )
+                    if not await self._playback.flush_carried_frames(flush_env):
+                        outcome = "cancelled"
                     self._playback.mark_generation_done(outcome)
 
         self._tts_task = asyncio.create_task(_run_tts())
@@ -508,7 +551,6 @@ class CallActor:
 
     async def _playback_pump(self) -> None:
         assert self._playback
-        frame_sleep = self.config.frame_ms / 1000.0
         while not self._stopped:
             chunk = self._playback.pop_nowait()
             if chunk is None:
@@ -518,7 +560,8 @@ class CallActor:
                 continue
             await self.media.send_pcm(chunk.pcm_s16le)
             if not self.config.telephony_stream:
-                await asyncio.sleep(frame_sleep)
+                duration = (len(chunk.pcm_s16le) // 2) / chunk.sample_rate
+                await asyncio.sleep(duration)
 
     async def _on_playback_drained(self) -> None:
         assert self._playback
