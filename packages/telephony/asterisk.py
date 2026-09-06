@@ -156,3 +156,11 @@ class AsteriskARI:
             r = await client.delete(f"{self.base_url}/bridges/{bridge_id}")
             if r.status_code not in (204, 404):
                 r.raise_for_status()
+
+    async def play_sound(self, channel_id: str, media: str = "sound:beep") -> None:
+        async with httpx.AsyncClient(auth=self._auth, timeout=10.0) as client:
+            r = await client.post(
+                f"{self.base_url}/channels/{channel_id}/play",
+                params={"media": media},
+            )
+            r.raise_for_status()
