@@ -18,6 +18,9 @@ from packages.telephony.asterisk import AsteriskARI, ari_events_ws_url
 app = FastAPI(title="IMVERA Asterisk Stasis App")
 STASIS_APP = os.environ.get("IMVERA_STASIS_APP", "imvera")
 GATEWAY_HTTP = os.environ.get("IMVERA_VOICE_GATEWAY_HTTP", "http://127.0.0.1:9200")
+# slin16 @ 16 kHz on inject leg — avoids 24k→8k downsample + μ-law in gateway.
+# Set IMVERA_INJECT_FORMAT=ulaw for narrowband PSTN trunk paths.
+INJECT_FORMAT = os.environ.get("IMVERA_INJECT_FORMAT", "slin16")
 _ari = AsteriskARI()
 
 
@@ -92,7 +95,8 @@ async def _handle_stasis_start(channel: dict) -> None:
     await _ari.answer(channel_id)
     await _ari.create_bridge(bridge_id)
 
-    snoop = await _ari.snoop_channel(channel_id, STASIS_APP, spy="in", whisper="none")
+    # spy=both: user uplink is present on snoop in this bridge; gate playback VAD in CallActor.
+    snoop = await _ari.snoop_channel(channel_id, STASIS_APP, spy="both", whisper="none")
     snoop_id = snoop["id"]
     await _ari.answer(snoop_id)
 
@@ -103,7 +107,7 @@ async def _handle_stasis_start(channel: dict) -> None:
         direction="both",
     )
     inject = await _ari.create_external_media(
-        STASIS_APP, "imvera_inject", format="ulaw", direction="both"
+        STASIS_APP, "imvera_inject", format=INJECT_FORMAT, direction="both"
     )
     capture_id = capture["id"]
     inject_id = inject["id"]

@@ -162,8 +162,12 @@ async def test_playback_queue_no_loss():
 
     task = asyncio.create_task(consumer())
     assert await q.enqueue_wait(chunk)
+    assert await q.flush_carried_frames(chunk)
+    q.mark_generation_done("success")
     await task
-    assert total_out == len(data)
+    frame_bytes = pcm16_frame_bytes(16000, 20)
+    assert total_out >= len(data)
+    assert total_out - len(data) < frame_bytes
 
 
 @pytest.mark.asyncio
@@ -177,9 +181,43 @@ async def test_playback_zero_sent_not_completed():
     assert q._ledger.state != PlaybackState.COMPLETED
 
 
-def test_playback_splits_frames():
+@pytest.mark.asyncio
+async def test_playback_flush_carried_frame_once() -> None:
+    q = PlaybackQueue("c1", buffer_limit_ms=200, sample_rate=16000, frame_ms=20)
+    q.begin_phrase("g1", "p1", "hello")
+    frame = pcm16_frame_bytes(16000, 20)
+    partial = b"\x01\x00" * (frame // 4)
+    chunk = AudioEnvelope("c1", "g1", "p1", 0, 16000, partial)
+    assert await q.enqueue_wait(chunk)
+    assert q.pop_nowait() is None
+    assert await q.flush_carried_frames(chunk)
+    flushed = q.pop_nowait()
+    assert flushed is not None
+    assert len(flushed.pcm_s16le) == frame
+    assert q.pop_nowait() is None
+
+
+def test_playback_splits_frames() -> None:
     frame = b"\x00\x01" * (pcm16_frame_bytes(16000, 20) // 2)
     big = frame * 3
     parts = split_pcm_frames(big, 16000, 20)
     assert len(parts) == 3
     assert all(len(p) == len(frame) for p in parts)
+
+
+def test_inject_format_defaults_to_slin16(monkeypatch) -> None:
+    monkeypatch.delenv("IMVERA_INJECT_FORMAT", raising=False)
+    import importlib
+
+    mod = importlib.import_module("services.asterisk_app.main")
+    importlib.reload(mod)
+    assert mod.INJECT_FORMAT == "slin16"
+
+
+def test_snoop_uses_both_directions() -> None:
+    import inspect
+
+    from services.asterisk_app import main as asterisk_main
+
+    src = inspect.getsource(asterisk_main._handle_stasis_start)
+    assert 'spy="both"' in src

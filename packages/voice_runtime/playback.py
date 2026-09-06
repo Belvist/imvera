@@ -34,14 +34,13 @@ class PlaybackLedger:
 
 
 def split_pcm_frames(pcm_s16le: bytes, sample_rate: int, frame_ms: int = 20) -> list[bytes]:
+    """Split PCM into full 20ms frames only (no trailing partial)."""
     frame_bytes = pcm16_frame_bytes(sample_rate, frame_ms)
     frames: list[bytes] = []
     offset = 0
     while offset + frame_bytes <= len(pcm_s16le):
         frames.append(pcm_s16le[offset : offset + frame_bytes])
         offset += frame_bytes
-    if offset < len(pcm_s16le):
-        frames.append(pcm_s16le[offset:])
     return frames
 
 
@@ -56,6 +55,7 @@ class PlaybackQueue:
     _cancelled_generations: set[str] = field(default_factory=set)
     _queue: asyncio.Queue[AudioEnvelope] = field(default_factory=asyncio.Queue)
     _max_frames: int = 0
+    _frame_carry: bytearray = field(default_factory=bytearray)
 
     def __post_init__(self) -> None:
         frames_in_buffer = max(1, self.buffer_limit_ms // self.frame_ms)
@@ -64,6 +64,7 @@ class PlaybackQueue:
 
     def begin_phrase(self, generation_id: str, phrase_id: str, canonical_text: str) -> None:
         self._active_generation = generation_id
+        self._frame_carry.clear()
         self._ledger = PlaybackLedger(
             phrase_id=phrase_id,
             generation_id=generation_id,
@@ -82,12 +83,34 @@ class PlaybackQueue:
             if self._ledger:
                 self._ledger.interrupted = True
                 self._ledger.state = PlaybackState.INTERRUPTED
+            self._frame_carry.clear()
             while not self._queue.empty():
                 try:
                     self._queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
             self._active_generation = None
+
+    async def _put_frame(self, env: AudioEnvelope) -> bool:
+        loop = asyncio.get_running_loop()
+        frame_samples = len(env.pcm_s16le) // 2
+        deadline = loop.time() + 5.0
+        while True:
+            if env.generation_id in self._cancelled_generations:
+                return False
+            try:
+                self._queue.put_nowait(env)
+                break
+            except asyncio.QueueFull:
+                if loop.time() >= deadline:
+                    if self._ledger:
+                        self._ledger.state = PlaybackState.FAILED
+                        self._ledger.generation_outcome = "failed"
+                    return False
+                await asyncio.sleep(0.01)
+        if self._ledger:
+            self._ledger.queued_samples += frame_samples
+        return True
 
     async def enqueue_wait(self, chunk: AudioEnvelope) -> bool:
         if chunk.generation_id in self._cancelled_generations:
@@ -98,11 +121,11 @@ class PlaybackQueue:
         if self._ledger:
             self._ledger.generated_samples += samples
             self._ledger.state = PlaybackState.PLAYING
-        loop = asyncio.get_running_loop()
-        for frame_pcm in split_pcm_frames(chunk.pcm_s16le, chunk.sample_rate, self.frame_ms):
-            if chunk.generation_id in self._cancelled_generations:
-                return False
-            frame_samples = len(frame_pcm) // 2
+        self._frame_carry.extend(chunk.pcm_s16le)
+        frame_bytes = pcm16_frame_bytes(chunk.sample_rate, self.frame_ms)
+        while len(self._frame_carry) >= frame_bytes:
+            frame_pcm = bytes(self._frame_carry[:frame_bytes])
+            del self._frame_carry[:frame_bytes]
             env = AudioEnvelope(
                 call_id=chunk.call_id,
                 generation_id=chunk.generation_id,
@@ -111,23 +134,31 @@ class PlaybackQueue:
                 sample_rate=chunk.sample_rate,
                 pcm_s16le=frame_pcm,
             )
-            deadline = loop.time() + 5.0
-            while True:
-                if chunk.generation_id in self._cancelled_generations:
-                    return False
-                try:
-                    self._queue.put_nowait(env)
-                    break
-                except asyncio.QueueFull:
-                    if loop.time() >= deadline:
-                        if self._ledger:
-                            self._ledger.state = PlaybackState.FAILED
-                            self._ledger.generation_outcome = "failed"
-                        return False
-                    await asyncio.sleep(0.01)
-            if self._ledger:
-                self._ledger.queued_samples += frame_samples
+            if not await self._put_frame(env):
+                return False
         return True
+
+    async def flush_carried_frames(self, chunk: AudioEnvelope) -> bool:
+        """Pad and enqueue one final frame when TTS generation ends."""
+        if chunk.generation_id in self._cancelled_generations:
+            return False
+        if not self._frame_carry:
+            return True
+        frame_bytes = pcm16_frame_bytes(chunk.sample_rate, self.frame_ms)
+        pad = frame_bytes - len(self._frame_carry)
+        if pad > 0:
+            self._frame_carry.extend(b"\x00" * pad)
+        frame_pcm = bytes(self._frame_carry[:frame_bytes])
+        self._frame_carry.clear()
+        env = AudioEnvelope(
+            call_id=chunk.call_id,
+            generation_id=chunk.generation_id,
+            phrase_id=chunk.phrase_id,
+            sequence=chunk.sequence,
+            sample_rate=chunk.sample_rate,
+            pcm_s16le=frame_pcm,
+        )
+        return await self._put_frame(env)
 
     def pop_nowait(self) -> AudioEnvelope | None:
         try:

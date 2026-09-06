@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
@@ -25,32 +24,28 @@ def main() -> int:
     vad_path.parent.mkdir(parents=True, exist_ok=True)
     if not vad_path.exists():
         print("Preparing silero_vad.onnx...")
-        code = subprocess.call(
-            [
-                sys.executable,
-                "-m",
-                "huggingface_hub.cli",
-                "download",
-                "onnx-community/silero-vad",
+        try:
+            from huggingface_hub import hf_hub_download
+
+            hf_hub_download(
+                "deepghs/silero-vad-onnx",
                 "silero_vad.onnx",
-                "--local-dir",
-                str(vad_path.parent),
-            ],
-        )
-        if code != 0:
-            print("Warning: silero VAD download failed — energy VAD fallback will be used.")
+                local_dir=str(vad_path.parent),
+            )
+        except Exception as exc:
+            print(f"Warning: silero VAD download failed ({exc}) — energy VAD fallback.")
     for model_id in models:
         print(f"Preparing {model_id}...")
-        code = subprocess.call(
-            [sys.executable, "-m", "huggingface_hub.cli", "download", model_id],
-        )
-        if code != 0:
+        try:
+            from huggingface_hub import snapshot_download
+
+            snapshot_download(model_id)
+        except Exception as exc:
             print(
-                f"BLOCKED: failed to download {model_id}. "
-                "Install huggingface_hub and ensure network access.",
+                f"BLOCKED: failed to download {model_id}: {exc}",
                 file=sys.stderr,
             )
-            return code
+            return 1
     print("Models prepared.")
     return 0
 
