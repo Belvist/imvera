@@ -149,16 +149,22 @@ def test_fsm_blocks_summary_until_all_mandatory() -> None:
     assert CallFsm.can_advance(state) is True
 
 
-def test_planner_sets_identity_on_valid_answer() -> None:
+def test_planner_identity_question_before_answer() -> None:
     state = DialogueState(call_id="planner", fsm_state=FsmState.IDENTIFY_PERSON)
-    Planner.plan_after_user(
+    opening = Planner.plan_vera_turn(state, turn_id=1, generation_id="g1")
+    assert opening.intent == "confirm_identity"
+    assert "разговариваю" in opening.speech.lower()
+
+    after = Planner.plan_after_user(
         state,
         user_text="да, это я",
         judgement=AnswerJudgement.VALID,
         generation_id="g1",
-        turn_id=1,
+        turn_id=2,
     )
     assert state.mandatory_checks["identity"] is True
+    assert after.intent == "confirm_consent"
+    assert state.fsm_state == FsmState.CHECK_CONSENT
 
 
 def test_slot_fill_sets_mandatory_for_mood() -> None:
@@ -177,15 +183,10 @@ def test_slot_fill_sets_mandatory_for_mood() -> None:
 
 def test_planner_arms_pending_slot_when_asking_wellness() -> None:
     state = DialogueState(call_id="pending", fsm_state=FsmState.DAILY_CHECK)
-    proposal = Planner.plan_after_user(
-        state,
-        user_text="",
-        judgement=AnswerJudgement.NO_ANSWER,
-        generation_id="g1",
-        turn_id=1,
-    )
+    proposal = Planner.plan_vera_turn(state, turn_id=1, generation_id="g1")
     assert state.pending_slot == "wellness"
     assert state.pending_question is not None
+    assert proposal.intent == "check_wellness"
     assert "чувствуете" in proposal.speech.lower()
 
 
@@ -202,9 +203,12 @@ def test_sequential_slot_questions_fill_all_four_slots() -> None:
 
     for slot, answer in answers.items():
         turn += 1
-        question = Planner.plan_after_user(
-            state, "", AnswerJudgement.NO_ANSWER, gid, turn
-        )
+        if slot == "wellness":
+            question = Planner.plan_vera_turn(state, turn, gid)
+        else:
+            question = Planner.plan_after_user(
+                state, "", AnswerJudgement.NO_ANSWER, gid, turn
+            )
         assert state.pending_slot == slot
         assert slot in question.intent
 
@@ -216,64 +220,81 @@ def test_sequential_slot_questions_fill_all_four_slots() -> None:
     assert state.mandatory_remaining() == ["identity", "consent", "can_talk"]
 
 
+def test_early_goodbye_does_not_corrupt_daily_check_fsm() -> None:
+    state = DialogueState(call_id="early", fsm_state=FsmState.DAILY_CHECK)
+    proposal = Planner.plan_closing(state, "до свидания", turn_id=1, generation_id="g1")
+    assert state.fsm_state == FsmState.DAILY_CHECK
+    assert state.closing_requested is True
+    assert state.goodbye_count == 1
+    assert proposal.intent == "goodbye_confirm"
+    assert proposal.fsm_state == FsmState.DAILY_CHECK
+
+
 def test_sequential_happy_path_call_to_green() -> None:
-    """Full pilot call without manually presetting internal planner fields."""
+    """Full pilot call — each user answer follows a Vera question with matching intent."""
     state = DialogueState(call_id="happy", fsm_state=FsmState.IDENTIFY_PERSON)
-    turn = 0
     gid = "g-happy"
+    turn = 0
 
-    def user_says(text: str) -> None:
+    def vera_must(intent: str, *, substring: str | None = None) -> None:
         nonlocal turn
         turn += 1
-        Planner.plan_after_user(state, text, AnswerJudgement.VALID, gid, turn)
+        if turn == 1:
+            proposal = Planner.plan_vera_turn(state, turn, gid)
+        else:
+            proposal = Planner.plan_after_user(
+                state, "", AnswerJudgement.NO_ANSWER, gid, turn
+            )
+        assert proposal.intent == intent
+        if substring:
+            assert substring in proposal.speech.lower()
 
-    def vera_prompt() -> None:
+    def user_after_vera(text: str, *, expected_next_intent: str) -> None:
         nonlocal turn
         turn += 1
-        Planner.plan_after_user(state, "", AnswerJudgement.NO_ANSWER, gid, turn)
+        proposal = Planner.plan_after_user(
+            state, text, AnswerJudgement.VALID, gid, turn
+        )
+        assert proposal.intent == expected_next_intent
 
-    user_says("да, это я")
+    vera_must("confirm_identity", substring="разговариваю")
+    user_after_vera("да, это я", expected_next_intent="confirm_consent")
     assert state.fsm_state == FsmState.CHECK_CONSENT
-    assert state.mandatory_checks["identity"] is True
 
-    user_says("да, звоните")
+    user_after_vera("да, согласен", expected_next_intent="greeting")
     assert state.fsm_state == FsmState.GREETING
     assert state.mandatory_checks["consent"] is True
 
-    vera_prompt()
-    assert state.greeted is True
-
-    vera_prompt()
+    user_after_vera("угу", expected_next_intent="check_can_talk")
     assert state.fsm_state == FsmState.CHECK_CAN_TALK
 
-    user_says("да, удобно говорить")
+    user_after_vera("да, удобно", expected_next_intent="check_wellness")
     assert state.fsm_state == FsmState.DAILY_CHECK
-    assert state.mandatory_checks["can_talk"] is True
+    assert state.pending_slot == "wellness"
 
-    for slot, answer in (
-        ("wellness", "нормально"),
-        ("mood", "хорошее"),
-        ("sleep", "спал нормально"),
-        ("plans", "дома посижу"),
-    ):
-        Planner.plan_after_user(
-            state, "", AnswerJudgement.NO_ANSWER, gid, turn + 1
-        )
-        turn += 1
-        assert state.pending_slot == slot
-        Planner.plan_after_user(state, answer, AnswerJudgement.VALID, gid, turn + 1)
-        turn += 1
+    slot_flow = (
+        ("wellness", "нормально", "check_mood"),
+        ("mood", "хорошее", "check_sleep"),
+        ("sleep", "спал нормально", "check_plans"),
+        ("plans", "дома посижу", "summary"),
+    )
+    for slot, answer, next_intent in slot_flow:
+        user_after_vera(answer, expected_next_intent=next_intent)
         assert state.slots[slot] == SlotStatus.FILLED
-
-    while state.fsm_state not in (FsmState.SUMMARY, FsmState.GOODBYE):
-        vera_prompt()
+        if next_intent.startswith("check_"):
+            assert state.pending_slot == next_intent.removeprefix("check_")
 
     assert state.fsm_state == FsmState.SUMMARY
     assert state.mandatory_remaining() == []
 
-    Planner.plan_closing(state, "до свидания", turn + 1, gid)
     turn += 1
-    Planner.plan_closing(state, "до свидания", turn + 1, gid)
+    first = Planner.plan_closing(state, "до свидания", turn, gid)
+    assert first.intent == "goodbye_confirm"
+    assert state.fsm_state == FsmState.GOODBYE
+
+    turn += 1
+    second = Planner.plan_closing(state, "до свидания", turn, gid)
+    assert second.intent == "goodbye_final"
     assert state.fsm_state == FsmState.FINAL_CLASSIFICATION
     assert state.goodbye_confirmed is True
 

@@ -6,13 +6,13 @@ from packages.contracts.turn import TurnProposal
 from packages.dialogue.fsm import CallFsm
 from packages.dialogue.state import DialogueState
 
-_WELLNESS_Q = "Расскажите, как вы себя чувствуете сейчас?"
 _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
 _GOODBYE_FINAL = "До свидания. Хорошего дня."
+_GOODBYE_BLOCKED = "Давайте сначала закончим несколько вопросов, хорошо?"
 _GOODBYE_MARKERS = ("до свидания", "пока", "всего доброго")
 
 _SLOT_QUESTIONS: dict[str, str] = {
-    "wellness": _WELLNESS_Q,
+    "wellness": "Расскажите, как вы себя чувствуете сейчас?",
     "mood": "Как у вас настроение?",
     "sleep": "Как вы спали?",
     "plans": "Какие у вас планы на сегодня?",
@@ -20,6 +20,17 @@ _SLOT_QUESTIONS: dict[str, str] = {
 
 
 class Planner:
+    @staticmethod
+    def plan_vera_turn(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        """Emit Vera's line for the current FSM state (call opening / re-prompt)."""
+        if state.fsm_state == FsmState.CALL_START:
+            state.fsm_state = FsmState.IDENTIFY_PERSON
+        return Planner._prompt_for_state(state, turn_id, generation_id)
+
     @staticmethod
     def plan_after_user(
         state: DialogueState,
@@ -29,38 +40,102 @@ class Planner:
         turn_id: int,
     ) -> TurnProposal:
         state = Planner._apply_user(state, user_text, judgement)
+        Planner._advance_when_ready(state)
+        return Planner._prompt_for_state(state, turn_id, generation_id)
 
-        open_slot = Planner._next_open_slot(state)
-        if state.fsm_state == FsmState.DAILY_CHECK and open_slot:
-            Planner._arm_pending_slot(state, open_slot)
+    @staticmethod
+    def _advance_when_ready(state: DialogueState) -> None:
+        while CallFsm.can_advance(state):
+            if state.fsm_state == FsmState.GREETING and not state.greeted:
+                break
+            if state.fsm_state == FsmState.DAILY_CHECK and Planner._next_open_slot(state):
+                break
+            if state.fsm_state in (
+                FsmState.SUMMARY,
+                FsmState.GOODBYE,
+                FsmState.FINAL_CLASSIFICATION,
+            ):
+                break
+            CallFsm.advance(state)
+
+    @staticmethod
+    def _prompt_for_state(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        base = {
+            "turn_id": turn_id,
+            "generation_id": generation_id,
+            "fsm_state": state.fsm_state,
+            "mandatory_remaining": state.mandatory_remaining(),
+        }
+
+        if state.fsm_state == FsmState.IDENTIFY_PERSON:
             return TurnProposal(
-                turn_id=turn_id,
-                generation_id=generation_id,
-                speech=_SLOT_QUESTIONS[open_slot],
-                intent=f"check_{open_slot}",
-                fsm_state=state.fsm_state,
-                mandatory_remaining=state.mandatory_remaining(),
+                **base,
+                speech=(
+                    f"Здравствуйте. Я разговариваю с {state.elder_display_name}?"
+                ),
+                intent="confirm_identity",
             )
 
-        if state.fsm_state == FsmState.GREETING and not state.greeted:
-            state.greeted = True
+        if state.fsm_state == FsmState.CHECK_CONSENT:
             return TurnProposal(
-                turn_id=turn_id,
-                generation_id=generation_id,
-                speech="Доброе утро. Это IMVERA, ваш регулярный звонок.",
-                intent="greeting",
-                fsm_state=state.fsm_state,
-                mandatory_remaining=state.mandatory_remaining(),
+                **base,
+                speech=(
+                    "Вы согласны получать регулярные звонки от IMVERA? "
+                    "Это важно — звонки только с вашего согласия."
+                ),
+                intent="confirm_consent",
             )
 
-        state = CallFsm.advance(state)
+        if state.fsm_state == FsmState.GREETING:
+            if not state.greeted:
+                state.greeted = True
+                return TurnProposal(
+                    **base,
+                    speech="Доброе утро. Это IMVERA, ваш регулярный звонок.",
+                    intent="greeting",
+                )
+            Planner._advance_when_ready(state)
+            return Planner._prompt_for_state(state, turn_id, generation_id)
+
+        if state.fsm_state == FsmState.CHECK_CAN_TALK:
+            return TurnProposal(
+                **base,
+                speech="Вам сейчас удобно немного поговорить?",
+                intent="check_can_talk",
+            )
+
+        if state.fsm_state == FsmState.DAILY_CHECK:
+            open_slot = Planner._next_open_slot(state)
+            if open_slot:
+                Planner._arm_pending_slot(state, open_slot)
+                return TurnProposal(
+                    **base,
+                    speech=_SLOT_QUESTIONS[open_slot],
+                    intent=f"check_{open_slot}",
+                )
+
+        if state.fsm_state == FsmState.SUMMARY:
+            return TurnProposal(
+                **base,
+                speech="Спасибо за разговор. Я всё записала.",
+                intent="summary",
+            )
+
+        if state.fsm_state == FsmState.FINAL_CLASSIFICATION:
+            return TurnProposal(
+                **base,
+                speech=_GOODBYE_FINAL,
+                intent="goodbye_final",
+            )
+
         return TurnProposal(
-            turn_id=turn_id,
-            generation_id=generation_id,
+            **base,
             speech="Спасибо, что ответили.",
             intent="acknowledge",
-            fsm_state=state.fsm_state,
-            mandatory_remaining=state.mandatory_remaining(),
         )
 
     @staticmethod
@@ -91,9 +166,12 @@ class Planner:
                 state.mandatory_checks[state.pending_slot] = True
                 state.pending_slot = None
                 state.pending_question = None
-        elif judgement in (AnswerJudgement.NO_ANSWER, AnswerJudgement.BACKCHANNEL):
-            pass
         return state
+
+    @staticmethod
+    def _may_enter_closing_fsm(state: DialogueState) -> bool:
+        closing_states = (FsmState.SUMMARY, FsmState.GOODBYE, FsmState.FINAL_CLASSIFICATION)
+        return not state.mandatory_remaining() and state.fsm_state in closing_states
 
     @staticmethod
     def plan_closing(
@@ -102,31 +180,42 @@ class Planner:
         turn_id: int,
         generation_id: str,
     ) -> TurnProposal:
-        """Goodbye sub-flow: first goodbye → confirm; second → terminal (S12)."""
-        if state.fsm_state not in (
-            FsmState.SUMMARY,
-            FsmState.GOODBYE,
-            FsmState.FINAL_CLASSIFICATION,
-        ):
-            state.fsm_state = FsmState.GOODBYE
-
+        """Goodbye sub-flow — does not corrupt main FSM when mandatory incomplete."""
+        saved_fsm = state.fsm_state
         normalized = user_text.lower().strip()
         if any(marker in normalized for marker in _GOODBYE_MARKERS):
             state.goodbye_count += 1
-            if state.fsm_state == FsmState.SUMMARY:
-                state.fsm_state = FsmState.GOODBYE
+            state.closing_requested = True
+
+        can_close = Planner._may_enter_closing_fsm(state)
 
         if state.goodbye_count >= 2:
-            state.goodbye_confirmed = True
-            state.fsm_state = FsmState.FINAL_CLASSIFICATION
+            if can_close:
+                state.goodbye_confirmed = True
+                state.fsm_state = FsmState.FINAL_CLASSIFICATION
+                return TurnProposal(
+                    turn_id=turn_id,
+                    generation_id=generation_id,
+                    speech=_GOODBYE_FINAL,
+                    intent="goodbye_final",
+                    fsm_state=state.fsm_state,
+                    mandatory_remaining=state.mandatory_remaining(),
+                )
+            state.fsm_state = saved_fsm
             return TurnProposal(
                 turn_id=turn_id,
                 generation_id=generation_id,
-                speech=_GOODBYE_FINAL,
-                intent="goodbye_final",
+                speech=_GOODBYE_BLOCKED,
+                intent="goodbye_blocked_incomplete",
                 fsm_state=state.fsm_state,
                 mandatory_remaining=state.mandatory_remaining(),
             )
+
+        if state.goodbye_count >= 1 and can_close and state.fsm_state == FsmState.SUMMARY:
+            state.fsm_state = FsmState.GOODBYE
+
+        if not can_close:
+            state.fsm_state = saved_fsm
 
         return TurnProposal(
             turn_id=turn_id,

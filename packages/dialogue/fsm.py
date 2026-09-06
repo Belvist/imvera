@@ -16,7 +16,6 @@ _TRANSITIONS: dict[FsmState, FsmState] = {
     FsmState.GOODBYE: FsmState.FINAL_CLASSIFICATION,
 }
 
-# Must be satisfied before leaving this state.
 _EXIT_GATES: dict[FsmState, str] = {
     FsmState.IDENTIFY_PERSON: "identity",
     FsmState.CHECK_CONSENT: "consent",
@@ -30,10 +29,20 @@ class CallFsm:
         gate_key = _EXIT_GATES.get(state.fsm_state)
         if gate_key and not state.mandatory_checks.get(gate_key, False):
             return False
+        if state.fsm_state == FsmState.GREETING and not state.greeted:
+            return False
         if state.fsm_state == FsmState.DAILY_CHECK and state.mandatory_remaining():
             return False
         if state.fsm_state in (FsmState.SUMMARY, FsmState.GOODBYE):
             return not state.mandatory_remaining()
+        if state.fsm_state in (
+            FsmState.FINAL_CLASSIFICATION,
+            FsmState.RED_SIGNAL,
+            FsmState.CONFIRM_SITUATION,
+            FsmState.INCIDENT_REQUESTED,
+            FsmState.ESCALATION_HANDOFF,
+        ):
+            return False
         return True
 
     @staticmethod
