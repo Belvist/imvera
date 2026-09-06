@@ -7,6 +7,7 @@ export PYTHONPATH := .
 
 .PHONY: install test lint up down ps logs api-health contracts-check migrate doctor
 .PHONY: models-prepare models-up voice-setup voice-up voice-doctor voice-down zoiper-info zoiper-fix voice-e2e voice-sip-e2e
+.PHONY: voice-refs-prepare tts-preview tts-preview-list
 .PHONY: voice-open test-contracts test-dialogue-e2e test-persistence-e2e test-voice test-sip
 .PHONY: test-pstn trace-bench test-isolation release-check
 
@@ -37,6 +38,16 @@ models-up:
 voice-setup: install
 	$(PYTHON) scripts/zoiper_info.py
 	$(PYTHON) scripts/models_prepare.py
+	$(PYTHON) scripts/prepare_voice_refs.py
+
+voice-refs-prepare:
+	$(PYTHON) scripts/prepare_voice_refs.py
+
+tts-preview-list:
+	$(PYTHON) scripts/tts_preview.py --list-refs
+
+tts-preview:
+	$(PYTHON) scripts/tts_preview.py --out /tmp/imvera_tts_preview.wav
 
 voice-up:
 	$(PYTHON) scripts/voice_up.py

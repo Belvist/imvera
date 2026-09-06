@@ -17,13 +17,14 @@ models:
     enable_thinking: false
   tts:
     id: mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit
-    # CustomVoice presets (female, Russian): serena | vivian
-    # ref_audio: optional path to WAV for voice cloning (see docs/tts-qwen3-customvoice.md)
+    # Preset fallback when cloning disabled (IMVERA_TTS_USE_REF=0): serena | vivian
     voice: vivian
     lang_code: Russian
     streaming_interval: 0.16
-    ref_audio: null
-    ref_text: null
+    # Zero-shot clone (not trained model). See config/voice_refs/manifest.json
+    ref_id: fleurs_ru_female_1
+    ref_audio: config/voice_refs/fleurs_ru_female_1.wav
+    ref_text: "эта идея пришла из китая где излюбленным цветком был цвет сливы"
   vad:
     onnx: silero_vad
 

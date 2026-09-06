@@ -25,6 +25,7 @@ from services.inference.common import (
     mount_health,
     new_request_id,
 )
+from services.tts.voice_refs import resolve_tts_ref
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "voice-m5.yaml"
 _tts = None
@@ -65,8 +66,7 @@ def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
     tts_cfg = cfg["models"]["tts"]
     voice = req.voice or tts_cfg["voice"]
     lang = req.language or tts_cfg["lang_code"]
-    ref_audio = tts_cfg.get("ref_audio")
-    ref_text = tts_cfg.get("ref_text")
+    ref_path, ref_text, ref_id = resolve_tts_ref(tts_cfg, CONFIG_PATH)
     gen_kwargs: dict[str, Any] = {
         "text": req.text,
         "voice": voice,
@@ -74,14 +74,16 @@ def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
         "stream": True,
         "streaming_interval": tts_cfg.get("streaming_interval", 0.32),
     }
-    if ref_audio:
-        ref_path = Path(ref_audio)
-        if not ref_path.is_absolute():
-            ref_path = CONFIG_PATH.parents[1] / ref_path
-        if ref_path.exists():
+    if ref_path is not None:
+        if ref_text:
             gen_kwargs["ref_audio"] = str(ref_path)
-            if ref_text:
-                gen_kwargs["ref_text"] = ref_text
+            gen_kwargs["ref_text"] = ref_text
+        else:
+            # ICL cloning requires ref_text; mlx_audio resamples ref_audio to 24 kHz.
+            print(
+                f"WARNING: ref_audio {ref_path} ignored — ref_text missing "
+                f"(set IMVERA_TTS_REF_TEXT or manifest entry for {ref_id or ref_path.name})"
+            )
     seq = 0
     try:
         for result in _tts.generate(**gen_kwargs):
