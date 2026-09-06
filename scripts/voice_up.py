@@ -75,7 +75,25 @@ def _wait_ari_registered(cfg: dict) -> bool:
     return False
 
 
+def _wait_asterisk_cli(timeout_s: float = 60.0) -> bool:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        try:
+            subprocess.check_output(
+                ["docker", "exec", "imvera-asterisk", "asterisk", "-rx", "core show version"],
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            return True
+        except subprocess.CalledProcessError:
+            time.sleep(1.0)
+    print("BLOCKED: Asterisk CLI not ready", file=sys.stderr)
+    return False
+
+
 def _verify_asterisk_modules() -> bool:
+    if not _wait_asterisk_cli():
+        return False
     try:
         out = subprocess.check_output(
             ["docker", "exec", "imvera-asterisk", "asterisk", "-rx", "module show like websocket"],
@@ -86,6 +104,47 @@ def _verify_asterisk_modules() -> bool:
             print("BLOCKED: chan_websocket not loaded in Asterisk container", file=sys.stderr)
             return False
         print("  Asterisk chan_websocket: loaded")
+        try:
+            from scripts.local_sip_config import load_or_create
+
+            cfg = load_or_create()
+            auth = (cfg["ari_user"], cfg["ari_password"])
+            http_root = normalize_ari_http_root("http://127.0.0.1:8088")
+            import httpx
+
+            for name in ("imvera_inject",):
+                r = httpx.post(
+                    f"{http_root}/ari/channels/externalMedia",
+                    params={
+                        "app": cfg["stasis_app"],
+                        "external_host": name,
+                        "transport": "websocket",
+                        "encapsulation": "none",
+                        "format": "slin16",
+                        "direction": "both",
+                        "connection_type": "client",
+                        "transport_data": "f(json)",
+                    },
+                    auth=auth,
+                    timeout=5.0,
+                )
+                if r.status_code not in (200, 201):
+                    print(
+                        f"BLOCKED: websocket_client connection '{name}' invalid: {r.text}",
+                        file=sys.stderr,
+                    )
+                    return False
+                ch_id = r.json().get("id")
+                if ch_id:
+                    httpx.delete(
+                        f"{http_root}/ari/channels/{ch_id}",
+                        auth=auth,
+                        timeout=5.0,
+                    )
+            print("  Asterisk websocket client: imvera_inject")
+        except httpx.HTTPError as exc:
+            print(f"BLOCKED: cannot verify websocket_client connections: {exc}", file=sys.stderr)
+            return False
         return True
     except subprocess.CalledProcessError as exc:
         print(f"BLOCKED: cannot verify Asterisk modules: {exc.output}", file=sys.stderr)

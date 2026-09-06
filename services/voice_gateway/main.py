@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 
 import httpx
 import uvicorn
+import websockets
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
@@ -23,8 +25,10 @@ from packages.voice_runtime.call_actor import CallActor, MediaCallbacks, build_c
 from packages.voice_runtime.trace import record_event
 
 app = FastAPI(title="IMVERA Voice Gateway", version="0.2.0")
+log = logging.getLogger("voice_gateway")
 
 ASTERISK_APP_HTTP = os.environ.get("IMVERA_ASTERISK_APP_HTTP", "http://127.0.0.1:9201")
+ASTERISK_HTTP = os.environ.get("IMVERA_ASTERISK_HTTP", "http://127.0.0.1:8088")
 
 
 def _urls() -> tuple[str, str, str]:
@@ -42,10 +46,14 @@ class CallSession:
     actor: CallActor
     capture_ws: WebSocket | None = None
     inject_ws: WebSocket | None = None
+    capture_ready: bool = False
+    inject_ready: bool = False
     media_ready: asyncio.Event = field(default_factory=asyncio.Event)
     sample_rate: int = 16000
     frame_size: int = 640
     ptime_ms: int = 20
+    capture_bytes: int = 0
+    _capture_task: asyncio.Task | None = None
 
 
 _sessions: dict[str, CallSession] = {}
@@ -55,6 +63,10 @@ class OpenCallRequest(BaseModel):
     family_id: str = Field(default="fam-voice")
     elder_name: str = Field(default="")
     sip_channel_id: str = ""
+
+
+class AttachCaptureRequest(BaseModel):
+    connection_id: str
 
 
 @app.get("/health/ready")
@@ -121,8 +133,56 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
 async def close_call(call_id: str) -> dict:
     session = _sessions.pop(call_id, None)
     if session:
+        log.info("call %s capture_bytes=%s", call_id, session.capture_bytes)
+        if session._capture_task and not session._capture_task.done():
+            session._capture_task.cancel()
         await session.actor.stop()
-    return {"status": "closed"}
+    return {"status": "closed", "capture_bytes": session.capture_bytes if session else 0}
+
+
+async def _maybe_media_ready(session: CallSession) -> None:
+    if session.capture_ready and session.inject_ready and not session.media_ready.is_set():
+        session.media_ready.set()
+        await session.actor.on_media_ready(session.sample_rate, session.frame_size)
+
+
+async def _run_incoming_capture(session: CallSession, connection_id: str) -> None:
+    ws_url = f"{ASTERISK_HTTP.replace('http://', 'ws://')}/media/{connection_id}"
+    try:
+        async with websockets.connect(ws_url, open_timeout=10) as ws:
+            while True:
+                message = await ws.recv()
+                if isinstance(message, bytes):
+                    session.capture_bytes += len(message)
+                    await session.actor.push_pcm(message, session.sample_rate)
+                    continue
+                if not is_control_message(message):
+                    continue
+                data = json.loads(message)
+                if is_media_start(data):
+                    fmt = parse_media_start(data)
+                    session.sample_rate = fmt.sample_rate
+                    session.frame_size = fmt.frame_size_bytes
+                    session.ptime_ms = fmt.ptime_ms
+                    session.capture_ready = True
+                    await _maybe_media_ready(session)
+    except Exception as exc:
+        log.warning("incoming capture ended for %s: %s", session.call_id, exc)
+    finally:
+        session.capture_ready = False
+
+
+@app.post("/internal/calls/{call_id}/attach_incoming_capture")
+async def attach_incoming_capture(call_id: str, body: AttachCaptureRequest) -> dict:
+    session = _sessions.get(call_id)
+    if not session:
+        raise HTTPException(404, detail="call not open")
+    if session._capture_task and not session._capture_task.done():
+        return {"status": "already_attached"}
+    session._capture_task = asyncio.create_task(
+        _run_incoming_capture(session, body.connection_id)
+    )
+    return {"status": "attaching", "connection_id": body.connection_id}
 
 
 async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> None:
@@ -147,22 +207,24 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
                     session.sample_rate = fmt.sample_rate
                     session.frame_size = fmt.frame_size_bytes
                     session.ptime_ms = fmt.ptime_ms
-                    if session.capture_ws and session.inject_ws:
-                        if not session.media_ready.is_set():
-                            session.media_ready.set()
-                            await session.actor.on_media_ready(
-                                session.sample_rate, session.frame_size
-                            )
+                    if role == "capture":
+                        session.capture_ready = True
+                    else:
+                        session.inject_ready = True
+                    await _maybe_media_ready(session)
             elif "bytes" in message and message["bytes"] and role == "capture":
+                session.capture_bytes += len(message["bytes"])
                 await session.actor.push_pcm(message["bytes"], session.sample_rate)
     except WebSocketDisconnect:
         pass
     finally:
         if role == "capture":
             session.capture_ws = None
+            session.capture_ready = False
         else:
             session.inject_ws = None
-        if session.capture_ws is None and session.inject_ws is None:
+            session.inject_ready = False
+        if not session.capture_ready and not session.inject_ready:
             await session.actor.stop()
             _sessions.pop(session.call_id, None)
 

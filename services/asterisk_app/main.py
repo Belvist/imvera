@@ -95,11 +95,31 @@ async def _handle_stasis_start(channel: dict) -> None:
 
     snoop = await _ari.snoop_channel(channel_id, STASIS_APP, spy="in", whisper="none")
     snoop_id = snoop["id"]
+    await _ari.answer(snoop_id)
 
-    capture = await _ari.create_external_media(STASIS_APP, "imvera-capture", format="slin16")
-    inject = await _ari.create_external_media(STASIS_APP, "imvera-inject", format="slin16")
+    capture = await _ari.create_external_media(
+        STASIS_APP,
+        "INCOMING",
+        format="slin16",
+        direction="out",
+        connection_type="server",
+    )
+    inject = await _ari.create_external_media(
+        STASIS_APP, "imvera_inject", format="slin16", direction="in"
+    )
     capture_id = capture["id"]
     inject_id = inject["id"]
+    connection_id = capture.get("channelvars", {}).get("MEDIA_WEBSOCKET_CONNECTION_ID", "")
+    if not connection_id:
+        connection_id = await _ari.get_channel_variable(
+            capture_id, "MEDIA_WEBSOCKET_CONNECTION_ID"
+        )
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        await client.post(
+            f"{GATEWAY_HTTP}/internal/calls/{call_id}/attach_incoming_capture",
+            json={"connection_id": connection_id},
+        )
 
     await _ari.create_bridge(capture_bridge_id)
     await _ari.add_to_bridge(capture_bridge_id, snoop_id)

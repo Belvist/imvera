@@ -93,17 +93,31 @@ class AsteriskARI:
     async def snoop_channel(
         self,
         channel_id: str,
-        app: str,
+        app: str | None = None,
+        *,
         spy: str = "in",
         whisper: str = "none",
     ) -> dict[str, Any]:
+        params: dict[str, str] = {"spy": spy, "whisper": whisper}
+        if app:
+            params["app"] = app
         async with httpx.AsyncClient(auth=self._auth, timeout=10.0) as client:
             r = await client.post(
                 f"{self.base_url}/channels/{channel_id}/snoop",
-                params={"app": app, "spy": spy, "whisper": whisper},
+                params=params,
             )
             r.raise_for_status()
             return _json_or_empty(r)
+
+    async def get_channel_variable(self, channel_id: str, variable: str) -> str:
+        async with httpx.AsyncClient(auth=self._auth, timeout=10.0) as client:
+            r = await client.get(
+                f"{self.base_url}/channels/{channel_id}/variable",
+                params={"variable": variable},
+            )
+            r.raise_for_status()
+            payload = _json_or_empty(r)
+            return str(payload.get("value", ""))
 
     async def create_external_media(
         self,
@@ -111,6 +125,8 @@ class AsteriskARI:
         connection_id: str,
         *,
         format: str = "slin16",
+        direction: str = "both",
+        connection_type: str = "client",
     ) -> dict[str, Any]:
         async with httpx.AsyncClient(auth=self._auth, timeout=10.0) as client:
             r = await client.post(
@@ -121,8 +137,9 @@ class AsteriskARI:
                     "transport": "websocket",
                     "encapsulation": "none",
                     "format": format,
-                    "direction": "both",
-                    "connection_type": "client",
+                    "direction": direction,
+                    "connection_type": connection_type,
+                    "transport_data": "f(json)",
                 },
             )
             r.raise_for_status()

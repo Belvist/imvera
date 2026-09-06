@@ -6,7 +6,7 @@ PYTHON = python3
 export PYTHONPATH := .
 
 .PHONY: install test lint up down ps logs api-health contracts-check migrate doctor
-.PHONY: models-prepare models-up voice-setup voice-up voice-doctor voice-down zoiper-info voice-e2e
+.PHONY: models-prepare models-up voice-setup voice-up voice-doctor voice-down zoiper-info voice-e2e voice-sip-e2e
 .PHONY: voice-open test-contracts test-dialogue-e2e test-persistence-e2e test-voice test-sip
 .PHONY: test-pstn trace-bench test-isolation release-check
 
@@ -52,6 +52,9 @@ zoiper-info:
 
 voice-e2e:
 	@$(PYTHON) scripts/voice_e2e.py
+
+voice-sip-e2e:
+	@$(PYTHON) scripts/voice_sip_e2e.py
 
 up:
 	$(COMPOSE) up -d --build
