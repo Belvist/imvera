@@ -11,16 +11,16 @@ DEFAULT_MODEL = ROOT / "config" / "models" / "silero_vad.onnx"
 
 
 class SileroVad:
-    """Streaming Silero VAD — 512-sample windows at 16 kHz."""
+    """Streaming Silero VAD — 512-sample windows at 16 kHz (32 ms per inference)."""
 
     def __init__(self, sample_rate: int = 16000, model_path: Path | None = None) -> None:
         if sample_rate != 16000:
             raise ValueError("Silero VAD adapter supports 16 kHz only")
         self.sample_rate = sample_rate
-        self._window = 512
+        self._window_samples = 512
+        self._window_ms = self._window_samples * 1000 // sample_rate
         self._min_speech_ms = 100
         self._min_silence_ms = 650
-        self._frame_ms = 20
         import numpy as np
         import onnxruntime as ort
 
@@ -58,9 +58,9 @@ class SileroVad:
         started = False
         ended = False
         self._buf += pcm
-        while len(self._buf) >= self._window * 2:
-            frame = self._buf[: self._window * 2]
-            self._buf = self._buf[self._window * 2 :]
+        while len(self._buf) >= self._window_samples * 2:
+            frame = self._buf[: self._window_samples * 2]
+            self._buf = self._buf[self._window_samples * 2 :]
             samples = array.array("h")
             samples.frombytes(frame)
             import numpy as np
@@ -70,12 +70,12 @@ class SileroVad:
             loud = prob >= 0.5
             if loud:
                 self._silence_ms = 0
-                self._speech_ms += self._frame_ms
+                self._speech_ms += self._window_ms
                 if not self._in_speech and self._speech_ms >= self._min_speech_ms:
                     self._in_speech = True
                     started = True
             elif self._in_speech:
-                self._silence_ms += self._frame_ms
+                self._silence_ms += self._window_ms
                 if self._silence_ms >= self._min_silence_ms:
                     self._in_speech = False
                     self._speech_ms = 0

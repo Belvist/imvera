@@ -8,6 +8,8 @@ from pathlib import Path
 
 import httpx
 
+from packages.telephony.asterisk import is_stasis_app_registered, normalize_ari_http_root
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -47,12 +49,8 @@ def main() -> int:
 
         cfg = load_or_create()
         auth = (cfg["ari_user"], cfg["ari_password"])
-        r = httpx.get(
-            "http://127.0.0.1:8088/ari/applications",
-            auth=auth,
-            timeout=3.0,
-        )
-        if r.status_code == 200 and cfg["stasis_app"] in r.json():
+        http_root = normalize_ari_http_root("http://127.0.0.1:8088")
+        if is_stasis_app_registered(http_root, auth, cfg["stasis_app"]):
             print(f"  ARI app '{cfg['stasis_app']}': registered")
         else:
             blockers.append("ARI app imvera not registered")

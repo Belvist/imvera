@@ -8,6 +8,12 @@ from packages.contracts.semantic import ActiveQuestionKind, SemanticPayload, evi
 from packages.dialogue.interpretation import UserInterpretation
 
 
+def _consent_evidence_ok(raw_text: str, payload: SemanticPayload) -> bool:
+    if payload.consent_evidence is None:
+        return False
+    return evidence_matches(raw_text, payload.consent_evidence)
+
+
 def semantic_to_user_interpretation(
     raw_text: str,
     payload: SemanticPayload,
@@ -42,51 +48,60 @@ def semantic_to_user_interpretation(
         )
 
     if active_question_kind == "identity":
-        if payload.consent_answer == "yes" or (
-            payload.dialogue_act == "answer" and payload.answers_pending_question
-        ):
+        if payload.consent_answer == "no":
+            return UserInterpretation(
+                judgement=AnswerJudgement.DECLINE,
+                dialogue_act=DialogueAct.ANSWER,
+                declines=True,
+            )
+        if payload.consent_answer == "yes" and _consent_evidence_ok(raw_text, payload):
             return UserInterpretation(
                 judgement=AnswerJudgement.VALID,
                 dialogue_act=DialogueAct.ANSWER,
                 affirms=True,
                 confirms_identity=True,
             )
-        if payload.consent_answer == "no":
-            return UserInterpretation(
-                judgement=AnswerJudgement.DECLINE,
-                dialogue_act=DialogueAct.ANSWER,
-                declines=True,
-            )
 
     if active_question_kind == "consent":
-        if payload.consent_answer == "yes":
-            return UserInterpretation(
-                judgement=AnswerJudgement.VALID,
-                dialogue_act=DialogueAct.ANSWER,
-                affirms=True,
-                sets_consent=ConsentState.ACTIVE,
-            )
-        if payload.consent_answer == "no":
+        if payload.consent_answer == "no" and _consent_evidence_ok(raw_text, payload):
             return UserInterpretation(
                 judgement=AnswerJudgement.DECLINE,
                 dialogue_act=DialogueAct.ANSWER,
                 declines=True,
                 sets_consent=ConsentState.DECLINED,
             )
+        if payload.consent_answer == "yes" and _consent_evidence_ok(raw_text, payload):
+            return UserInterpretation(
+                judgement=AnswerJudgement.VALID,
+                dialogue_act=DialogueAct.ANSWER,
+                affirms=True,
+                sets_consent=ConsentState.ACTIVE,
+            )
 
     if active_question_kind == "can_talk":
-        if payload.consent_answer == "yes":
+        if payload.consent_answer == "no" and _consent_evidence_ok(raw_text, payload):
+            return UserInterpretation(
+                judgement=AnswerJudgement.DECLINE,
+                dialogue_act=DialogueAct.ANSWER,
+                declines=True,
+            )
+        if payload.consent_answer == "yes" and _consent_evidence_ok(raw_text, payload):
             return UserInterpretation(
                 judgement=AnswerJudgement.VALID,
                 dialogue_act=DialogueAct.ANSWER,
                 affirms=True,
                 confirms_can_talk=True,
             )
-        if payload.consent_answer == "no":
+        if (
+            payload.dialogue_act == "answer"
+            and payload.answers_pending_question
+            and _consent_evidence_ok(raw_text, payload)
+        ):
             return UserInterpretation(
-                judgement=AnswerJudgement.DECLINE,
+                judgement=AnswerJudgement.VALID,
                 dialogue_act=DialogueAct.ANSWER,
-                declines=True,
+                affirms=True,
+                confirms_can_talk=True,
             )
 
     if payload.user_question:

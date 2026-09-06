@@ -28,7 +28,11 @@ SEMANTIC_SCHEMA_HINT = """Верни ТОЛЬКО JSON SemanticPayload (без c
   "dialogue_act": "answer|question|correction|repeat|backchannel|unclear",
   "control": "none|stop_call|revoke_consent|defer|wrong_person",
   "consent_answer": "yes|no|unclear|not_applicable",
-  "facts": [{"field":"mood","value":"...","subject":"speaker","temporal_scope":"today","negated":false,"evidence":{"start":0,"end":6,"quote":"хорошо"}}],
+  "facts": [{
+    "field":"mood","value":"...","subject":"speaker",
+    "temporal_scope":"today","negated":false,
+    "evidence":{"start":0,"end":6,"quote":"хорошо"}
+  }],
   "risk_candidates": [],
   "answers_pending_question": true,
   "needs_clarification": false,

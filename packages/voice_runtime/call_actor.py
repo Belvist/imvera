@@ -74,8 +74,8 @@ class CallActor:
     _task: asyncio.Task | None = None
     _playback_task: asyncio.Task | None = None
     _policy_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    _resampler: StatefulResampler | None = None
-    _output_resampler: StatefulResampler | None = None
+    _input_resampler: StatefulResampler | None = None
+    _tts_resamplers: dict[str, StatefulResampler] = field(default_factory=dict)
     _vad: object | None = None
     _collector: SpeechSegmentCollector | None = None
     _playback: PlaybackQueue | None = None
@@ -87,7 +87,10 @@ class CallActor:
     _media_ready: bool = False
     _pending_open: SessionTurnResult | None = None
     _output_sample_rate: int = 16000
+    _output_frame_bytes: int = 640
     _inflight_utterances: set[int] = field(default_factory=set)
+    _hangup_after_playback: bool = False
+    _transport_closed: bool = False
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._run())
@@ -101,6 +104,7 @@ class CallActor:
     async def on_media_ready(self, sample_rate: int, frame_size: int) -> None:
         await self._ensure_audio_chain(sample_rate)
         self._output_sample_rate = sample_rate
+        self._output_frame_bytes = frame_size
         self._media_ready = True
         if self._playback_task is None:
             self._playback_task = asyncio.create_task(self._playback_pump())
@@ -109,7 +113,7 @@ class CallActor:
             self._pending_open = None
 
     async def push_pcm(self, pcm: bytes, sample_rate: int) -> None:
-        if self._stopped:
+        if self._stopped or self._transport_closed:
             return
         await self._queue.put(ActorEvent(ActorEventType.PCM, pcm=pcm, sample_rate=sample_rate))
 
@@ -147,12 +151,9 @@ class CallActor:
         await asyncio.to_thread(self.session.finalize_if_needed)
 
     async def _ensure_audio_chain(self, sample_rate: int) -> None:
-        if self._resampler is not None:
+        if self._input_resampler is not None:
             return
-        self._resampler = StatefulResampler(sample_rate, self.config.target_sample_rate)
-        self._output_resampler = StatefulResampler(
-            self.config.target_sample_rate, sample_rate
-        )
+        self._input_resampler = StatefulResampler(sample_rate, self.config.target_sample_rate)
         self._vad = create_vad(self.config.target_sample_rate)
         self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
         self._playback = PlaybackQueue(
@@ -169,12 +170,23 @@ class CallActor:
             )
         )
 
+    def _tts_resampler(self, generation_id: str, source_rate: int) -> StatefulResampler:
+        key = f"{generation_id}:{source_rate}"
+        if key not in self._tts_resamplers:
+            self._tts_resamplers[key] = StatefulResampler(source_rate, self._output_sample_rate)
+        return self._tts_resamplers[key]
+
+    def _resample_tts_chunk(self, generation_id: str, pcm: bytes, source_rate: int) -> bytes:
+        if source_rate == self._output_sample_rate:
+            return pcm
+        return self._tts_resampler(generation_id, source_rate).process(pcm)
+
     async def _on_pcm(self, pcm_s16le: bytes, sample_rate: int) -> None:
-        if self._stopped or not self._media_ready:
+        if self._stopped or not self._media_ready or self._transport_closed:
             return
         await self._ensure_audio_chain(sample_rate)
-        assert self._resampler and self._vad and self._collector
-        pcm = self._resampler.process(pcm_s16le)
+        assert self._input_resampler and self._vad and self._collector
+        pcm = self._input_resampler.process(pcm_s16le)
         if not pcm:
             return
         started, ended = self._vad.feed(pcm)
@@ -193,7 +205,7 @@ class CallActor:
             asyncio.create_task(self._handle_utterance(segment, seq))
 
     async def _handle_utterance(self, pcm: bytes, utterance_seq: int) -> None:
-        if self._stopped:
+        if self._stopped or self._transport_closed:
             self._inflight_utterances.discard(utterance_seq)
             return
         self._utterance_seq = utterance_seq
@@ -220,7 +232,7 @@ class CallActor:
                     )
                 )
             return
-        if self._stopped or self.session.state.call_finalized:
+        if self._stopped or self._transport_closed:
             self._inflight_utterances.discard(utterance_seq)
             return
 
@@ -258,7 +270,7 @@ class CallActor:
                     )
                 )
             return
-        if self._stopped or self.session.state.call_finalized:
+        if self._stopped or self._transport_closed:
             self._inflight_utterances.discard(utterance_seq)
             return
 
@@ -279,7 +291,7 @@ class CallActor:
         )
 
         async with self._policy_lock:
-            if self._stopped or self.session.state.call_finalized:
+            if self._stopped or self._transport_closed:
                 self._inflight_utterances.discard(utterance_seq)
                 return
             if self.session.state.state_version != captured_version:
@@ -293,7 +305,7 @@ class CallActor:
             )
 
         self._inflight_utterances.discard(utterance_seq)
-        if self._stopped or self.session.state.call_finalized:
+        if self._stopped or self._transport_closed:
             return
         if not result.persist_ok:
             await self.media.emit(
@@ -307,16 +319,18 @@ class CallActor:
         await self.media.emit(
             RuntimeEvent(self.call_id, RuntimeEventType.PERSISTENCE_COMMITTED, {})
         )
+        if result.proposal.intent.endswith("_final") or self.session.state.final_action_done:
+            self._hangup_after_playback = True
         await self._deliver_session_turn(result)
 
     async def _deliver_session_turn(self, result: SessionTurnResult) -> None:
-        if self._stopped or not result.validated.allowed:
-            if self.session.state.final_action_done and not result.validated.speech:
+        if self._stopped or self._transport_closed or not result.validated.allowed:
+            if self._hangup_after_playback and not result.validated.speech:
                 await self._maybe_hangup_when_idle()
             return
         planner_text = result.validated.speech
         if not planner_text:
-            if self.session.state.final_action_done:
+            if self._hangup_after_playback:
                 await self._maybe_hangup_when_idle()
             return
 
@@ -350,7 +364,7 @@ class CallActor:
         )
         validated = Validator.validate(proposal)
         if not validated.allowed or not validated.speech:
-            if self.session.state.final_action_done:
+            if self._hangup_after_playback:
                 await self._maybe_hangup_when_idle()
             return
         await self._speak_phrase(validated.speech)
@@ -373,9 +387,12 @@ class CallActor:
             )
         )
         self._active_generation = None
+        self._tts_resamplers = {
+            k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
+        }
 
     async def _speak_phrase(self, text: str) -> None:
-        if not text or not self._playback or self._stopped:
+        if not text or not self._playback or self._stopped or self._transport_closed:
             return
         generation_id = f"g-{uuid.uuid4().hex[:8]}"
         phrase_id = f"p-{uuid.uuid4().hex[:8]}"
@@ -396,17 +413,20 @@ class CallActor:
                 ):
                     if generation_id != self._active_generation or self._stopped:
                         break
+                    out_pcm = self._resample_tts_chunk(
+                        generation_id, chunk.pcm_s16le, chunk.sample_rate
+                    )
                     env = AudioEnvelope(
                         call_id=self.call_id,
                         generation_id=generation_id,
                         phrase_id=phrase_id,
                         sequence=seq,
-                        sample_rate=chunk.sample_rate,
-                        pcm_s16le=chunk.pcm_s16le,
+                        sample_rate=self._output_sample_rate,
+                        pcm_s16le=out_pcm,
                     )
                     seq += 1
-                    if self._playback and self._playback.enqueue(env):
-                        pass
+                    if self._playback:
+                        await self._playback.enqueue_wait(env)
             finally:
                 if self._playback and generation_id == self._active_generation:
                     self._playback.mark_generation_done()
@@ -416,51 +436,65 @@ class CallActor:
             RuntimeEvent(
                 self.call_id,
                 RuntimeEventType.RENDERER_PHRASE_READY,
-                {"phrase_id": phrase_id, "text": text},
+                {"phrase_id": phrase_id, "text": text, "generation_id": generation_id},
             )
         )
 
     async def _playback_pump(self) -> None:
-        assert self._playback and self._output_resampler
+        assert self._playback
+        frame_sleep = self.config.frame_ms / 1000.0
         while not self._stopped:
-            chunk = self._playback.pop()
+            chunk = self._playback.pop_nowait()
             if chunk is None:
                 if self._playback.playback_complete():
-                    self._playback.mark_completed()
-                    if self._active_generation:
-                        await self.media.emit(
-                            RuntimeEvent(
-                                self.call_id,
-                                RuntimeEventType.PLAYBACK_COMPLETED,
-                                {"generation_id": self._active_generation},
-                            )
-                        )
-                        if self._delivered_phrases and self._playback._ledger:
-                            spoken = self._playback._ledger.canonical_text
-                            if spoken and (
-                                not self._delivered_phrases
-                                or self._delivered_phrases[-1] != spoken
-                            ):
-                                self._delivered_phrases.append(spoken)
-                        self._active_generation = None
-                        if self.session.state.final_action_done:
-                            await self._maybe_hangup_when_idle()
+                    await self._on_playback_drained()
                 await asyncio.sleep(0.01)
                 continue
-            out_pcm = chunk.pcm_s16le
-            if chunk.sample_rate != self._output_sample_rate:
-                out_pcm = self._output_resampler.process(out_pcm)
-            if out_pcm:
-                await self.media.send_pcm(out_pcm)
-            await asyncio.sleep(self.config.frame_ms / 1000.0)
+            await self.media.send_pcm(chunk.pcm_s16le)
+            await asyncio.sleep(frame_sleep)
+
+    async def _on_playback_drained(self) -> None:
+        assert self._playback
+        gen = self._active_generation
+        if not gen or not self._playback.playback_complete():
+            return
+        ledger = self._playback._ledger
+        if not ledger:
+            return
+        self._playback.mark_completed()
+        spoken = ledger.canonical_text
+        if spoken and (not self._delivered_phrases or self._delivered_phrases[-1] != spoken):
+            self._delivered_phrases.append(spoken)
+        await self.media.emit(
+            RuntimeEvent(
+                self.call_id,
+                RuntimeEventType.PLAYBACK_COMPLETED,
+                {
+                    "generation_id": gen,
+                    "sent_samples": ledger.sent_samples,
+                    "queued_samples": ledger.queued_samples,
+                },
+            )
+        )
+        self._active_generation = None
+        self._tts_resamplers = {
+            k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
+        }
+        pacing_tail = ledger.sent_samples / max(self._output_sample_rate, 1)
+        await asyncio.sleep(min(pacing_tail, 2.0))
+        if self._hangup_after_playback:
+            await self._maybe_hangup_when_idle()
 
     async def _maybe_hangup_when_idle(self) -> None:
-        if self._stopped:
+        if self._stopped or self._transport_closed:
             return
-        if self._active_generation or (self._playback and self._playback._queue):
+        if self._active_generation or (self._playback and self._playback.pending_frames):
             return
         if self._inflight_utterances:
             return
+        if self._tts_task and not self._tts_task.done():
+            return
+        self._transport_closed = True
         await self.media.hangup()
 
 

@@ -1,10 +1,8 @@
-# Asterisk 22.x with chan_websocket — ADR-001 lab image
-# Pin: andrius/asterisk:22 (verify modules in container after build)
-FROM andrius/asterisk:22
+# Asterisk 22.8.x lab image — ADR-001 (chan_websocket + ARI)
+FROM andrius/asterisk:22.8.0
 
 RUN mkdir -p /etc/asterisk/generated
 
-# Base templates; runtime secrets mounted from config/local/asterisk
 COPY docker/asterisk/modules.conf /etc/asterisk/modules.conf
 COPY docker/asterisk/extensions.conf /etc/asterisk/extensions.conf
 COPY docker/asterisk/rtp.conf /etc/asterisk/rtp.conf

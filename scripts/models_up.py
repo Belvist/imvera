@@ -4,17 +4,16 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 import time
-from pathlib import Path
 
 import httpx
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
-PID_DIR = ROOT / ".run"
+from scripts.voice_process import ROOT, is_running, start, stop
+
 CFG = ROOT / "config" / "voice-m5.yaml"
+WORKERS = ("stt", "tts", "llm")
 
 
 def _load_ports() -> dict[str, int]:
@@ -38,32 +37,40 @@ def _wait_ready(url: str, name: str, timeout_s: float = 600.0) -> bool:
     return False
 
 
+def _worker_ready(port: int) -> bool:
+    try:
+        r = httpx.get(f"http://127.0.0.1:{port}/health/ready", timeout=2.0)
+        return r.status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
+def _all_ready(ports: dict[str, int]) -> bool:
+    return all(is_running(name) and _worker_ready(ports[name]) for name in WORKERS)
+
+
 def main() -> int:
     ports = _load_ports()
-    PID_DIR.mkdir(exist_ok=True)
+    if _all_ready(ports):
+        print("MLX workers already running and ready.")
+        return 0
+
     env = os.environ.copy()
-    procs: list[tuple[str, subprocess.Popen]] = []
-    specs = [
-        ("stt", ports["stt"]),
-        ("tts", ports["tts"]),
-        ("llm", ports["llm"]),
-    ]
-    for name, port in specs:
-        log = PID_DIR / f"{name}.log"
+    for name in WORKERS:
+        stop(name)
+
+    for name in WORKERS:
+        port = ports[name]
         print(f"Starting {name} on {port}...")
-        p = subprocess.Popen(
+        start(
+            name,
             [sys.executable, str(ROOT / "services" / name / "worker.py")],
-            cwd=ROOT,
             env={**env, f"IMVERA_{name.upper()}_PORT": str(port)},
-            stdout=log.open("w"),
-            stderr=subprocess.STDOUT,
         )
-        (PID_DIR / f"{name}.pid").write_text(str(p.pid))
-        procs.append((name, p))
 
     ok = True
-    for name, port in specs:
-        if not _wait_ready(f"http://127.0.0.1:{port}", name):
+    for name in WORKERS:
+        if not _wait_ready(f"http://127.0.0.1:{ports[name]}", name):
             ok = False
     if not ok:
         return 1
