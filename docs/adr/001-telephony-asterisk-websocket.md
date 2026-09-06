@@ -1,6 +1,6 @@
 # ADR-001: Telephony — Asterisk + ARI + Separated Media Legs
 
-**Status:** accepted (Architecture Freeze v1)  
+**Status:** accepted (Architecture Freeze v1, amended 2026-09-06)  
 **Date:** 2026-09-06
 
 ## Context
@@ -11,14 +11,16 @@ IMVERA needs inbound/outbound PSTN via SIP trunk. Voice-runtime must receive **f
 
 ```text
 PJSIP
-  → Asterisk ≥ 22.6.0
+  → Asterisk ≥ 22.8.0   # JSON WebSocket control format (22.8+)
   → Stasis ARI application
   → Dual media legs:
         Capture: Snoop(inbound) / ExternalMedia IN  → voice-runtime STT
         Inject:  voice-runtime TTS → ExternalMedia OUT → caller bridge
-  → Primary transport to runtime: chan_websocket (Asterisk ≥ 22.6)
+  → Primary transport to runtime: chan_websocket
   → Fallback: AudioSocket (TCP_NODELAY required)
 ```
+
+Minimum **22.6.0** if JSON control is not required; **22.8.0+** when using Asterisk JSON WebSocket control messages.
 
 Do **not** use undifferentiated single stream STT+TTS without echo gate pass.
 
@@ -40,12 +42,13 @@ Do **not** use undifferentiated single stream STT+TTS without echo gate pass.
 ## References
 
 - [External Media and ARI](https://docs.asterisk.org/Development/Reference-Information/Asterisk-Framework-and-API-Examples/External-Media-and-ARI/)
-- [chan_websocket](https://docs.asterisk.org/Configuration/Channel-Drivers/WebSocket/)
+- [chan_websocket / WebSocket](https://docs.asterisk.org/Configuration/Channel-Drivers/WebSocket/)
 
 ## Verification status
 
 | Claim | Status |
 |-------|--------|
 | ExternalMedia inject + receive | ✅ Asterisk docs |
+| JSON control ≥ 22.8 | ✅ Asterisk docs |
 | Dual-leg pattern for AI | ⚠️ spike Phase 5 |
 | chan_websocket scale | ⚠️ monitor at pilot |

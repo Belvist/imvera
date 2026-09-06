@@ -16,8 +16,32 @@ def _max_level(a: RiskLevel, b: RiskLevel) -> RiskLevel:
     return a if _ORDER[a] >= _ORDER[b] else b
 
 
+def _at_least(level: RiskLevel, minimum: RiskLevel) -> bool:
+    return _ORDER[level] >= _ORDER[minimum]
+
+
+def _level_from_deterministic(signals: list[str]) -> RiskLevel:
+    level = RiskLevel.NONE
+    for sid in signals:
+        rl = signal_to_risk_level(sid)
+        level = _max_level(level, RiskLevel.RED if rl == "RED" else RiskLevel.YELLOW)
+    return level
+
+
+def _level_from_semantic(semantic_signals: list[str]) -> RiskLevel:
+    """LLM may flag candidates only — never authority for RED (AGENTS.md)."""
+    level = RiskLevel.NONE
+    for sig in semantic_signals:
+        lower = sig.lower()
+        if "concern" in lower or "yellow" in lower:
+            level = _max_level(level, RiskLevel.YELLOW)
+        elif any(token in lower for token in ("possible", "candidate", "fall", "red")):
+            level = _max_level(level, RiskLevel.POSSIBLE)
+    return level
+
+
 class SafetyEngine:
-    """Merge deterministic + semantic signals. No LLM authority."""
+    """Merge deterministic + semantic signals. Deterministic rules own RED."""
 
     @staticmethod
     def ingest_transcript(
@@ -26,23 +50,28 @@ class SafetyEngine:
         semantic_signals: list[str] | None = None,
     ) -> SafetySnapshot:
         signals = match_deterministic_signals(text)
-        level = RiskLevel.NONE
-        for sid in signals:
-            rl = signal_to_risk_level(sid)
-            level = _max_level(level, RiskLevel.RED if rl == "RED" else RiskLevel.YELLOW)
+        level = _level_from_deterministic(signals)
 
         if semantic_signals:
-            for sig in semantic_signals:
-                if "red" in sig.lower() or "fall" in sig.lower():
-                    level = _max_level(level, RiskLevel.RED)
-                elif "concern" in sig.lower() or "yellow" in sig.lower():
-                    level = _max_level(level, RiskLevel.YELLOW)
-                elif "possible" in sig.lower():
-                    level = _max_level(level, RiskLevel.POSSIBLE)
+            sem_level = _level_from_semantic(semantic_signals)
+            level = _max_level(level, sem_level)
 
         safety.highest_signal_seen = _max_level(safety.highest_signal_seen, level)
-        if safety.signal_resolution != SignalResolution.CONFIRMED_FALSE_ALARM:
-            safety.active_risk = _max_level(safety.active_risk, level)
+
+        if signals and _at_least(level, RiskLevel.YELLOW):
+            safety.episode_seq += 1
+            episode_id = f"ep-{safety.episode_seq}"
+            safety.active_episode_id = episode_id
+            if episode_id not in safety.dismissed_episode_ids:
+                safety.active_risk = _max_level(safety.active_risk, level)
+                safety.signal_resolution = SignalResolution.UNRESOLVED
+        elif level > RiskLevel.NONE:
+            if (
+                safety.active_episode_id is None
+                or safety.active_episode_id not in safety.dismissed_episode_ids
+            ):
+                safety.active_risk = _max_level(safety.active_risk, level)
+
         return safety
 
     @staticmethod
@@ -53,8 +82,14 @@ class SafetyEngine:
         return safety
 
     @staticmethod
-    def resolve_false_alarm(safety: SafetySnapshot) -> SafetySnapshot:
-        """After deterministic false-alarm protocol (ADR-005)."""
+    def resolve_false_alarm(
+        safety: SafetySnapshot,
+        episode_id: str | None = None,
+    ) -> SafetySnapshot:
+        """Clear active_risk for one episode only; new episodes may re-raise RED."""
+        ep = episode_id or safety.active_episode_id
+        if ep and ep not in safety.dismissed_episode_ids:
+            safety.dismissed_episode_ids.append(ep)
         safety.signal_resolution = SignalResolution.CONFIRMED_FALSE_ALARM
         safety.active_risk = RiskLevel.NONE
         return safety

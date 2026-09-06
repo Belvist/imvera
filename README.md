@@ -4,19 +4,27 @@ Greenfield **voice + telephony** stack for [IMVERA](https://imvera.ru/).
 
 Пожилой человек отвечает на обычный звонок. Вера ведёт разговор. Семья получает статус.
 
+```text
+LLM semantic signals → POSSIBLE / YELLOW candidate only — never RED authority.
+Deterministic transcript rules → RED/YELLOW candidate.
+Control confirmation → CONFIRMED RED.
+```
+
 ## Status
 
 | Phase | Status |
 |-------|--------|
 | 0 Agent system | ✅ |
-| 1 Contracts + ADR | ✅ |
-| 2 Domain core (FSM, Safety, Status) | ✅ |
-| 3 Speech lab (Silero STT/TTS) | next |
+| 1 Architecture/contracts | 🟡 ADR STT/TTS updated; CI added |
+| 2 Domain core | 🟡 Phase 2.1 correctness in progress |
+| 3 Speech lab (Qwen STT + CosyVoice/Qwen TTS) | ⛔ after Phase 2.1 gate |
+| 4 Realtime streaming | ❌ |
+| 5 Asterisk | ❌ |
 
 ## Quick start
 
 ```bash
-make install && make test    # local dev + 14 tests
+make install && make test    # local dev
 make up                      # Docker: postgres, redis, minio, api
 make api-health              # http://127.0.0.1:8080/health
 make down                    # stop stack
@@ -43,7 +51,7 @@ Full guide: **[LAUNCH.md](./LAUNCH.md)**
 - STT never hears Vera's outbound TTS
 - One dialogue brain, one FSM owner
 - StatusEngine owns final GREEN/YELLOW/RED (not LLM)
-- Silero `v5_5_ru` phrase-chunked TTS @ 8k or 24k
+- TTS/STT chosen by Phase 3 benchmark (see ADR-003, ADR-006)
 
 ## License
 

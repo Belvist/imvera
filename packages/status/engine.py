@@ -8,6 +8,7 @@ from packages.contracts.enums import (
     RiskLevel,
     TechnicalState,
 )
+from packages.contracts.mandatory import PILOT_MANDATORY_CHECKS
 from packages.contracts.status import CallStatusSnapshot
 
 
@@ -23,11 +24,6 @@ class StatusEngine:
         consent = snapshot.consent_state
         active_risk = snapshot.safety.active_risk
 
-        if consent == ConsentState.DECLINED:
-            if active_risk == RiskLevel.RED or care == CareState.RED:
-                return PublicCallStatus.RED
-            return PublicCallStatus.DECLINED
-
         if delivery in (DeliveryState.NOT_ATTEMPTED, DeliveryState.FAILED):
             return PublicCallStatus.TECHNICAL
 
@@ -40,6 +36,9 @@ class StatusEngine:
         if care == CareState.YELLOW or active_risk == RiskLevel.YELLOW:
             return PublicCallStatus.YELLOW
 
+        if consent == ConsentState.DECLINED:
+            return PublicCallStatus.DECLINED
+
         if technical in (TechnicalState.FAILED, TechnicalState.DEGRADED):
             return PublicCallStatus.TECHNICAL
 
@@ -49,7 +48,6 @@ class StatusEngine:
         if delivery == DeliveryState.ANSWERED and technical == TechnicalState.OK:
             if care == CareState.GREEN and StatusEngine._mandatory_complete(snapshot):
                 return PublicCallStatus.GREEN
-            # Answered, no RED/YELLOW risk, but checks incomplete or care not GREEN
             return PublicCallStatus.YELLOW
 
         return PublicCallStatus.TECHNICAL
@@ -59,7 +57,7 @@ class StatusEngine:
         checks = snapshot.mandatory_checks
         if not checks:
             return False
-        return all(checks.values())
+        return all(checks.get(key, False) for key in PILOT_MANDATORY_CHECKS)
 
     @staticmethod
     def finalize(snapshot: CallStatusSnapshot) -> CallStatusSnapshot:

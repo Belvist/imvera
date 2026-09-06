@@ -17,6 +17,9 @@ class SafetySnapshot(BaseModel):
     highest_signal_seen: RiskLevel = RiskLevel.NONE
     active_risk: RiskLevel = RiskLevel.NONE
     signal_resolution: SignalResolution = SignalResolution.UNRESOLVED
+    active_episode_id: str | None = None
+    dismissed_episode_ids: list[str] = Field(default_factory=list)
+    episode_seq: int = 0
 
 
 class CallStatusSnapshot(BaseModel):

@@ -6,11 +6,12 @@ Record irreversible technical decisions here.
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [001](001-telephony-asterisk-websocket.md) | Telephony: Asterisk + dual media legs | accepted |
-| [002](002-tts-silero-v5-phrase-chunked.md) | TTS: Silero v5_5_ru phrase-chunked | accepted |
-| [002a](002a-silero-8k-vs-24k-benchmark.md) | Silero 8k vs 24k PSTN benchmark | proposed (Phase 3) |
-| [003](003-stt-whisper-streaming.md) | STT: faster-whisper hypothesis | proposed |
+| [001](001-telephony-asterisk-websocket.md) | Telephony: Asterisk ≥22.8 + dual media legs | accepted |
+| [002](002-tts-silero-v5-phrase-chunked.md) | TTS: Silero v5_5_ru (historical) | **superseded** → [006](006-tts-benchmark-cosyvoice-qwen.md) |
+| [002a](002a-silero-8k-vs-24k-benchmark.md) | Silero 8k vs 24k PSTN benchmark | deferred |
+| [003](003-stt-whisper-streaming.md) | STT: Qwen3-ASR vs Whisper benchmark | accepted |
 | [004](004-dialogue-fsm.md) | Dialogue FSM ownership | accepted |
 | [005](005-status-precedence.md) | 4 axes + false-alarm protocol | accepted |
+| [006](006-tts-benchmark-cosyvoice-qwen.md) | TTS: CosyVoice3 vs Qwen3-TTS | accepted |
 
 Master plan: [PLAN.md](../PLAN.md) v1.2

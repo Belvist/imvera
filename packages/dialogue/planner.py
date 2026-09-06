@@ -1,6 +1,7 @@
 """Planner — decides what to do next (not how to say it)."""
 
 from packages.contracts.enums import AnswerJudgement, FsmState, SlotStatus
+from packages.contracts.mandatory import PILOT_SLOT_CHECKS
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.fsm import CallFsm
 from packages.dialogue.state import DialogueState
@@ -9,6 +10,13 @@ _WELLNESS_Q = "Расскажите, как вы себя чувствуете �
 _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
 _GOODBYE_FINAL = "До свидания. Хорошего дня."
 _GOODBYE_MARKERS = ("до свидания", "пока", "всего доброго")
+
+_SLOT_QUESTIONS: dict[str, str] = {
+    "wellness": _WELLNESS_Q,
+    "mood": "Как у вас настроение?",
+    "sleep": "Как вы спали?",
+    "plans": "Какие у вас планы на сегодня?",
+}
 
 
 class Planner:
@@ -22,19 +30,19 @@ class Planner:
     ) -> TurnProposal:
         state = Planner._apply_user(state, user_text, judgement)
 
-        if state.fsm_state == FsmState.DAILY_CHECK and state.slots["wellness"] == SlotStatus.OPEN:
+        open_slot = Planner._next_open_slot(state)
+        if state.fsm_state == FsmState.DAILY_CHECK and open_slot:
             return TurnProposal(
                 turn_id=turn_id,
                 generation_id=generation_id,
-                speech=_WELLNESS_Q,
-                intent="check_wellness",
+                speech=_SLOT_QUESTIONS[open_slot],
+                intent=f"check_{open_slot}",
                 fsm_state=state.fsm_state,
                 mandatory_remaining=state.mandatory_remaining(),
             )
 
         if state.fsm_state == FsmState.GREETING and not state.greeted:
             state.greeted = True
-            state.mandatory_checks["identity"] = True
             return TurnProposal(
                 turn_id=turn_id,
                 generation_id=generation_id,
@@ -55,24 +63,35 @@ class Planner:
         )
 
     @staticmethod
+    def _next_open_slot(state: DialogueState) -> str | None:
+        for slot in PILOT_SLOT_CHECKS:
+            if state.slots[slot] == SlotStatus.OPEN:
+                return slot
+        return None
+
+    @staticmethod
     def _apply_user(
         state: DialogueState, user_text: str, judgement: AnswerJudgement
     ) -> DialogueState:
-        if (
-            judgement == AnswerJudgement.VALID
-            and state.pending_slot == "wellness"
-            and user_text.strip()
-        ):
-            state.slots["wellness"] = SlotStatus.FILLED
-            state.mandatory_checks["wellness"] = True
-            state.pending_slot = None
-            state.pending_question = None
+        if judgement == AnswerJudgement.VALID and user_text.strip():
+            if state.fsm_state == FsmState.IDENTIFY_PERSON:
+                state.mandatory_checks["identity"] = True
+            elif state.fsm_state == FsmState.CHECK_CONSENT:
+                state.mandatory_checks["consent"] = True
+            elif state.fsm_state == FsmState.CHECK_CAN_TALK:
+                state.mandatory_checks["can_talk"] = True
+            elif state.pending_slot and state.pending_slot in state.slots:
+                state.slots[state.pending_slot] = SlotStatus.FILLED
+                state.mandatory_checks[state.pending_slot] = True
+                state.pending_slot = None
+                state.pending_question = None
         elif judgement in (AnswerJudgement.NO_ANSWER, AnswerJudgement.BACKCHANNEL):
-            # Silence / backchannel never close an open slot (DIALOGUE_SPEC, S11).
             pass
-        elif state.fsm_state == FsmState.DAILY_CHECK and state.slots["wellness"] == SlotStatus.OPEN:
-            state.pending_slot = "wellness"
-            state.pending_question = _WELLNESS_Q
+        elif state.fsm_state == FsmState.DAILY_CHECK:
+            open_slot = Planner._next_open_slot(state)
+            if open_slot:
+                state.pending_slot = open_slot
+                state.pending_question = _SLOT_QUESTIONS[open_slot]
         return state
 
     @staticmethod
@@ -83,7 +102,11 @@ class Planner:
         generation_id: str,
     ) -> TurnProposal:
         """Goodbye sub-flow: first goodbye → confirm; second → terminal (S12)."""
-        if state.fsm_state not in (FsmState.SUMMARY, FsmState.GOODBYE, FsmState.FINAL_CLASSIFICATION):
+        if state.fsm_state not in (
+            FsmState.SUMMARY,
+            FsmState.GOODBYE,
+            FsmState.FINAL_CLASSIFICATION,
+        ):
             state.fsm_state = FsmState.GOODBYE
 
         normalized = user_text.lower().strip()

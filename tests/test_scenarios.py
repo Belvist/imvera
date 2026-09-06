@@ -44,6 +44,9 @@ def test_s01_morning_check_in_green() -> None:
             "consent": True,
             "can_talk": True,
             "wellness": True,
+            "mood": True,
+            "sleep": True,
+            "plans": True,
         },
     )
     assert StatusEngine.resolve(s) == PublicCallStatus.GREEN

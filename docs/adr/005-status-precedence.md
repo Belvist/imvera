@@ -37,6 +37,7 @@ signal_resolution:    UNRESOLVED | CONFIRMED | CONFIRMED_FALSE_ALARM
 | ANSWERED | OK | GREEN | ACTIVE | GREEN |
 | ANSWERED | OK | GREEN | ACTIVE | **YELLOW** (mandatory_checks incomplete) |
 | ANSWERED | OK | UNKNOWN | ACTIVE | **YELLOW** (contact made, classification incomplete) |
+| ANSWERED | OK | YELLOW | DECLINED | **YELLOW** (precedence over DECLINED) |
 | ANSWERED | * | * | DECLINED | DECLINED |
 
 ### Mandatory-incomplete rule (answered, no technical failure)
@@ -90,7 +91,8 @@ Trunk down before dial → **TECHNICAL**, never NO_CONTACT.
 1. `highest_signal_seen` set to RED on signal (never lowered).
 2. Control question (deterministic template).
 3. On `CONFIRMED_FALSE_ALARM` via rules (explicit denial + plausible alternative + no corroborating signals):
-   - `active_risk` may → NONE
+   - `active_risk` may → NONE **for that episode only** (`dismissed_episode_ids`)
+   - new deterministic RED in same call creates a **new episode** and may restore `active_risk`
    - `care_state` updated per rules (not auto-GREEN if mandatory checks incomplete)
 4. Event log retains original RED signal.
 

@@ -41,10 +41,13 @@ FSM may not enter `SUMMARY` or `GOODBYE` while `mandatory_checks` incomplete.
 
 ```text
 identity_confirmed
-consent_active          # or one-time call without schedule
+consent_active          # elder only; silence ≠ consent
 can_talk_confirmed
-wellness_slot         # FILLED or DECLINED
-# mood, sleep, plans — per product config (pilot: all four)
+wellness_slot           # FILLED or DECLINED
+mood_slot
+sleep_slot
+plans_slot
+# pilot mandatory = all seven keys in packages/contracts/mandatory.py
 no_active_red_or_yellow
 technical_state == OK
 delivery_state == ANSWERED

@@ -1,4 +1,4 @@
-"""Minimal FSM transitions — expand in Phase 2+."""
+"""FSM transitions with mandatory exit gates."""
 
 from packages.contracts.enums import FsmState
 from packages.dialogue.state import DialogueState
@@ -16,10 +16,20 @@ _TRANSITIONS: dict[FsmState, FsmState] = {
     FsmState.GOODBYE: FsmState.FINAL_CLASSIFICATION,
 }
 
+# Must be satisfied before leaving this state.
+_EXIT_GATES: dict[FsmState, str] = {
+    FsmState.IDENTIFY_PERSON: "identity",
+    FsmState.CHECK_CONSENT: "consent",
+    FsmState.CHECK_CAN_TALK: "can_talk",
+}
+
 
 class CallFsm:
     @staticmethod
     def can_advance(state: DialogueState) -> bool:
+        gate_key = _EXIT_GATES.get(state.fsm_state)
+        if gate_key and not state.mandatory_checks.get(gate_key, False):
+            return False
         if state.fsm_state == FsmState.DAILY_CHECK and state.mandatory_remaining():
             return False
         if state.fsm_state in (FsmState.SUMMARY, FsmState.GOODBYE):

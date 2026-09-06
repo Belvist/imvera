@@ -3,6 +3,7 @@
 from pydantic import BaseModel, Field
 
 from packages.contracts.enums import FsmState, SlotStatus
+from packages.contracts.mandatory import PILOT_MANDATORY_CHECKS, pilot_mandatory_defaults
 
 
 class DialogueState(BaseModel):
@@ -18,17 +19,10 @@ class DialogueState(BaseModel):
             "plans": SlotStatus.OPEN,
         }
     )
-    mandatory_checks: dict[str, bool] = Field(
-        default_factory=lambda: {
-            "identity": False,
-            "consent": False,
-            "can_talk": False,
-            "wellness": False,
-        }
-    )
+    mandatory_checks: dict[str, bool] = Field(default_factory=pilot_mandatory_defaults)
     greeted: bool = False
     goodbye_count: int = 0
     goodbye_confirmed: bool = False
 
     def mandatory_remaining(self) -> list[str]:
-        return [k for k, v in self.mandatory_checks.items() if not v]
+        return [k for k in PILOT_MANDATORY_CHECKS if not self.mandatory_checks.get(k, False)]
