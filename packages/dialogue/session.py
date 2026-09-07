@@ -101,9 +101,10 @@ class CallSession:
         quotes = {k: v.source_quote for k, v in self.state.facts.items()}
         existing = self.store.get_call_result(self.state.call_id, self.state.family_id)
         metadata = dict(existing.metadata) if existing else {}
-        from packages.dialogue.transition_store import _state_to_metadata
+        from packages.dialogue.transition_store import _load_outbox, _state_to_metadata
 
-        metadata.update(_state_to_metadata(self.state, None))
+        outbox = _load_outbox(metadata)
+        metadata.update(_state_to_metadata(self.state, None, outbox))
         return CallResultSnapshot(
             call_id=self.state.call_id,
             family_id=self.state.family_id,
@@ -332,6 +333,35 @@ class CallSession:
             observation_ids=obs_ids,
             persist_ok=fin_ok and commit.ok,
             persist_error=fin_err or commit.error,
+        )
+
+    def plan_identity_followup(self) -> SessionTurnResult:
+        """Planner-only follow-up after identity intro TTS (no user turn)."""
+        self.turn_id += 1
+        gen = self._next_generation_id()
+        proposal = Planner.plan_identity_question(self.state, self.turn_id, gen)
+        validated = Validator.validate(proposal)
+        commit = self.transitions.commit_transition(self.state, proposal)
+        contract = TurnInterpretation(
+            call_id=self.state.call_id,
+            turn_id=self.turn_id,
+            raw_text="",
+            dialogue_act=DialogueAct.UNCLEAR,
+            judgement=AnswerJudgement.NO_ANSWER,
+            state_version=self.state.state_version,
+        )
+        return SessionTurnResult(
+            user_text="",
+            interpretation=UserInterpretation(
+                judgement=AnswerJudgement.NO_ANSWER,
+                dialogue_act=DialogueAct.UNCLEAR,
+            ),
+            turn_contract=contract,
+            proposal=proposal,
+            validated=validated,
+            safety=self.safety.model_copy(deep=True),
+            persist_ok=commit.ok,
+            persist_error=commit.error,
         )
 
     def handle_wait_expired(self, wait_id: str | None = None) -> SessionTurnResult:

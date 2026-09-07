@@ -4,7 +4,7 @@ from packages.contracts.enums import FsmState
 from packages.dialogue.state import DialogueState
 
 _TRANSITIONS: dict[FsmState, FsmState] = {
-    FsmState.CALL_START: FsmState.IDENTIFY_PERSON,
+    FsmState.CALL_START: FsmState.DAILY_CHECK,
     FsmState.IDENTIFY_PERSON: FsmState.CHECK_CONSENT,
     FsmState.CHECK_CONSENT: FsmState.GREETING,
     FsmState.GREETING: FsmState.CHECK_CAN_TALK,

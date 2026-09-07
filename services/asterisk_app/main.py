@@ -98,11 +98,13 @@ async def _handle_stasis_start(channel: dict) -> None:
     await _ari.answer(channel_id)
     await _ari.create_bridge(bridge_id)
 
-    # spy=both: user uplink is present on snoop in this bridge; gate playback VAD in CallActor.
-    snoop = await _ari.snoop_channel(channel_id, STASIS_APP, spy="both", whisper="none")
+    # spy=out: SIP -> bridge (client mic only). inject is on playback bridge; Vera
+    # downlink enters SIP as spy=in and must NOT pollute uplink capture.
+    snoop = await _ari.snoop_channel(channel_id, STASIS_APP, spy="out", whisper="none")
     snoop_id = snoop["id"]
     await _ari.answer(snoop_id)
 
+    # Asterisk ARI accepts direction=both only (recv/send → HTTP 400, no audio path).
     capture = await _ari.create_external_media(
         STASIS_APP,
         "imvera_capture",
@@ -156,9 +158,9 @@ async def _handle_stasis_end(channel: dict) -> None:
     for call_id, ctx in list(_active.items()):
         if channel_id in (
             ctx.sip_channel_id,
-            ctx.snoop_id,
             ctx.capture_id,
             ctx.inject_id,
+            ctx.snoop_id,
         ):
             await hangup_call(call_id)
             break

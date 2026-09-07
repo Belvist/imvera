@@ -1,10 +1,11 @@
 """Planner — decides what to do next (not how to say it)."""
 
+import re
+
 from packages.contracts.core import TerminationReason
-from packages.contracts.enums import AnswerJudgement, ConsentState, FsmState, GoalStatus, SlotStatus
+from packages.contracts.enums import AnswerJudgement, FsmState, GoalStatus, SlotStatus
 from packages.contracts.mandatory import PILOT_SLOT_CHECKS
 from packages.contracts.turn import TurnProposal
-from packages.dialogue.facts import FactRecord
 from packages.dialogue.fsm import CallFsm
 from packages.dialogue.interpretation import UserInterpretation, interpret_user_turn
 from packages.dialogue.question_ledger import (
@@ -12,6 +13,7 @@ from packages.dialogue.question_ledger import (
     clarification_for_slot,
     next_open_slot,
 )
+from packages.dialogue.reducer import DialogueReducer
 from packages.dialogue.state import DialogueState
 
 _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
@@ -31,6 +33,7 @@ _SLOT_ALT_CLOSE = (
     "или скажите коротко, как вы себя чувствуете?"
 )
 _PARTIAL_UNRESOLVED_CLOSE = "Сейчас не получилось узнать, как у вас дела. До свидания."
+_PAUSE_ACK = "Подожду."
 
 _SLOT_QUESTIONS: dict[str, str] = {
     "wellness": "Расскажите, как вы себя чувствуете сейчас?",
@@ -39,8 +42,53 @@ _SLOT_QUESTIONS: dict[str, str] = {
     "plans": "Какие у вас планы на сегодня?",
 }
 
+_COMPLAINT_MARKERS = re.compile(
+    r"\b(болит|болел\w*|болела|больно|плохо\s+спал\w*|не\s+спал\w*|"
+    r"одинок\w*|грустн\w*|устал\w*|тошнит|кружится\s+голова)\b",
+    re.I,
+)
+_POSITIVE_ONLY = re.compile(
+    r"^(нормально|хорошо|отлично|не\s+плохо|вс[её]\s+хорошо)\.?$",
+    re.I,
+)
+
 
 class Planner:
+    @staticmethod
+    def _opening_wellness_speech(state: DialogueState) -> str:
+        name = state.elder_display_name
+        return f"Здравствуйте, это сервис IMVERA, {name}. Как вы себя чувствуете?"
+
+    @staticmethod
+    def _begin_direct_daily_check(state: DialogueState) -> None:
+        """Lab direct-open: skip verbal identity/consent/can_talk; start wellness."""
+        state.fsm_state = FsmState.DAILY_CHECK
+        state.greeted = True
+        state.mandatory_checks["identity"] = True
+        state.mandatory_checks["consent"] = True
+        state.mandatory_checks["can_talk"] = True
+
+    @staticmethod
+    def _plan_opening_wellness(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        speech = Planner._opening_wellness_speech(state)
+        Planner._arm_pending_slot(state, "wellness", question=speech)
+        goal = state.ensure_goal("wellness")
+        if not Planner.reserve_question_attempt(state, generation_id, "wellness"):
+            return Planner._mark_goal_unresolved(state, "wellness", turn_id, generation_id)
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=speech,
+            intent="opening_wellness",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+            question_goal_id=goal.goal_id,
+        )
+
     @staticmethod
     def plan_vera_turn(
         state: DialogueState,
@@ -49,8 +97,28 @@ class Planner:
     ) -> TurnProposal:
         """Emit Vera's line for the current FSM state (call opening / re-prompt)."""
         if state.fsm_state == FsmState.CALL_START:
-            state.fsm_state = FsmState.IDENTIFY_PERSON
+            Planner._begin_direct_daily_check(state)
+            return Planner._plan_opening_wellness(state, turn_id, generation_id)
         return Planner._prompt_for_state(state, turn_id, generation_id)
+
+    @staticmethod
+    def plan_identity_question(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        """Identity question immediately after intro audio completes."""
+        state.identity_intro_spoken = True
+        question = f"Я разговариваю с {state.elder_display_name}?"
+        state.pending_question = question
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=question,
+            intent="confirm_identity",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+        )
 
     @staticmethod
     def plan_after_user(
@@ -77,6 +145,9 @@ class Planner:
         if interp.defers_call and not state.is_terminal():
             return Planner._handle_defer(state, turn_id, generation_id)
 
+        if interp.pause_requested and not state.is_terminal():
+            return Planner._handle_pause(state, turn_id, generation_id)
+
         if (
             interp.declines
             and state.fsm_state == FsmState.CHECK_CAN_TALK
@@ -85,9 +156,15 @@ class Planner:
             return Planner._handle_can_talk_decline(state, turn_id, generation_id)
 
         if interp.fact_candidates:
-            Planner._apply_interpretation(
-                state, interp, turn_id, utterance_id=utterance_id
+            DialogueReducer.apply(
+                state, interp, turn_id, utterance_id=utterance_id, apply_facts=True
             )
+            if not interp.asks_who_are_you:
+                reflection = Planner._try_complaint_reflection(
+                    state, turn_id, generation_id, interp
+                )
+                if reflection is not None:
+                    return reflection
 
         if interp.asks_who_are_you:
             return Planner._handle_who_are_you(state, turn_id, generation_id)
@@ -122,8 +199,8 @@ class Planner:
             if count > _MAX_SLOT_UNCLEAR:
                 return Planner._slot_unclear_limit(state, turn_id, generation_id)
 
-        state = Planner._apply_interpretation(
-            state, interp, turn_id, utterance_id=utterance_id, skip_facts=True
+        DialogueReducer.apply(
+            state, interp, turn_id, utterance_id=utterance_id, apply_facts=False
         )
         if state.consent_declined and state.fsm_state == FsmState.FINAL_CLASSIFICATION:
             return Planner._prompt_for_state(state, turn_id, generation_id)
@@ -193,6 +270,63 @@ class Planner:
         state.pending_question_delivered = True
         state.pending_action_id = None
         state.bump_version()
+
+    @staticmethod
+    def _is_complaint_report(value: str, *, negated: bool = False) -> bool:
+        if negated:
+            return False
+        lower = value.strip().lower()
+        if _POSITIVE_ONLY.match(lower):
+            return False
+        return bool(_COMPLAINT_MARKERS.search(lower))
+
+    @staticmethod
+    def _build_complaint_reflection(candidates: list) -> str:
+        parts: list[str] = []
+        for cand in candidates:
+            text = cand.value.strip().rstrip(".!?…")
+            if text:
+                parts.append(text[0].lower() + text[1:] if len(text) > 1 else text.lower())
+        if not parts:
+            return ""
+        if len(parts) == 1:
+            sentence = parts[0]
+        else:
+            sentence = ", ".join(parts[:-1]) + f", и {parts[-1]}"
+        return sentence[0].upper() + sentence[1:] + "."
+
+    @staticmethod
+    def _try_complaint_reflection(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+        interp: UserInterpretation,
+    ) -> TurnProposal | None:
+        if state.fsm_state != FsmState.DAILY_CHECK or state.risk_handling:
+            return None
+        if state.last_reflected_turn_id == turn_id:
+            return None
+        complaints = [
+            c
+            for c in interp.fact_candidates
+            if Planner._is_complaint_report(c.value, negated=c.negated)
+        ]
+        if not complaints:
+            return None
+        speech = Planner._build_complaint_reflection(complaints)
+        if not speech:
+            return None
+        state.last_reflected_turn_id = turn_id
+        state.bump_version()
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=speech,
+            intent="reflect_report",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+            semantic_signals=["concerned_reflection"],
+        )
 
     @staticmethod
     def _handle_backchannel_on_active_goal(
@@ -419,37 +553,22 @@ class Planner:
         )
 
     @staticmethod
-    def _commit_fact(
+    def _handle_pause(
         state: DialogueState,
-        field: str,
-        value: str,
-        source_quote: str,
         turn_id: int,
-        *,
-        utterance_id: str = "",
-        negated: bool = False,
-        temporal_scope: str = "now",
-        subject: str = "elder",
-    ) -> None:
-        prev = state.facts.get(field)
-        revision = (prev.revision + 1) if prev else 1
-        state.facts[field] = FactRecord(
-            field=field,
-            value=value,
-            source_quote=source_quote,
+        generation_id: str,
+    ) -> TurnProposal:
+        state.waiting_on_goal = None
+        state.bump_version()
+        return TurnProposal(
             turn_id=turn_id,
-            source_utterance_id=utterance_id,
-            subject=subject,
-            temporal_scope=temporal_scope,
-            revision=revision,
-            negated=negated,
+            generation_id=generation_id,
+            speech=_PAUSE_ACK,
+            intent="pause_ack",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+            semantic_signals=["pause_wait"],
         )
-        state.slots[field] = SlotStatus.FILLED
-        goal = state.get_goal(field)
-        if goal is not None:
-            goal.status = GoalStatus.ANSWERED
-        state.mandatory_checks[field] = True
-        state.slot_unclear_counts.pop(field, None)
 
     @staticmethod
     def _handle_defer(
@@ -551,22 +670,31 @@ class Planner:
         }
 
         if state.fsm_state == FsmState.IDENTIFY_PERSON:
-            return TurnProposal(
-                **base,
-                speech=(
-                    f"Здравствуйте. Я Вера, голосовой помощник IMVERA. "
-                    f"Я разговариваю с {state.elder_display_name}?"
-                ),
-                intent="confirm_identity",
-            )
+            question = f"Я разговариваю с {state.elder_display_name}?"
+            state.pending_question = question
+            if not state.identity_intro_spoken:
+                return TurnProposal(
+                    **base,
+                    speech="Здравствуйте. Я Вера, голосовой помощник IMVERA.",
+                    intent="identity_intro",
+                )
+            if state.pending_question_delivered:
+                speech = f"Извините, не расслышала. {question}"
+                intent = "repeat_identity"
+            else:
+                speech = question
+                intent = "confirm_identity"
+            return TurnProposal(**base, speech=speech, intent=intent)
 
         if state.fsm_state == FsmState.CHECK_CONSENT:
+            question = (
+                "Вы согласны получать регулярные звонки от IMVERA? "
+                "Это важно — звонки только с вашего согласия."
+            )
+            state.pending_question = question
             return TurnProposal(
                 **base,
-                speech=(
-                    "Вы согласны получать регулярные звонки от IMVERA? "
-                    "Это важно — звонки только с вашего согласия."
-                ),
+                speech=question,
                 intent="confirm_consent",
             )
 
@@ -582,9 +710,11 @@ class Planner:
             return Planner._prompt_for_state(state, turn_id, generation_id)
 
         if state.fsm_state == FsmState.CHECK_CAN_TALK:
+            question = "Вам сейчас удобно немного поговорить?"
+            state.pending_question = question
             return TurnProposal(
                 **base,
-                speech="Вам сейчас удобно немного поговорить?",
+                speech=question,
                 intent="check_can_talk",
             )
 
@@ -678,82 +808,6 @@ class Planner:
     @staticmethod
     def _next_open_slot(state: DialogueState) -> str | None:
         return next_open_slot(state.slots)
-
-    @staticmethod
-    def _apply_interpretation(
-        state: DialogueState,
-        interp: UserInterpretation,
-        turn_id: int,
-        *,
-        utterance_id: str = "",
-        skip_facts: bool = False,
-    ) -> DialogueState:
-        from packages.contracts.enums import AnswerJudgement
-
-        if interp.sets_consent == ConsentState.DECLINED:
-            state.consent_declined = True
-            state.mandatory_checks["consent"] = False
-            state.fsm_state = FsmState.FINAL_CLASSIFICATION
-            state.call_ended_early = True
-            state.final_action_done = True
-            state.goodbye_confirmed = True
-            state.termination_reason = TerminationReason.CONSENT_DECLINED
-            state.bump_version()
-            return state
-
-        if interp.sets_consent == ConsentState.ACTIVE:
-            state.mandatory_checks["consent"] = True
-            state.consent_declined = False
-
-        if interp.confirms_identity:
-            state.mandatory_checks["identity"] = True
-
-        if interp.confirms_can_talk:
-            state.mandatory_checks["can_talk"] = True
-
-        if skip_facts:
-            return state
-
-        if interp.fact_candidates:
-            for cand in interp.fact_candidates:
-                Planner._commit_fact(
-                    state,
-                    cand.field,
-                    cand.value,
-                    cand.source_quote,
-                    turn_id,
-                    utterance_id=utterance_id,
-                    negated=cand.negated,
-                )
-            if state.pending_slot and state.pending_slot in state.facts:
-                filled_slot = state.pending_slot
-                goal = state.get_goal(filled_slot)
-                if goal is not None:
-                    goal.status = GoalStatus.ANSWERED
-                state.slots[filled_slot] = SlotStatus.FILLED
-                state.mandatory_checks[filled_slot] = True
-                state.pending_slot = None
-                state.pending_question = None
-                state.pending_question_delivered = False
-                state.waiting_on_goal = None
-            state.bump_version()
-        elif (
-            interp.fills_pending_slot
-            and state.pending_slot
-            and state.pending_slot in state.slots
-            and interp.judgement == AnswerJudgement.VALID
-        ):
-            slot = state.pending_slot
-            value = interp.slot_value or ""
-            Planner._commit_fact(
-                state, slot, value, value, turn_id, utterance_id=utterance_id
-            )
-            state.pending_slot = None
-            state.pending_question = None
-            state.pending_question_delivered = False
-            state.bump_version()
-
-        return state
 
     @staticmethod
     def _may_enter_closing_fsm(state: DialogueState) -> bool:

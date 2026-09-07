@@ -77,6 +77,9 @@ voice-sip-e2e:
 voice-sip-downlink:
 	@$(PYTHON) scripts/voice_sip_e2e.py --downlink-only
 
+voice-call-gate:
+	@$(PYTHON) scripts/voice_call_gate.py
+
 sip-call-diag:
 	@IMVERA_WS_DIAG=1 $(PYTHON) scripts/sip_call_diag.py
 
@@ -100,6 +103,27 @@ voice-open:
 	@echo "Gateway WS: ws://127.0.0.1:9200/media/<call_id>"
 
 test-contracts: contracts-check
+
+test-dialogue-gates:
+	$(PYTHON) -m pytest \
+		tests/test_planner_question_ledger.py \
+		tests/test_wait_contract.py \
+		tests/test_inference_stop_epoch.py \
+		tests/test_call_actor_backchannel_ledger.py \
+		tests/test_dispatch_failure_matrix.py \
+		tests/test_semantic_pipeline.py \
+		tests/test_mixed_nonanswer_sequence.py \
+		tests/test_mixed_nonanswer_sequence_callactor.py \
+		tests/test_complaint_voice_path.py \
+		tests/test_call_actor_llm_fallback.py \
+		tests/test_dialogue_acceptance_gaps.py \
+		-q
+
+test-dialogue-live:
+	@$(PYTHON) -m pytest tests/test_llm_live_dialogue.py -v
+
+dialogue-smoke:
+	@$(PYTHON) scripts/dialogue_product_smoke.py
 
 test-dialogue-e2e:
 	$(PYTHON) -m pytest tests/test_integrity.py tests/test_product_dialogue.py tests/test_investor_dialogue.py -q

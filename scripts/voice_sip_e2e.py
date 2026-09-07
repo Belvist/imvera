@@ -161,15 +161,27 @@ def _wait_new_call(since_ts: float, timeout_s: float = 20.0, sip_call_id: str | 
     return None
 
 
-def _wait_trace_types(call_id: str, required: set[str], timeout_s: float) -> set[str]:
+def _wait_trace_types(
+    call_id: str,
+    required: set[str],
+    timeout_s: float,
+    *,
+    call=None,
+) -> set[str]:
+    silence = bytes([SILENCE_BYTE]) * FRAME_BYTES
     deadline = time.time() + timeout_s
     seen: set[str] = set()
     while time.time() < deadline:
+        if call is not None:
+            try:
+                call.write_audio(silence)
+            except Exception:
+                pass
         for row in _trace_rows(call_id):
             seen.add(row["type"])
         if required <= seen:
             return seen
-        time.sleep(0.2)
+        time.sleep(0.02)
     for row in _trace_rows(call_id):
         seen.add(row["type"])
     return seen
@@ -313,23 +325,28 @@ def _run_sip_session(
 
         _prime_rtp_symmetric(call)
         tap.start(call)
-        _wait_trace_types(internal_call_id, {"playback.completed"}, 45.0)
+        _wait_trace_types(internal_call_id, {"playback.completed"}, 45.0, call=call)
 
         if send_speech:
+            time.sleep(0.5)
             silence = bytes([SILENCE_BYTE]) * FRAME_BYTES * 50
             for chunk in (caller_pcm, silence):
                 for offset in range(0, len(chunk), FRAME_BYTES):
-                    call.write_audio(chunk[offset : offset + FRAME_BYTES])
+                    frame = chunk[offset : offset + FRAME_BYTES]
+                    call.write_audio(frame)
                     time.sleep(0.02)
             _wait_trace_types(
                 internal_call_id,
                 {"stt.final", "interpretation.ready", "playback.completed"},
                 60.0,
+                call=call,
             )
             time.sleep(2.0)
 
         capture_bytes = _call_capture_bytes(internal_call_id) if internal_call_id else 0
     finally:
+        if internal_call_id and capture_bytes == 0:
+            capture_bytes = _call_capture_bytes(internal_call_id)
         received = tap.stop() if tap._thread else _collect_downlink(call, seconds=0.5)
         try:
             call.hangup()

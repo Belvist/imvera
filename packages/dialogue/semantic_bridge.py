@@ -94,6 +94,12 @@ def semantic_to_user_interpretation(
             dialogue_act=DialogueAct.DEFER,
             defers_call=True,
         )
+    if payload.control == "pause":
+        return UserInterpretation(
+            judgement=AnswerJudgement.SIDE_TOPIC,
+            dialogue_act=DialogueAct.PAUSE,
+            pause_requested=True,
+        )
 
     fact_candidates = _extract_fact_candidates(
         raw_text, payload, pending_slot=pending_slot

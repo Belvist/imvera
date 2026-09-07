@@ -14,12 +14,13 @@ from enum import StrEnum
 
 from packages.contracts.core import TerminationReason
 from packages.contracts.interpretation import TurnInterpretation
+from packages.contracts.outbox import ActionOutboxStatus
 from packages.contracts.providers import TTSProvider
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.context_builder import active_question_kind, build_turn_context
-from packages.dialogue.interpretation import to_turn_interpretation
-from packages.dialogue.semantic_bridge import semantic_to_user_interpretation
+from packages.dialogue.semantic_adapter import adapt_semantic_turn
+from packages.dialogue.interpretation import to_turn_interpretation, interpret_user_turn
 from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue.validator import Validator
 from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler
@@ -36,7 +37,24 @@ from services.tts.http_provider import HttpTTSProvider
 log = logging.getLogger("call_actor")
 
 _SKIP_RENDER_INTENTS = frozenset(
-    {"greeting", "confirm_identity", "confirm_consent", "check_can_talk"}
+    {
+        "greeting",
+        "opening_wellness",
+        "identity_intro",
+        "confirm_identity",
+        "repeat_identity",
+        "confirm_consent",
+        "check_can_talk",
+    }
+)
+_QUESTION_DELIVERY_INTENTS = frozenset(
+    {
+        "opening_wellness",
+        "confirm_identity",
+        "repeat_identity",
+        "confirm_consent",
+        "check_can_talk",
+    }
 )
 _SENTENCE_END = re.compile(r"[.!?…]+(?:\s|$)")
 
@@ -140,6 +158,12 @@ class CallActor:
         default_factory=lambda: DialogueTimingProfile(**dialogue_timing_settings())
     )
     _monotonic: Callable[[], float] = field(default=time.monotonic, repr=False)
+    _outbox_action_id: str | None = None
+    _pending_answer_wait: tuple[str | None, str | None] | None = None
+    _last_delivered_intent: str | None = None
+    _playback_uplink_buf: bytearray = field(default_factory=bytearray)
+    _tts_first_pcm_gens: set[str] = field(default_factory=set)
+    _tts_slow_watch: asyncio.Task | None = None
 
     async def _emit_stage(self, stage: str, **payload: object) -> None:
         started = self._active_stage_budget.started_mono if self._active_stage_budget else 0.0
@@ -313,6 +337,52 @@ class CallActor:
         self._vad = create_vad(self.config.target_sample_rate)
         self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
 
+    @staticmethod
+    def _normalize_speech_text(text: str) -> str:
+        cleaned = re.sub(r"[^\w\s]", " ", text.lower())
+        return " ".join(cleaned.split())
+
+    def _is_assistant_echo(self, text: str) -> bool:
+        normalized = self._normalize_speech_text(text)
+        if not normalized:
+            return True
+        for phrase in self._delivered_phrases:
+            spoken = self._normalize_speech_text(phrase)
+            if not spoken:
+                continue
+            if normalized == spoken or spoken in normalized or normalized in spoken:
+                return True
+        pending = self.session.state.pending_question
+        if pending:
+            question = self._normalize_speech_text(pending)
+            if question and (normalized == question or question in normalized):
+                return True
+        return False
+
+    async def _feed_uplink_pcm(self, pcm: bytes) -> None:
+        assert self._vad and self._collector
+        if self._active_generation:
+            # Ignore uplink while Vera speaks — tail flush caused STT echo of her question
+            # (see sip-132cf68add: "Я разговариваю с Даниил" instead of user "да").
+            return
+        started, ended = self._vad.feed(pcm)
+        if started:
+            await self._interrupt_playback(flush=True)
+            self._pause_answer_wait()
+            await self.media.emit(
+                RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {})
+            )
+        segment = self._collector.on_frame(pcm, started, ended)
+        if segment:
+            await self.media.emit(
+                RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_ENDED, {})
+            )
+            async with self._policy_lock:
+                utterance_seq = self._utterance_seq + 1
+                self._utterance_seq = utterance_seq
+            self._inflight_utterances.add(utterance_seq)
+            asyncio.create_task(self._handle_utterance(segment, utterance_seq))
+
     def _tts_resampler(self, generation_id: str, source_rate: int) -> StatefulResampler:
         key = f"{generation_id}:{source_rate}"
         if key not in self._tts_resamplers:
@@ -332,25 +402,7 @@ class CallActor:
         pcm = self._input_resampler.process(pcm_s16le)
         if not pcm:
             return
-        if self._active_generation:
-            return
-        started, ended = self._vad.feed(pcm)
-        if started:
-            await self._interrupt_playback(flush=True)
-            self._pause_answer_wait()
-            await self.media.emit(
-                RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {})
-            )
-        segment = self._collector.on_frame(pcm, started, ended)
-        if segment:
-            await self.media.emit(
-                RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_ENDED, {})
-            )
-            async with self._policy_lock:
-                utterance_seq = self._utterance_seq + 1
-                self._utterance_seq = utterance_seq
-            self._inflight_utterances.add(utterance_seq)
-            asyncio.create_task(self._handle_utterance(segment, utterance_seq))
+        await self._feed_uplink_pcm(pcm)
 
     async def _submit_utterance_outcome(self, outcome: _UtteranceOutcome) -> None:
         self._utterance_outcomes[outcome.utterance_seq] = outcome
@@ -499,6 +551,59 @@ class CallActor:
             )
         self._schedule_wait_timer()
 
+    def _start_pause_wait(self) -> None:
+        if self._wait_task and not self._wait_task.done():
+            self._wait_task.cancel()
+        self._wait_task = None
+        self._wait_state = WaitState.start_pause_wait(
+            control_epoch=self._control_epoch,
+            profile=self._timing_profile,
+            now_mono=self._monotonic(),
+        )
+        self._schedule_wait_timer()
+
+    async def _finalize_outbox_action(
+        self,
+        *,
+        sent_samples: int,
+        outcome: str,
+    ) -> None:
+        action_id = self._outbox_action_id
+        if not action_id:
+            return
+        record = await asyncio.to_thread(
+            self.session.transitions.get_outbox_record,
+            self.session.state.call_id,
+            action_id,
+        )
+        if record is not None and record.status == ActionOutboxStatus.PENDING:
+            await asyncio.to_thread(
+                self.session.transitions.mark_outbox_dispatching,
+                self.session.state,
+                action_id,
+            )
+        if outcome == "success" and sent_samples > 0:
+            await asyncio.to_thread(
+                self.session.transitions.mark_outbox_transport_complete,
+                self.session.state,
+                action_id,
+                sent_samples=sent_samples,
+            )
+        elif sent_samples > 0:
+            await asyncio.to_thread(
+                self.session.transitions.mark_outbox_delivery_unknown,
+                self.session.state,
+                action_id,
+                sent_samples=sent_samples,
+            )
+        else:
+            await asyncio.to_thread(
+                self.session.transitions.mark_outbox_cancelled,
+                self.session.state,
+                action_id,
+            )
+        self._outbox_action_id = None
+
     async def _post_apply_turn(self, result: SessionTurnResult) -> None:
         if self._stopped or self._transport_closed:
             return
@@ -574,7 +679,13 @@ class CallActor:
             await self._emit_stage(
                 "stt.final", utterance_id=utterance_id, text_len=len(text)
             )
-            if not text:
+            if not text or self._is_assistant_echo(text):
+                if text:
+                    await self._emit_stage(
+                        "stt.echo_discarded",
+                        utterance_id=utterance_id,
+                        text_len=len(text),
+                    )
                 self._resume_answer_wait_if_paused()
                 await self._submit_utterance_outcome(
                     _UtteranceOutcome(
@@ -584,6 +695,8 @@ class CallActor:
                     )
                 )
                 return
+
+            await self._cancel_wait_timer()
 
             llm_request_id = f"llm-{uuid.uuid4().hex[:8]}"
             self._active_llm_request_id = llm_request_id
@@ -595,6 +708,7 @@ class CallActor:
                 asr_quality=stt_result.asr_quality,
                 delivered_phrases=tuple(self._delivered_phrases[-6:]),
             )
+            semantic = None
             try:
                 semantic = await self.llm.interpret_turn(
                     ctx,
@@ -602,16 +716,12 @@ class CallActor:
                     request_id=llm_request_id,
                 )
             except Exception as exc:
-                await self._submit_utterance_outcome(
-                    _UtteranceOutcome(
-                        utterance_seq=utterance_seq,
-                        utterance_id=utterance_id,
-                        ok=False,
-                        error_stage="llm",
-                        error=str(exc),
-                    )
+                log.warning(
+                    "LLM interpret failed call_id=%s utterance=%s: %s — rule fallback",
+                    self.call_id,
+                    utterance_id,
+                    exc,
                 )
-                return
             finally:
                 if self._active_llm_request_id == llm_request_id:
                     self._active_llm_request_id = None
@@ -625,12 +735,16 @@ class CallActor:
                 RuntimeEvent(self.call_id, RuntimeEventType.INTERPRETATION_READY, {})
             )
             qkind = active_question_kind(self.session.state)
-            interp = semantic_to_user_interpretation(
-                text,
-                semantic.payload,
-                active_question_kind=qkind,
-                pending_slot=self.session.state.pending_slot,
-            )
+            if semantic is not None:
+                interp, _validated = adapt_semantic_turn(
+                    text,
+                    semantic.payload,
+                    state=self.session.state,
+                    active_question_kind=qkind,
+                    pending_slot=self.session.state.pending_slot,
+                )
+            else:
+                interp = interpret_user_turn(self.session.state, text)
             legacy_contract: TurnInterpretation = to_turn_interpretation(
                 self.session.state,
                 turn_id,
@@ -673,20 +787,43 @@ class CallActor:
             return False
         if self._render_generation != render_generation:
             return False
+        self._last_delivered_intent = result.proposal.intent
         await self._speak_phrase(validated.speech, render_generation)
-        if result.proposal.intent.startswith(("check_", "clarify_", "repeat_")):
+        if result.proposal.intent.startswith(("check_", "clarify_", "repeat_")) or (
+            result.proposal.intent == "opening_wellness"
+        ):
             await asyncio.to_thread(
                 self.session.mark_spoken_action, result.proposal.generation_id
             )
-            self._start_answer_wait(
-                goal_id=result.proposal.question_goal_id,
-                question_id=result.proposal.generation_id,
+        mandatory_wait_intents = (
+            "confirm_identity",
+            "repeat_identity",
+            "confirm_consent",
+            "check_can_talk",
+        )
+        if (
+            result.proposal.intent.startswith(("check_", "clarify_", "repeat_"))
+            or result.proposal.intent in mandatory_wait_intents
+        ):
+            self._pending_answer_wait = (
+                result.proposal.question_goal_id,
+                result.proposal.generation_id,
             )
         return True
 
     async def _deliver_session_turn(self, result: SessionTurnResult) -> None:
         if result.proposal.intent == "wait_for_continuation":
             await self._handle_backchannel_continuation(result)
+            return
+        await self._cancel_wait_timer()
+        self._outbox_action_id = result.proposal.generation_id
+        if result.proposal.intent == "pause_ack":
+            if self._stopped or self._transport_closed or not result.validated.allowed:
+                return
+            await self._speak_validated_proposal(
+                result, result.validated.speech, result.proposal.generation_id
+            )
+            self._start_pause_wait()
             return
         await self._cancel_wait_timer()
         if self._stopped or self._transport_closed or not result.validated.allowed:
@@ -799,6 +936,14 @@ class CallActor:
         await self._cancel_active_llm()
         self._render_generation = None
         self._playback_turn_generation = None
+        sent_samples = 0
+        if self._playback and self._playback._ledger:
+            sent_samples = self._playback._ledger.sent_samples
+        if self._outbox_action_id:
+            await self._finalize_outbox_action(
+                sent_samples=sent_samples,
+                outcome="cancelled",
+            )
         if not self._playback or not self._active_generation:
             return
         gen = self._active_generation
@@ -814,6 +959,7 @@ class CallActor:
             )
         )
         self._active_generation = None
+        self._playback_uplink_buf.clear()
         self._tts_resamplers = {
             k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
         }
@@ -876,8 +1022,21 @@ class CallActor:
             except asyncio.CancelledError:
                 outcome = "cancelled"
                 raise
-            except Exception:
+            except Exception as exc:
                 outcome = "failed"
+                log.error(
+                    "TTS failed call_id=%s generation_id=%s phrase_id=%s: %s",
+                    self.call_id,
+                    generation_id,
+                    phrase_id,
+                    exc,
+                )
+                await self._emit_stage(
+                    "tts.failed",
+                    generation_id=generation_id,
+                    phrase_id=phrase_id,
+                    error=str(exc)[:200],
+                )
             finally:
                 if self._playback and generation_id == self._active_generation:
                     for key, resampler in list(self._tts_resamplers.items()):
@@ -909,6 +1068,11 @@ class CallActor:
                     self._playback.mark_generation_done(outcome)
 
         self._tts_task = asyncio.create_task(_run_tts())
+        if self._tts_slow_watch and not self._tts_slow_watch.done():
+            self._tts_slow_watch.cancel()
+        self._tts_slow_watch = asyncio.create_task(
+            self._watch_tts_slow_start(generation_id, phrase_id)
+        )
         await self._emit_stage("tts.start", phrase_id=phrase_id, text_len=len(text))
         await self.media.emit(
             RuntimeEvent(
@@ -916,6 +1080,28 @@ class CallActor:
                 RuntimeEventType.RENDERER_PHRASE_READY,
                 {"phrase_id": phrase_id, "text": text, "generation_id": generation_id},
             )
+        )
+
+    async def _watch_tts_slow_start(self, generation_id: str, phrase_id: str) -> None:
+        try:
+            await asyncio.sleep(5.0)
+        except asyncio.CancelledError:
+            return
+        if generation_id in self._tts_first_pcm_gens:
+            return
+        if self._active_generation != generation_id:
+            return
+        log.error(
+            "TTS slow start call_id=%s generation_id=%s phrase_id=%s — no first_pcm in 5s",
+            self.call_id,
+            generation_id,
+            phrase_id,
+        )
+        await self._emit_stage(
+            "tts.slow_start",
+            generation_id=generation_id,
+            phrase_id=phrase_id,
+            waited_ms=5000,
         )
 
     async def _playback_pump(self) -> None:
@@ -929,6 +1115,9 @@ class CallActor:
                 continue
             await self.media.send_pcm(chunk.pcm_s16le)
             if chunk.sequence == 0:
+                self._tts_first_pcm_gens.add(chunk.generation_id)
+                if self._tts_slow_watch and not self._tts_slow_watch.done():
+                    self._tts_slow_watch.cancel()
                 await self._emit_stage(
                     "tts.first_pcm",
                     generation_id=chunk.generation_id,
@@ -953,10 +1142,16 @@ class CallActor:
         spoken = ledger.canonical_text
         if spoken and (not self._delivered_phrases or self._delivered_phrases[-1] != spoken):
             self._delivered_phrases.append(spoken)
-            if self.session.state.pending_question:
+            intent = self._last_delivered_intent or ""
+            marks_question = intent in _QUESTION_DELIVERY_INTENTS or intent.startswith(
+                ("check_", "clarify_", "repeat_")
+            )
+            if marks_question:
                 self.session.state.pending_question_delivered = True
         finish = self.media.finish or self.media.flush
         await finish()
+        sent = ledger.sent_samples
+        await self._finalize_outbox_action(sent_samples=sent, outcome=ledger.generation_outcome)
         await self.media.emit(
             RuntimeEvent(
                 self.call_id,
@@ -974,7 +1169,15 @@ class CallActor:
             k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
         }
         self._flush_pcm_queue()
+        self._playback_uplink_buf.clear()
         self._reset_uplink_endpointing()
+        pending_wait = self._pending_answer_wait
+        if pending_wait is not None:
+            self._pending_answer_wait = None
+            self._start_answer_wait(
+                goal_id=pending_wait[0],
+                question_id=pending_wait[1],
+            )
         if self._hangup_after_playback:
             await self._maybe_hangup_when_idle()
 

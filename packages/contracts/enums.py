@@ -96,6 +96,7 @@ class DialogueAct(StrEnum):
     WRONG_PERSON = "wrong_person"
     CORRECTION = "correction"
     UNCLEAR = "unclear"
+    PAUSE = "pause"
 
 
 class AnswerJudgement(StrEnum):

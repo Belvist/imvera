@@ -8,26 +8,25 @@ from packages.dialogue.state import DialogueState
 
 
 def _wellness_pending_state() -> DialogueState:
-    state = DialogueState(call_id="wellness", fsm_state=FsmState.DAILY_CHECK)
-    state.mandatory_checks.update(
-        {"identity": True, "consent": True, "can_talk": True, "greeted": True}
+    state = DialogueState(
+        call_id="wellness",
+        elder_display_name="Даниил",
+        fsm_state=FsmState.CALL_START,
     )
-    state.greeted = True
     Planner.plan_vera_turn(state, 1, "g1")
     assert state.pending_slot == "wellness"
     return state
 
 
 def _session_through_wellness() -> CallSession:
-    session = CallSession(call_id="audit", family_id="fam-test")
-    session.start()
-    session.state.mandatory_checks.update(
-        {"identity": True, "consent": True, "can_talk": True}
+    session = CallSession(
+        call_id="audit",
+        family_id="fam-test",
+        elder_display_name="Даниил",
     )
-    session.state.greeted = True
-    session.state.fsm_state = FsmState.DAILY_CHECK
-    Planner.plan_vera_turn(session.state, 2, "g2")
+    session.start()
     assert session.state.pending_slot == "wellness"
+    assert session.state.fsm_state == FsmState.DAILY_CHECK
     return session
 
 
@@ -110,8 +109,9 @@ def test_wrong_number_ends_identify() -> None:
 
 def test_da_vy_chto_not_consent() -> None:
     session = CallSession(call_id="consent", family_id="fam-test")
-    session.start()
     session.state.fsm_state = FsmState.CHECK_CONSENT
+    session.state.mandatory_checks["identity"] = True
+    session.state.mandatory_checks["consent"] = False
     session.handle_user_text("да вы что")
     assert session.state.mandatory_checks["consent"] is False
     assert session.state.fsm_state == FsmState.CHECK_CONSENT

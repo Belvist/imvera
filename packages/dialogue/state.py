@@ -30,6 +30,7 @@ class DialogueState(BaseModel):
     facts: dict[str, FactRecord] = Field(default_factory=dict)
     mandatory_checks: dict[str, bool] = Field(default_factory=pilot_mandatory_defaults)
     greeted: bool = False
+    identity_intro_spoken: bool = False
     goodbye_count: int = 0
     goodbye_confirmed: bool = False
     closing_requested: bool = False
@@ -56,6 +57,7 @@ class DialogueState(BaseModel):
     waiting_on_goal: str | None = None
     consecutive_unresolved_goals: int = 0
     pending_action_id: str | None = None
+    last_reflected_turn_id: int = 0
 
     def bump_version(self) -> None:
         self.state_version += 1

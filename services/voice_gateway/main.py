@@ -7,6 +7,8 @@ import audioop
 import json
 import logging
 import os
+import time
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -14,19 +16,20 @@ import httpx
 import uvicorn
 import websockets
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from packages.contracts.runtime import RuntimeEvent
+from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.telephony.ws_protocol import (
     flush_media_command,
     is_media_start,
     parse_control_message,
     parse_media_start,
 )
+from packages.voice_runtime.audio_channels import extract_client_uplink
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks, build_call_actor
 from packages.voice_runtime.trace import record_event
 
-app = FastAPI(title="IMVERA Voice Gateway", version="0.2.0")
 log = logging.getLogger("voice_gateway")
 
 ASTERISK_APP_HTTP = os.environ.get("IMVERA_ASTERISK_APP_HTTP", "http://127.0.0.1:9201")
@@ -35,6 +38,8 @@ WS_DIAG = os.environ.get("IMVERA_WS_DIAG", "0") == "1"
 WS_DIAG_DIR = Path(__file__).resolve().parents[2] / ".run" / "ws-diag"
 INJECT_PACE = os.environ.get("IMVERA_INJECT_PACE", "1") == "1"
 CAPTURE_DIAG = os.environ.get("IMVERA_CAPTURE_DIAG", "0") == "1"
+CAPTURE_DUMP = os.environ.get("IMVERA_CAPTURE_DUMP", "")
+TTS_WARMUP_BUDGET_S = float(os.environ.get("IMVERA_TTS_FIRST_PCM_BUDGET_S", "8.0"))
 
 
 def _log_ws_control(call_id: str, role: str, raw: str, parsed: dict | None) -> None:
@@ -59,6 +64,65 @@ def _urls() -> tuple[str, str, str]:
     return stt, tts, llm
 
 
+async def _warm_tts_pipeline() -> None:
+    """Prime MLX TTS so first live call is not 10–30s silent."""
+    _, tts_url, _ = _urls()
+    started = time.monotonic()
+    first_s: float | None = None
+    try:
+        timeout = httpx.Timeout(5.0, read=90.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{tts_url}/v1/synthesize",
+                json={
+                    "call_id": "gateway-warmup",
+                    "generation_id": "gw-warmup",
+                    "phrase_id": "gw-w",
+                    "text": "А.",
+                },
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    data = json.loads(line)
+                    if data.get("done"):
+                        break
+                    if data.get("pcm_b64"):
+                        if first_s is None:
+                            first_s = time.monotonic() - started
+    except httpx.HTTPError as exc:
+        log.error("TTS warmup failed at startup: %s", exc)
+        return
+    if first_s is None:
+        log.error("TTS warmup produced no PCM at startup")
+        return
+    if first_s > TTS_WARMUP_BUDGET_S:
+        log.error(
+            "TTS warmup slow: first_pcm in %.1fs (budget %.1fs)",
+            first_s,
+            TTS_WARMUP_BUDGET_S,
+        )
+    else:
+        log.info("TTS warmup OK: first_pcm in %.2fs", first_s)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    if os.environ.get("IMVERA_GATEWAY_TTS_WARMUP", "0") == "1":
+        try:
+            await asyncio.wait_for(_warm_tts_pipeline(), timeout=30.0)
+        except asyncio.TimeoutError:
+            log.error(
+                "TTS warmup timed out at gateway startup (30s) — run make voice-call-gate"
+            )
+    yield
+
+
+app = FastAPI(title="IMVERA Voice Gateway", version="0.2.0", lifespan=_lifespan)
+
+
 @dataclass
 class CallSession:
     call_id: str
@@ -75,9 +139,11 @@ class CallSession:
     inject_encoding: str = "slin16"
     capture_sample_rate: int = 16000
     capture_frame_size: int = 640
+    capture_channels: int = 1
     ptime_ms: int = 20
     capture_bytes: int = 0
     capture_rms_peak: float = 0.0
+    _capture_dump: object | None = None
     inject_bytes_sent: int = 0
     _inject_first_logged: bool = False
     _capture_task: asyncio.Task | None = None
@@ -136,9 +202,36 @@ async def _send_inject_payload(
         )
 
 
-@app.get("/health/ready")
-async def ready() -> dict:
+async def _inference_blockers() -> list[str]:
     stt, tts, llm = _urls()
+    blockers: list[str] = []
+    async with httpx.AsyncClient(timeout=2.0) as client:
+        for name, base in (("stt", stt), ("tts", tts), ("llm", llm)):
+            try:
+                response = await client.get(f"{base.rstrip('/')}/health/ready")
+                if response.status_code != 200:
+                    detail = response.text[:200]
+                    blockers.append(f"{name}: HTTP {response.status_code} {detail}")
+            except httpx.HTTPError as exc:
+                blockers.append(f"{name}: {exc}")
+    return blockers
+
+
+@app.get("/health/ready")
+async def ready() -> JSONResponse | dict:
+    stt, tts, llm = _urls()
+    blockers = await _inference_blockers()
+    if blockers:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "blockers": blockers,
+                "stt": stt,
+                "tts": tts,
+                "llm": llm,
+            },
+        )
     return {"status": "ok", "stt": stt, "tts": tts, "llm": llm}
 
 
@@ -174,6 +267,10 @@ async def call_trace(call_id: str) -> dict:
 
 @app.post("/internal/calls/{call_id}/open")
 async def open_call(call_id: str, body: OpenCallRequest) -> dict:
+    blockers = await _inference_blockers()
+    if blockers:
+        log.error("refusing call %s — inference not ready: %s", call_id, blockers)
+        raise HTTPException(503, detail={"error": "inference not ready", "blockers": blockers})
     if call_id in _sessions:
         raise HTTPException(409, detail="call already open")
     for stale_id in list(_sessions.keys()):
@@ -279,6 +376,12 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
     )
     session.actor = actor
     _sessions[call_id] = session
+    if CAPTURE_DUMP:
+        dump_path = Path(CAPTURE_DUMP).expanduser()
+        if "{call_id}" in str(dump_path):
+            dump_path = Path(str(dump_path).format(call_id=call_id))
+        dump_path.parent.mkdir(parents=True, exist_ok=True)
+        session._capture_dump = dump_path.open("wb")
     actor.start()
     return {"status": "opened", "call_id": call_id}
 
@@ -294,8 +397,24 @@ async def close_call(call_id: str) -> dict:
             session.capture_rms_peak,
             session.inject_bytes_sent,
         )
+        record_event(
+            call_id,
+            RuntimeEvent(
+                call_id,
+                RuntimeEventType.STAGE_TIMING,
+                {
+                    "stage": "capture.summary",
+                    "capture_bytes": session.capture_bytes,
+                    "capture_rms_peak": round(session.capture_rms_peak, 1),
+                    "inject_bytes_sent": session.inject_bytes_sent,
+                },
+            ),
+        )
         if session._capture_task and not session._capture_task.done():
             session._capture_task.cancel()
+        if session._capture_dump is not None:
+            session._capture_dump.close()
+            session._capture_dump = None
         await session.actor.stop()
     return {"status": "closed", "capture_bytes": session.capture_bytes if session else 0}
 
@@ -327,7 +446,8 @@ async def _run_incoming_capture(session: CallSession, connection_id: str) -> Non
                 message = await ws.recv()
                 if isinstance(message, bytes):
                     session.capture_bytes += len(message)
-                    await session.actor.push_pcm(message, session.capture_sample_rate)
+                    pcm = extract_client_uplink(message, channels=session.capture_channels)
+                    await session.actor.push_pcm(pcm, session.capture_sample_rate)
                     continue
                 text = message.decode("utf-8", errors="replace") if isinstance(message, bytes) else str(message)
                 data = parse_control_message(text)
@@ -338,6 +458,7 @@ async def _run_incoming_capture(session: CallSession, connection_id: str) -> Non
                     fmt = parse_media_start(data)
                     session.capture_sample_rate = fmt.sample_rate
                     session.capture_frame_size = fmt.frame_size_bytes
+                    session.capture_channels = fmt.channels
                     session.ptime_ms = fmt.ptime_ms
                     session.capture_ready = True
                     await _maybe_media_ready(session)
@@ -390,6 +511,7 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
                     if role == "capture":
                         session.capture_sample_rate = fmt.sample_rate
                         session.capture_frame_size = fmt.frame_size_bytes
+                        session.capture_channels = fmt.channels
                         session.capture_ready = True
                     else:
                         session.inject_sample_rate = fmt.sample_rate
@@ -398,14 +520,15 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
                         session.inject_ready = True
                     await _maybe_media_ready(session)
             elif "bytes" in message and message["bytes"] and role == "capture":
-                session.capture_bytes += len(message["bytes"])
-                if CAPTURE_DIAG:
-                    rms = _pcm_rms(message["bytes"])
-                    if rms > session.capture_rms_peak:
-                        session.capture_rms_peak = rms
-                await session.actor.push_pcm(
-                    message["bytes"], session.capture_sample_rate
-                )
+                raw_pcm = message["bytes"]
+                session.capture_bytes += len(raw_pcm)
+                pcm = extract_client_uplink(raw_pcm, channels=session.capture_channels)
+                if session._capture_dump is not None:
+                    session._capture_dump.write(raw_pcm)
+                rms = _pcm_rms(pcm)
+                if rms > session.capture_rms_peak:
+                    session.capture_rms_peak = rms
+                await session.actor.push_pcm(pcm, session.capture_sample_rate)
     except WebSocketDisconnect:
         pass
     finally:

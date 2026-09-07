@@ -26,6 +26,7 @@ class MediaFormat:
     frame_size_bytes: int
     encoding: str = "slin16"
     ptime_ms: int = 20
+    channels: int = 1
 
 
 def _encoding_sample_rate(encoding: str, message: dict) -> int:
@@ -79,6 +80,9 @@ def parse_media_start(message: dict) -> MediaFormat:
         sample_rate = int(message.get("sample_rate") or 16000)
 
     ptime_ms = int(message.get("ptime") or 20)
+    channels = int(message.get("channels") or 1)
+    if isinstance(fmt, dict) and fmt.get("channels"):
+        channels = int(fmt["channels"])
     optimal = int(message.get("optimal_frame_size") or 0)
     if optimal <= 0:
         optimal = sample_rate * 2 * ptime_ms // 1000
@@ -89,6 +93,7 @@ def parse_media_start(message: dict) -> MediaFormat:
         frame_size_bytes=optimal,
         encoding=encoding,
         ptime_ms=ptime_ms,
+        channels=channels,
     )
 
 

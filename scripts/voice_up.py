@@ -235,6 +235,15 @@ def main() -> int:
     print(f"  Zoiper: {cfg['username']}@{cfg['sip_server']}:{cfg['port']}")
     print(f"  Password: {cfg['password']}")
     print(f"  Dial: {cfg['vera_extension']}")
+
+    print("\nRunning voice call gate (TTS first_pcm budget)...")
+    gate = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "voice_call_gate.py")],
+        cwd=ROOT,
+        check=False,
+    )
+    if gate.returncode != 0:
+        print("WARN: voice-call-gate failed — first Zoiper call may be silent", file=sys.stderr)
     return 0
 
 

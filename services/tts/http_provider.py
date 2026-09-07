@@ -62,7 +62,9 @@ class HttpTTSProvider:
         if remaining <= 0:
             raise ProviderTimeout("TTS deadline exceeded before request")
         try:
-            timeout = min(self._timeout_s, remaining)
+            # MLX first chunk can exceed 12s after worker restart; read timeout must cover it.
+            read_timeout = max(self._timeout_s, remaining, 45.0)
+            timeout = httpx.Timeout(5.0, read=read_timeout)
             if self._client is not None:
                 client = self._client
                 owned = False

@@ -148,21 +148,27 @@ def test_fsm_blocks_summary_until_all_mandatory() -> None:
     assert CallFsm.can_advance(state) is True
 
 
-def test_planner_identity_question_before_answer() -> None:
-    state = DialogueState(call_id="planner", fsm_state=FsmState.IDENTIFY_PERSON)
-    opening = Planner.plan_vera_turn(state, turn_id=1, generation_id="g1")
-    assert opening.intent == "confirm_identity"
-    assert "разговариваю" in opening.speech.lower()
-
-    after = Planner.plan_after_user(
-        state,
-        "да, это я",
-        "g1",
-        2,
+def test_planner_opening_wellness_on_call_start() -> None:
+    state = DialogueState(
+        call_id="planner",
+        elder_display_name="Даниил",
+        fsm_state=FsmState.CALL_START,
     )
+    opening = Planner.plan_vera_turn(state, turn_id=1, generation_id="g1")
+    assert opening.intent == "opening_wellness"
+    assert "здравствуйте" in opening.speech.lower()
+    assert "imvera" in opening.speech.lower()
+    assert "даниил" in opening.speech.lower()
+    assert "чувствуете" in opening.speech.lower()
+    assert state.fsm_state == FsmState.DAILY_CHECK
+    assert state.pending_slot == "wellness"
     assert state.mandatory_checks["identity"] is True
-    assert after.intent == "confirm_consent"
-    assert state.fsm_state == FsmState.CHECK_CONSENT
+    assert state.mandatory_checks["consent"] is True
+    assert state.mandatory_checks["can_talk"] is True
+
+    after = Planner.plan_after_user(state, "нормально", "g2", 2)
+    assert state.slots["wellness"] == SlotStatus.FILLED
+    assert after.intent == "check_mood"
 
 
 def test_slot_fill_sets_mandatory_for_mood() -> None:
@@ -221,18 +227,19 @@ def test_early_goodbye_does_not_corrupt_daily_check_fsm() -> None:
 
 
 def test_sequential_happy_path_call_to_green() -> None:
-    """Full pilot call — each user answer follows a Vera question with matching intent."""
-    state = DialogueState(call_id="happy", fsm_state=FsmState.IDENTIFY_PERSON)
+    """Full pilot call — opening wellness then four slots to GREEN."""
+    state = DialogueState(
+        call_id="happy",
+        elder_display_name="Даниил",
+        fsm_state=FsmState.CALL_START,
+    )
     gid = "g-happy"
     turn = 0
 
     def vera_must(intent: str, *, substring: str | None = None) -> None:
         nonlocal turn
         turn += 1
-        if turn == 1:
-            proposal = Planner.plan_vera_turn(state, turn, gid)
-        else:
-            proposal = Planner.plan_after_user(state, "", gid, turn)
+        proposal = Planner.plan_vera_turn(state, turn, gid)
         assert proposal.intent == intent
         if substring:
             assert substring in proposal.speech.lower()
@@ -243,18 +250,7 @@ def test_sequential_happy_path_call_to_green() -> None:
         proposal = Planner.plan_after_user(state, text, gid, turn)
         assert proposal.intent == expected_next_intent
 
-    vera_must("confirm_identity", substring="разговариваю")
-    user_after_vera("да, это я", expected_next_intent="confirm_consent")
-    assert state.fsm_state == FsmState.CHECK_CONSENT
-
-    user_after_vera("да, согласен", expected_next_intent="greeting")
-    assert state.fsm_state == FsmState.GREETING
-    assert state.mandatory_checks["consent"] is True
-
-    user_after_vera("угу", expected_next_intent="check_can_talk")
-    assert state.fsm_state == FsmState.CHECK_CAN_TALK
-
-    user_after_vera("да, удобно", expected_next_intent="check_wellness")
+    vera_must("opening_wellness", substring="чувствуете")
     assert state.fsm_state == FsmState.DAILY_CHECK
     assert state.pending_slot == "wellness"
 

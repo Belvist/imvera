@@ -82,7 +82,7 @@ class SemanticPayload(StrictModel):
         "backchannel",
         "unclear",
     ]
-    control: Literal["none", "stop_call", "revoke_consent", "defer", "wrong_person"]
+    control: Literal["none", "stop_call", "revoke_consent", "defer", "wrong_person", "pause"]
     consent_answer: Literal["yes", "no", "unclear", "not_applicable"]
     consent_evidence: Evidence | None = None
     control_evidence: Evidence | None = None

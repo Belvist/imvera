@@ -1,58 +1,72 @@
-# Current task — Dialogue Stage 1 (QuestionLedger) + SIP uplink
+# Current task — Dialogue Stage 2 (semantic pipeline + outbox)
 
 ## Primary assignment
 
-[IMVERA Dialogue Task 2026-09-07](IMVERA_DIALOGUE_TASK_2026-09-07.md) — Stage 1 in progress.  
+[IMVERA Dialogue Task 2026-09-07](IMVERA_DIALOGUE_TASK_2026-09-07.md) — Stage 2 in progress.  
 Architecture: [ADR-009](adr/009-llm-understanding-state-policy.md).
 
-## User outcome (Stage 1 gate)
+## User outcome (Stage 2 gate)
 
-20×«ага» via CallActor + session: ≤2 automatic wellness attempts, 0 invented facts, `UNRESOLVED` + partial CLOSE.
+Смысл → state через единый путь; жалобы зеркалятся без похвалы; outbox §15 не врёт о доставке; PAUSE ack + pause_wait в CallActor.
 
 ## Branch / SHA
 
 | Field | Value |
 |-------|-------|
 | Branch | `feature/voice-zoiper-m5` |
-| Dialogue work | QuestionLedger, WAIT in CallActor, `DialogueTransitionStore` |
+| Last pushed | `e0e86b042067f1860d26f681152c036795c501a4` (Stage 1) |
+| Working tree | Stage 2 — **uncommitted** |
 
-## Stage 1 — CHANGED
+## Stage 2 — CHANGED (uncommitted)
 
-**1a (policy loop):**
-- `packages/dialogue/question_ledger.py` — QuestionGoal, attempt limits
-- `packages/dialogue/planner.py` — BACKCHANNEL→WAIT, UNRESOLVED, reserve/delivery
-- `packages/dialogue/state.py`, `packages/contracts/enums.py` — GoalStatus, UNRESOLVED slot
-- `packages/dialogue/transition_store.py` — mid-call commit before TTS
-- `packages/dialogue/session.py` — `handle_wait_expired`, persistence metadata
-- `packages/dialogue/validator.py`, `packages/dialogue/fsm.py` — partial CLOSE
-- `migrations/002_dialogue_transition.sql`
+**Semantic pipeline:**
+- `packages/dialogue/semantic_validator.py` — evidence span, subject, temporal, consent guards
+- `packages/dialogue/answer_policy.py` — backchannel ≠ consent; «да» только при доставленном вопросе
+- `packages/dialogue/semantic_adapter.py` — validate → policy → bridge
+- `packages/dialogue/reducer.py` — единственная мутация state из facts/consent
+- `packages/dialogue/planner.py` — `reflect_report`, PAUSE, DialogueReducer
+- `packages/contracts/semantic.py` — `control: pause`
+- `packages/voice_runtime/call_actor.py` — `adapt_semantic_turn`, outbox finalize, PAUSE wait
 
-**1b (§6.1 WAIT contract):**
-- `packages/voice_runtime/wait_state.py` — WaitState, answer_wait + single backchannel_extra
-- `packages/voice_runtime/profile.py` — `dialogue_timing_settings()` (7000/2000/30000)
-- `config/voice-m5.yaml` — `dialogue_timing` profile
-- `packages/voice_runtime/call_actor.py` — event-driven wait, control_epoch, pause on speech
-- `tests/test_wait_contract.py`, `tests/test_inference_stop_epoch.py`
+**Outbox §15:**
+- `packages/contracts/outbox.py` — status machine
+- `packages/dialogue/transition_store.py` — metadata `action_outbox`, transitions
+- `packages/dialogue/session.py` — snapshot outbox fix
+- `packages/voice_runtime/call_actor.py` — `_finalize_outbox_action`, interrupt path
+- `tests/test_dispatch_failure_matrix.py`
 
-## Stage 1 — VERIFIED
+**Tests:**
+- `tests/test_semantic_pipeline.py`
+- `tests/test_mixed_nonanswer_sequence.py`
+- `tests/test_dispatch_failure_matrix.py`
+
+## Stage 2 — VERIFIED (local, uncommitted)
 
 ```bash
+make test-dialogue-gates
+# 35 passed — policy + CallActor integration
+
 python3 -m pytest tests/ -q
-# 157 passed, 2 skipped (2026-09-07)
+# 170 passed, 4 skipped
+
+# Live LLM (when MLX worker up on :9103):
+make test-dialogue-live
+# or: IMVERA_LLM_URL=http://127.0.0.1:9103 python3 -m pytest tests/test_llm_live_dialogue.py -v
 ```
 
 ## NOT VERIFIED
 
-- Live Zoiper 20×«ага» with real 7s timers
-- PG migration 002 applied / outbox §15 wired
-- PAUSE wait (`pause_wait_ms`) end-to-end
-- `test_dispatch_failure_matrix.py` (§15 four points)
-- Latency baseline doc (Phase 0)
+- Live Zoiper / real LLM «голова болит» trace
+- PG `action_outbox` table wired in `pg_store`
+- SIP uplink (parallel uncommitted track)
+- Latency baseline doc
 
 ## NEXT GATE
 
-Stage 1b remainder: outbox status machine + dispatch failure matrix. Then Stage 2 (`SemanticAdapter`).
+1. Commit Stage 2 dialogue (exclude SIP files unless requested).
+2. Real-model gate: HttpLLM «голова болит» with trace.
+3. Optional: wire `migrations/002_dialogue_transition.sql` to `pg_store`.
 
-## Parallel track (SIP uplink)
+## Parallel track (SIP uplink — uncommitted, separate)
 
-See uncommitted `call_actor.py` / `voice_sip_e2e.py` — capture topology still open.
+`scripts/voice_sip_e2e.py`, `services/asterisk_app/main.py`, `services/voice_gateway/main.py`, `tests/test_voice_stack.py`

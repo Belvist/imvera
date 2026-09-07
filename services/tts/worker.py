@@ -7,6 +7,7 @@ import base64
 import json
 import os
 import queue
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from services.inference.common import (
     InferenceExecutor,
+    QueueFullError,
     WorkerState,
     check_deadline,
     mount_health,
@@ -101,6 +103,8 @@ def _produce_silero_chunks(
 def _produce_mlx_chunks(
     req: SynthesizeRequest, out_q: queue.Queue, tts_cfg: dict[str, Any]
 ) -> None:
+    if _tts is None:
+        raise RuntimeError("TTS model not loaded")
     voice = req.voice or tts_cfg["voice"]
     lang = req.language or tts_cfg["lang_code"]
     gen_kwargs, ref_id = build_mlx_gen_kwargs(
@@ -152,7 +156,7 @@ def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
 
 
 @app.on_event("startup")
-def warmup() -> None:
+def startup() -> None:
     global _tts
     cfg = _load_config()
     tts_cfg = cfg["models"]["tts"]
@@ -170,17 +174,33 @@ def warmup() -> None:
             state.warmup_error = str(exc)
             state.ready = False
         return
+    # MLX load+warmup runs on the process main thread before HTTP binds (see main()).
 
+
+def _load_and_warmup_mlx(tts_cfg: dict[str, Any], engine: str) -> None:
+    global _tts
     model_id = resolve_model_id(tts_cfg)
     try:
         from mlx_audio.tts.utils import load_model
+        from services.tts.warmup import warmup_synthesis
 
-        _tts = load_model(model_id)
+        print(f"TTS loading {model_id}...", flush=True)
+        loaded = load_model(model_id)
+        if loaded is None:
+            raise RuntimeError(f"load_model returned None for {model_id}")
+        _tts = loaded
         state.model_revision = f"{engine}:{model_id}"
+        first_s = warmup_synthesis(_produce_chunks, text="А.", timeout_s=180.0)
+        if first_s <= 0:
+            state.warmup_error = "warmup synthesis produced no audio"
+            state.ready = False
+            return
+        print(f"TTS warmup first chunk in {first_s:.2f}s", flush=True)
         state.ready = True
     except Exception as exc:
         state.warmup_error = str(exc)
         state.ready = False
+        print(f"TTS load/warmup failed: {exc}", flush=True)
 
 
 mount_health(app, state, "tts")
@@ -193,7 +213,11 @@ async def _ndjson_stream(req: SynthesizeRequest) -> AsyncIterator[bytes]:
     def produce() -> None:
         _produce_chunks(req, out_q)
 
-    fut = executor.submit(produce)
+    try:
+        fut = executor.submit(produce)
+    except QueueFullError as exc:
+        yield (json.dumps({"done": True, "error": str(exc)}, ensure_ascii=False) + "\n").encode()
+        return
     got_audio = False
     try:
         while True:
@@ -224,6 +248,8 @@ async def synthesize(req: SynthesizeRequest) -> StreamingResponse:
         raise HTTPException(503, detail=state.warmup_error or "not ready")
     if engine == "silero_lab" and not state.ready:
         raise HTTPException(503, detail=state.warmup_error or "silero lab not ready")
+    if executor.queue_depth >= 4:
+        raise HTTPException(503, detail="inference queue full")
     return StreamingResponse(_ndjson_stream(req), media_type="application/x-ndjson")
 
 
@@ -241,6 +267,10 @@ def cancel(body: dict[str, Any]) -> dict[str, str]:
 def main() -> None:
     cfg = _load_config()
     port = int(os.environ.get("IMVERA_TTS_PORT", cfg["ports"]["tts"]))
+    tts_cfg = cfg["models"]["tts"]
+    engine = tts_engine(tts_cfg)
+    if engine != "silero_lab":
+        _load_and_warmup_mlx(tts_cfg, engine)
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 
 

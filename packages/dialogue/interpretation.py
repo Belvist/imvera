@@ -93,6 +93,7 @@ class UserInterpretation(BaseModel):
     defers_call: bool = False
     asks_who_are_you: bool = False
     risk_false_alarm: bool = False
+    pause_requested: bool = False
 
 
 def _strip_punct(text: str) -> str:

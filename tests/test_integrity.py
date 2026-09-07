@@ -13,16 +13,12 @@ def _full_session(call_id: str = "integrity") -> CallSession:
     store = InMemoryCallRecordStore()
     session = CallSession(call_id=call_id, family_id="fam-integrity", store=store)
     session.start()
-    session.handle_user_text("да")
-    session.handle_user_text("да")
-    session.handle_user_text("да")
-    session.handle_user_text("да")
+    session.handle_user_text("нормально")
     return session
 
 
 def test_mood_good_does_not_overwrite_wellness() -> None:
     session = _full_session()
-    session.handle_user_text("нормально")
     assert session.state.slots["wellness"] == SlotStatus.FILLED
     assert session.state.pending_slot == "mood"
     session.handle_user_text("хорошо")
@@ -65,7 +61,11 @@ def test_single_call_ended_event() -> None:
     store = InMemoryCallRecordStore()
     session = CallSession(call_id="ended-once", family_id="fam-integrity", store=store)
     session.start()
-    session.handle_user_text("да")
+    session.state.fsm_state = FsmState.CHECK_CONSENT
+    session.state.mandatory_checks["consent"] = False
+    session.state.pending_question = (
+        "Вы согласны получать регулярные звонки от IMVERA?"
+    )
     session.handle_user_text("нет, не согласен")
     session.handle_user_text("алло")
     session.handle_user_text("ещё раз")
@@ -78,7 +78,11 @@ def test_finalize_preserves_family_and_state() -> None:
     store = InMemoryCallRecordStore()
     session = CallSession(call_id="finalize", family_id="fam-42", store=store)
     session.start()
-    session.handle_user_text("да")
+    session.state.fsm_state = FsmState.CHECK_CONSENT
+    session.state.mandatory_checks["consent"] = False
+    session.state.pending_question = (
+        "Вы согласны получать регулярные звонки от IMVERA?"
+    )
     session.handle_user_text("нет, не согласен")
     result = session.get_persisted_result()
     assert result is not None
@@ -93,7 +97,11 @@ def test_wrong_family_cannot_read() -> None:
     store = InMemoryCallRecordStore()
     session = CallSession(call_id="fam-gate", family_id="fam-a", store=store)
     session.start()
-    session.handle_user_text("да")
+    session.state.fsm_state = FsmState.CHECK_CONSENT
+    session.state.mandatory_checks["consent"] = False
+    session.state.pending_question = (
+        "Вы согласны получать регулярные звонки от IMVERA?"
+    )
     session.handle_user_text("нет, не согласен")
     assert store.get_call_result("fam-gate", "fam-b") is None
 
@@ -124,9 +132,7 @@ def test_risk_observation_persisted() -> None:
     store = InMemoryCallRecordStore()
     session = CallSession(call_id="risk-obs", family_id="fam-integrity", store=store)
     session.start()
-    session.handle_user_text("да")
-    session.handle_user_text("да")
-    session.handle_user_text("да")
+    session.handle_user_text("нормально")
     session.handle_user_text("я упала и не могу встать")
     result = session.get_persisted_result()
     assert result is not None

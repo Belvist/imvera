@@ -64,6 +64,30 @@ class Validator:
             speech = speech[:_MAX_CHARS]
 
         lower = speech.lower()
+
+        if proposal.intent == "reflect_report":
+            for praise in ("отлично", "замечательно", "как настроение", "хорошо!"):
+                if praise in lower:
+                    return ValidatedTurn(
+                        turn_id=proposal.turn_id,
+                        generation_id=proposal.generation_id,
+                        speech=speech,
+                        intent=proposal.intent,
+                        fsm_state=proposal.fsm_state,
+                        allowed=False,
+                        validator_notes=f"praise_on_complaint: {praise}",
+                    )
+            if "?" in speech:
+                return ValidatedTurn(
+                    turn_id=proposal.turn_id,
+                    generation_id=proposal.generation_id,
+                    speech=speech,
+                    intent=proposal.intent,
+                    fsm_state=proposal.fsm_state,
+                    allowed=False,
+                    validator_notes="reflect_report must not add questions",
+                )
+
         for phrase in _FORBIDDEN_PROMISES:
             if phrase in lower:
                 return ValidatedTurn(

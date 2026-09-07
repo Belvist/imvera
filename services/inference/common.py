@@ -32,6 +32,10 @@ def new_request_id() -> str:
     return f"req-{uuid.uuid4().hex[:12]}"
 
 
+class QueueFullError(RuntimeError):
+    """Inference executor saturated."""
+
+
 class InferenceExecutor:
     """Single-thread executor for MLX model access."""
 
@@ -49,7 +53,7 @@ class InferenceExecutor:
     def submit(self, fn: Callable[[], T]) -> concurrent.futures.Future[T]:
         with self._lock:
             if self._pending >= self._max_queue:
-                raise RuntimeError("inference queue full")
+                raise QueueFullError("inference queue full")
             self._pending += 1
 
         def wrapped() -> T:
