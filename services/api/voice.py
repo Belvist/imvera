@@ -1,7 +1,8 @@
-"""Voice API routes — WebSocket media + health."""
+"""Voice API routes — WebSocket media via unified CallActor."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
@@ -12,15 +13,12 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 
 from packages.contracts.runtime import RuntimeEvent
 from packages.core import create_call_record_store
-from packages.dialogue.session import CallSession
-from packages.voice_runtime.audio import AudioEnvelope
-from packages.voice_runtime.runtime import VoiceRuntime, VoiceRuntimeConfig
-from services.stt.http_provider import HttpSTTProvider
-from services.tts.http_provider import HttpTTSProvider
+from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
+from packages.voice_runtime.trace import record_event
 
 router = APIRouter()
 _store = create_call_record_store()
-_runtimes: dict[str, VoiceRuntime] = {}
+_actors: dict[str, Any] = {}
 
 
 def _git_sha() -> str:
@@ -33,6 +31,15 @@ def _git_sha() -> str:
         return out.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return "unknown"
+
+
+def _provider_urls() -> tuple[str, str, str]:
+    stt = os.environ.get("IMVERA_STT_URL")
+    tts = os.environ.get("IMVERA_TTS_URL")
+    llm = os.environ.get("IMVERA_LLM_URL", "http://127.0.0.1:9103")
+    if not stt or not tts:
+        raise HTTPException(status_code=503, detail="STT/TTS endpoints not configured")
+    return stt, tts, llm
 
 
 @router.get("/health/live")
@@ -59,6 +66,7 @@ def version() -> dict[str, str]:
         "git_sha": _git_sha(),
         "architecture": "ADR-008",
         "schema": "voice-v1",
+        "dialogue_path": "CallActor",
     }
 
 
@@ -76,19 +84,27 @@ async def voice_ws(
     call_id: str,
     family_id: str = Query(..., min_length=1),
 ) -> None:
-    stt_url = os.environ.get("IMVERA_STT_URL")
-    tts_url = os.environ.get("IMVERA_TTS_URL")
-    if not stt_url or not tts_url:
+    try:
+        stt_url, tts_url, llm_url = _provider_urls()
+    except HTTPException:
         await websocket.close(code=1013, reason="STT/TTS endpoints not configured")
         return
 
     await websocket.accept()
-    session = CallSession(call_id=call_id, family_id=family_id, store=_store)
+    output_rate = int(websocket.query_params.get("sample_rate", "16000"))
+    frame_bytes = output_rate * 2 * 20 // 1000
 
-    async def send_audio(chunk: AudioEnvelope) -> None:
-        await websocket.send_bytes(chunk.pcm_s16le)
+    async def send_pcm(pcm: bytes) -> None:
+        await websocket.send_bytes(pcm)
+
+    async def flush() -> None:
+        await websocket.send_text(json.dumps({"type": "playback.flush"}, ensure_ascii=False))
+
+    async def hangup() -> None:
+        await websocket.send_text(json.dumps({"type": "call.ended"}, ensure_ascii=False))
 
     async def emit(event: RuntimeEvent) -> None:
+        record_event(call_id, event)
         await websocket.send_text(
             json.dumps(
                 {"type": event.event_type.value, "payload": event.payload},
@@ -96,39 +112,43 @@ async def voice_ws(
             )
         )
 
-    runtime = VoiceRuntime(
+    actor = build_call_actor(
         call_id=call_id,
         family_id=family_id,
-        session=session,
-        stt=HttpSTTProvider(stt_url),
-        tts=HttpTTSProvider(tts_url),
-        send_audio=send_audio,
-        emit=emit,
-        config=VoiceRuntimeConfig(
-            playback_buffer_ms=int(os.environ.get("IMVERA_PLAYBACK_BUFFER_MS", "200")),
-        ),
+        elder_name=os.environ.get("IMVERA_ELDER_NAME", ""),
+        stt_url=stt_url,
+        tts_url=tts_url,
+        llm_url=llm_url,
+        media=MediaCallbacks(send_pcm=send_pcm, flush=flush, hangup=hangup, emit=emit),
+        store=_store,
     )
-    _runtimes[call_id] = runtime
+    _actors[call_id] = actor
+    actor.start()
     try:
-        await runtime.start_call()
+        await actor.on_media_ready(output_rate, frame_bytes, input_sample_rate=output_rate)
         while True:
             message = await websocket.receive()
             if message["type"] == "websocket.disconnect":
                 break
             if "bytes" in message and message["bytes"]:
-                rate = int(websocket.query_params.get("sample_rate", "16000"))
-                await runtime.on_pcm(message["bytes"], rate)
+                rate = int(websocket.query_params.get("sample_rate", str(output_rate)))
+                await actor.push_pcm(message["bytes"], rate)
             elif "text" in message and message["text"]:
                 data = json.loads(message["text"])
                 if data.get("type") == "media.ready":
-                    await runtime.handle_media_ready(int(data.get("sample_rate", 16000)))
+                    rate = int(data.get("sample_rate", output_rate))
+                    await actor.on_media_ready(
+                        rate,
+                        rate * 2 * 20 // 1000,
+                        input_sample_rate=rate,
+                    )
                 elif data.get("type") == "stop":
-                    await runtime.stop()
+                    await actor.stop()
                     break
     except WebSocketDisconnect:
-        await runtime.stop()
+        await actor.stop()
     finally:
-        _runtimes.pop(call_id, None)
+        _actors.pop(call_id, None)
 
 
 def new_call_id() -> str:
