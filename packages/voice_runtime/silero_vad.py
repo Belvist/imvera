@@ -103,6 +103,20 @@ class SileroVad:
                 self._speech_ms = 0
         return started, ended
 
+    def reset(self) -> None:
+        """Clear streaming state without reloading the ONNX session."""
+        import numpy as np
+
+        self._buf = b""
+        self._in_speech = False
+        self._speech_ms = 0
+        self._silence_ms = 0
+        if self._uses_state:
+            self._state = np.zeros((2, 1, 128), dtype=np.float32)
+        else:
+            self._h = np.zeros((2, 1, 64), dtype=np.float32)
+            self._c = np.zeros((2, 1, 64), dtype=np.float32)
+
     @property
     def in_speech(self) -> bool:
         return self._in_speech

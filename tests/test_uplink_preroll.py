@@ -9,7 +9,13 @@ from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession
 from packages.voice_runtime.audio import AudioEnvelope
 from packages.voice_runtime.audio_channels import extract_client_uplink
-from packages.voice_runtime.call_actor import CallActor, CallActorConfig, MediaCallbacks
+from packages.voice_runtime.call_actor import (
+    ActorEvent,
+    ActorEventType,
+    CallActor,
+    CallActorConfig,
+    MediaCallbacks,
+)
 from packages.voice_runtime.echo_ref_gate import (
     DownlinkEchoRef,
     EchoRefConfig,
@@ -60,19 +66,23 @@ def test_lab_half_duplex_defaults(monkeypatch) -> None:
     monkeypatch.delenv("IMVERA_LAB_HALF_DUPLEX", raising=False)
     monkeypatch.delenv("IMVERA_POST_SPEECH_PAUSE_MS", raising=False)
     monkeypatch.delenv("IMVERA_ECHO_REF_GATE", raising=False)
-    assert lab_half_duplex_enabled() is False
-    assert echo_ref_gate_enabled() is True
+    assert lab_half_duplex_enabled() is True
+    assert echo_ref_gate_enabled() is False
     assert post_speech_pause_ms() == 400
     env = apply_lab_half_duplex_env({})
-    assert env["IMVERA_LAB_HALF_DUPLEX"] == "0"
-    assert env["IMVERA_ECHO_REF_GATE"] == "1"
+    assert env["IMVERA_LAB_HALF_DUPLEX"] == "1"
+    assert env["IMVERA_ECHO_REF_GATE"] == "0"
     assert env["IMVERA_POST_SPEECH_PAUSE_MS"] == "400"
-    # Explicit mute fallback must stick (voice_up must not force half-duplex ON).
+    # Explicit mute must stick.
     muted = apply_lab_half_duplex_env({"IMVERA_LAB_HALF_DUPLEX": "1"})
     assert muted["IMVERA_LAB_HALF_DUPLEX"] == "1"
     # Explicit always-listen must stick (do not overwrite parent 0).
     listen = apply_lab_half_duplex_env({"IMVERA_LAB_HALF_DUPLEX": "0"})
     assert listen["IMVERA_LAB_HALF_DUPLEX"] == "0"
+    always = apply_lab_half_duplex_env(
+        {"IMVERA_LAB_HALF_DUPLEX": "0", "IMVERA_ECHO_REF_GATE": "1"}
+    )
+    assert always["IMVERA_ECHO_REF_GATE"] == "1"
 
 
 def test_echo_ref_same_pcm_is_echo_different_is_user() -> None:
@@ -211,6 +221,9 @@ def test_unmute_only_after_post_speech_pause() -> None:
         assert "listen.enabled" in stages
         assert actor._listen_gated_until is None
         assert not actor._uplink_listen_blocked()
+        # Reset recreates real VAD — reattach tracker for the assertion.
+        actor._vad = _Vad()
+        actor._collector = _Collector()
         await actor._feed_uplink_pcm(frame)
         assert fed == [frame], "After pause, uplink must reach VAD"
 
@@ -278,6 +291,9 @@ def test_force_unmute_if_pause_cancelled() -> None:
         await asyncio.gather(task, return_exceptions=True)
         assert actor._listen_gated_until is None
         assert not actor._uplink_listen_blocked()
+        # Finalize's listen path recreates VAD — restore tracker.
+        actor._vad = _Vad()
+        actor._collector = _Collector()
         frame = b"\x03\x00" * 320
         await actor._feed_uplink_pcm(frame)
         assert fed == [frame]
@@ -509,7 +525,7 @@ def test_wellness_answers_never_echo_discarded() -> None:
         llm=SimpleNamespace(),
         media=MediaCallbacks(_noop, _noop, _noop, _noop),
     )
-    opening = "Здравствуйте, это сервис IMVERA, Даниил. Как вы себя чувствуете?"
+    opening = "Здравствуйте, это сервис Имвера, Даниил. Как вы себя чувствуете?"
     actor._delivered_phrases.append(opening)
     actor.session.state.pending_question = opening
     for answer in (
@@ -521,3 +537,123 @@ def test_wellness_answers_never_echo_discarded() -> None:
         "чувствую себя плохо",
     ):
         assert not actor._is_assistant_echo(answer), answer
+
+
+def test_echo_ref_48k_inject_gates_matching_16k_uplink() -> None:
+    """Inject is slin48; uplink is 16 kHz — gate must resample or it hears Vera as user."""
+
+    async def scenario() -> None:
+        session = CallSession(
+            call_id="echo-48k",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+        fed: list[bytes] = []
+
+        class _Vad:
+            def feed(self, pcm: bytes) -> tuple[bool, bool]:
+                fed.append(pcm)
+                return True, False
+
+        class _Collector:
+            def on_frame(self, _pcm, _started, _ended):
+                return None
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+            config=CallActorConfig(
+                lab_half_duplex=False,
+                echo_ref_gate=True,
+                lab_barge_in=False,
+                target_sample_rate=16000,
+            ),
+        )
+        actor._media_ready = True
+        actor._vad = _Vad()
+        actor._collector = _Collector()
+        actor._active_generation = "g-48"
+        vera48 = _pcm_sine(440.0, samples=960, sample_rate=48000, amp=12000)
+        for _ in range(10):
+            actor._push_echo_downlink(vera48, 48000)
+        up16 = _pcm_sine(440.0, samples=320, sample_rate=16000, amp=12000)
+        await actor._feed_uplink_pcm(up16)
+        assert fed == [], "48 kHz downlink must match 16 kHz uplink after resample"
+
+    asyncio.run(scenario())
+
+
+def test_echo_ref_fail_open_when_playback_idle() -> None:
+    """After listen.enabled, leftover TTS in the ring must not drop user speech."""
+
+    async def scenario() -> None:
+        session = CallSession(
+            call_id="echo-idle",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+        fed: list[bytes] = []
+
+        class _Vad:
+            def feed(self, pcm: bytes) -> tuple[bool, bool]:
+                fed.append(pcm)
+                return False, False
+
+        class _Collector:
+            def on_frame(self, _pcm, _started, _ended):
+                return None
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+            config=CallActorConfig(
+                lab_half_duplex=False,
+                echo_ref_gate=True,
+                lab_barge_in=False,
+            ),
+        )
+        actor._media_ready = True
+        actor._vad = _Vad()
+        actor._collector = _Collector()
+        actor._active_generation = None
+        leftover = _pcm_sine(440.0, samples=320, amp=12000)
+        actor._ensure_echo_ref()
+        assert actor._echo_ref is not None
+        actor._echo_ref.push(leftover)
+        user = _pcm_sine(1200.0, samples=320, amp=12000)
+        await actor._feed_uplink_pcm(user)
+        assert fed == [user]
+
+    asyncio.run(scenario())
+
+
+def test_flush_pcm_queue_keeps_stop() -> None:
+    actor = CallActor(
+        call_id="flush-stop",
+        family_id="fam-voice",
+        session=CallSession(
+            call_id="flush-stop",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        ),
+        stt=SimpleNamespace(),
+        tts=SimpleNamespace(),
+        llm=SimpleNamespace(),
+        media=MediaCallbacks(_noop, _noop, _noop, _noop),
+    )
+    actor._queue.put_nowait(ActorEvent(ActorEventType.PCM, pcm=b"\x00\x00" * 10))
+    actor._queue.put_nowait(ActorEvent(ActorEventType.STOP))
+    actor._flush_pcm_queue()
+    kept = actor._queue.get_nowait()
+    assert kept.kind == ActorEventType.STOP
+    assert actor._queue.empty()

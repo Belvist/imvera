@@ -172,6 +172,11 @@ def _init_silero_lab(tts_cfg: dict[str, Any]) -> bool:
 
         load_silero(tts_cfg.get("silero_lab") or {})
         state.model_revision = f"silero_lab:{lab_backend_name(tts_cfg.get('silero_lab') or {})}"
+        if "macos_say" in state.model_revision:
+            state.ready = False
+            state.warmup_error = "macos_say is not Silero Xenia"
+            print("BLOCKED: TTS macos_say — install .[lab-silero] / torch", flush=True)
+            return False
         state.ready = True
         state.warmup_error = None
         os.environ["IMVERA_TTS_ENGINE"] = "silero_lab"

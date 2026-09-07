@@ -199,6 +199,10 @@ def test_opening_cache_plays_without_live_tts(monkeypatch):
 
         assert not tts_called
         assert sent, "Cached opening PCM should reach the downlink"
+        assert actor._wait_state is not None, (
+            "Answer wait must arm before cached opening drain "
+            "(otherwise Vera never re-prompts after greeting)"
+        )
         actor._playback_task.cancel()
         await asyncio.gather(actor._playback_task, return_exceptions=True)
 

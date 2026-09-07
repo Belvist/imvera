@@ -36,9 +36,14 @@ def main() -> int:
         if r.status_code != 200:
             print(f"BLOCKED: TTS not ready ({r.status_code})", file=sys.stderr)
             return 1
+        engine = str(r.json().get("model_revision", "")).strip()
     except httpx.HTTPError as exc:
         print(f"BLOCKED: TTS unreachable: {exc}", file=sys.stderr)
         return 1
+    if "macos_say" in engine or not engine.startswith("silero_lab:silero:"):
+        print(f"BLOCKED: TTS is not Silero Xenia ({engine!r})", file=sys.stderr)
+        return 1
+    os.environ["IMVERA_TTS_MODEL_REVISION"] = engine
 
     pcm_parts: list[bytes] = []
     sample_rate = 24000
@@ -70,8 +75,8 @@ def main() -> int:
         print("BLOCKED: prerender produced no PCM", file=sys.stderr)
         return 1
 
-    path = save_opening(text, pcm, sample_rate)
-    print(f"Opening cached: {path.name} ({len(pcm)} bytes @ {sample_rate} Hz)")
+    path = save_opening(text, pcm, sample_rate, engine=engine)
+    print(f"Opening cached: {path.name} ({len(pcm)} bytes @ {sample_rate} Hz engine={engine})")
     return 0
 
 

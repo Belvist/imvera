@@ -45,7 +45,7 @@ def _tts_matches_lab_fast() -> bool:
         if r.status_code != 200:
             return False
         rev = str(r.json().get("model_revision", ""))
-        return rev.startswith("silero_lab:")
+        return rev.startswith("silero_lab:silero:") and "macos_say" not in rev and "xenia" in rev
     except httpx.HTTPError:
         return False
 
@@ -191,13 +191,13 @@ def main() -> int:
             "  speaker: xenia (Silero) — NC lab only; "
             "macos say fallback if torch/omegaconf missing"
         )
-    if env.get("IMVERA_LAB_HALF_DUPLEX", "0") in {"1", "true", "yes"}:
+    if env.get("IMVERA_LAB_HALF_DUPLEX", "1") in {"1", "true", "yes"}:
         pause = env.get("IMVERA_POST_SPEECH_PAUSE_MS", "400")
         print(
             f"Lab half-duplex: ON (post-speech pause {pause}ms — "
             "Vera finishes → pause → then mic)"
         )
-    elif env.get("IMVERA_ECHO_REF_GATE", "1") in {"1", "true", "yes"}:
+    elif env.get("IMVERA_ECHO_REF_GATE", "0") in {"1", "true", "yes"}:
         print(
             "Lab always-listen: echo reference gate ON "
             "(downlink PCM ring — not ML speaker-ID)"
@@ -208,6 +208,32 @@ def main() -> int:
     code = _ensure_workers(env)
     if code != 0:
         return code
+
+    tts_rev = ""
+    tts_ok = False
+    try:
+        tts_health = httpx.get("http://127.0.0.1:9102/health/ready", timeout=3.0)
+        tts_ok = tts_health.status_code == 200
+        tts_rev = str(tts_health.json().get("model_revision", "")) if tts_ok else ""
+    except httpx.HTTPError:
+        tts_ok = False
+    if (
+        not tts_ok
+        or "macos_say" in tts_rev
+        or not tts_rev.startswith("silero_lab:silero:")
+        or "xenia" not in tts_rev
+    ):
+        print(f"BLOCKED: TTS must be silero:xenia, got {tts_rev!r}", file=sys.stderr)
+        return 1
+    env["IMVERA_TTS_MODEL_REVISION"] = tts_rev
+    os.environ["IMVERA_TTS_MODEL_REVISION"] = tts_rev
+    print(f"  TTS revision: {tts_rev}")
+
+    cache_dir = ROOT / ".run" / "cache"
+    if cache_dir.is_dir():
+        for stale in cache_dir.glob("opening_*.json"):
+            stale.unlink()
+            print(f"  dropped stale opening cache {stale.name}")
 
     print("Pre-rendering opening phrase cache...")
     prerender = subprocess.run(

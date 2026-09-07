@@ -58,6 +58,12 @@ class EnergyVad:
                 self._speech_ms = 0
         return started, ended
 
+    def reset(self) -> None:
+        """Clear speech/silence counters for a fresh listen window."""
+        self._in_speech = False
+        self._speech_ms = 0
+        self._silence_ms = 0
+
     @property
     def in_speech(self) -> bool:
         return self._in_speech

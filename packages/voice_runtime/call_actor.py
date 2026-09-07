@@ -122,12 +122,12 @@ class CallActorConfig:
     playback_buffer_ms: int = 60
     frame_ms: int = 20
     telephony_stream: bool = True
-    # Lab Zoiper/softphone: hard mute during Vera (friend MVP). Default off —
-    # prefer always-listen + IMVERA_ECHO_REF_GATE reference PCM gate.
-    lab_half_duplex: bool = False
+    # Lab Zoiper/softphone: hard mute during Vera (friend MVP). Default on —
+    # always-listen + IMVERA_ECHO_REF_GATE is opt-in until live-stable.
+    lab_half_duplex: bool = True
     post_speech_pause_ms: int = 400
     # Drop uplink frames that match recently injected downlink PCM.
-    echo_ref_gate: bool = True
+    echo_ref_gate: bool = False
     # Interrupt Vera on clear user speech during playback (lab; default off).
     lab_barge_in: bool = False
 
@@ -352,18 +352,53 @@ class CallActor:
         self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
 
     def _flush_pcm_queue(self) -> None:
+        """Drop pending PCM; keep STOP so hangup is never flushed away."""
+        kept: list[ActorEvent] = []
         while not self._queue.empty():
             try:
-                self._queue.get_nowait()
+                item = self._queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
+            if item.kind == ActorEventType.STOP:
+                kept.append(item)
+        for item in kept:
+            self._queue.put_nowait(item)
 
     def _reset_uplink_endpointing(self) -> None:
-        """Clear VAD/collector after assistant playback — fresh listen window."""
-        if self._input_resampler is None:
+        """Clear VAD/collector after assistant playback — fresh listen window.
+
+        Prefer in-place VAD.reset() — never reload Silero ONNX on the hot path.
+        If VAD was never created (no uplink yet), leave it for media setup.
+        """
+        if self._vad is not None:
+            reset = getattr(self._vad, "reset", None)
+            if callable(reset):
+                reset()
+            else:
+                self._vad = create_vad(self.config.target_sample_rate)
+        if self._collector is not None:
+            self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
+
+    def _push_echo_downlink(self, pcm_s16le: bytes, sample_rate: int) -> None:
+        """Feed injected downlink into echo-ref at uplink/VAD sample rate."""
+        if not self.config.echo_ref_gate or not pcm_s16le:
             return
-        self._vad = create_vad(self.config.target_sample_rate)
-        self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
+        self._ensure_echo_ref()
+        if self._echo_ref is None:
+            return
+        target = int(self.config.target_sample_rate)
+        src = int(sample_rate) or target
+        if src == target:
+            self._echo_ref.push(pcm_s16le)
+            return
+        key = f"echo_ref:{src}->{target}"
+        resampler = self._tts_resamplers.get(key)
+        if resampler is None:
+            resampler = StatefulResampler(src, target)
+            self._tts_resamplers[key] = resampler
+        converted = resampler.process(pcm_s16le)
+        if converted:
+            self._echo_ref.push(converted)
 
     @staticmethod
     def _normalize_speech_text(text: str) -> str:
@@ -504,6 +539,8 @@ class CallActor:
             self._force_listen_enabled()
             self._flush_pcm_queue()
             self._playback_uplink_buf.clear()
+            if self._echo_ref is not None:
+                self._echo_ref.clear()
             self._reset_uplink_endpointing()
             await self._emit_stage(
                 "listen.enabled",
@@ -962,20 +999,6 @@ class CallActor:
         if self._render_generation != render_generation:
             return False
         self._last_delivered_intent = result.proposal.intent
-        cached = (
-            load_opening(validated.speech)
-            if result.proposal.intent == "opening_wellness"
-            else None
-        )
-        if cached is not None:
-            await self._speak_cached_pcm(
-                validated.speech,
-                cached.pcm_s16le,
-                cached.sample_rate,
-                render_generation,
-            )
-        else:
-            await self._speak_phrase(validated.speech, render_generation)
         marks_delivered = result.proposal.intent.startswith(
             ("check_", "clarify_", "repeat_")
         ) or result.proposal.intent == "opening_wellness"
@@ -993,10 +1016,26 @@ class CallActor:
             result.proposal.intent.startswith(("check_", "clarify_", "repeat_"))
             or result.proposal.intent in mandatory_wait_intents
         ):
+            # Arm before speak — cached opening drains + finalizes inside speak;
+            # setting this afterward leaves Vera with no answer-wait (test + live).
             self._pending_answer_wait = (
                 result.proposal.question_goal_id,
                 result.proposal.generation_id,
             )
+        cached = (
+            load_opening(validated.speech)
+            if result.proposal.intent == "opening_wellness"
+            else None
+        )
+        if cached is not None:
+            await self._speak_cached_pcm(
+                validated.speech,
+                cached.pcm_s16le,
+                cached.sample_rate,
+                render_generation,
+            )
+        else:
+            await self._speak_phrase(validated.speech, render_generation)
         return True
 
     async def _deliver_session_turn(self, result: SessionTurnResult) -> None:
@@ -1445,9 +1484,7 @@ class CallActor:
                 continue
             await self.media.send_pcm(chunk.pcm_s16le)
             if self.config.echo_ref_gate:
-                self._ensure_echo_ref()
-                if self._echo_ref is not None:
-                    self._echo_ref.push(chunk.pcm_s16le)
+                self._push_echo_downlink(chunk.pcm_s16le, chunk.sample_rate)
             if chunk.sequence == 0:
                 self._tts_first_pcm_gens.add(chunk.generation_id)
                 if self._tts_slow_watch and not self._tts_slow_watch.done():
@@ -1492,6 +1529,7 @@ class CallActor:
                 # Already finalized — never leave mute stuck on a replay.
                 if self._active_generation == gen:
                     self._active_generation = None
+                self._force_listen_enabled()
                 return
             ledger = self._playback._ledger
             if not ledger:

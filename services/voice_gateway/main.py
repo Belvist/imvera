@@ -390,6 +390,12 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
 async def close_call(call_id: str) -> dict:
     session = _sessions.pop(call_id, None)
     if session:
+        print(
+            f"call {call_id} capture_bytes={session.capture_bytes} "
+            f"capture_rms_peak={session.capture_rms_peak:.1f} "
+            f"inject_bytes_sent={session.inject_bytes_sent}",
+            flush=True,
+        )
         log.info(
             "call %s capture_bytes=%s capture_rms_peak=%.1f inject_bytes_sent=%s",
             call_id,

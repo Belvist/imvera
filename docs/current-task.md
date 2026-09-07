@@ -9,15 +9,16 @@
 | **Reference PCM gate (now)** | Ring of injected downlink PCM; NCC/energy vs uplink | Right lab path for always-listen without self-talk |
 | **True WebRTC AEC / ML speaker-ID** | Full AEC or X-vector | Later — **not** claimed; not in repo |
 
-**Flags (lab defaults — echo-ref always-listen):**
+**Flags (lab defaults — tonight: friend half-duplex):**
 
-- `IMVERA_ECHO_REF_GATE=1` — default ON (downlink PCM ring; not ML speaker-ID)
-- `IMVERA_LAB_HALF_DUPLEX=0` — default OFF; `voice_up` must **not** force mute. Explicit `=1` is mute fallback (friend MVP); unmute fail-safes stay when that mode is chosen
+- `IMVERA_LAB_HALF_DUPLEX=1` — default ON (mute while Vera speaks → pause → unmute). Chosen after sip-dad36ca2bf always-listen left echo `speech.started` and zero user STT.
+- `IMVERA_ECHO_REF_GATE=0` — default OFF with half-duplex; opt-in with `HALF_DUPLEX=0` + `ECHO_REF=1`
 - `IMVERA_LAB_BARGE_IN=0` — do not interrupt Vera on user speech yet
 - TTS: `silero_lab:silero:v5_ru:xenia` (torch+omegaconf); **not** `macos_say:Milena`
-- Fail-safe unmute (half-duplex path only): `_force_listen_enabled` in `finally` + auto-expire pause gate (sip-97e9)
+- Opening cache fingerprinted by engine; legacy/macos_say PCM deleted on `voice_up`
+- Fail-safe unmute: `_force_listen_enabled` in `finally` + auto-expire pause gate + VAD.reset on listen.enabled
 
-**Agent fight 2026-09-08:** prior `apply_lab_half_duplex_env` forced `HALF_DUPLEX=1`, which broke always-listen after a plain `make voice-up`. Fixed: defaults prefer always-listen; mute only if explicitly requested.
+**Agent fight 2026-09-08 (honest):** agents flipped half-duplex ↔ always-listen and left a hybrid (gateway HALF=0, TTS worker HALF=1, stale unfingerprinted opening cache). Tonight: ONE mode — half-duplex + Xenia + reliable unmute.
 
 **Incident 2026-09-08 robot voice:** health showed `silero_lab:macos_say:Milena` (torch missing). Fixed: `pip install -e ".[lab-silero]"` + omegaconf; config `v5_ru`/`xenia` (local cache; `v5_5_ru` SSL-blocked).
 

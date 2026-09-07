@@ -38,6 +38,14 @@ def require_silero_lab() -> None:
         )
 
 
+def macos_say_allowed() -> bool:
+    return os.environ.get("IMVERA_ALLOW_MACOS_SAY", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
 def _torch_available() -> bool:
     try:
         import torch  # noqa: F401
@@ -82,7 +90,7 @@ def load_silero(silero_cfg: dict[str, Any]) -> tuple[Any, Any]:
 
     require_silero_lab()
     if not _torch_available():
-        if sys.platform == "darwin":
+        if sys.platform == "darwin" and macos_say_allowed():
             _silero_model = MACOS_SAY_SENTINEL
             _silero_device = None
             print(
@@ -91,7 +99,7 @@ def load_silero(silero_cfg: dict[str, Any]) -> tuple[Any, Any]:
             )
             return _silero_model, _silero_device
         raise RuntimeError(
-            "silero_lab requires torch on non-macOS: pip install -e '.[lab-silero]'"
+            "silero_lab requires torch (macos_say disabled). pip install -e '.[lab-silero]'"
         )
 
     import torch
@@ -154,6 +162,8 @@ def synthesize_silero(
     model, _device = load_silero(silero_cfg)
     sample_rate = int(silero_cfg.get("sample_rate", 24000))
     if model == MACOS_SAY_SENTINEL:
+        if not macos_say_allowed():
+            raise RuntimeError("macos_say disabled; Silero Xenia required")
         return _synthesize_macos_say(text, sample_rate)
     speaker = silero_cfg.get("speaker", "xenia")
     audio = model.apply_tts(text=text, speaker=speaker, sample_rate=sample_rate)

@@ -45,8 +45,8 @@ class EchoRefConfig:
 
 
 def echo_ref_gate_enabled() -> bool:
-    """IMVERA_ECHO_REF_GATE — default on for always-listen lab path."""
-    return os.environ.get("IMVERA_ECHO_REF_GATE", "1").strip().lower() in {
+    """IMVERA_ECHO_REF_GATE — default off; pair with always-listen (HALF_DUPLEX=0)."""
+    return os.environ.get("IMVERA_ECHO_REF_GATE", "0").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -63,8 +63,8 @@ def lab_barge_in_enabled() -> bool:
 
 
 def apply_echo_ref_env(env: dict[str, str]) -> dict[str, str]:
-    """Lab defaults: reference gate on; half-duplex mute off when gate is present."""
-    env.setdefault("IMVERA_ECHO_REF_GATE", "1")
+    """Opt-in echo-ref defaults — does not flip half-duplex off by itself."""
+    env.setdefault("IMVERA_ECHO_REF_GATE", "0")
     env.setdefault("IMVERA_LAB_BARGE_IN", "0")
     return env
 
