@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +74,7 @@ class InterpretRequest(BaseModel):
     request_id: str = Field(default_factory=new_request_id)
     context: dict[str, Any]
     deadline: float | None = None
+    timeout_ms: int | None = None
 
 
 class RenderRequest(BaseModel):
@@ -81,6 +83,17 @@ class RenderRequest(BaseModel):
     facts: list[dict[str, Any]] = Field(default_factory=list)
     capabilities: dict[str, bool] = Field(default_factory=dict)
     deadline: float | None = None
+    timeout_ms: int | None = None
+
+
+class _RequestCancelled(Exception):
+    pass
+
+
+def _local_deadline(req: InterpretRequest | RenderRequest) -> float | None:
+    if req.timeout_ms is not None:
+        return time.monotonic() + max(req.timeout_ms, 1) / 1000.0
+    return req.deadline
 
 
 app = FastAPI(title="IMVERA LLM Worker", version="0.1.0")
@@ -111,7 +124,7 @@ def warmup() -> None:
         state.ready = False
 
 
-mount_health(app, state, "llm")
+mount_health(app, state, "llm", executor_supplier=lambda: executor)
 
 
 @app.post("/v1/interpret")
@@ -120,7 +133,8 @@ async def interpret(req: InterpretRequest) -> dict[str, Any]:
         raise HTTPException(503, detail=state.warmup_error or "not ready")
     if req.request_id in _cancelled:
         raise HTTPException(499, detail="cancelled")
-    check_deadline(req.deadline)
+    local_deadline = _local_deadline(req)
+    check_deadline(local_deadline)
     cfg = _load_config()
     ctx = req.context
     user_content = (
@@ -134,10 +148,18 @@ async def interpret(req: InterpretRequest) -> dict[str, Any]:
     ]
     raw = ""
     payload: dict[str, Any] | None = None
+
+    def _interpret_step() -> str:
+        if req.request_id in _cancelled:
+            raise _RequestCancelled()
+        check_deadline(local_deadline)
+        return _generate_sync(messages, cfg["models"]["llm"]["max_tokens_interpret"])
+
     for attempt in range(2):
-        raw = await executor.run(
-            lambda: _generate_sync(messages, cfg["models"]["llm"]["max_tokens_interpret"])
-        )
+        try:
+            raw = await executor.run(_interpret_step)
+        except _RequestCancelled:
+            raise HTTPException(499, detail="cancelled") from None
         try:
             from packages.contracts.semantic import SemanticPayload
 
@@ -168,7 +190,8 @@ async def render(req: RenderRequest) -> StreamingResponse:
         raise HTTPException(503, detail=state.warmup_error or "not ready")
     if req.request_id in _cancelled:
         raise HTTPException(499, detail="cancelled")
-    check_deadline(req.deadline)
+    local_deadline = _local_deadline(req)
+    check_deadline(local_deadline)
 
     async def stream():
         cfg = _load_config()
@@ -192,20 +215,36 @@ async def render(req: RenderRequest) -> StreamingResponse:
             add_generation_prompt=True,
             enable_thinking=cfg["models"]["llm"].get("enable_thinking", False),
         )
+        gen = stream_generate(
+            _model,
+            _tokenizer,
+            prompt=prompt,
+            max_tokens=cfg["models"]["llm"]["max_tokens_render"],
+        )
+        parts: list[str] = []
 
-        def _iter():
-            for item in stream_generate(
-                _model,
-                _tokenizer,
-                prompt=prompt,
-                max_tokens=cfg["models"]["llm"]["max_tokens_render"],
-            ):
-                if req.request_id in _cancelled:
-                    break
-                yield item.text
+        def _next_chunk() -> str | None:
+            if req.request_id in _cancelled:
+                raise _RequestCancelled()
+            check_deadline(local_deadline)
+            try:
+                item = next(gen)
+            except StopIteration:
+                return None
+            return item.text
 
-        text = await executor.run(lambda: "".join(_iter()))
-        yield json.dumps({"text": text.strip(), "done": True}, ensure_ascii=False) + "\n"
+        while True:
+            try:
+                chunk = await executor.run(_next_chunk)
+            except _RequestCancelled:
+                return
+            if chunk is None:
+                break
+            parts.append(chunk)
+            yield json.dumps({"text": chunk, "delta": True}, ensure_ascii=False) + "\n"
+
+        full = "".join(parts).strip()
+        yield json.dumps({"text": full, "done": True}, ensure_ascii=False) + "\n"
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")
 

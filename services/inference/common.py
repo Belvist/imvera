@@ -67,7 +67,20 @@ class InferenceExecutor:
         return await loop.run_in_executor(None, fut.result)
 
 
-def mount_health(app: FastAPI, state: WorkerState, service: str) -> None:
+def mount_health(
+    app: FastAPI,
+    state: WorkerState,
+    service: str,
+    executor: InferenceExecutor | None = None,
+    *,
+    executor_supplier: Callable[[], InferenceExecutor | None] | None = None,
+) -> None:
+    def _queue_depth() -> int:
+        ex = executor_supplier() if executor_supplier is not None else executor
+        if ex is not None:
+            return ex.queue_depth
+        return state.queue_depth
+
     @app.get("/health/live")
     def live() -> dict[str, str]:
         return {"status": "live", "service": service}
@@ -80,7 +93,7 @@ def mount_health(app: FastAPI, state: WorkerState, service: str) -> None:
                     "status": "ready",
                     "service": service,
                     "model_revision": state.model_revision,
-                    "queue_depth": state.queue_depth,
+                    "queue_depth": _queue_depth(),
                 }
             )
         return JSONResponse(
