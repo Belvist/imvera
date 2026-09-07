@@ -205,3 +205,75 @@ def test_control_backchannel_does_not_fill_slot():
     session = daily_session()
     apply(session, "Алло", payload(dialogue_act="backchannel"))
     assert session.state.slots["wellness"] == SlotStatus.OPEN
+
+
+# --- Wellness scenario matrix (rule + semantic paths) ---
+
+
+def test_happy_path_wellness_to_goodbye_rule_baseline():
+    """Opening → хорошо → mood → sleep → plans → summary."""
+    session = daily_session()
+    for text in ("хорошо", "хорошо", "нормально спал", "дома посижу"):
+        result = session.handle_user_text(text)
+        gen = session.state.pending_action_id
+        if gen:
+            session.mark_spoken_action(gen)
+    assert all(session.state.slots[s] == SlotStatus.FILLED for s in ("wellness", "mood", "sleep", "plans"))
+    assert session.state.fsm_state == FsmState.SUMMARY
+    assert result.proposal.intent == "summary"
+
+
+def test_negative_wellness_triggers_empathy_then_continues():
+    """плохо / не очень → reflect_report, slot filled, flow continues."""
+    for phrase in ("плохо", "не очень"):
+        session = daily_session()
+        result = session.handle_user_text(phrase)
+        assert session.state.slots["wellness"] == SlotStatus.FILLED
+        assert result.proposal.intent == "reflect_report"
+        assert phrase.split()[0] in result.proposal.speech.lower()
+        assert "?" not in result.proposal.speech
+        follow = session.handle_user_text("хорошее")
+        assert session.state.slots["mood"] == SlotStatus.FILLED
+        assert follow.proposal.intent == "check_sleep"
+
+
+def test_aga_is_backchannel_not_slot_fill_rule_baseline():
+    session = daily_session()
+    result = session.handle_user_text("ага")
+    assert result.proposal.intent == "wait_for_continuation"
+    assert result.interpretation.judgement.name == "BACKCHANNEL"
+    assert session.state.slots["wellness"] == SlotStatus.OPEN
+
+
+def test_who_are_you_explain_vera_then_resume():
+    session = daily_session()
+    result = session.handle_user_text("Кто вы?")
+    assert result.proposal.intent == "explain_vera"
+    assert session.state.slots["wellness"] == SlotStatus.OPEN
+    assert session.state.pending_slot == "wellness"
+    resume = session.handle_user_text("хорошо")
+    assert session.state.slots["wellness"] == SlotStatus.FILLED
+    assert resume.proposal.intent == "check_mood"
+
+
+def test_pause_and_stop_rule_baseline():
+    session = daily_session()
+    pause = session.handle_user_text("подождите")
+    assert pause.proposal.intent == "pause_ack"
+    assert pause.proposal.speech == "Подожду."
+
+    session = daily_session()
+    stop = session.handle_user_text("закончим разговор")
+    assert stop.proposal.intent == "goodbye_confirm"
+    assert session.state.awaiting_goodbye_confirm
+
+
+def test_topic_refusal_declines_sleep_and_continues():
+    session = daily_session()
+    session.handle_user_text("хорошо")
+    session.handle_user_text("хорошо")
+    result = session.handle_user_text("не хочу говорить о сне")
+    assert session.state.slots["sleep"] == SlotStatus.DECLINED
+    assert session.state.mandatory_checks["sleep"] is True
+    assert result.proposal.intent == "check_plans"
+    assert session.state.pending_slot == "plans"

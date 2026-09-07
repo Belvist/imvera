@@ -7,7 +7,7 @@ from packages.contracts.interpretation import FactCandidate
 _SLEEP = re.compile(r"\b(спал\w*|сон\w*|не\s+спал\w*|плохо\s+спал\w*|хорошо\s+спал\w*)\b", re.I)
 _PLANS = re.compile(r"\b(дома|врач\w*|нигде|гуля\w*|магазин\w*|внук\w*|буду\s+дома)\b", re.I)
 _WELLNESS = re.compile(
-    r"\b(нормально|хорошо|отлично|плохо|нехорошо|болит|устал\w*|слаб\w*|"
+    r"\b(нормально|хорошо|отлично|плохо|нехорошо|не\s+очень|болит|устал\w*|слаб\w*|"
     r"голов\w*|температур\w*|чувствую\s+себя|мне\s+плохо|мне\s+нехорошо)\b",
     re.I,
 )
@@ -29,12 +29,23 @@ def _clauses(text: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
+def _clause_negated(clause: str) -> bool:
+    lower = clause.lower()
+    if re.search(r"\bне\s+очень\b", lower):
+        return False
+    if re.search(r"\bне\s+плохо\b", lower):
+        return False
+    if lower in {"плохо", "нехорошо"}:
+        return False
+    return bool(re.search(r"\bне\s+", lower))
+
+
 def _classify_clause(clause: str, pending_slot: str | None) -> str | None:
     lower = clause.lower()
     if pending_slot and len(lower.split()) <= 4:
         short_by_slot = {
             "mood": lower in {"хорошо", "нормально", "отлично", "грустно", "плохо", "весело"},
-            "wellness": lower in {"хорошо", "нормально", "отлично", "плохо", "нехорошо"},
+            "wellness": lower in {"хорошо", "нормально", "отлично", "плохо", "нехорошо", "не очень"},
             "sleep": bool(_SLEEP.search(lower)),
             "plans": bool(_PLANS.search(lower)) or lower in {"дома", "нигде"},
         }
@@ -81,7 +92,7 @@ def extract_fact_candidates(
             value=clause.strip(),
             source_quote=clause.strip(),
             answers_pending=field == pending_slot if pending_slot else False,
-            negated=bool(re.search(r"\bне\s+", clause.lower())),
+            negated=_clause_negated(clause),
         )
 
     if not seen and pending_slot:

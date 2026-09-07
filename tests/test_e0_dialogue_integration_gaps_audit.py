@@ -106,7 +106,9 @@ def test_speech_onset_then_backchannel_keeps_a_live_wait_deadline():
     asyncio.run(scenario())
 
 
-def test_incoming_audio_is_not_discarded_while_vera_speaks():
+def test_incoming_audio_muted_while_vera_speaks_half_duplex():
+    """Half-duplex: during active TTS, uplink must not reach VAD (echo self-barge-in gate)."""
+
     async def scenario():
         session, _ = daily_session()
         actor = actor_for(session)
@@ -116,8 +118,12 @@ def test_incoming_audio_is_not_discarded_while_vera_speaks():
         actor._active_generation = "speaking"
         actor._render_generation = "speaking"
         await actor._on_pcm(b"\x01\x00" * 320, 16000)
-        assert vad_calls, "All caller audio is dropped before VAD during active TTS"
-        assert actor._active_generation is None, "Admitted speech did not interrupt TTS"
+        assert not vad_calls, "Uplink must be muted during active TTS (half-duplex)"
+        assert actor._active_generation == "speaking"
+
+        actor._active_generation = None
+        await actor._on_pcm(b"\x01\x00" * 320, 16000)
+        assert vad_calls, "After playback ends, uplink must reach VAD again"
 
     asyncio.run(scenario())
 
@@ -136,20 +142,29 @@ def test_blocked_tts_does_not_mark_question_delivered_or_start_answer_wait():
 
         actor = actor_for(session, tts=SimpleNamespace(synthesize=synthesize, cancel=noop))
         actor._playback = PlaybackQueue(call_id=actor.call_id)
+        actor._playback_task = asyncio.create_task(actor._playback_pump())
         actor._render_generation = "render-review"
+        actor._outbox_action_id = result.proposal.generation_id
         try:
-            assert await actor._speak_validated_proposal(
-                result, result.proposal.speech, "render-review"
+            speak_task = asyncio.create_task(
+                actor._speak_validated_proposal(
+                    result, result.proposal.speech, "render-review"
+                )
             )
+            await asyncio.sleep(0.05)
             assert actor._playback._ledger.generated_samples == 0
             assert not session.state.pending_question_delivered, (
                 "Question is marked delivered while the TTS provider has emitted zero PCM"
             )
             assert actor._wait_state is None, "Answer window started before question audio"
+            speak_task.cancel()
+            await asyncio.gather(speak_task, return_exceptions=True)
         finally:
             if actor._tts_task:
                 actor._tts_task.cancel()
                 await asyncio.gather(actor._tts_task, return_exceptions=True)
+            actor._playback_task.cancel()
+            await asyncio.gather(actor._playback_task, return_exceptions=True)
             await actor._cancel_wait_timer()
 
     asyncio.run(scenario())

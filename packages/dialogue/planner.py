@@ -44,7 +44,8 @@ _SLOT_QUESTIONS: dict[str, str] = {
 
 _COMPLAINT_MARKERS = re.compile(
     r"\b(болит|болел\w*|болела|больно|плохо\s+спал\w*|не\s+спал\w*|"
-    r"одинок\w*|грустн\w*|устал\w*|тошнит|кружится\s+голова)\b",
+    r"одинок\w*|грустн\w*|устал\w*|тошнит|кружится\s+голова|"
+    r"плохо|не\s+очень|нехорошо)\b",
     re.I,
 )
 _POSITIVE_ONLY = re.compile(
@@ -271,6 +272,20 @@ class Planner:
         goal.reserved_attempt_id = None
         state.pending_question_delivered = True
         state.pending_action_id = None
+        state.bump_version()
+
+    @staticmethod
+    def release_question_attempt(state: DialogueState, generation_id: str) -> None:
+        """Drop reservation when question audio never reached the channel."""
+        slot = state.pending_slot
+        if not slot:
+            return
+        goal = state.get_goal(slot)
+        if goal is None or goal.reserved_attempt_id != generation_id:
+            return
+        goal.reserved_attempt_id = None
+        if state.pending_action_id == generation_id:
+            state.pending_action_id = None
         state.bump_version()
 
     @staticmethod

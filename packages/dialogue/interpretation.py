@@ -52,6 +52,10 @@ _REPEAT = re.compile(
     r"\b(повторите|повтори|еще\s+раз|ещё\s+раз|не\s+понял[аи]?|не\s+расслышал[аи]?|что\s+вы\s+сказали)\b",
     re.I,
 )
+_STOP_CALL = re.compile(
+    r"\b(закончим|закончить\s+разговор|хватит\s+разговор|давайте\s+закончим)\b",
+    re.I,
+)
 _WHO_ARE_YOU = re.compile(
     r"(^\s*(кто|что|зачем|где|как)\s+вы|кто\s+вы\s+такая|что\s+это\s+за|как\s+вас\s+зовут)",
     re.I,
@@ -59,9 +63,21 @@ _WHO_ARE_YOU = re.compile(
 _DEFER = re.compile(r"\b(потом|позже|не\s+сейчас|давайте\s+потом|перезвоните)\b", re.I)
 _RHETORICAL_DENY = re.compile(r"(да\s+вы\s+что|что\s+вы\s+такое|вы\s+что)", re.I)
 _WELLNESS_HINT = re.compile(
-    r"\b(нормально|хорошо|отлично|плохо|нехорошо|болит|устал\w*|слаб\w*|"
+    r"\b(нормально|хорошо|отлично|плохо|нехорошо|не\s+очень|болит|устал\w*|слаб\w*|"
     r"голов\w*|температур\w*|чувствую\s+себя)\b",
     re.I,
+)
+_TOPIC_REFUSAL = re.compile(
+    r"не\s+(хочу|буду)\s+(говорить\s+)?(о|про)\s+(\S+)",
+    re.I,
+)
+_REFUSE_GENERIC = re.compile(r"\bне\s+хочу\b", re.I)
+_PAUSE = re.compile(r"\b(подождите|подожди|минуточку|секундочку|погодите)\b", re.I)
+_TOPIC_TO_SLOT: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"сн|спал|спать", re.I), "sleep"),
+    (re.compile(r"настроен", re.I), "mood"),
+    (re.compile(r"здоров|самочувств", re.I), "wellness"),
+    (re.compile(r"план", re.I), "plans"),
 )
 _WELLNESS_POSITIVE = re.compile(
     r"(чувствую\s+себя\s+(хорошо|нормально|отлично)|отлично|"
@@ -94,6 +110,7 @@ class UserInterpretation(BaseModel):
     asks_who_are_you: bool = False
     risk_false_alarm: bool = False
     pause_requested: bool = False
+    declines_topic_slot: str | None = None
 
 
 def _strip_punct(text: str) -> str:
@@ -166,8 +183,31 @@ def _slot_answer_value(slot: str, text: str) -> str:
     return text.strip()
 
 
+def _topic_refusal_slot(text: str, pending_slot: str | None) -> str | None:
+    match = _TOPIC_REFUSAL.search(text)
+    if match:
+        topic_word = match.group(4)
+        for pattern, slot in _TOPIC_TO_SLOT:
+            if pattern.search(topic_word):
+                return slot
+    if pending_slot and _REFUSE_GENERIC.search(text) and len(text.split()) <= 6:
+        return pending_slot
+    return None
+
+
+def _effective_pending_slot(state: DialogueState) -> str | None:
+    if state.pending_slot:
+        return state.pending_slot
+    if state.fsm_state == FsmState.DAILY_CHECK:
+        from packages.dialogue.question_ledger import next_open_slot
+
+        return next_open_slot(state.slots)
+    return None
+
+
 def _looks_like_slot_answer(state: DialogueState, text: str) -> bool:
-    if not state.pending_slot:
+    pending = _effective_pending_slot(state)
+    if not pending:
         return False
     if _is_backchannel_only(text) or _contains_goodbye(text):
         return False
@@ -182,16 +222,16 @@ def _looks_like_slot_answer(state: DialogueState, text: str) -> bool:
         return True
     if _DENY.search(text.lower()) and not _negated_wellness_is_positive(text):
         return False
-    return _slot_hint_matches(state.pending_slot, text)
+    return _slot_hint_matches(pending, text)
 
 
 def _build_slot_fact(state: DialogueState, text: str) -> FactCandidate | None:
-    if not state.pending_slot or not _looks_like_slot_answer(state, text):
+    pending = _effective_pending_slot(state)
+    if not pending or not _looks_like_slot_answer(state, text):
         return None
-    slot = state.pending_slot
     return FactCandidate(
-        field=slot,
-        value=_slot_answer_value(slot, text),
+        field=pending,
+        value=_slot_answer_value(pending, text),
         source_quote=text.strip(),
         answers_pending=True,
     )
@@ -291,6 +331,13 @@ def interpret_user_turn(state: DialogueState, user_text: str) -> UserInterpretat
             requests_goodbye=True,
         )
 
+    if _STOP_CALL.search(normalized):
+        return UserInterpretation(
+            judgement=AnswerJudgement.SIDE_TOPIC,
+            dialogue_act=DialogueAct.STOP_CALL,
+            requests_goodbye=True,
+        )
+
     if _REPEAT.search(normalized):
         return UserInterpretation(
             judgement=AnswerJudgement.UNCLEAR,
@@ -315,6 +362,22 @@ def interpret_user_turn(state: DialogueState, user_text: str) -> UserInterpretat
         return UserInterpretation(
             judgement=AnswerJudgement.UNCLEAR,
             dialogue_act=DialogueAct.DEFER,
+        )
+
+    if _PAUSE.search(normalized) and state.fsm_state == FsmState.DAILY_CHECK:
+        return UserInterpretation(
+            judgement=AnswerJudgement.SIDE_TOPIC,
+            dialogue_act=DialogueAct.PAUSE,
+            pause_requested=True,
+        )
+
+    refusal_slot = _topic_refusal_slot(text, state.pending_slot)
+    if refusal_slot and state.fsm_state == FsmState.DAILY_CHECK:
+        return UserInterpretation(
+            judgement=AnswerJudgement.DECLINE,
+            dialogue_act=DialogueAct.ANSWER,
+            declines=True,
+            declines_topic_slot=refusal_slot,
         )
 
     if _DENY.search(normalized) and not _negated_wellness_is_positive(text):
@@ -374,7 +437,17 @@ def interpret_user_turn(state: DialogueState, user_text: str) -> UserInterpretat
             dialogue_act=DialogueAct.BACKCHANNEL,
         )
 
-    candidates = extract_fact_candidates(text, state.pending_slot)
+    if (
+        state.pending_slot
+        and state.fsm_state == FsmState.DAILY_CHECK
+        and _is_backchannel_only(text)
+    ):
+        return UserInterpretation(
+            judgement=AnswerJudgement.BACKCHANNEL,
+            dialogue_act=DialogueAct.BACKCHANNEL,
+        )
+
+    candidates = extract_fact_candidates(text, _effective_pending_slot(state))
     if candidates:
         pending = state.pending_slot
         answered_pending = pending is not None and any(c.field == pending for c in candidates)

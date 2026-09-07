@@ -9,13 +9,18 @@ export PYTHONPATH := .
 .PHONY: models-prepare models-up voice-setup voice-up voice-doctor voice-down zoiper-info zoiper-fix voice-e2e voice-sip-e2e
 .PHONY: voice-refs-prepare tts-preview tts-preview-list tts-preview-compare
 .PHONY: voice-open test-contracts test-dialogue-e2e test-persistence-e2e test-voice test-sip
-.PHONY: test-pstn trace-bench test-isolation release-check
+.PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k
 
 install:
 	$(PYTHON) -m pip install -e ".[dev,api,mlx]"
 
 test:
 	$(PYTHON) -m pytest tests/ -q
+
+test-corpus-1k:
+	@echo "LAYER: CallSession dialogue corpus (NOT live SIP×1000)"
+	$(PYTHON) scripts/run_dialogue_corpus.py --workers 4 --minimum 1000
+	$(PYTHON) -m pytest tests/corpus/test_call_actor_load.py -q
 
 lint:
 	$(PYTHON) -m ruff check packages services tests scripts

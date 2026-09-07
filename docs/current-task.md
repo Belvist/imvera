@@ -2,114 +2,126 @@
 
 ## Primary assignment
 
-Tomorrow: live Zoiper call to **7000** — validate full wellness dialogue on real audio.  
-Policy matrix: `tests/test_wellness_call_scenarios.py` (Stage B audit from `docs/verification/dialogue-current.md`, base `e0e86b0`).  
+Live Zoiper **7000** — wellness dialogue on real audio.  
+**Incident 2026-09-08 00:08 (`sip-31365dee13`):** echo self-barge-in — greeting cut ~187ms; STT `Сд.`/`Сейчас`; no `playback.completed`. Cause: `8accf9a` R1 unmuted uplink during TTS. **Fix (working tree):** half-duplex mute + echo prefix discard; stack restarted. **Live redial NOT VERIFIED.**  
+Policy matrix: `tests/test_wellness_call_scenarios.py`.  
+**1k corpus + load harness:** `make test-corpus-1k` / `scripts/run_dialogue_corpus.py` (Session/Planner scale proof; **NOT** live SIP×1000).  
 Architecture: [ADR-009](adr/009-llm-understanding-state-policy.md).
 
-## Branch / SHA
+## Branch / SHA — truth table
 
 | Field | Value |
 |-------|-------|
-| Branch | `feature/voice-zoiper-m5` |
-| Last pushed | `e0e86b042067f1860d26f681152c036795c501a4` (Stage 1) |
-| Working tree | `69edab5` + uncommitted — Stage 2 + wellness matrix |
+| Branch | `fix/dialogue-stage-b` (local) |
+| **HEAD (before this corpus commit)** | `fd2170b` — wellness scenario matrix |
+| Telephony gate commit | `69edab5` — macOS say lab TTS + gateway `/health/ready` (**PASSED**) |
+| Prior dialogue stage | `e0e86b0` — QuestionLedger / answer-wait |
+| Included in corpus commit | Stage B dialogue (empathy / topic-refuse / multi-phrase / `release_question_attempt`) + `tests/corpus/` + runner |
+| Last pushed (historical) | `e0e86b0` — do not assume remote has Stage B |
+| Push policy | **Do not push** unless user asks |
+
+### Dialogue behavior under corpus proof
+
+- **«не очень» / «плохо»** → wellness FILLED + `reflect_report` empathy
+- **«хорошо» / «нормально»** → wellness FILLED + `check_mood`
+- Backchannel «ага»/«алло»/«угу» → never fills pending slot
+- Topic refuse, pause, stop-call phrases
+- **CallActor:** sequential multi-phrase TTS; reservation release on TTS fail (mock TTS load)
+
+## Reproduce 1k proof (tomorrow / Daniil)
+
+```bash
+cd /Users/earflow/Downloads/voiseup
+git rev-parse HEAD
+make test-corpus-1k
+# or:
+python3 scripts/run_dialogue_corpus.py --workers 4 --minimum 1000
+python3 -m pytest tests/corpus/ -q
+python3 -m pytest tests/ -q   # full suite
+```
+
+Expect: **1000/1000** corpus pass + CallActor load green.  
+Label: **CallSession dialogue scale** — not Zoiper/SIP×1000.
 
 ## Tomorrow checklist — dial 7000 (Zoiper)
 
 ### Before the call
 
 ```bash
-make up                    # or stack already running
-make dialogue-smoke        # gateway + STT/TTS/LLM health + policy gates
-make zoiper-info           # SIP credentials / extension
+cd /Users/earflow/Downloads/voiseup
+git rev-parse HEAD
+git status -sb
+make voice-up
+make zoiper-info
+curl -s http://127.0.0.1:9200/health/ready
+curl -s http://127.0.0.1:9101/health/ready
+curl -s http://127.0.0.1:9102/health/ready
+curl -s http://127.0.0.1:9103/health/ready
+make dialogue-smoke
+make test-corpus-1k          # scale proof (text Session path)
 ```
 
-Runtime truth to note: `git rev-parse HEAD`, active profile (`config/voice-m5.yaml`), STT `:9101`, TTS `:9102`, LLM `:9103`, gateway `:9200`.
+Runtime truth: `git rev-parse HEAD` + `git status -sb`, profile `config/voice-m5.yaml`, STT `:9101`, TTS `:9102`, LLM `:9103`, gateway `:9200`.
 
 ### Call script (say in order)
 
-| Step | Vera asks (approx.) | You say | Policy intent to expect |
-|------|---------------------|---------|-------------------------|
+| Step | Vera asks (approx.) | You say | Expect |
+|------|---------------------|---------|--------|
 | 0 | Opening / identity / consent / can talk | «Да» (if prompted) | `opening_wellness` → `DAILY_CHECK` |
-| 1 | Как себя чувствуете? | **Pick one:** «хорошо» / «нормально» / «не очень» / «плохо» | `check_mood`, wellness slot FILLED |
-| 2 | Настроение? | «хорошее» (or «плохое» if step 1 was negative) | `check_sleep` |
-| 3 | Сон? | «спал нормально» (or «спала плохо») | `check_plans` |
-| 4 | Планы? | «дома посижу» / «дома» | `summary` |
+| 1a | Как себя чувствуете? | **«хорошо»** or **«нормально»** | wellness FILLED → mood (`check_mood`) |
+| 1b | (alt) Как себя чувствуете? | **«не очень»** or **«плохо»** | wellness FILLED → **`reflect_report`** |
+| 2 | Настроение? | «хорошее» (or «плохое» if 1b) | mood FILLED → sleep |
+| 3 | Сон? | «спал нормально» / «спала плохо» | sleep FILLED → plans |
+| 4 | Планы? | «дома посижу» / «дома» | plans FILLED → summary |
 | 5 | (optional) | «до свидания» → «да» | `goodbye_confirm` → `goodbye_final` |
 
-**Extra probes (separate short calls or after step 1):**
+**Extra probes:** mixed side question; complaint «голова болит»; backchannel «ага»; soft stop «закончим разговор».
 
-| Probe | You say | Expect |
-|-------|---------|--------|
-| Mixed answer + side question | «Чувствую себя хорошо. А зачем вы спрашиваете?» | wellness FILLED + `explain_vera` (mentions Вера) |
-| Complaint | «Голова болит с утра» | `reflect_report`, mirrors «болит», **no** «отлично», **no** `?` |
-| Backchannel | «ага» (while question pending) | slot stays OPEN, `wait_for_continuation` |
-
-### Trace events to expect (`.run/traces/<call_id>.jsonl`)
-
-Minimum per turn (from `packages/contracts/runtime.py`):
+### Where traces go
 
 ```text
-call.started
-media.ready
-speech.started → speech.ended
-stt.final          (payload.text ≈ what you said)
-interpretation.ready
-renderer.phrase_ready
-playback.completed   (sent_samples > 0)
-call.ended
+.run/traces/<call_id>.jsonl
+curl -s http://127.0.0.1:9200/calls/<call_id>/trace | jq '.events[].type'
 ```
-
-Optional / timing: `stage.timing`, `playback.interrupted` (barge-in), `persistence.committed`.
-
-Inspect: `curl -s http://127.0.0.1:9200/calls/<call_id>/trace | jq '.events[].type'`
 
 ### Pass criteria (live)
 
-- [ ] Vera speaks greeting before wellness question
-- [ ] STT `stt.final` text matches utterance (± minor ASR drift)
-- [ ] No 3+ identical wellness questions in one call
+- [ ] Greeting before wellness question
+- [ ] STT ≈ utterance
+- [ ] «хорошо» advances; «не очень»/«плохо» empathy then advance
+- [ ] No 3+ identical wellness questions
 - [ ] Complaint mirrored without praise
-- [ ] All four slots filled OR explicit UNRESOLVED close (not infinite loop)
-- [ ] Goodbye terminates (`call.ended`, no repeat goodbye spam)
+- [ ] Four slots filled OR explicit UNRESOLVED close
+- [ ] Goodbye terminates
 
-## Stage B scenario matrix — VERIFIED (policy, local)
+## Local verification (this session)
 
 ```bash
-python3 -m pytest tests/test_wellness_call_scenarios.py -q
-# 12 passed
+python3 scripts/run_dialogue_corpus.py --workers 4 --minimum 1000
+# → 1000 passed / 0 failed, ~4200–4500 scenarios/sec (ProcessPool)
 
-python3 -m pytest tests/ -q
-# 216 passed, 2 skipped
+python3 -m pytest tests/corpus/ -q
+# → corpus gate + CallActor load
+
+python3 -m pytest tests/ -q --ignore=tests/test_llm_live_dialogue.py
+# → 220 passed, 2 skipped
+
+make dialogue-smoke   # gateway/providers ready; live LLM gates OK when stack up
 ```
 
-**Coverage (`tests/test_wellness_call_scenarios.py`):**
-
-- Parametrized wellness mood: хорошо, нормально, не очень, плохо
-- Full slot completion → goodbye (×4 mood variants)
-- Mixed utterance + side question
-- Complaint at wellness + mid-call
-- Rule-baseline short answers (хорошо/нормально/плохо)
-
-**Audit sources reviewed:** `tests/test_e0_dialogue_integration_gaps_audit.py`, `tests/test_dialogue_acceptance_gaps.py`, `docs/verification/dialogue-current.md`.
-
-## NOT VERIFIED (live call — tomorrow)
+## NOT VERIFIED
 
 | Item | Why |
 |------|-----|
-| STT accuracy | Policy tests inject text; real ASR on elderly phone speech not measured |
-| Echo / full-duplex | No SIP lab run on current SHA in this session |
-| End-to-end latency (p50/p95) | No `stage.timing` baseline doc; live not timed |
-| Real LLM semantic JSON | Matrix uses fixture `SemanticPayload`, not HttpLLM output |
-| TTS audibility / barge-in on phone | Downlink energy not checked on Zoiper |
-| PG `action_outbox` wire | metadata-only in transition_store |
+| **SIP / Zoiper ×1000** | Not feasible tonight; corpus is Session/Planner text path |
+| Live STT elderly speech | Corpus injects text |
+| Live TTS audibility / barge-in on softphone | CallActor load uses **mock** TTS |
+| End-to-end latency p50/p95 | No timed live baseline |
+| Real LLM for all 1000 cases | Rule interpreter; semantic matrix is separate |
+| Remote/main parity | Branch local; do not push unless asked |
 
 ## NEXT GATE
 
-1. **Tomorrow:** one full happy-path call + one complaint call on 7000; save trace JSONL + note SHA.
-2. `make test-dialogue-live` with MLX on `:9103` for real «голова болит» LLM gate.
-3. Add `tests/test_wellness_call_scenarios.py` to `make test-dialogue-gates` (optional).
-
-## Parallel track (SIP uplink — uncommitted, separate)
-
-`scripts/voice_sip_e2e.py`, `services/asterisk_app/main.py`, `services/voice_gateway/main.py`, `tests/test_voice_stack.py`
+1. **Tomorrow:** Zoiper 7000 — one happy-path («хорошо») + one empathy («не очень»/«плохо»); save `.run/traces/<call_id>.jsonl` + SHA.
+2. Re-run `make test-corpus-1k` after any dialogue change (regression proof).
+3. Optional: `make test-dialogue-live` for real LLM complaint gate.

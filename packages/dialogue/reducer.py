@@ -9,6 +9,19 @@ from packages.dialogue.state import DialogueState
 
 class DialogueReducer:
     @staticmethod
+    def _decline_slot(state: DialogueState, slot: str) -> None:
+        goal = state.ensure_goal(slot)
+        goal.status = GoalStatus.DECLINED
+        state.slots[slot] = SlotStatus.DECLINED
+        state.mandatory_checks[slot] = True
+        state.slot_unclear_counts.pop(slot, None)
+        if state.pending_slot == slot:
+            state.pending_slot = None
+            state.pending_question = None
+            state.pending_question_delivered = False
+            state.waiting_on_goal = None
+
+    @staticmethod
     def apply(
         state: DialogueState,
         interp: UserInterpretation,
@@ -17,6 +30,13 @@ class DialogueReducer:
         utterance_id: str = "",
         apply_facts: bool = True,
     ) -> DialogueState:
+        if interp.declines_topic_slot:
+            DialogueReducer._decline_slot(state, interp.declines_topic_slot)
+            state.bump_version()
+            if not apply_facts:
+                return state
+            return state
+
         if interp.sets_consent == ConsentState.DECLINED:
             state.consent_declined = True
             state.mandatory_checks["consent"] = False
@@ -52,8 +72,15 @@ class DialogueReducer:
                     utterance_id=utterance_id,
                     negated=cand.negated,
                 )
+            filled_slot = None
             if state.pending_slot and state.pending_slot in state.facts:
                 filled_slot = state.pending_slot
+            else:
+                for cand in interp.fact_candidates:
+                    if cand.answers_pending and cand.field in state.facts:
+                        filled_slot = cand.field
+                        break
+            if filled_slot:
                 goal = state.get_goal(filled_slot)
                 if goal is not None:
                     goal.status = GoalStatus.ANSWERED

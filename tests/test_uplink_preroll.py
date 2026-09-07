@@ -1,4 +1,4 @@
-"""Always-on uplink and stereo LEFT=caller demux."""
+"""Always-on uplink when idle; half-duplex mute during Vera playback; echo discard."""
 
 import asyncio
 from types import SimpleNamespace
@@ -27,8 +27,8 @@ def test_extract_client_uplink_stereo_left_only() -> None:
     assert list(samples) == [100, 200, -50]
 
 
-def test_uplink_reaches_vad_during_playback() -> None:
-    """Caller PCM always reaches VAD; barge-in interrupts active TTS."""
+def test_uplink_muted_during_playback() -> None:
+    """While Vera plays, uplink must not reach VAD (echo self-barge-in gate)."""
 
     async def scenario() -> None:
         session = CallSession(
@@ -65,8 +65,12 @@ def test_uplink_reaches_vad_during_playback() -> None:
         actor._render_generation = "g-vera-speaking"
         frame = b"\x00\x01" * 320
         await actor._feed_uplink_pcm(frame)
+        assert fed == []
+        assert actor._active_generation == "g-vera-speaking"
+
+        actor._active_generation = None
+        await actor._feed_uplink_pcm(frame)
         assert fed == [frame]
-        assert actor._active_generation is None
 
     asyncio.run(scenario())
 
@@ -88,3 +92,31 @@ def test_assistant_echo_discarded() -> None:
     actor._delivered_phrases.append("Я разговариваю с Даниил?")
     assert actor._is_assistant_echo("Я разговариваю с Даниил. Я разговариваю с Даниил.")
     assert not actor._is_assistant_echo("Да, это я")
+    assert not actor._is_assistant_echo("Да.")
+    assert not actor._is_assistant_echo("да")
+
+
+def test_assistant_echo_prefix_and_in_progress_phrase() -> None:
+    """sip-31365dee13: STT 'Сейчас' must match in-progress / interrupted Vera phrase."""
+    actor = CallActor(
+        call_id="echo-prefix",
+        family_id="fam-voice",
+        session=CallSession(
+            call_id="echo-prefix",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        ),
+        stt=SimpleNamespace(),
+        tts=SimpleNamespace(),
+        llm=SimpleNamespace(),
+        media=MediaCallbacks(_noop, _noop, _noop, _noop),
+    )
+    actor._playback = PlaybackQueue(call_id=actor.call_id)
+    actor._playback.begin_phrase(
+        "g-1",
+        "p-1",
+        "Сейчас не получилось узнать, как у вас дела.",
+    )
+    assert actor._is_assistant_echo("Сейчас")
+    assert actor._is_assistant_echo("Сейчас не получилось")
+    assert not actor._is_assistant_echo("Нормально")

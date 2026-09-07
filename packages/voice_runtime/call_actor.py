@@ -19,6 +19,7 @@ from packages.contracts.providers import TTSProvider
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.context_builder import active_question_kind, build_turn_context
+from packages.dialogue.planner import Planner
 from packages.dialogue.semantic_adapter import adapt_semantic_turn
 from packages.dialogue.interpretation import to_turn_interpretation, interpret_user_turn
 from packages.dialogue.session import CallSession, SessionTurnResult
@@ -167,6 +168,7 @@ class CallActor:
     _playback_uplink_buf: bytearray = field(default_factory=bytearray)
     _tts_first_pcm_gens: set[str] = field(default_factory=set)
     _tts_slow_watch: asyncio.Task | None = None
+    _hold_turn_finalize: bool = False
 
     async def _emit_stage(self, stage: str, **payload: object) -> None:
         started = self._active_stage_budget.started_mono if self._active_stage_budget else 0.0
@@ -345,29 +347,58 @@ class CallActor:
         cleaned = re.sub(r"[^\w\s]", " ", text.lower())
         return " ".join(cleaned.split())
 
+    def _assistant_echo_candidates(self) -> list[str]:
+        """Phrases Vera already said or is saying — used to drop acoustic echo STT."""
+        candidates = list(self._delivered_phrases)
+        if self._playback and self._playback._ledger:
+            spoken = self._playback._ledger.canonical_text
+            if spoken and (not candidates or candidates[-1] != spoken):
+                candidates.append(spoken)
+        pending = self.session.state.pending_question
+        if pending:
+            candidates.append(pending)
+        return candidates
+
     def _is_assistant_echo(self, text: str) -> bool:
         normalized = self._normalize_speech_text(text)
         if not normalized:
             return True
-        for phrase in self._delivered_phrases:
+        user_tokens = normalized.split()
+        for phrase in self._assistant_echo_candidates():
             spoken = self._normalize_speech_text(phrase)
             if not spoken:
                 continue
-            if normalized == spoken or spoken in normalized or normalized in spoken:
+            if normalized == spoken:
                 return True
-        pending = self.session.state.pending_question
-        if pending:
-            question = self._normalize_speech_text(pending)
-            if question and (normalized == question or question in normalized):
+            # Substantial containment only — never treat short answers like «да»
+            # as echo of longer Vera text that merely contains those letters
+            # (e.g. «да» ⊂ «даниил»).
+            if len(normalized) >= 6 and (spoken in normalized or normalized in spoken):
                 return True
+            spoken_tokens = spoken.split()
+            # Prefix / first-token echo of a longer Vera phrase ("Сейчас" ← "Сейчас не…").
+            if user_tokens and spoken_tokens[: len(user_tokens)] == user_tokens:
+                if len(user_tokens) >= 2 or len(user_tokens[0]) >= 4:
+                    return True
         return False
+
+    def _remember_assistant_phrase(self, text: str) -> None:
+        spoken = (text or "").strip()
+        if not spoken:
+            return
+        if not self._delivered_phrases or self._delivered_phrases[-1] != spoken:
+            self._delivered_phrases.append(spoken)
 
     async def _feed_uplink_pcm(self, pcm: bytes) -> None:
         assert self._vad and self._collector
+        # Half-duplex listen gate: Zoiper/softphone leaks TTS into capture.
+        # Continuous VAD during playback (8accf9a R1) caused echo self-barge-in
+        # (sip-31365dee13: greeting interrupted ~187ms; STT "Сд." / "Сейчас").
+        # AUDIO_CONTRACT Phase 5: barge_in must stay false while elder is silent.
+        if self._active_generation:
+            return
         started, ended = self._vad.feed(pcm)
         if started:
-            if self._active_generation:
-                await self._interrupt_playback(flush=True)
             self._pause_answer_wait()
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {})
@@ -600,6 +631,11 @@ class CallActor:
         else:
             await asyncio.to_thread(
                 self.session.transitions.mark_outbox_cancelled,
+                self.session.state,
+                action_id,
+            )
+            await asyncio.to_thread(
+                Planner.release_question_attempt,
                 self.session.state,
                 action_id,
             )
@@ -881,6 +917,7 @@ class CallActor:
         buffer = ""
         stream_spoken_parts: list[str] = []
         first_phrase_started = False
+        self._hold_turn_finalize = True
         try:
             async for chunk in self.llm.render_stream(
                 action,
@@ -926,13 +963,14 @@ class CallActor:
                                 result, buffer.strip(), render_generation
                             )
                     await self._emit_stage("render.complete")
-                    return
+                    break
         except Exception:
             if not first_phrase_started:
                 await self._speak_validated_proposal(
                     result, planner_text, render_generation
                 )
         finally:
+            self._hold_turn_finalize = False
             if self._active_llm_request_id == render_request_id:
                 self._active_llm_request_id = None
 
@@ -942,17 +980,22 @@ class CallActor:
             await self._speak_validated_proposal(
                 result, buffer.strip(), render_generation
             )
+        if self._playback and self._playback.playback_complete():
+            await self._finalize_turn_playback()
 
     async def _interrupt_playback(self, *, flush: bool) -> None:
         if flush:
             self._bump_control_epoch()
             asyncio.create_task(self.media.flush())
         await self._cancel_active_llm()
+        self._hold_turn_finalize = False
         self._render_generation = None
         self._playback_turn_generation = None
         sent_samples = 0
+        interrupted_text = ""
         if self._playback and self._playback._ledger:
             sent_samples = self._playback._ledger.sent_samples
+            interrupted_text = self._playback._ledger.canonical_text or ""
         if self._outbox_action_id:
             await self._finalize_outbox_action(
                 sent_samples=sent_samples,
@@ -961,6 +1004,9 @@ class CallActor:
         if not self._playback or not self._active_generation:
             return
         gen = self._active_generation
+        # Remember partial speech so post-interrupt STT echo is discarded.
+        if sent_samples > 0 and interrupted_text:
+            self._remember_assistant_phrase(interrupted_text)
         self._playback.cancel_generation(gen)
         asyncio.create_task(self.tts.cancel(gen))
         if self._tts_task and not self._tts_task.done():
@@ -1045,7 +1091,64 @@ class CallActor:
             if self._playback:
                 await self._playback.enqueue_wait(env)
         if self._playback and generation_id == self._active_generation:
-            self._playback.mark_generation_done(generation_id, outcome="success")
+            self._playback.mark_generation_done("success")
+        await self._wait_phrase_playback_drained()
+
+    def _clear_pending_delivery(self, render_generation: str) -> None:
+        if self._pending_mark_render_gen == render_generation:
+            self._pending_mark_spoken_id = None
+            self._pending_mark_render_gen = None
+        if self._outbox_action_id and self._pending_answer_wait is not None:
+            self._pending_answer_wait = None
+
+    async def _abort_undelivered_phrase(self, render_generation: str) -> None:
+        """Release ledger reservation when TTS/playback never sent audio."""
+        self._clear_pending_delivery(render_generation)
+        sent_samples = 0
+        if self._playback and self._playback._ledger:
+            sent_samples = self._playback._ledger.sent_samples
+        if sent_samples > 0:
+            return
+        if self._outbox_action_id:
+            await self._finalize_outbox_action(
+                sent_samples=0,
+                outcome="cancelled",
+            )
+            return
+        action_id = self._pending_mark_spoken_id or render_generation
+        await asyncio.to_thread(
+            Planner.release_question_attempt,
+            self.session.state,
+            action_id,
+        )
+
+    async def _wait_phrase_playback_drained(self) -> None:
+        if not self._playback:
+            return
+        render_generation = self._render_generation
+        deadline = time.monotonic() + self.config.tts_deadline_s + 10.0
+        while time.monotonic() < deadline:
+            if self._stopped or self._transport_closed:
+                return
+            ledger = self._playback._ledger
+            if ledger and ledger.generation_done and ledger.generation_outcome not in (
+                None,
+                "success",
+            ):
+                if render_generation:
+                    await self._abort_undelivered_phrase(render_generation)
+                if not self._hold_turn_finalize:
+                    self._active_generation = None
+                return
+            if self._playback.playback_complete():
+                await self._on_playback_drained()
+                return
+            await asyncio.sleep(0.01)
+        log.warning(
+            "phrase playback drain timeout call_id=%s generation=%s",
+            self.call_id,
+            self._active_generation,
+        )
 
     async def _speak_phrase(self, text: str, render_generation: str) -> None:
         if (
@@ -1164,6 +1267,11 @@ class CallActor:
                 {"phrase_id": phrase_id, "text": text, "generation_id": generation_id},
             )
         )
+        try:
+            await self._tts_task
+        except asyncio.CancelledError:
+            return
+        await self._wait_phrase_playback_drained()
 
     async def _watch_tts_slow_start(self, generation_id: str, phrase_id: str) -> None:
         try:
@@ -1219,18 +1327,33 @@ class CallActor:
         if not ledger:
             return
         if ledger.sent_samples <= 0 or ledger.generation_outcome != "success":
+            if not self._hold_turn_finalize:
+                self._active_generation = None
+            return
+        spoken = ledger.canonical_text
+        self._remember_assistant_phrase(spoken or "")
+        if self._hold_turn_finalize:
+            return
+        await self._finalize_turn_playback()
+
+    async def _finalize_turn_playback(self) -> None:
+        assert self._playback
+        gen = self._active_generation
+        if not gen or not self._playback.playback_complete():
+            return
+        ledger = self._playback._ledger
+        if not ledger:
+            return
+        if ledger.sent_samples <= 0 or ledger.generation_outcome != "success":
             self._active_generation = None
             return
         self._playback.mark_completed()
-        spoken = ledger.canonical_text
-        if spoken and (not self._delivered_phrases or self._delivered_phrases[-1] != spoken):
-            self._delivered_phrases.append(spoken)
-            intent = self._last_delivered_intent or ""
-            marks_question = intent in _QUESTION_DELIVERY_INTENTS or intent.startswith(
-                ("check_", "clarify_", "repeat_")
-            )
-            if marks_question:
-                self.session.state.pending_question_delivered = True
+        intent = self._last_delivered_intent or ""
+        marks_question = intent in _QUESTION_DELIVERY_INTENTS or intent.startswith(
+            ("check_", "clarify_", "repeat_")
+        )
+        if marks_question:
+            self.session.state.pending_question_delivered = True
         if (
             self._pending_mark_render_gen == gen
             and self._pending_mark_spoken_id
