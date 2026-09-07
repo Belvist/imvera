@@ -18,19 +18,32 @@ from packages.contracts.providers import (
 
 
 class HttpTTSProvider:
-    def __init__(self, base_url: str, timeout_s: float = 12.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout_s: float = 12.0,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout_s = timeout_s
+        self._client = client
         self._cancelled: set[str] = set()
 
     async def cancel(self, generation_id: str) -> None:
         self._cancelled.add(generation_id)
         try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                await client.post(
+            if self._client is not None:
+                await self._client.post(
                     f"{self._base_url}/v1/cancel",
                     json={"generation_id": generation_id},
+                    timeout=2.0,
                 )
+            else:
+                async with httpx.AsyncClient(timeout=2.0) as client:
+                    await client.post(
+                        f"{self._base_url}/v1/cancel",
+                        json={"generation_id": generation_id},
+                    )
         except httpx.HTTPError:
             pass
 
@@ -49,7 +62,14 @@ class HttpTTSProvider:
         if remaining <= 0:
             raise ProviderTimeout("TTS deadline exceeded before request")
         try:
-            async with httpx.AsyncClient(timeout=min(self._timeout_s, remaining)) as client:
+            timeout = min(self._timeout_s, remaining)
+            if self._client is not None:
+                client = self._client
+                owned = False
+            else:
+                client = httpx.AsyncClient(timeout=timeout)
+                owned = True
+            try:
                 async with client.stream(
                     "POST",
                     f"{self._base_url}/v1/synthesize",
@@ -60,6 +80,7 @@ class HttpTTSProvider:
                         "phrase_id": phrase_id,
                         "sample_rate": 16000,
                     },
+                    timeout=timeout,
                 ) as response:
                     if response.status_code >= 400:
                         body = await response.aread()
@@ -91,5 +112,8 @@ class HttpTTSProvider:
                             is_last=bool(data.get("is_last", False)),
                         )
                         seq += 1
+            finally:
+                if owned:
+                    await client.aclose()
         except httpx.HTTPError as exc:
             raise ProviderUnavailable(str(exc)) from exc

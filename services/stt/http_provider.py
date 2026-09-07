@@ -13,9 +13,15 @@ from packages.contracts.stt import STTPartial, STTResult
 
 
 class HttpSTTProvider:
-    def __init__(self, base_url: str, timeout_s: float = 8.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout_s: float = 8.0,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout_s = timeout_s
+        self._client = client
 
     async def transcribe_partial(
         self,
@@ -40,8 +46,8 @@ class HttpSTTProvider:
         if remaining <= 0:
             raise ProviderTimeout("STT deadline exceeded before request")
         try:
-            async with httpx.AsyncClient(timeout=min(self._timeout_s, remaining)) as client:
-                response = await client.post(
+            if self._client is not None:
+                response = await self._client.post(
                     f"{self._base_url}/v1/transcribe",
                     json={
                         "call_id": call_id,
@@ -49,7 +55,19 @@ class HttpSTTProvider:
                         "sample_rate": sample_rate,
                         "pcm_b64": _b64(pcm_s16le),
                     },
+                    timeout=min(self._timeout_s, remaining),
                 )
+            else:
+                async with httpx.AsyncClient(timeout=min(self._timeout_s, remaining)) as client:
+                    response = await client.post(
+                        f"{self._base_url}/v1/transcribe",
+                        json={
+                            "call_id": call_id,
+                            "turn_id": turn_id,
+                            "sample_rate": sample_rate,
+                            "pcm_b64": _b64(pcm_s16le),
+                        },
+                    )
         except httpx.HTTPError as exc:
             raise ProviderUnavailable(str(exc)) from exc
         if response.status_code >= 400:

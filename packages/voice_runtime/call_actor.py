@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -27,6 +28,7 @@ from packages.voice_runtime.playback import PlaybackQueue
 from packages.voice_runtime.profile import audio_settings
 from packages.voice_runtime.silero_vad import create_vad
 from services.llm.http_provider import HttpLLMProvider
+from services.providers.http_clients import get_shared_async_client
 from services.stt.http_provider import HttpSTTProvider
 from services.tts.http_provider import HttpTTSProvider
 
@@ -35,6 +37,7 @@ log = logging.getLogger("call_actor")
 _SKIP_RENDER_INTENTS = frozenset(
     {"greeting", "confirm_identity", "confirm_consent", "check_can_talk"}
 )
+_SENTENCE_END = re.compile(r"[.!?…]+(?:\s|$)")
 
 EmitFn = Callable[[RuntimeEvent], Awaitable[None]]
 
@@ -106,6 +109,40 @@ class CallActor:
     _hangup_after_playback: bool = False
     _transport_closed: bool = False
     _capture_lost: bool = False
+    _turn_deadline: float = 0.0
+    _turn_started_mono: float = 0.0
+    _active_llm_request_id: str | None = None
+
+    async def _emit_stage(self, stage: str, **payload: object) -> None:
+        elapsed_ms = int((time.monotonic() - self._turn_started_mono) * 1000) if self._turn_started_mono else 0
+        await self.media.emit(
+            RuntimeEvent(
+                self.call_id,
+                RuntimeEventType.STAGE_TIMING,
+                {"stage": stage, "elapsed_ms": elapsed_ms, **payload},
+            )
+        )
+
+    async def _cancel_active_llm(self) -> None:
+        rid = self._active_llm_request_id
+        if not rid:
+            return
+        self._active_llm_request_id = None
+        await self.llm.cancel_request(rid)
+
+    @staticmethod
+    def _split_complete_phrases(text: str) -> tuple[list[str], str]:
+        phrases: list[str] = []
+        rest = text
+        while rest:
+            match = _SENTENCE_END.search(rest)
+            if not match:
+                break
+            phrase = rest[: match.end()].strip()
+            rest = rest[match.end() :].lstrip()
+            if phrase:
+                phrases.append(phrase)
+        return phrases, rest
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._run_wrapper())
@@ -276,14 +313,18 @@ class CallActor:
         self._utterance_seq = utterance_seq
         utterance_id = f"u-{utterance_seq}"
         turn_id = self.session.turn_id + 1
-        deadline = time.monotonic() + self.config.stt_deadline_s
+        self._turn_started_mono = time.monotonic()
+        self._turn_deadline = self._turn_started_mono + (
+            self.config.stt_deadline_s + self.config.llm_deadline_s
+        )
+        await self._emit_stage("utterance.start", utterance_id=utterance_id, turn_id=turn_id)
         try:
             stt_result = await self.stt.transcribe_final(
                 pcm,
                 self.config.target_sample_rate,
                 call_id=self.call_id,
                 turn_id=turn_id,
-                deadline=deadline,
+                deadline=self._turn_deadline,
             )
         except Exception as exc:
             self._inflight_utterances.discard(utterance_seq)
@@ -308,11 +349,13 @@ class CallActor:
                 {"utterance_id": utterance_id, "text": text},
             )
         )
+        await self._emit_stage("stt.final", utterance_id=utterance_id, text_len=len(text))
         if not text:
             self._inflight_utterances.discard(utterance_seq)
             return
 
-        llm_deadline = time.monotonic() + self.config.llm_deadline_s
+        llm_request_id = f"llm-{uuid.uuid4().hex[:8]}"
+        self._active_llm_request_id = llm_request_id
         ctx = build_turn_context(
             self.session.state,
             turn_id=turn_id,
@@ -322,7 +365,11 @@ class CallActor:
             delivered_phrases=tuple(self._delivered_phrases[-6:]),
         )
         try:
-            semantic = await self.llm.interpret_turn(ctx, deadline=llm_deadline)
+            semantic = await self.llm.interpret_turn(
+                ctx,
+                deadline=self._turn_deadline,
+                request_id=llm_request_id,
+            )
         except Exception as exc:
             self._inflight_utterances.discard(utterance_seq)
             if not self._stopped:
@@ -334,10 +381,15 @@ class CallActor:
                     )
                 )
             return
+        finally:
+            if self._active_llm_request_id == llm_request_id:
+                self._active_llm_request_id = None
+
         if self._stopped or self._transport_closed:
             self._inflight_utterances.discard(utterance_seq)
             return
 
+        await self._emit_stage("interpret.ready", utterance_id=utterance_id)
         await self.media.emit(
             RuntimeEvent(self.call_id, RuntimeEventType.INTERPRETATION_READY, {})
         )
@@ -393,6 +445,28 @@ class CallActor:
             return
         await self._deliver_session_turn(result)
 
+    async def _speak_validated_proposal(
+        self,
+        result: SessionTurnResult,
+        speech: str,
+        render_generation: str,
+    ) -> bool:
+        proposal = TurnProposal(
+            turn_id=result.proposal.turn_id,
+            generation_id=result.proposal.generation_id,
+            speech=speech,
+            intent=result.proposal.intent,
+            fsm_state=result.proposal.fsm_state,
+            mandatory_remaining=result.proposal.mandatory_remaining,
+        )
+        validated = Validator.validate(proposal)
+        if not validated.allowed or not validated.speech:
+            return False
+        if self._render_generation != render_generation:
+            return False
+        await self._speak_phrase(validated.speech, render_generation)
+        return True
+
     async def _deliver_session_turn(self, result: SessionTurnResult) -> None:
         if self._stopped or self._transport_closed or not result.validated.allowed:
             if self._hangup_after_playback and not result.validated.speech:
@@ -406,59 +480,94 @@ class CallActor:
 
         render_generation = f"g-{uuid.uuid4().hex[:8]}"
         self._render_generation = render_generation
-
-        rendered = planner_text
-        try:
-            if result.proposal.intent not in _SKIP_RENDER_INTENTS:
-                facts = [
-                    {
-                        "field": k,
-                        "value": v.value,
-                        "quote": v.source_quote,
-                        "source_utterance_id": v.source_utterance_id,
-                    }
-                    for k, v in self.session.state.facts.items()
-                ]
-                rendered_llm = await self.llm.render_text(
-                    {
-                        "intent": result.proposal.intent,
-                        "fsm_state": result.proposal.fsm_state.value,
-                        "planner_text": planner_text,
-                        "user_text": result.user_text,
-                        "pending_question": self.session.state.pending_question,
-                        "delivered_phrases": list(self._delivered_phrases[-6:]),
-                    },
-                    facts,
-                    time.monotonic() + self.config.llm_deadline_s,
-                )
-                if rendered_llm:
-                    rendered = rendered_llm
-        except Exception:
-            rendered = planner_text
-
-        if self._render_generation != render_generation or self._stopped or self._transport_closed:
-            return
-
-        proposal = TurnProposal(
-            turn_id=result.proposal.turn_id,
-            generation_id=result.proposal.generation_id,
-            speech=rendered,
-            intent=result.proposal.intent,
-            fsm_state=result.proposal.fsm_state,
-            mandatory_remaining=result.proposal.mandatory_remaining,
+        render_deadline = (
+            self._turn_deadline
+            if self._turn_deadline > time.monotonic()
+            else time.monotonic() + self.config.llm_deadline_s
         )
-        validated = Validator.validate(proposal)
-        if not validated.allowed or not validated.speech:
-            if self._hangup_after_playback:
-                await self._maybe_hangup_when_idle()
+
+        if result.proposal.intent in _SKIP_RENDER_INTENTS:
+            await self._speak_validated_proposal(result, planner_text, render_generation)
             return
-        if self._render_generation != render_generation:
+
+        facts = [
+            {
+                "field": k,
+                "value": v.value,
+                "quote": v.source_quote,
+                "source_utterance_id": v.source_utterance_id,
+            }
+            for k, v in self.session.state.facts.items()
+        ]
+        action = {
+            "intent": result.proposal.intent,
+            "fsm_state": result.proposal.fsm_state.value,
+            "planner_text": planner_text,
+            "user_text": result.user_text,
+            "pending_question": self.session.state.pending_question,
+            "delivered_phrases": list(self._delivered_phrases[-6:]),
+        }
+        render_request_id = f"render-{uuid.uuid4().hex[:8]}"
+        self._active_llm_request_id = render_request_id
+        buffer = ""
+        first_phrase_started = False
+        try:
+            async for chunk in self.llm.render_stream(
+                action,
+                facts,
+                render_deadline,
+                request_id=render_request_id,
+            ):
+                if (
+                    self._render_generation != render_generation
+                    or self._stopped
+                    or self._transport_closed
+                ):
+                    return
+                if chunk.delta:
+                    buffer += chunk.text
+                    phrases, buffer = self._split_complete_phrases(buffer)
+                    for phrase in phrases:
+                        if await self._speak_validated_proposal(
+                            result, phrase, render_generation
+                        ):
+                            first_phrase_started = True
+                            await self._emit_stage(
+                                "render.first_phrase",
+                                phrase_len=len(phrase),
+                            )
+                elif chunk.done:
+                    tail = (chunk.text or buffer).strip()
+                    if tail and not first_phrase_started:
+                        await self._speak_validated_proposal(
+                            result, tail, render_generation
+                        )
+                    elif tail and tail not in self._delivered_phrases[-1:]:
+                        await self._speak_validated_proposal(
+                            result, tail, render_generation
+                        )
+                    await self._emit_stage("render.complete")
+                    return
+        except Exception:
+            if not first_phrase_started:
+                await self._speak_validated_proposal(
+                    result, planner_text, render_generation
+                )
+        finally:
+            if self._active_llm_request_id == render_request_id:
+                self._active_llm_request_id = None
+
+        if self._render_generation != render_generation or self._stopped:
             return
-        await self._speak_phrase(validated.speech, render_generation)
+        if buffer.strip() and not first_phrase_started:
+            await self._speak_validated_proposal(
+                result, buffer.strip(), render_generation
+            )
 
     async def _interrupt_playback(self, *, flush: bool) -> None:
         if flush:
             asyncio.create_task(self.media.flush())
+        await self._cancel_active_llm()
         self._render_generation = None
         if not self._playback or not self._active_generation:
             return
@@ -566,6 +675,7 @@ class CallActor:
                     self._playback.mark_generation_done(outcome)
 
         self._tts_task = asyncio.create_task(_run_tts())
+        await self._emit_stage("tts.start", phrase_id=phrase_id, text_len=len(text))
         await self.media.emit(
             RuntimeEvent(
                 self.call_id,
@@ -584,6 +694,12 @@ class CallActor:
                 await asyncio.sleep(0.01)
                 continue
             await self.media.send_pcm(chunk.pcm_s16le)
+            if chunk.sequence == 0:
+                await self._emit_stage(
+                    "tts.first_pcm",
+                    generation_id=chunk.generation_id,
+                    samples=len(chunk.pcm_s16le) // 2,
+                )
             if not self.config.telephony_stream:
                 duration = (len(chunk.pcm_s16le) // 2) / chunk.sample_rate
                 await asyncio.sleep(duration)
@@ -647,11 +763,14 @@ def build_call_actor(
     tts_url: str,
     llm_url: str,
     media: MediaCallbacks,
+    *,
+    store: object | None = None,
 ) -> CallActor:
     session = CallSession(
         call_id=call_id,
         family_id=family_id,
         elder_display_name=elder_name,
+        store=store,
     )
     profile_audio = audio_settings()
     profile_limits = {}
@@ -667,13 +786,14 @@ def build_call_actor(
             str(profile_limits.get("playback_buffer_ms", 60)),
         )
     )
+    shared = get_shared_async_client()
     return CallActor(
         call_id=call_id,
         family_id=family_id,
         session=session,
-        stt=HttpSTTProvider(stt_url),
-        tts=HttpTTSProvider(tts_url),
-        llm=HttpLLMProvider(llm_url),
+        stt=HttpSTTProvider(stt_url, client=shared),
+        tts=HttpTTSProvider(tts_url, client=shared),
+        llm=HttpLLMProvider(llm_url, client=shared),
         media=media,
         config=CallActorConfig(
             target_sample_rate=profile_audio["internal_sample_rate"],

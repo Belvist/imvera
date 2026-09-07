@@ -32,6 +32,7 @@ class RuntimeEventType(StrEnum):
     CALL_DEADLINE_REACHED = "call.deadline_reached"
     CALL_ENDED = "call.ended"
     CAPTURE_LOST = "capture.lost"
+    STAGE_TIMING = "stage.timing"
 
 
 @dataclass(frozen=True)
