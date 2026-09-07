@@ -1,0 +1,111 @@
+Snapshot: f71de9d8ba36609b116eb24dd63c7e88a94c05d7
+Linux Python 3.12; isolated provider/transport tests, no live SIP/MLX.
+
+Original suite:
+...............................................ss....................... [ 68%]
+.................................                                        [100%]
+103 passed, 2 skipped in 0.77s
+
+Additional regression requirements:
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+______________ test_uninterrupted_audio_never_discards_pbx_queue _______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f785758b6e0>
+
+    def test_uninterrupted_audio_never_discards_pbx_queue(monkeypatch):
+        monkeypatch.setattr(gateway, "INJECT_STREAM_FLUSH", True)
+        monkeypatch.setattr(gateway, "INJECT_FLUSH_INTERVAL", 4)
+        socket = Socket()
+        session = gateway.CallSession("audit", "family", "name", actor=None)
+        session.inject_ws = socket
+    
+        async def run():
+            for _ in range(8):
+                await gateway._send_inject_payload(session, "audit", b"\x01\x02" * 320)
+    
+        asyncio.run(run())
+        assert len(socket.payloads) == 8
+>       assert socket.controls == [], f"Uninterrupted speech sent destructive commands: {socket.controls}"
+E       AssertionError: Uninterrupted speech sent destructive commands: [{'command': 'FLUSH_MEDIA'}, {'command': 'FLUSH_MEDIA'}]
+E       assert [{'command': ...FLUSH_MEDIA'}] == []
+E         
+E         Left contains 2 more items, first extra item: {'command': 'FLUSH_MEDIA'}
+E         Use -v to get more diff
+
+../IMVERA_Voice_Workbench/test_audio_delivery_regressions.py:60: AssertionError
+___________ test_capture_media_start_cannot_overwrite_inject_format ____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f785758bf80>
+
+    def test_capture_media_start_cannot_overwrite_inject_format(monkeypatch):
+        monkeypatch.setattr(gateway, "_maybe_media_ready", noop)
+        session = gateway.CallSession("audit", "family", "name", actor=None)
+        session.inject_ready = True
+        session.inject_sample_rate = 8000
+        session.inject_encoding = "ulaw"
+        session.inject_frame_size = 160
+        socket = Socket([{"type": "websocket.receive", "text": json.dumps({
+            "event": "MEDIA_START", "format": "slin16", "optimal_frame_size": 640,
+            "ptime": 20,
+        })}])
+        asyncio.run(gateway._attach_leg(session, "capture", socket))
+        actual = (session.inject_sample_rate, session.inject_encoding, session.inject_frame_size)
+>       assert actual == (8000, "ulaw", 160), f"Capture event overwrote output format: {actual}"
+E       AssertionError: Capture event overwrote output format: (16000, 'slin16', 640)
+E       assert (16000, 'slin16', 640) == (8000, 'ulaw', 160)
+E         
+E         At index 0 diff: 16000 != 8000
+E         Use -v to get more diff
+
+../IMVERA_Voice_Workbench/test_audio_delivery_regressions.py:76: AssertionError
+________________ test_capture_16k_is_not_resampled_as_inject_8k ________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f785742edb0>
+
+    def test_capture_16k_is_not_resampled_as_inject_8k(monkeypatch):
+        observed = []
+        vad = SimpleNamespace(feed=lambda pcm: (observed.append(len(pcm)) or False, False))
+        monkeypatch.setattr(actors, "create_vad", lambda rate: vad)
+        actor = actors.CallActor(
+            call_id="audit", family_id="family", session=None, stt=None, tts=None, llm=None,
+            media=actors.MediaCallbacks(send_pcm=noop, flush=noop, hangup=noop, emit=noop),
+        )
+        # Avoid starting an unrelated endless playback task in this isolated test.
+        actor._playback_task = object()
+    
+        async def run():
+            await actor.on_media_ready(8000, 160)  # output: ulaw 8 kHz
+            await actor._on_pcm(b"\x01\x00" * 320, 16000)  # capture: 20 ms at 16 kHz
+    
+        asyncio.run(run())
+>       assert observed == [640], f"20 ms capture was changed to a different duration: {observed} bytes"
+E       AssertionError: 20 ms capture was changed to a different duration: [1280] bytes
+E       assert [1280] == [640]
+E         
+E         At index 0 diff: 1280 != 640
+E         Use -v to get more diff
+
+../IMVERA_Voice_Workbench/test_audio_delivery_regressions.py:95: AssertionError
+=============================== warnings summary ===============================
+services/voice_gateway/main.py:6
+  /workspace/scratch/31cc57699069/imvera-audit-f71de9d/services/voice_gateway/main.py:6: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../IMVERA_Voice_Workbench/test_audio_delivery_regressions.py::test_uninterrupted_audio_never_discards_pbx_queue
+FAILED ../IMVERA_Voice_Workbench/test_audio_delivery_regressions.py::test_capture_media_start_cannot_overwrite_inject_format
+FAILED ../IMVERA_Voice_Workbench/test_audio_delivery_regressions.py::test_capture_16k_is_not_resampled_as_inject_8k
+3 failed, 1 warning in 1.00s
+
+Voice generator: no MLX hardware here; no neural audio generated.
+
+Workbench verification:
+  Python syntax and lint: passed.
+  12 unique voice profile IDs: passed.
+  Temporary waveform output: WAV PCM_16 mono 24000 Hz, 24000 samples, hash matches.
+  Peak attenuation prevents integer clipping: passed.
+  Silence / mismatched sample rate / NaN input rejection: passed.
+  Temporary test waveform deleted; it is not a generated voice reference.
+  Linux generation attempt: exit 1 with explicit Apple Silicon requirement, no output audio.

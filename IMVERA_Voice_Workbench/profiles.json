@@ -1,0 +1,65 @@
+{
+  "reference_text": "Здравствуйте. Меня зовут Вера. Я голосовой помощник сервиса Имвера. Как проходит ваш день? Можно не торопиться с ответом. Если я что-то расслышала неправильно, пожалуйста, поправьте меня. Расскажите, что сегодня было для вас самым приятным.",
+  "profiles": [
+    {
+      "id": "v01",
+      "label": "Тёплый средний",
+      "description": "Adult female, perceived age around 35–45. Warm mid-range pitch, smooth rounded timbre, relaxed conversational cadence, gentle falling sentence endings. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v02",
+      "label": "Низкий спокойный",
+      "description": "Adult female, perceived age around 45–55. Low alto register, resonant chest tone, grounded and composed delivery, clear consonants. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v03",
+      "label": "Светлый ясный",
+      "description": "Adult female, perceived age around 30–40. Light medium-high register, clear open vowels, friendly brightness, lively but restrained intonation. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v04",
+      "label": "Зрелый мягкий",
+      "description": "Adult female, perceived age around 55–65. Mature mellow timbre, steady breath support, deliberate but natural pacing, gentle warmth. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v05",
+      "label": "Нейтральный разговорный",
+      "description": "Adult female, perceived age around 35–45. Neutral mid-range voice, everyday conversational rhythm, unforced phrasing, balanced resonance. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v06",
+      "label": "Бархатный низкий",
+      "description": "Adult female, perceived age around 35–50. Velvety low-mid register, rich rounded vowels, smooth connected speech, moderate tempo. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v07",
+      "label": "Собранный чёткий",
+      "description": "Adult female, perceived age around 40–50. Firm clear mid-range tone, crisp articulation, concise question contours, attentive calm delivery. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v08",
+      "label": "Лёгкий дружелюбный",
+      "description": "Adult female, perceived age around 30–40. Light lyrical timbre, a subtle audible smile, easy conversational flow, expressive but modest pitch movement. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v09",
+      "label": "Глубокий зрелый",
+      "description": "Adult female, perceived age around 50–65. Deep full-bodied alto, measured phrasing, smooth stable pitch, patient and warm expression. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v10",
+      "label": "Мягкий камерный",
+      "description": "Adult female, perceived age around 35–45. Soft focused mid-range voice, close conversational presence, gentle dynamics, clearly voiced rather than whispered. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v11",
+      "label": "Открытый энергичный",
+      "description": "Adult female, perceived age around 40–50. Open resonant tone, slightly brighter projection, engaged natural speech, moderate energy and pace. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    },
+    {
+      "id": "v12",
+      "label": "Ровный неспешный",
+      "description": "Adult female, perceived age around 45–60. Even mid-low pitch, unhurried natural speech, comfortable short pauses, clearly separated words without over-articulation. Native Russian pronunciation. Dry clean close-microphone speech with no music, room echo, theatrical performance, singing or artificial age effects. Speak naturally to one adult person."
+    }
+  ]
+}

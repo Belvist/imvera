@@ -1,0 +1,4 @@
+mlx-audio @ git+https://github.com/Blaizzy/mlx-audio.git@921059d0074eae624a7570b951c5a45ad4a61b42
+numpy>=2,<3
+soundfile>=0.13,<1
+huggingface_hub>=0.30,<2
