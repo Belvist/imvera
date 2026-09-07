@@ -26,6 +26,12 @@ from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue.validator import Validator
 from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler
 from packages.voice_runtime.endpointing import SpeechSegmentCollector
+from packages.voice_runtime.echo_ref_gate import (
+    DownlinkEchoRef,
+    EchoRefConfig,
+    echo_ref_gate_enabled,
+    lab_barge_in_enabled,
+)
 from packages.voice_runtime.lab_half_duplex import (
     lab_half_duplex_enabled,
     post_speech_pause_ms,
@@ -116,9 +122,14 @@ class CallActorConfig:
     playback_buffer_ms: int = 60
     frame_ms: int = 20
     telephony_stream: bool = True
-    # Lab Zoiper/softphone: mute uplink during Vera + pause after drain (friend MVP).
-    lab_half_duplex: bool = True
+    # Lab Zoiper/softphone: hard mute during Vera (friend MVP). Default off —
+    # prefer always-listen + IMVERA_ECHO_REF_GATE reference PCM gate.
+    lab_half_duplex: bool = False
     post_speech_pause_ms: int = 400
+    # Drop uplink frames that match recently injected downlink PCM.
+    echo_ref_gate: bool = True
+    # Interrupt Vera on clear user speech during playback (lab; default off).
+    lab_barge_in: bool = False
 
 
 @dataclass
@@ -180,6 +191,7 @@ class CallActor:
     _listen_gated_until: float | None = None
     _finalized_playback_gens: set[str] = field(default_factory=set)
     _finalize_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _echo_ref: DownlinkEchoRef | None = None
 
     async def _emit_stage(self, stage: str, **payload: object) -> None:
         started = self._active_stage_budget.started_mono if self._active_stage_budget else 0.0
@@ -370,10 +382,34 @@ class CallActor:
             candidates.append(pending)
         return candidates
 
+    # Elder wellness/mood answers — never treat as Vera echo (sip deaf reports).
+    _SLOT_ANSWER_ALLOWLIST = frozenset(
+        {
+            "хорошо",
+            "нормально",
+            "плохо",
+            "не очень",
+            "отлично",
+            "так себе",
+            "чувствую себя хорошо",
+            "чувствую себя плохо",
+            "себя хорошо",
+            "себя плохо",
+            "хорошее",
+            "плохое",
+            "да",
+            "нет",
+        }
+    )
+
     def _is_assistant_echo(self, text: str) -> bool:
         normalized = self._normalize_speech_text(text)
         if not normalized:
             return True
+        # Wellness answers must reach the dialogue brain even if Vera's question
+        # shares tokens («себя», «чувствуете» vs «чувствую себя хорошо»).
+        if normalized in self._SLOT_ANSWER_ALLOWLIST:
+            return False
         user_tokens = normalized.split()
         for phrase in self._assistant_echo_candidates():
             spoken = self._normalize_speech_text(phrase)
@@ -400,20 +436,36 @@ class CallActor:
         if not self._delivered_phrases or self._delivered_phrases[-1] != spoken:
             self._delivered_phrases.append(spoken)
 
+    def _ensure_echo_ref(self) -> None:
+        if not self.config.echo_ref_gate:
+            self._echo_ref = None
+            return
+        if self._echo_ref is None:
+            self._echo_ref = DownlinkEchoRef(
+                EchoRefConfig(sample_rate=self.config.target_sample_rate)
+            )
+
     def _uplink_listen_blocked(self) -> bool:
-        """Strict half-duplex: no VAD while Vera speaks or during post-speech pause."""
-        if self._active_generation:
+        """Hard mute only in classic half-duplex mode (friend MVP).
+
+        Always-listen path keeps uplink open and uses DownlinkEchoRef instead.
+        Fail-safe: if echo gate is off, mute during active playback (no R1 regression).
+        """
+        if self.config.lab_half_duplex:
+            if self._active_generation:
+                return True
+            until = self._listen_gated_until
+            if until is None:
+                return False
+            # Auto-expire: never leave mic muted if pause await was skipped/cancelled.
+            if self._monotonic() >= until:
+                self._listen_gated_until = None
+                return False
             return True
-        if not self.config.lab_half_duplex:
-            return False
-        until = self._listen_gated_until
-        if until is None:
-            return False
-        # Auto-expire: never leave mic muted if pause await was skipped/cancelled.
-        if self._monotonic() >= until:
-            self._listen_gated_until = None
-            return False
-        return True
+        # Always-listen requires echo_ref_gate; otherwise mute during Vera speech.
+        if self._active_generation and not self.config.echo_ref_gate:
+            return True
+        return False
 
     def _force_listen_enabled(self) -> None:
         """Unmute uplink immediately — post-speech pause must not stick forever."""
@@ -457,23 +509,37 @@ class CallActor:
                 "listen.enabled",
                 pause_ms=int(self.config.post_speech_pause_ms),
                 lab_half_duplex=bool(self.config.lab_half_duplex),
+                echo_ref_gate=bool(self.config.echo_ref_gate),
             )
 
     async def _feed_uplink_pcm(self, pcm: bytes) -> None:
         assert self._vad and self._collector
-        # Half-duplex listen gate: Zoiper/softphone leaks TTS into capture.
-        # Continuous VAD during playback (8accf9a R1) caused echo self-barge-in
-        # (sip-31365dee13: greeting interrupted ~187ms; STT "Сд." / "Сейчас").
-        # Friend MVP: Vera finishes → pause → THEN enable mic (no self-dialogue).
-        # AUDIO_CONTRACT Phase 5: barge_in must stay false while elder is silent.
+        # Classic half-duplex: hard mute while Vera speaks / post-speech pause.
+        # Always-listen: keep mic open; reference PCM gate drops Vera's echo.
         if self._uplink_listen_blocked():
             return
+        playback_active = bool(self._active_generation)
+        if self.config.echo_ref_gate:
+            self._ensure_echo_ref()
+            if self._echo_ref is not None and self._echo_ref.should_drop_for_vad(
+                pcm, playback_active=playback_active
+            ):
+                return
         started, ended = self._vad.feed(pcm)
         if started:
             self._pause_answer_wait()
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {})
             )
+            # Optional barge-in: only when lab flag on and Vera is still talking.
+            if playback_active and self.config.lab_barge_in:
+                gen = self._active_generation
+                await self._interrupt_playback(flush=True)
+                await self._emit_stage(
+                    "bargein_detected",
+                    generation_id=gen,
+                    echo_ref_gate=True,
+                )
         segment = self._collector.on_frame(pcm, started, ended)
         if segment:
             await self.media.emit(
@@ -917,6 +983,7 @@ class CallActor:
             self._pending_mark_spoken_id = result.proposal.generation_id
             self._pending_mark_render_gen = render_generation
         mandatory_wait_intents = (
+            "opening_wellness",
             "confirm_identity",
             "repeat_identity",
             "confirm_consent",
@@ -1377,6 +1444,10 @@ class CallActor:
                 await asyncio.sleep(0.01)
                 continue
             await self.media.send_pcm(chunk.pcm_s16le)
+            if self.config.echo_ref_gate:
+                self._ensure_echo_ref()
+                if self._echo_ref is not None:
+                    self._echo_ref.push(chunk.pcm_s16le)
             if chunk.sequence == 0:
                 self._tts_first_pcm_gens.add(chunk.generation_id)
                 if self._tts_slow_watch and not self._tts_slow_watch.done():
@@ -1549,5 +1620,7 @@ def build_call_actor(
             telephony_stream=os.environ.get("IMVERA_TELEPHONY_STREAM", "1") == "1",
             lab_half_duplex=lab_half_duplex_enabled(),
             post_speech_pause_ms=post_speech_pause_ms(),
+            echo_ref_gate=echo_ref_gate_enabled(),
+            lab_barge_in=lab_barge_in_enabled(),
         ),
     )

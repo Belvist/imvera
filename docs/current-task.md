@@ -1,5 +1,23 @@
 # Current task — Grandmother call validation (Stage B/C)
 
+## How Vera knows her voice (always-listen)
+
+| Level | What | Verdict for Daniil |
+|-------|------|--------------------|
+| **Mute (half-duplex)** | Mic off while TTS plays | Dumb but stable — friend’s MVP; feels «deaf» |
+| **Text `_is_assistant_echo`** | Drop STT if transcript ≈ Vera’s phrase | Weak — STT already wrong on echo (`Сд.`/`Сейчас`) |
+| **Reference PCM gate (now)** | Ring of injected downlink PCM; NCC/energy vs uplink | Right lab path for always-listen without self-talk |
+| **True WebRTC AEC / ML speaker-ID** | Full AEC or X-vector | Later — **not** claimed; not in repo |
+
+**Flags (lab defaults after this change):**
+
+- `IMVERA_ECHO_REF_GATE=1` — reference gate on (default)
+- `IMVERA_LAB_HALF_DUPLEX=0` — always-listen (default); set `1` to restore friend mute
+- `IMVERA_LAB_BARGE_IN=0` — do not interrupt Vera on user speech yet (fail-safe)
+- Fail-safe: uncertain match during playback → drop frame (no self-barge-in), never permanent mute
+
+Code: `packages/voice_runtime/echo_ref_gate.py` + `CallActor._feed_uplink_pcm` / `_playback_pump`.
+
 ## Primary assignment
 
 Live Zoiper **7000** — wellness dialogue on real audio.  
@@ -16,13 +34,14 @@ Honest gap list (friend solved local mic loop first; we jumped to Asterisk/Zoipe
 | Friend (local MVP, ~3h) | Our Zoiper/SIP path |
 |-------------------------|---------------------|
 | sounddevice mic/speakers first | Asterisk + ExternalMedia + snoop + softphone |
-| Strict half-duplex: speak → finish → pause → **then** mic | We briefly re-broke with audit R1 always-listen; echo self-barge-in |
+| Strict half-duplex: speak → finish → pause → **then** mic | Was default; now optional via `IMVERA_LAB_HALF_DUPLEX=1` |
 | Whisper local + WebRTC VAD | MLX STT + Silero/energy VAD over RTP |
 | Silero Xenia (`kseniya`) | Lab often falls back to **macos say** (robotic) if torch missing |
 | Dialogue orchestrator owns flow | Same Planner/Session; **Core owns GREEN/YELLOW/RED** — we must not copy friend's verdict ownership into voiseup |
 | One failure mode: acoustic loop | ×10: echo, snoop mix, codec, inject lag, capture loss, finalize races |
 
-Same root bug class (hearing Vera). Complexity ≠ smarter dialogue. Lab flag: `IMVERA_LAB_HALF_DUPLEX=1` (default), `IMVERA_POST_SPEECH_PAUSE_MS=400`.
+Same root bug class (hearing Vera). **Correct engineering:** reference echo gate from known TTS PCM — not permanent mute, not text-only filter.  
+Lab: `IMVERA_ECHO_REF_GATE=1` (default), `IMVERA_LAB_HALF_DUPLEX=0` (default always-listen).
 
 ## Branch / SHA — truth table
 

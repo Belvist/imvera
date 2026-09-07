@@ -44,6 +44,9 @@ def backchannel(session):
 
 
 def actor_for(session, **kwargs):
+    from packages.voice_runtime.call_actor import CallActorConfig
+
+    config = kwargs.pop("config", None)
     return CallActor(
         call_id=session.state.call_id,
         family_id=session.state.family_id,
@@ -52,6 +55,8 @@ def actor_for(session, **kwargs):
         tts=kwargs.get("tts", SimpleNamespace(cancel=noop)),
         llm=SimpleNamespace(),
         media=MediaCallbacks(noop, noop, noop, noop),
+        config=config
+        or CallActorConfig(lab_half_duplex=True, echo_ref_gate=False),
     )
 
 

@@ -188,14 +188,19 @@ def main() -> int:
     if env.get("IMVERA_TTS_ENGINE") == "silero_lab":
         print("Lab fast TTS: silero_lab (IMVERA_LAB_FAST_TTS=1, ~1-2s warm first_pcm)")
         print(
-            "  speaker: kseniya (Silero Xenia) — NC lab only; "
-            "macos say fallback if torch missing"
+            "  speaker: xenia (Silero) — NC lab only; "
+            "macos say fallback if torch/omegaconf missing"
         )
-    if env.get("IMVERA_LAB_HALF_DUPLEX", "1") in {"1", "true", "yes"}:
+    if env.get("IMVERA_LAB_HALF_DUPLEX", "0") in {"1", "true", "yes"}:
         pause = env.get("IMVERA_POST_SPEECH_PAUSE_MS", "400")
         print(
             f"Lab half-duplex: ON (post-speech pause {pause}ms — "
             "Vera finishes → pause → then mic)"
+        )
+    elif env.get("IMVERA_ECHO_REF_GATE", "1") in {"1", "true", "yes"}:
+        print(
+            "Lab always-listen: echo reference gate ON "
+            "(downlink PCM ring — not ML speaker-ID)"
         )
 
     code = _ensure_workers(env)
