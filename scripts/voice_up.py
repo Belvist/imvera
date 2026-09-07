@@ -191,7 +191,7 @@ def main() -> int:
             "  speaker: xenia (Silero) — NC lab only; "
             "macos say fallback if torch/omegaconf missing"
         )
-    if env.get("IMVERA_LAB_HALF_DUPLEX", "1") in {"1", "true", "yes"}:
+    if env.get("IMVERA_LAB_HALF_DUPLEX", "0") in {"1", "true", "yes"}:
         pause = env.get("IMVERA_POST_SPEECH_PAUSE_MS", "400")
         print(
             f"Lab half-duplex: ON (post-speech pause {pause}ms — "
@@ -202,6 +202,8 @@ def main() -> int:
             "Lab always-listen: echo reference gate ON "
             "(downlink PCM ring — not ML speaker-ID)"
         )
+    else:
+        print("Lab listen: always-listen, echo-ref gate OFF (raw uplink)")
 
     code = _ensure_workers(env)
     if code != 0:

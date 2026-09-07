@@ -9,13 +9,15 @@
 | **Reference PCM gate (now)** | Ring of injected downlink PCM; NCC/energy vs uplink | Right lab path for always-listen without self-talk |
 | **True WebRTC AEC / ML speaker-ID** | Full AEC or X-vector | Later — **not** claimed; not in repo |
 
-**Flags (lab defaults after deaf+robot fix):**
+**Flags (lab defaults — echo-ref always-listen):**
 
-- `IMVERA_LAB_HALF_DUPLEX=1` — **forced ON** at `voice_up` (friend MVP; unmute after drain+pause)
-- `IMVERA_ECHO_REF_GATE=1` — reference gate available as belt-and-suspenders
+- `IMVERA_ECHO_REF_GATE=1` — default ON (downlink PCM ring; not ML speaker-ID)
+- `IMVERA_LAB_HALF_DUPLEX=0` — default OFF; `voice_up` must **not** force mute. Explicit `=1` is mute fallback (friend MVP); unmute fail-safes stay when that mode is chosen
 - `IMVERA_LAB_BARGE_IN=0` — do not interrupt Vera on user speech yet
 - TTS: `silero_lab:silero:v5_ru:xenia` (torch+omegaconf); **not** `macos_say:Milena`
-- Fail-safe unmute: `_force_listen_enabled` in `finally` + auto-expire pause gate (sip-97e9)
+- Fail-safe unmute (half-duplex path only): `_force_listen_enabled` in `finally` + auto-expire pause gate (sip-97e9)
+
+**Agent fight 2026-09-08:** prior `apply_lab_half_duplex_env` forced `HALF_DUPLEX=1`, which broke always-listen after a plain `make voice-up`. Fixed: defaults prefer always-listen; mute only if explicitly requested.
 
 **Incident 2026-09-08 robot voice:** health showed `silero_lab:macos_say:Milena` (torch missing). Fixed: `pip install -e ".[lab-silero]"` + omegaconf; config `v5_ru`/`xenia` (local cache; `v5_5_ru` SSL-blocked).
 

@@ -60,16 +60,19 @@ def test_lab_half_duplex_defaults(monkeypatch) -> None:
     monkeypatch.delenv("IMVERA_LAB_HALF_DUPLEX", raising=False)
     monkeypatch.delenv("IMVERA_POST_SPEECH_PAUSE_MS", raising=False)
     monkeypatch.delenv("IMVERA_ECHO_REF_GATE", raising=False)
-    assert lab_half_duplex_enabled() is True
+    assert lab_half_duplex_enabled() is False
     assert echo_ref_gate_enabled() is True
     assert post_speech_pause_ms() == 400
     env = apply_lab_half_duplex_env({})
-    assert env["IMVERA_LAB_HALF_DUPLEX"] == "1"
+    assert env["IMVERA_LAB_HALF_DUPLEX"] == "0"
     assert env["IMVERA_ECHO_REF_GATE"] == "1"
     assert env["IMVERA_POST_SPEECH_PAUSE_MS"] == "400"
-    # Stale always-listen=0 in parent env must not stick.
-    forced = apply_lab_half_duplex_env({"IMVERA_LAB_HALF_DUPLEX": "0"})
-    assert forced["IMVERA_LAB_HALF_DUPLEX"] == "1"
+    # Explicit mute fallback must stick (voice_up must not force half-duplex ON).
+    muted = apply_lab_half_duplex_env({"IMVERA_LAB_HALF_DUPLEX": "1"})
+    assert muted["IMVERA_LAB_HALF_DUPLEX"] == "1"
+    # Explicit always-listen must stick (do not overwrite parent 0).
+    listen = apply_lab_half_duplex_env({"IMVERA_LAB_HALF_DUPLEX": "0"})
+    assert listen["IMVERA_LAB_HALF_DUPLEX"] == "0"
 
 
 def test_echo_ref_same_pcm_is_echo_different_is_user() -> None:
