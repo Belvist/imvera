@@ -46,8 +46,10 @@ models:
           not CustomVoice — better zero-shot cloning per Qwen docs.
     silero_lab:
       # CC BY-NC-SA 4.0 — LOCAL LAB ONLY (ADR-002). Requires IMVERA_SILERO_LAB_ACK=1.
-      model: v5_5_ru
-      speaker: kseniya
+      # v5_ru is locally cached; v5_5_ru needs models.silero.ai download (often SSL-blocked).
+      # speaker xenia ≈ friend's «Silero Xenia»; kseniya also available on v5_ru.
+      model: v5_ru
+      speaker: xenia
       language: ru
       sample_rate: 24000
       license: CC-BY-NC-SA-4.0

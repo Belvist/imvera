@@ -191,7 +191,7 @@ def main() -> int:
             "  speaker: xenia (Silero) — NC lab only; "
             "macos say fallback if torch/omegaconf missing"
         )
-    if env.get("IMVERA_LAB_HALF_DUPLEX", "0") in {"1", "true", "yes"}:
+    if env.get("IMVERA_LAB_HALF_DUPLEX", "1") in {"1", "true", "yes"}:
         pause = env.get("IMVERA_POST_SPEECH_PAUSE_MS", "400")
         print(
             f"Lab half-duplex: ON (post-speech pause {pause}ms — "

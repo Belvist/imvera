@@ -9,14 +9,15 @@
 | **Reference PCM gate (now)** | Ring of injected downlink PCM; NCC/energy vs uplink | Right lab path for always-listen without self-talk |
 | **True WebRTC AEC / ML speaker-ID** | Full AEC or X-vector | Later — **not** claimed; not in repo |
 
-**Flags (lab defaults after this change):**
+**Flags (lab defaults after deaf+robot fix):**
 
-- `IMVERA_ECHO_REF_GATE=1` — reference gate on (default)
-- `IMVERA_LAB_HALF_DUPLEX=0` — always-listen (default); set `1` to restore friend mute
-- `IMVERA_LAB_BARGE_IN=0` — do not interrupt Vera on user speech yet (fail-safe)
-- Fail-safe: uncertain match during playback → drop frame (no self-barge-in), never permanent mute
+- `IMVERA_LAB_HALF_DUPLEX=1` — **forced ON** at `voice_up` (friend MVP; unmute after drain+pause)
+- `IMVERA_ECHO_REF_GATE=1` — reference gate available as belt-and-suspenders
+- `IMVERA_LAB_BARGE_IN=0` — do not interrupt Vera on user speech yet
+- TTS: `silero_lab:silero:v5_ru:xenia` (torch+omegaconf); **not** `macos_say:Milena`
+- Fail-safe unmute: `_force_listen_enabled` in `finally` + auto-expire pause gate (sip-97e9)
 
-Code: `packages/voice_runtime/echo_ref_gate.py` + `CallActor._feed_uplink_pcm` / `_playback_pump`.
+**Incident 2026-09-08 robot voice:** health showed `silero_lab:macos_say:Milena` (torch missing). Fixed: `pip install -e ".[lab-silero]"` + omegaconf; config `v5_ru`/`xenia` (local cache; `v5_5_ru` SSL-blocked).
 
 ## Primary assignment
 

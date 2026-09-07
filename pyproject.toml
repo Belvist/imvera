@@ -37,6 +37,9 @@ mlx = [
 ]
 lab-silero = [
     "torch>=2.2",
+    "omegaconf>=2.3",
+    "soundfile>=0.12",
+    "numpy>=1.26",
 ]
 sip-lab = [
     "pyVoIP==1.6.8",

@@ -1,7 +1,8 @@
-"""Silero v5_5_ru — LOCAL LAB ONLY (CC BY-NC-SA 4.0, not for production).
+"""Silero v5_ru — LOCAL LAB ONLY (CC BY-NC-SA 4.0, not for production).
 
-# Silero v5_5_ru speaker ``kseniya`` ≈ English «Xenia» (friend's Silero Xenia).
-# When torch is unavailable on macOS, falls back to native ``say`` for sub-2s lab TTS.
+Speaker ``xenia`` / ``kseniya`` (friend's Silero Xenia). Default model ``v5_ru``
+(local cache). ``v5_5_ru`` falls back to ``v5_ru`` if models.silero.ai is unreachable.
+When torch is unavailable on macOS, falls back to native ``say`` for sub-2s lab TTS.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from typing import Any
 
 SILERO_LICENSE = "CC BY-NC-SA 4.0"
 SILERO_WARNING = (
-    "Silero v5_5_ru (speaker kseniya) is NON-COMMERCIAL (CC BY-NC-SA 4.0). "
+    "Silero v5_ru (speaker xenia/kseniya) is NON-COMMERCIAL (CC BY-NC-SA 4.0). "
     "LOCAL LAB / listen-test reference only — not for IMVERA production or pilot."
 )
 MACOS_SAY_SENTINEL = "macos_say"
@@ -97,17 +98,36 @@ def load_silero(silero_cfg: dict[str, Any]) -> tuple[Any, Any]:
 
     device = torch.device("cpu")
     language = silero_cfg.get("language", "ru")
-    model_name = silero_cfg.get("model", "v5_5_ru")
-    model, _ = torch.hub.load(
-        repo_or_dir="snakers4/silero-models",
-        model="silero_tts",
-        language=language,
-        speaker=model_name,
-        trust_repo=True,
-    )
+    model_name = silero_cfg.get("model", "v5_ru")
+    try:
+        model, _ = torch.hub.load(
+            repo_or_dir="snakers4/silero-models",
+            model="silero_tts",
+            language=language,
+            speaker=model_name,
+            trust_repo=True,
+        )
+    except Exception as primary_exc:
+        # Lab machines often cannot reach models.silero.ai for v5_5_ru; v5_ru is cached.
+        if model_name != "v5_ru":
+            print(
+                f"Lab TTS: {model_name} load failed ({primary_exc}); falling back to v5_ru",
+                flush=True,
+            )
+            model, _ = torch.hub.load(
+                repo_or_dir="snakers4/silero-models",
+                model="silero_tts",
+                language=language,
+                speaker="v5_ru",
+                trust_repo=True,
+            )
+        else:
+            raise
     model.to(device)
     _silero_model = model
     _silero_device = device
+    speaker = silero_cfg.get("speaker", "xenia")
+    print(f"Lab TTS: Silero {model_name} speaker={speaker}", flush=True)
     return model, device
 
 
@@ -115,8 +135,9 @@ def lab_backend_name(silero_cfg: dict[str, Any]) -> str:
     model, _ = load_silero(silero_cfg)
     if model == MACOS_SAY_SENTINEL:
         return f"macos_say:{MACOS_RU_VOICE}"
-    speaker = silero_cfg.get("speaker", "kseniya")
-    return f"silero:{speaker}"
+    speaker = silero_cfg.get("speaker", "xenia")
+    model_name = silero_cfg.get("model", "v5_ru")
+    return f"silero:{model_name}:{speaker}"
 
 
 def synthesize_silero(
@@ -134,7 +155,7 @@ def synthesize_silero(
     sample_rate = int(silero_cfg.get("sample_rate", 24000))
     if model == MACOS_SAY_SENTINEL:
         return _synthesize_macos_say(text, sample_rate)
-    speaker = silero_cfg.get("speaker", "kseniya")
+    speaker = silero_cfg.get("speaker", "xenia")
     audio = model.apply_tts(text=text, speaker=speaker, sample_rate=sample_rate)
     arr = np.asarray(audio, dtype=np.float32)
     if arr.ndim > 1:
