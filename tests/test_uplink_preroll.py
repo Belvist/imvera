@@ -26,6 +26,7 @@ from packages.voice_runtime.lab_half_duplex import (
     apply_lab_half_duplex_env,
     lab_half_duplex_enabled,
     post_speech_pause_ms,
+    uplink_preroll_ms,
 )
 from packages.voice_runtime.playback import PlaybackQueue
 from packages.voice_runtime.vad import EnergyVad, VadConfig
@@ -66,13 +67,15 @@ def test_lab_half_duplex_defaults(monkeypatch) -> None:
     monkeypatch.delenv("IMVERA_LAB_HALF_DUPLEX", raising=False)
     monkeypatch.delenv("IMVERA_POST_SPEECH_PAUSE_MS", raising=False)
     monkeypatch.delenv("IMVERA_ECHO_REF_GATE", raising=False)
-    assert lab_half_duplex_enabled() is True
+    assert lab_half_duplex_enabled() is False
     assert echo_ref_gate_enabled() is False
-    assert post_speech_pause_ms() == 400
+    assert post_speech_pause_ms() == 100
+    assert uplink_preroll_ms() == 2000
     env = apply_lab_half_duplex_env({})
-    assert env["IMVERA_LAB_HALF_DUPLEX"] == "1"
-    assert env["IMVERA_ECHO_REF_GATE"] == "0"
-    assert env["IMVERA_POST_SPEECH_PAUSE_MS"] == "400"
+    assert env["IMVERA_LAB_HALF_DUPLEX"] == "0"
+    assert env["IMVERA_ECHO_REF_GATE"] == "1"
+    assert env["IMVERA_POST_SPEECH_PAUSE_MS"] == "100"
+    assert env["IMVERA_UPLINK_PREROLL_MS"] == "2000"
     # Explicit mute must stick.
     muted = apply_lab_half_duplex_env({"IMVERA_LAB_HALF_DUPLEX": "1"})
     assert muted["IMVERA_LAB_HALF_DUPLEX"] == "1"
@@ -221,9 +224,9 @@ def test_unmute_only_after_post_speech_pause() -> None:
         assert "listen.enabled" in stages
         assert actor._listen_gated_until is None
         assert not actor._uplink_listen_blocked()
-        # Reset recreates real VAD — reattach tracker for the assertion.
         actor._vad = _Vad()
         actor._collector = _Collector()
+        fed.clear()
         await actor._feed_uplink_pcm(frame)
         assert fed == [frame], "After pause, uplink must reach VAD"
 
@@ -291,9 +294,9 @@ def test_force_unmute_if_pause_cancelled() -> None:
         await asyncio.gather(task, return_exceptions=True)
         assert actor._listen_gated_until is None
         assert not actor._uplink_listen_blocked()
-        # Finalize's listen path recreates VAD — restore tracker.
         actor._vad = _Vad()
         actor._collector = _Collector()
+        fed.clear()
         frame = b"\x03\x00" * 320
         await actor._feed_uplink_pcm(frame)
         assert fed == [frame]
@@ -637,7 +640,188 @@ def test_echo_ref_fail_open_when_playback_idle() -> None:
     asyncio.run(scenario())
 
 
-def test_flush_pcm_queue_keeps_stop() -> None:
+def test_opening_wellness_half_duplex_user_reaches_collector() -> None:
+    """Opening: buffer during Vera TTS; user reaches VAD only after echo tail."""
+
+    async def scenario() -> None:
+        import time
+
+        session = CallSession(
+            call_id="opening-listen",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+        fed: list[bytes] = []
+        collector_frames: list[bytes] = []
+        speech_events: list[str] = []
+
+        async def emit(event) -> None:
+            speech_events.append(event.event_type.value)
+
+        class _Vad:
+            def feed(self, pcm: bytes) -> tuple[bool, bool]:
+                fed.append(pcm)
+                return len(fed) == 1, False
+
+            in_speech = False
+
+        class _Collector:
+            def on_frame(self, pcm, speech_started, speech_ended, speech_active=False):
+                if speech_started:
+                    collector_frames.append(pcm)
+                return None
+
+            collecting = False
+
+            def reset_pending(self) -> None:
+                pass
+
+            def force_finalize(self):
+                return None
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, emit, finish=_noop),
+            config=CallActorConfig(
+                lab_half_duplex=False,
+                echo_ref_gate=True,
+                post_speech_pause_ms=0,
+            ),
+        )
+        actor._media_ready = True
+        actor._vad = _Vad()
+        actor._collector = _Collector()
+        actor._utterance_builder = _Collector()
+        actor._last_delivered_intent = "opening_wellness"
+        actor._active_generation = "g-opening"
+        actor._on_bot_playback_started()
+        vera_pcm = _pcm_sine(440.0, samples=320, amp=12000)
+        user_pcm = _pcm_sine(1800.0, samples=320, amp=12000)
+        actor._push_echo_downlink(vera_pcm, 16000)
+        await actor._feed_uplink_pcm(vera_pcm)
+        assert fed == [], "No VAD during opening bot speech"
+        await actor._feed_uplink_pcm(user_pcm)
+        assert fed == [], "User buffered during opening bot speech"
+        actor._turn_manager.on_playback_completed(time.monotonic())
+        actor._turn_manager.tick(time.monotonic() + 0.35)
+        actor._active_generation = None
+        await actor._feed_uplink_pcm(user_pcm)
+        assert fed == [user_pcm], "User speech reaches VAD after echo tail"
+        assert actor._active_generation is None
+
+    asyncio.run(scenario())
+
+
+def test_non_opening_still_half_duplex_muted() -> None:
+    """After opening, classic half-duplex mute during Vera still applies."""
+
+    async def scenario() -> None:
+        session = CallSession(
+            call_id="post-opening-duplex",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+        fed: list[bytes] = []
+
+        class _Vad:
+            def feed(self, pcm: bytes) -> tuple[bool, bool]:
+                fed.append(pcm)
+                return False, False
+
+        class _Collector:
+            def on_frame(self, _pcm, _started, _ended):
+                return None
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+            config=CallActorConfig(
+                lab_half_duplex=True,
+                echo_ref_gate=False,
+            ),
+        )
+        actor._media_ready = True
+        actor._vad = _Vad()
+        actor._collector = _Collector()
+        actor._last_delivered_intent = "check_mood"
+        actor._active_generation = "g-mood"
+        frame = b"\x04\x00" * 320
+        await actor._feed_uplink_pcm(frame)
+        assert fed == []
+
+    asyncio.run(scenario())
+
+
+def test_half_duplex_preroll_replayed_on_listen() -> None:
+    """Speech during Vera playback must reach VAD after listen.enabled via preroll."""
+
+    async def scenario() -> None:
+        session = CallSession(
+            call_id="preroll-test",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+        fed: list[bytes] = []
+        speech_events: list[str] = []
+
+        async def emit(event) -> None:
+            speech_events.append(event.event_type.value)
+
+        class _Vad:
+            def feed(self, pcm: bytes) -> tuple[bool, bool]:
+                fed.append(pcm)
+                return len(fed) == 1, False
+
+            def reset(self) -> None:
+                return None
+
+        class _Collector:
+            def on_frame(self, pcm, started, ended):
+                return pcm if started else None
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, emit, finish=_noop),
+            config=CallActorConfig(
+                lab_half_duplex=True,
+                echo_ref_gate=False,
+                post_speech_pause_ms=0,
+                uplink_preroll_ms=2000,
+            ),
+        )
+        actor._media_ready = True
+        actor._vad = _Vad()
+        actor._collector = _Collector()
+        actor._active_generation = "g-vera"
+        user_while_muted = _pcm_sine(880.0, samples=320, amp=12000)
+        await actor._feed_uplink_pcm(user_while_muted)
+        assert fed == [], "Muted uplink must not reach VAD yet"
+        assert len(actor._playback_uplink_buf) == len(user_while_muted)
+
+        actor._active_generation = None
+        await actor._enable_listen_after_playback()
+        assert fed, "Preroll must replay buffered speech into VAD"
+        assert speech_events.count("speech.started") == 1
+
+    asyncio.run(scenario())
+
+
+def test_flush_pcm_queue_keeps_stop_and_prerolls_pcm() -> None:
     actor = CallActor(
         call_id="flush-stop",
         family_id="fam-voice",
@@ -650,10 +834,285 @@ def test_flush_pcm_queue_keeps_stop() -> None:
         tts=SimpleNamespace(),
         llm=SimpleNamespace(),
         media=MediaCallbacks(_noop, _noop, _noop, _noop),
+        config=CallActorConfig(uplink_preroll_ms=2000),
     )
-    actor._queue.put_nowait(ActorEvent(ActorEventType.PCM, pcm=b"\x00\x00" * 10))
+    pcm = b"\x00\x01" * 10
+    actor._queue.put_nowait(ActorEvent(ActorEventType.PCM, pcm=pcm, sample_rate=16000))
     actor._queue.put_nowait(ActorEvent(ActorEventType.STOP))
     actor._flush_pcm_queue()
     kept = actor._queue.get_nowait()
     assert kept.kind == ActorEventType.STOP
     assert actor._queue.empty()
+    assert bytes(actor._playback_uplink_buf) == pcm
+
+
+def test_echo_ref_drop_does_not_buffer_confirmed_echo() -> None:
+    """Confirmed ECHO must not land in preroll — prevents Vera STT loop on replay."""
+
+    async def scenario() -> None:
+        session = CallSession(
+            call_id="echo-preroll",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+            config=CallActorConfig(
+                lab_half_duplex=False,
+                echo_ref_gate=True,
+                uplink_preroll_ms=2000,
+            ),
+        )
+        actor._media_ready = True
+        actor._vad = SimpleNamespace(feed=lambda _p: (False, False), reset=lambda: None)
+        actor._collector = SimpleNamespace(on_frame=lambda *_a: None)
+        actor._active_generation = "g-vera"
+        vera = _pcm_sine(440.0, samples=320, amp=12000)
+        actor._push_echo_downlink(vera, 16000)
+        await actor._feed_uplink_pcm(vera)
+        assert len(actor._playback_uplink_buf) == 0
+
+    asyncio.run(scenario())
+
+
+def test_echo_ref_uncertain_drop_buffers_preroll() -> None:
+    """UNCERTAIN drops during playback may still be user — keep for replay."""
+
+    async def scenario() -> None:
+        session = CallSession(
+            call_id="echo-uncertain-preroll",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+            config=CallActorConfig(
+                lab_half_duplex=False,
+                echo_ref_gate=True,
+                uplink_preroll_ms=2000,
+            ),
+        )
+        actor._media_ready = True
+        actor._vad = SimpleNamespace(feed=lambda _p: (False, False), reset=lambda: None)
+        actor._collector = SimpleNamespace(on_frame=lambda *_a: None)
+        actor._active_generation = "g-vera"
+        userish = _pcm_sine(900.0, samples=320, amp=9000)
+        await actor._feed_uplink_pcm(userish)
+        assert len(actor._playback_uplink_buf) == len(userish)
+
+    asyncio.run(scenario())
+
+
+def test_preroll_replay_skips_echo_matching_reference() -> None:
+    """Half-duplex preroll replay must not trigger VAD on Vera echo frames."""
+
+    async def scenario() -> None:
+        session = CallSession(
+            call_id="preroll-echo-skip",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+        fed: list[bytes] = []
+
+        class _Vad:
+            def feed(self, pcm: bytes) -> tuple[bool, bool]:
+                fed.append(pcm)
+                return False, False
+
+            def reset(self) -> None:
+                fed.clear()
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+            config=CallActorConfig(
+                lab_half_duplex=True,
+                echo_ref_gate=True,
+                uplink_preroll_ms=2000,
+            ),
+        )
+        actor._media_ready = True
+        actor._vad = _Vad()
+        actor._collector = SimpleNamespace(on_frame=lambda *_a: None)
+        actor._ensure_echo_ref()
+        vera = _pcm_sine(440.0, samples=320, amp=12000)
+        actor._push_echo_downlink(vera, 16000)
+        actor._playback_uplink_buf.extend(vera)
+        await actor._replay_uplink_preroll(bytes(vera))
+        assert fed == [], "Echo preroll must be filtered before VAD"
+
+    asyncio.run(scenario())
+
+
+def test_opening_uncertain_uplink_reaches_vad() -> None:
+    """Opening bot speech: uplink buffered; VAD only after echo tail."""
+
+    async def scenario() -> None:
+        import time
+
+        session = CallSession(
+            call_id="opening-uncertain",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+        fed: list[bytes] = []
+
+        class _Vad:
+            def feed(self, pcm: bytes) -> tuple[bool, bool]:
+                fed.append(pcm)
+                return False, False
+
+            in_speech = False
+
+        class _Collector:
+            def on_frame(self, _pcm, _started, _ended, speech_active=False):
+                return None
+
+            collecting = False
+
+            def reset_pending(self) -> None:
+                pass
+
+            def force_finalize(self):
+                return None
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+            config=CallActorConfig(lab_half_duplex=False, echo_ref_gate=False),
+        )
+        actor._media_ready = True
+        actor._vad = _Vad()
+        actor._collector = _Collector()
+        actor._utterance_builder = _Collector()
+        actor._last_delivered_intent = "opening_wellness"
+        actor._active_generation = "g-opening"
+        actor._on_bot_playback_started()
+        speech = _pcm_sine(900.0, samples=320, amp=9000)
+        await actor._feed_uplink_pcm(speech)
+        assert fed == [], "Buffered during opening bot speech"
+        actor._turn_manager.on_playback_completed(time.monotonic())
+        actor._turn_manager.tick(time.monotonic() + 0.35)
+        actor._active_generation = None
+        await actor._feed_uplink_pcm(speech)
+        assert fed == [speech], "Speech reaches VAD after echo tail"
+
+    asyncio.run(scenario())
+
+
+def test_suppress_false_speech_start_during_opening_echo() -> None:
+    """Vera echo during opening TTS must not emit speech.started (sip-72d8)."""
+
+    async def scenario() -> None:
+        events: list[str] = []
+
+        async def emit(event) -> None:
+            events.append(event.event_type.value)
+
+        session = CallSession(
+            call_id="opening-echo-suppress",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+
+        class _Vad:
+            def feed(self, pcm: bytes) -> tuple[bool, bool]:
+                return True, False
+
+            def reset(self) -> None:
+                pass
+
+            in_speech = True
+
+        class _Collector:
+            def on_frame(self, _pcm, started, _ended):
+                return None
+
+            collecting = False
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, emit),
+            config=CallActorConfig(lab_half_duplex=False, echo_ref_gate=True),
+        )
+        actor._media_ready = True
+        actor._vad = _Vad()
+        actor._collector = _Collector()
+        actor._last_delivered_intent = "opening_wellness"
+        actor._active_generation = "g-opening"
+        actor._on_bot_playback_started()
+        vera = _pcm_sine(440.0, samples=320, amp=12000)
+        actor._push_echo_downlink(vera, 16000)
+        await actor._process_uplink_vad_frame(vera, playback_active=True)
+        assert "speech.started" not in events
+
+    asyncio.run(scenario())
+
+
+def test_finalize_active_speech_before_listen_reset() -> None:
+    """In-progress segment must flush to STT before VAD reset on listen.enabled."""
+
+    async def scenario() -> None:
+        from packages.voice_runtime.utterance_builder import UtteranceBuilder
+
+        session = CallSession(
+            call_id="finalize-segment",
+            family_id="fam-voice",
+            store=InMemoryCallRecordStore(),
+        )
+        handled: list[int] = []
+
+        async def fake_handle(pcm: bytes, seq: int) -> None:
+            handled.append(len(pcm))
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="fam-voice",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+        )
+        actor._media_ready = True
+        builder = UtteranceBuilder(16000)
+        builder._collecting = True
+        builder._segment = [b"\x01\x00" * 160]
+        builder._speech_frames = 10
+        actor._utterance_builder = builder
+        actor._collector = builder
+        actor._turn_manager.phase = actor._turn_manager.phase.LISTENING
+        actor._handle_utterance = fake_handle  # type: ignore[method-assign]
+        ok = await actor._finalize_active_speech_before_listen_reset()
+        assert ok is True
+        await asyncio.sleep(0.05)
+        assert handled and handled[0] > 0
+
+    asyncio.run(scenario())

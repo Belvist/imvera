@@ -8,11 +8,14 @@ import os
 import re
 import time
 import uuid
+import wave
+from pathlib import Path
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
 from packages.contracts.core import TerminationReason
+from packages.contracts.enums import AsrQuality
 from packages.contracts.interpretation import TurnInterpretation
 from packages.contracts.outbox import ActionOutboxStatus
 from packages.contracts.providers import TTSProvider
@@ -24,17 +27,23 @@ from packages.dialogue.semantic_adapter import adapt_semantic_turn
 from packages.dialogue.interpretation import to_turn_interpretation, interpret_user_turn
 from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue.validator import Validator
-from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler
-from packages.voice_runtime.endpointing import SpeechSegmentCollector
+from packages.voice_runtime.agent_debug_log import agent_debug_log
+from packages.voice_runtime.audio_audit import audio_audit_enabled
+from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler, pcm_rms_s16le
+from packages.voice_runtime.audio_ring import AudioRingBuffer
 from packages.voice_runtime.echo_ref_gate import (
-    DownlinkEchoRef,
     EchoRefConfig,
+    EchoVerdict,
     echo_ref_gate_enabled,
     lab_barge_in_enabled,
 )
+from packages.voice_runtime.playback_reference import PlaybackReference
+from packages.voice_runtime.turn_fsm import ConversationPhase, TurnManager
+from packages.voice_runtime.utterance_builder import UtteranceBuilder
 from packages.voice_runtime.lab_half_duplex import (
     lab_half_duplex_enabled,
     post_speech_pause_ms,
+    uplink_preroll_ms,
 )
 from packages.voice_runtime.opening_cache import load_opening
 from packages.voice_runtime.playback import PlaybackQueue
@@ -44,6 +53,7 @@ from packages.voice_runtime.wait_state import DialogueTimingProfile, WaitState
 from services.llm.http_provider import HttpLLMProvider
 from services.providers.http_clients import get_shared_async_client
 from services.stt.http_provider import HttpSTTProvider
+from services.stt.normalize import normalize_transcript
 from services.tts.http_provider import HttpTTSProvider
 
 log = logging.getLogger("call_actor")
@@ -109,6 +119,7 @@ class _UtteranceOutcome:
     text: str = ""
     interp: object | None = None
     legacy_contract: object | None = None
+    asr_quality: AsrQuality = AsrQuality.GOOD
     error_stage: str | None = None
     error: str | None = None
 
@@ -125,7 +136,8 @@ class CallActorConfig:
     # Lab Zoiper/softphone: hard mute during Vera (friend MVP). Default on —
     # always-listen + IMVERA_ECHO_REF_GATE is opt-in until live-stable.
     lab_half_duplex: bool = True
-    post_speech_pause_ms: int = 400
+    post_speech_pause_ms: int = 100
+    uplink_preroll_ms: int = 2000
     # Drop uplink frames that match recently injected downlink PCM.
     echo_ref_gate: bool = False
     # Interrupt Vera on clear user speech during playback (lab; default off).
@@ -149,7 +161,10 @@ class CallActor:
     _input_resampler: StatefulResampler | None = None
     _tts_resamplers: dict[str, StatefulResampler] = field(default_factory=dict)
     _vad: object | None = None
-    _collector: SpeechSegmentCollector | None = None
+    _utterance_builder: UtteranceBuilder | None = None
+    _collector: UtteranceBuilder | None = None
+    _turn_manager: TurnManager = field(default_factory=TurnManager)
+    _raw_ring: AudioRingBuffer | None = None
     _playback: PlaybackQueue | None = None
     _active_generation: str | None = None
     _render_generation: str | None = None
@@ -191,7 +206,17 @@ class CallActor:
     _listen_gated_until: float | None = None
     _finalized_playback_gens: set[str] = field(default_factory=set)
     _finalize_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    _echo_ref: DownlinkEchoRef | None = None
+    _playback_ref: PlaybackReference | None = None
+    _uplink_total_bytes: int = 0
+    _uplink_rms_peak: float = 0.0
+    _listen_uplink_bytes: int = 0
+    _listen_rms_peak: float = 0.0
+    _listen_blocked_bytes: int = 0
+    _debug_uplink_tick: int = 0
+    _audio_echo_drop_logged: int = 0
+
+    def _active_builder(self) -> UtteranceBuilder | None:
+        return self._utterance_builder or self._collector
 
     async def _emit_stage(self, stage: str, **payload: object) -> None:
         started = self._active_stage_budget.started_mono if self._active_stage_budget else 0.0
@@ -349,10 +374,16 @@ class CallActor:
             capture_sample_rate, self.config.target_sample_rate
         )
         self._vad = create_vad(self.config.target_sample_rate)
-        self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
+        self._utterance_builder = UtteranceBuilder(self.config.target_sample_rate)
+        self._collector = self._utterance_builder
+        if self._raw_ring is None:
+            self._raw_ring = AudioRingBuffer(
+                self.config.target_sample_rate,
+                max_ms=max(4000, self.config.uplink_preroll_ms),
+            )
 
     def _flush_pcm_queue(self) -> None:
-        """Drop pending PCM; keep STOP so hangup is never flushed away."""
+        """Drop pending PCM from queue into preroll; keep STOP for hangup."""
         kept: list[ActorEvent] = []
         while not self._queue.empty():
             try:
@@ -361,35 +392,94 @@ class CallActor:
                 break
             if item.kind == ActorEventType.STOP:
                 kept.append(item)
+            elif item.kind == ActorEventType.PCM and item.pcm:
+                self._append_uplink_preroll(item.pcm)
         for item in kept:
             self._queue.put_nowait(item)
 
-    def _reset_uplink_endpointing(self) -> None:
-        """Clear VAD/collector after assistant playback — fresh listen window.
+    def _should_drop_echo_for_vad(self, pcm: bytes, *, playback_active: bool) -> bool:
+        """Gate Vera echo from VAD; never deletes raw capture."""
+        if self._playback_ref is None:
+            return False
+        classification = self._playback_ref.classify(pcm, playback_active=playback_active)
+        if classification.verdict == EchoVerdict.ECHO:
+            return True
+        if classification.verdict == EchoVerdict.UNCERTAIN and playback_active:
+            return True
+        return False
 
-        Prefer in-place VAD.reset() — never reload Silero ONNX on the hot path.
-        If VAD was never created (no uplink yet), leave it for media setup.
-        """
-        if self._vad is not None:
-            reset = getattr(self._vad, "reset", None)
-            if callable(reset):
-                reset()
-            else:
-                self._vad = create_vad(self.config.target_sample_rate)
-        if self._collector is not None:
-            self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
+    def _uplink_speech_active(self) -> bool:
+        """True when VAD/collector believe user speech is in progress."""
+        if self._collector is not None and getattr(self._collector, "collecting", False):
+            return True
+        if self._vad is not None and getattr(self._vad, "in_speech", False):
+            return True
+        return False
+
+    async def _finalize_active_speech_before_listen_reset(self) -> bool:
+        """Flush in-progress segment before VAD reset on listen.enabled (sip-72d8)."""
+        if self._collector is None:
+            return False
+        finalize = getattr(self._collector, "force_finalize", None)
+        if not callable(finalize):
+            return False
+        segment = finalize()
+        if not segment:
+            return False
+        if not self._turn_manager.should_emit_utterance():
+            await self._emit_stage(
+                "turn.discarded",
+                reason="listen_reset",
+                pcm_bytes=len(segment.pcm if hasattr(segment, "pcm") else segment),
+            )
+            return True
+        pcm_bytes = segment.pcm if hasattr(segment, "pcm") else segment
+        await self.media.emit(
+            RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_ENDED, {})
+        )
+        async with self._policy_lock:
+            utterance_seq = self._utterance_seq + 1
+            self._utterance_seq = utterance_seq
+        self._inflight_utterances.add(utterance_seq)
+        self._turn_manager.on_stt_submitted()
+        asyncio.create_task(self._handle_utterance(pcm_bytes, utterance_seq))
+        await self._emit_stage(
+            "vad.reset_on_listen",
+            had_active_speech=True,
+            segment_bytes=len(pcm_bytes),
+        )
+        return True
+
+    def _should_suppress_speech_start_during_playback(self, pcm: bytes) -> bool:
+        """Block false speech.started from Vera echo during TTS."""
+        if not self._active_generation:
+            return False
+        if self.config.lab_barge_in:
+            return False
+        verdict = None
+        if self._playback_ref is not None:
+            verdict = self._playback_ref.classify(pcm, playback_active=True).verdict
+        return self._turn_manager.should_suppress_speech_start(
+            playback_active=True,
+            echo_verdict=verdict,
+        )
+
+    def _reset_uplink_endpointing(self) -> None:
+        """Clear utterance assembly state after assistant playback — VAD stays hot."""
+        if self._utterance_builder is not None:
+            self._utterance_builder.reset_pending()
 
     def _push_echo_downlink(self, pcm_s16le: bytes, sample_rate: int) -> None:
-        """Feed injected downlink into echo-ref at uplink/VAD sample rate."""
-        if not self.config.echo_ref_gate or not pcm_s16le:
+        """Feed injected downlink into playback reference at uplink/VAD sample rate."""
+        if not self._effective_echo_ref_gate() or not pcm_s16le:
             return
-        self._ensure_echo_ref()
-        if self._echo_ref is None:
+        self._ensure_playback_ref()
+        if self._playback_ref is None:
             return
         target = int(self.config.target_sample_rate)
         src = int(sample_rate) or target
         if src == target:
-            self._echo_ref.push(pcm_s16le)
+            self._playback_ref.push(pcm_s16le)
             return
         key = f"echo_ref:{src}->{target}"
         resampler = self._tts_resamplers.get(key)
@@ -398,7 +488,7 @@ class CallActor:
             self._tts_resamplers[key] = resampler
         converted = resampler.process(pcm_s16le)
         if converted:
-            self._echo_ref.push(converted)
+            self._playback_ref.push(converted)
 
     @staticmethod
     def _normalize_speech_text(text: str) -> str:
@@ -471,20 +561,49 @@ class CallActor:
         if not self._delivered_phrases or self._delivered_phrases[-1] != spoken:
             self._delivered_phrases.append(spoken)
 
-    def _ensure_echo_ref(self) -> None:
-        if not self.config.echo_ref_gate:
-            self._echo_ref = None
+    def _effective_echo_ref_gate(self) -> bool:
+        return bool(self.config.echo_ref_gate)
+
+    def _ensure_playback_ref(self) -> None:
+        if not self._effective_echo_ref_gate():
+            self._playback_ref = None
             return
-        if self._echo_ref is None:
-            self._echo_ref = DownlinkEchoRef(
+        if self._playback_ref is None:
+            self._playback_ref = PlaybackReference(
                 EchoRefConfig(sample_rate=self.config.target_sample_rate)
             )
+
+    def _ensure_echo_ref(self) -> None:
+        """Compat alias for tests and legacy call sites."""
+        self._ensure_playback_ref()
+
+    @property
+    def _echo_ref(self) -> object | None:
+        if self._playback_ref is None:
+            return None
+        return self._playback_ref._ref
+
+    def _on_bot_playback_started(self) -> None:
+        intent = self._last_delivered_intent or ""
+        self._turn_manager.on_playback_started(
+            intent,
+            barge_in_enabled=bool(self.config.lab_barge_in),
+        )
+
+    async def _await_echo_tail(self) -> None:
+        while True:
+            now = self._monotonic()
+            self._turn_manager.tick(now)
+            remaining = self._turn_manager.echo_tail_remaining_s(now)
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(remaining, 0.05))
 
     def _uplink_listen_blocked(self) -> bool:
         """Hard mute only in classic half-duplex mode (friend MVP).
 
-        Always-listen path keeps uplink open and uses DownlinkEchoRef instead.
-        Fail-safe: if echo gate is off, mute during active playback (no R1 regression).
+        TurnManager handles opening buffer-only (no VAD) without transport mute.
+        Always-listen uses PlaybackReference echo gate instead of mute.
         """
         if self.config.lab_half_duplex:
             if self._active_generation:
@@ -505,6 +624,8 @@ class CallActor:
     def _force_listen_enabled(self) -> None:
         """Unmute uplink immediately — post-speech pause must not stick forever."""
         self._listen_gated_until = None
+        self._turn_manager.phase = ConversationPhase.LISTENING
+        self._turn_manager._echo_tail_until = None
 
     def _arm_post_speech_pause(self) -> None:
         """After playback.completed: keep mic muted for a short quiet window."""
@@ -531,54 +652,141 @@ class CallActor:
         finally:
             self._force_listen_enabled()
 
-    async def _enable_listen_after_playback(self) -> None:
-        """Pause (optional) → force unmute → fresh VAD. Never leave uplink muted."""
-        try:
-            await self._await_post_speech_pause()
-        finally:
-            self._force_listen_enabled()
-            self._flush_pcm_queue()
-            self._playback_uplink_buf.clear()
-            if self._echo_ref is not None:
-                self._echo_ref.clear()
-            self._reset_uplink_endpointing()
-            await self._emit_stage(
-                "listen.enabled",
-                pause_ms=int(self.config.post_speech_pause_ms),
-                lab_half_duplex=bool(self.config.lab_half_duplex),
-                echo_ref_gate=bool(self.config.echo_ref_gate),
-            )
+    def _reset_listen_uplink_stats(self) -> None:
+        self._listen_uplink_bytes = 0
+        self._listen_rms_peak = 0.0
+        self._listen_blocked_bytes = 0
 
-    async def _feed_uplink_pcm(self, pcm: bytes) -> None:
-        assert self._vad and self._collector
-        # Classic half-duplex: hard mute while Vera speaks / post-speech pause.
-        # Always-listen: keep mic open; reference PCM gate drops Vera's echo.
-        if self._uplink_listen_blocked():
+    def _track_uplink_pcm(self, pcm: bytes, *, fed_to_vad: bool) -> None:
+        nbytes = len(pcm)
+        if nbytes <= 0:
             return
-        playback_active = bool(self._active_generation)
-        if self.config.echo_ref_gate:
-            self._ensure_echo_ref()
-            if self._echo_ref is not None and self._echo_ref.should_drop_for_vad(
-                pcm, playback_active=playback_active
-            ):
-                return
-        started, ended = self._vad.feed(pcm)
+        self._uplink_total_bytes += nbytes
+        rms = pcm_rms_s16le(pcm)
+        if rms > self._uplink_rms_peak:
+            self._uplink_rms_peak = rms
+        if fed_to_vad:
+            self._listen_uplink_bytes += nbytes
+            if rms > self._listen_rms_peak:
+                self._listen_rms_peak = rms
+        else:
+            self._listen_blocked_bytes += nbytes
+
+    async def _emit_uplink_summary(self, reason: str) -> None:
+        await self._emit_stage(
+            "uplink.summary",
+            reason=reason,
+            listen_uplink_bytes=self._listen_uplink_bytes,
+            listen_rms_peak=round(self._listen_rms_peak, 1),
+            listen_blocked_bytes=self._listen_blocked_bytes,
+            uplink_total_bytes=self._uplink_total_bytes,
+            uplink_rms_peak=round(self._uplink_rms_peak, 1),
+            capture_lost=self._capture_lost,
+        )
+
+    def _append_uplink_preroll(self, pcm: bytes) -> None:
+        """Ring-buffer uplink dropped during half-duplex mute for replay on listen."""
+        cap_ms = int(self.config.uplink_preroll_ms)
+        if cap_ms <= 0 or not pcm:
+            return
+        max_bytes = self.config.target_sample_rate * 2 * cap_ms // 1000
+        self._playback_uplink_buf.extend(pcm)
+        overflow = len(self._playback_uplink_buf) - max_bytes
+        if overflow > 0:
+            del self._playback_uplink_buf[:overflow]
+
+    async def _process_uplink_vad_frame(
+        self, pcm: bytes, *, playback_active: bool, fed_to_vad: bool = True
+    ) -> None:
+        if fed_to_vad:
+            self._track_uplink_pcm(pcm, fed_to_vad=True)
+        started, ended = self._vad.feed(pcm)  # type: ignore[union-attr]
+        speech_active = bool(getattr(self._vad, "in_speech", False))
+        if started and self._should_suppress_speech_start_during_playback(pcm):
+            started = False
         if started:
+            self._turn_manager.on_vad_speech_started(self._monotonic())
+            if self.config.lab_barge_in and playback_active:
+                self._turn_manager.note_barge_in_candidate(self._monotonic())
+            await self._emit_stage(
+                "audio.speech_started",
+                playback_active=playback_active,
+                intent=self._last_delivered_intent or "",
+                rms=round(pcm_rms_s16le(pcm), 1),
+                turn_phase=str(self._turn_manager.phase),
+            )
+            # region agent log
+            agent_debug_log(
+                "D",
+                "call_actor.py:_process_uplink_vad_frame",
+                "speech_started",
+                {
+                    "call_id": self.call_id,
+                    "playback_active": playback_active,
+                    "intent": self._last_delivered_intent or "",
+                    "rms": round(pcm_rms_s16le(pcm), 1),
+                    "turn_phase": str(self._turn_manager.phase),
+                },
+            )
+            # endregion
             self._pause_answer_wait()
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {})
             )
-            # Optional barge-in: only when lab flag on and Vera is still talking.
             if playback_active and self.config.lab_barge_in:
                 gen = self._active_generation
+                self._turn_manager.confirm_barge_in()
                 await self._interrupt_playback(flush=True)
                 await self._emit_stage(
                     "bargein_detected",
                     generation_id=gen,
                     echo_ref_gate=True,
                 )
-        segment = self._collector.on_frame(pcm, started, ended)
-        if segment:
+        if ended:
+            self._turn_manager.on_vad_speech_ended()
+        builder = self._active_builder()
+        built = None
+        if builder is not None:
+            try:
+                built = builder.on_frame(
+                    pcm,
+                    speech_started=started,
+                    speech_ended=ended,
+                    speech_active=speech_active,
+                )
+            except TypeError:
+                built = builder.on_frame(pcm, started, ended)  # type: ignore[misc]
+        if built:
+            if isinstance(built, bytes):
+                pcm_out = built
+                duration_ms = int(len(pcm_out) / max(2, self.config.target_sample_rate) * 1000)
+                segment_rms = pcm_rms_s16le(pcm_out)
+                silence_tail_ms = 0
+            else:
+                pcm_out = built.pcm
+                duration_ms = built.duration_ms
+                segment_rms = built.segment_rms
+                silence_tail_ms = built.silence_tail_ms
+            await self._emit_stage(
+                "audio.speech_ended",
+                pcm_bytes=len(pcm_out),
+                duration_ms=duration_ms,
+                segment_rms=round(segment_rms, 1),
+                playback_active=playback_active,
+                silence_tail_ms=silence_tail_ms,
+                turn_phase=str(self._turn_manager.phase),
+            )
+            if not self._turn_manager.should_emit_utterance():
+                await self._emit_stage(
+                    "turn.discarded",
+                    reason=str(self._turn_manager.phase),
+                    pcm_bytes=len(pcm_out),
+                    duration_ms=duration_ms,
+                )
+                await self.media.emit(
+                    RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_ENDED, {})
+                )
+                return
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_ENDED, {})
             )
@@ -586,7 +794,157 @@ class CallActor:
                 utterance_seq = self._utterance_seq + 1
                 self._utterance_seq = utterance_seq
             self._inflight_utterances.add(utterance_seq)
-            asyncio.create_task(self._handle_utterance(segment, utterance_seq))
+            self._turn_manager.on_stt_submitted()
+            asyncio.create_task(self._handle_utterance(pcm_out, utterance_seq))
+
+    async def _replay_uplink_preroll(self, preroll: bytes) -> None:
+        """Feed buffered user speech into fresh VAD after half-duplex unmute.
+
+        Skip frames that still match downlink reference — preroll often contains
+        Vera echo captured during mute (sip-f21993a04f: false speech + echo_discard).
+        """
+        assert self._vad and self._collector
+        if not preroll:
+            return
+        frame_bytes = max(2, self.config.target_sample_rate * 2 * self.config.frame_ms // 1000)
+        for offset in range(0, len(preroll), frame_bytes):
+            chunk = preroll[offset : offset + frame_bytes]
+            if len(chunk) < 2:
+                continue
+            if self._playback_ref is not None:
+                classification = self._playback_ref.classify(chunk, playback_active=False)
+                if classification.verdict == EchoVerdict.ECHO:
+                    continue
+            await self._process_uplink_vad_frame(chunk, playback_active=False)
+
+    async def _enable_listen_after_playback(self) -> None:
+        """Echo tail → listen window. Raw capture always preserved; VAD stays hot."""
+        self._turn_manager.on_playback_completed(self._monotonic())
+        try:
+            await self._await_post_speech_pause()
+            await self._await_echo_tail()
+        finally:
+            self._force_listen_enabled()
+            self._flush_pcm_queue()
+            preroll = bytes(self._playback_uplink_buf)
+            self._playback_uplink_buf.clear()
+            had_active = await self._finalize_active_speech_before_listen_reset()
+            if not had_active:
+                await self._emit_stage("vad.reset_on_listen", had_active_speech=False)
+            self._reset_uplink_endpointing()
+            self._reset_listen_uplink_stats()
+            await self._emit_stage(
+                "listen.enabled",
+                pause_ms=int(self.config.post_speech_pause_ms),
+                lab_half_duplex=bool(self.config.lab_half_duplex),
+                echo_ref_gate=bool(self.config.echo_ref_gate),
+                effective_echo_ref_gate=bool(self._effective_echo_ref_gate()),
+                turn_phase=str(self._turn_manager.phase),
+                turn_policy=str(self._turn_manager.policy.kind),
+                preroll_bytes=len(preroll),
+            )
+            # region agent log
+            agent_debug_log(
+                "B",
+                "call_actor.py:_enable_listen_after_playback",
+                "listen_enabled",
+                {
+                    "call_id": self.call_id,
+                    "intent": self._last_delivered_intent or "",
+                    "preroll_bytes": len(preroll),
+                    "lab_half_duplex": bool(self.config.lab_half_duplex),
+                    "turn_phase": str(self._turn_manager.phase),
+                },
+            )
+            # endregion
+            if preroll:
+                await self._replay_uplink_preroll(preroll)
+            if self._playback_ref is not None:
+                self._playback_ref.clear()
+
+    async def _feed_uplink_pcm(self, pcm: bytes) -> None:
+        assert self._vad and self._collector
+        if self._raw_ring is not None:
+            self._raw_ring.push(pcm)
+        now = self._monotonic()
+        self._turn_manager.tick(now)
+        if self._active_generation and self._turn_manager.phase not in {
+            ConversationPhase.BOT_SPEAKING,
+            ConversationPhase.BARGE_IN_CANDIDATE,
+            ConversationPhase.USER_SPEAKING,
+        }:
+            self._on_bot_playback_started()
+        blocked = self._uplink_listen_blocked()
+        buffer_only = self._turn_manager.should_buffer_only()
+        self._debug_uplink_tick += 1
+        tick = self._debug_uplink_tick
+        if audio_audit_enabled() and (
+            tick in {1, 50, 200, 500} or tick % 500 == 0
+        ):
+            await self._emit_stage(
+                "audio.uplink_tick",
+                tick=tick,
+                blocked=blocked or buffer_only,
+                rms=round(pcm_rms_s16le(pcm), 1),
+                playback_active=bool(self._active_generation),
+                intent=self._last_delivered_intent or "",
+                turn_phase=str(self._turn_manager.phase),
+            )
+        if tick in {1, 50, 200, 500} or tick % 1000 == 0:
+            agent_debug_log(
+                "B",
+                "call_actor.py:_feed_uplink_pcm",
+                "uplink_tick",
+                {
+                    "call_id": self.call_id,
+                    "tick": self._debug_uplink_tick,
+                    "blocked": blocked or buffer_only,
+                    "turn_phase": str(self._turn_manager.phase),
+                    "active_gen": bool(self._active_generation),
+                    "intent": self._last_delivered_intent or "",
+                    "rms": round(pcm_rms_s16le(pcm), 1),
+                    "pcm_len": len(pcm),
+                },
+            )
+        if blocked or buffer_only or not self._turn_manager.should_feed_vad():
+            self._track_uplink_pcm(pcm, fed_to_vad=False)
+            self._append_uplink_preroll(pcm)
+            return
+        playback_active = bool(self._active_generation)
+        if self._effective_echo_ref_gate():
+            self._ensure_playback_ref()
+            if self._playback_ref is not None:
+                classification = self._playback_ref.classify(
+                    pcm, playback_active=playback_active
+                )
+                if self._should_drop_echo_for_vad(pcm, playback_active=playback_active):
+                    self._audio_echo_drop_logged += 1
+                    if self._audio_echo_drop_logged <= 30:
+                        await self._emit_stage(
+                            "audio.echo_classified",
+                            classification=str(classification.verdict),
+                            score=round(classification.score, 3),
+                            playback_active=playback_active,
+                            rms=round(pcm_rms_s16le(pcm), 1),
+                        )
+                    if self._debug_uplink_tick in {1, 50, 200}:
+                        agent_debug_log(
+                            "C",
+                            "call_actor.py:_feed_uplink_pcm",
+                            "echo_classified",
+                            {
+                                "call_id": self.call_id,
+                                "playback_active": playback_active,
+                                "verdict": str(classification.verdict),
+                                "score": classification.score,
+                                "rms": round(pcm_rms_s16le(pcm), 1),
+                            },
+                        )
+                    self._track_uplink_pcm(pcm, fed_to_vad=False)
+                    if classification.verdict != EchoVerdict.ECHO:
+                        self._append_uplink_preroll(pcm)
+                    return
+        await self._process_uplink_vad_frame(pcm, playback_active=playback_active)
 
     def _tts_resampler(self, generation_id: str, source_rate: int) -> StatefulResampler:
         key = f"{generation_id}:{source_rate}"
@@ -648,8 +1006,10 @@ class CallActor:
                     interp=outcome.interp,
                     contract=outcome.legacy_contract,
                     utterance_id=outcome.utterance_id,
+                    asr_quality=outcome.asr_quality,
                 )
                 deliver_results.append(result)
+                self._turn_manager.on_turn_applied()
         for event in failed_events:
             await self.media.emit(event)
         for result in deliver_results:
@@ -737,6 +1097,7 @@ class CallActor:
             self._schedule_wait_timer()
             return
         self._wait_state = None
+        await self._emit_uplink_summary("answer_wait_timeout")
         expired = await asyncio.to_thread(self.session.handle_wait_expired, wait_id)
         await self._post_apply_turn(expired)
 
@@ -840,6 +1201,20 @@ class CallActor:
             return
         await self._deliver_session_turn(result)
 
+    def _stt_dump_pcm(self, pcm: bytes, utterance_id: str) -> str | None:
+        """Optional WAV dump for offline stt_probe — IMVERA_STT_DUMP=1."""
+        if os.environ.get("IMVERA_STT_DUMP", "0") not in {"1", "true", "yes"}:
+            return None
+        dump_dir = Path(__file__).resolve().parents[2] / ".run" / "stt_dumps"
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        path = dump_dir / f"{self.call_id}_{utterance_id}.wav"
+        with wave.open(str(path), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(self.config.target_sample_rate)
+            wf.writeframes(pcm)
+        return str(path)
+
     async def _handle_utterance(self, pcm: bytes, utterance_seq: int) -> None:
         if self._stopped or self._transport_closed:
             self._inflight_utterances.discard(utterance_seq)
@@ -854,16 +1229,45 @@ class CallActor:
         )
         self._utterance_budgets[utterance_seq] = budget
         self._active_stage_budget = budget
+        sr = self.config.target_sample_rate
+        duration_ms = int(len(pcm) / max(2, sr) * 1000) if pcm else 0
+        pcm_rms = round(pcm_rms_s16le(pcm), 1)
+        dump_path = self._stt_dump_pcm(pcm, utterance_id)
+        await self._emit_stage(
+            "stt.request",
+            utterance_id=utterance_id,
+            turn_id=turn_id,
+            pcm_bytes=len(pcm),
+            duration_ms=duration_ms,
+            pcm_rms=pcm_rms,
+            dump_path=dump_path or "",
+            pending_slot=self.session.state.pending_slot or "",
+        )
         await self._emit_stage("utterance.start", utterance_id=utterance_id, turn_id=turn_id)
+        # region agent log
+        agent_debug_log(
+            "E",
+            "call_actor.py:_handle_utterance",
+            "stt_invoke",
+            {
+                "call_id": self.call_id,
+                "utterance_id": utterance_id,
+                "pcm_bytes": len(pcm),
+            },
+        )
+        # endregion
         try:
             try:
+                stt_started = time.monotonic()
                 stt_result = await self.stt.transcribe_final(
                     pcm,
                     self.config.target_sample_rate,
                     call_id=self.call_id,
                     turn_id=turn_id,
                     deadline=budget.deadline,
+                    utterance_id=utterance_id,
                 )
+                stt_elapsed_ms = int((time.monotonic() - stt_started) * 1000)
             except Exception as exc:
                 await self._submit_utterance_outcome(
                     _UtteranceOutcome(
@@ -879,7 +1283,21 @@ class CallActor:
                 self._inflight_utterances.discard(utterance_seq)
                 return
 
-            text = (stt_result.text or "").strip()
+            text = normalize_transcript((stt_result.text or "").strip())
+            raw_text = (stt_result.raw_text or stt_result.text or "").strip()
+            await self._emit_stage(
+                "stt.result",
+                utterance_id=utterance_id,
+                raw_text=raw_text,
+                text=text,
+                normalized_changed=raw_text != text,
+                asr_quality=str(stt_result.asr_quality),
+                duration_ms=stt_result.duration_ms or duration_ms,
+                pcm_rms=pcm_rms,
+                stt_elapsed_ms=stt_elapsed_ms,
+                model_revision=stt_result.model_revision or "",
+                audio_rms=stt_result.audio_quality.rms,
+            )
             await self.media.emit(
                 RuntimeEvent(
                     self.call_id,
@@ -890,6 +1308,15 @@ class CallActor:
             await self._emit_stage(
                 "stt.final", utterance_id=utterance_id, text_len=len(text)
             )
+            if not raw_text:
+                await self._emit_stage(
+                    "stt.empty",
+                    utterance_id=utterance_id,
+                    duration_ms=duration_ms,
+                    pcm_rms=pcm_rms,
+                    model_revision=stt_result.model_revision or "",
+                    empty_reason="gigaam_blank",
+                )
             if not text or self._is_assistant_echo(text):
                 if text:
                     await self._emit_stage(
@@ -897,7 +1324,9 @@ class CallActor:
                         utterance_id=utterance_id,
                         text_len=len(text),
                     )
+                    self._reset_uplink_endpointing()
                 self._resume_answer_wait_if_paused()
+                self._turn_manager.on_turn_applied()
                 await self._submit_utterance_outcome(
                     _UtteranceOutcome(
                         utterance_seq=utterance_seq,
@@ -956,6 +1385,12 @@ class CallActor:
                 )
             else:
                 interp = interpret_user_turn(self.session.state, text)
+            if stt_result.asr_quality in (AsrQuality.LOW, AsrQuality.UNUSABLE):
+                await self._emit_stage(
+                    "stt.low_quality",
+                    utterance_id=utterance_id,
+                    quality=str(stt_result.asr_quality),
+                )
             legacy_contract: TurnInterpretation = to_turn_interpretation(
                 self.session.state,
                 turn_id,
@@ -972,6 +1407,7 @@ class CallActor:
                     text=text,
                     interp=interp,
                     legacy_contract=legacy_contract,
+                    asr_quality=stt_result.asr_quality,
                 )
             )
         finally:
@@ -999,6 +1435,15 @@ class CallActor:
         if self._render_generation != render_generation:
             return False
         self._last_delivered_intent = result.proposal.intent
+        if result.proposal.intent == "opening_wellness":
+            # region agent log
+            agent_debug_log(
+                "B",
+                "call_actor.py:_speak_validated_proposal",
+                "opening_intent_set",
+                {"call_id": self.call_id, "intent": result.proposal.intent},
+            )
+            # endregion
         marks_delivered = result.proposal.intent.startswith(
             ("check_", "clarify_", "repeat_")
         ) or result.proposal.intent == "opening_wellness"
@@ -1222,6 +1667,7 @@ class CallActor:
         phrase_id = f"p-cache-{uuid.uuid4().hex[:8]}"
         new_turn = self._playback_turn_generation != render_generation
         self._active_generation = generation_id
+        self._on_bot_playback_started()
         self._playback.begin_phrase(
             generation_id, phrase_id, text, new_turn=new_turn
         )
@@ -1257,6 +1703,8 @@ class CallActor:
                     samples=len(out_pcm) // 2,
                     cached=True,
                 )
+            if out_pcm and self._effective_echo_ref_gate():
+                self._push_echo_downlink(out_pcm, self._output_sample_rate)
             env = AudioEnvelope(
                 call_id=self.call_id,
                 generation_id=generation_id,
@@ -1341,6 +1789,7 @@ class CallActor:
         phrase_id = f"p-{uuid.uuid4().hex[:8]}"
         new_turn = self._playback_turn_generation != render_generation
         self._active_generation = generation_id
+        self._on_bot_playback_started()
         self._playback.begin_phrase(
             generation_id, phrase_id, text, new_turn=new_turn
         )
@@ -1483,7 +1932,7 @@ class CallActor:
                 await asyncio.sleep(0.01)
                 continue
             await self.media.send_pcm(chunk.pcm_s16le)
-            if self.config.echo_ref_gate:
+            if self._effective_echo_ref_gate():
                 self._push_echo_downlink(chunk.pcm_s16le, chunk.sample_rate)
             if chunk.sequence == 0:
                 self._tts_first_pcm_gens.add(chunk.generation_id)
@@ -1658,6 +2107,7 @@ def build_call_actor(
             telephony_stream=os.environ.get("IMVERA_TELEPHONY_STREAM", "1") == "1",
             lab_half_duplex=lab_half_duplex_enabled(),
             post_speech_pause_ms=post_speech_pause_ms(),
+            uplink_preroll_ms=uplink_preroll_ms(),
             echo_ref_gate=echo_ref_gate_enabled(),
             lab_barge_in=lab_barge_in_enabled(),
         ),

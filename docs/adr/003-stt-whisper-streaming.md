@@ -62,3 +62,12 @@ Wrapper maps logprobs, no_speech, critical terms, RMS → `GOOD | LOW | UNUSABLE
 ## Verification status
 
 ❌ Benchmark not run yet — blocked on Phase 3A lab setup.
+
+### Lab default (2026-09-08)
+
+M5 lab STT worker switched from **mlx Qwen3-ASR** to **GigaAM v3_e2e_rnnt** (PyTorch CPU):
+
+- Final transcription only via `services/stt/gigaam_engine.py`; HTTP `/v1/transcribe` contract unchanged.
+- Silero VAD unchanged upstream; `asr_quality` / normalize / critical_terms wrappers kept.
+- Partial streaming via `v3_ctc` **not implemented** — `HttpSTTProvider.transcribe_partial` returns empty (same as before).
+- Qwen gated behind explicit `models.asr.engine: mlx_qwen` — no silent fallback.

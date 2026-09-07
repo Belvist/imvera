@@ -29,7 +29,12 @@ def _check(url: str, name: str, blockers: list[str]) -> None:
     try:
         r = httpx.get(url, timeout=3.0)
         if r.status_code == 200:
-            print(f"  {name}: ready")
+            detail = ""
+            if name in {"STT", "TTS", "LLM"}:
+                rev = r.json().get("model_revision")
+                if rev:
+                    detail = f" ({rev})"
+            print(f"  {name}: ready{detail}")
             return
     except httpx.HTTPError:
         pass

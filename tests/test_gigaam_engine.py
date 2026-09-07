@@ -1,0 +1,52 @@
+"""Unit tests for GigaAM engine wrapper (no live model download)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from services.stt.backends import load_asr_backend
+from services.stt.gigaam_engine import (
+    GigaAMEngine,
+    _resolve_model_name,
+    ensure_gigaam_artifacts,
+)
+
+
+def test_resolve_model_name_short_and_full() -> None:
+    assert _resolve_model_name("e2e_rnnt") == "v3_e2e_rnnt"
+    assert _resolve_model_name("v3_rnnt") == "v3_rnnt"
+
+
+def test_gigaam_engine_transcribe_wav() -> None:
+    model = MagicMock()
+    model.transcribe.return_value = SimpleNamespace(text="  Хорошо.  ")
+    engine = GigaAMEngine(model=model, model_id="v3_e2e_rnnt", device="cpu")
+    assert engine.transcribe_wav(Path("/tmp/x.wav")) == "Хорошо."
+    model.transcribe.assert_called_once_with("/tmp/x.wav")
+
+
+def test_ensure_gigaam_artifacts_skips_existing(tmp_path: Path) -> None:
+    resolved = "v3_e2e_rnnt"
+    ckpt = tmp_path / f"{resolved}.ckpt"
+    ckpt.write_bytes(b"x" * 64)
+    with patch("services.stt.gigaam_engine._verify_checksum") as verify:
+        root = ensure_gigaam_artifacts(resolved, tmp_path)
+    assert root == tmp_path
+    verify.assert_called_once()
+
+
+def test_load_asr_backend_unknown_engine() -> None:
+    with pytest.raises(RuntimeError, match="Unknown ASR engine"):
+        load_asr_backend({"engine": "whisper", "id": "large"})
+
+
+def test_load_asr_backend_gigaam_mock() -> None:
+    fake = GigaAMEngine(model=MagicMock(), model_id="v3_e2e_rnnt", device="cpu")
+    with patch("services.stt.gigaam_engine.load_gigaam_engine", return_value=fake):
+        backend, revision = load_asr_backend({"engine": "gigaam", "id": "v3_e2e_rnnt"})
+    assert backend is fake
+    assert revision == "gigaam:v3_e2e_rnnt@cpu"

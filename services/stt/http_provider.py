@@ -9,7 +9,7 @@ import httpx
 
 from packages.contracts.enums import AsrQuality
 from packages.contracts.providers import ProviderTimeout, ProviderUnavailable
-from packages.contracts.stt import STTPartial, STTResult
+from packages.contracts.stt import STTPartial, STTResult, CriticalTermMatch, AudioQualityHints
 
 
 class HttpSTTProvider:
@@ -41,32 +41,30 @@ class HttpSTTProvider:
         call_id: str,
         turn_id: int,
         deadline: float,
+        utterance_id: str = "",
     ) -> STTResult:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise ProviderTimeout("STT deadline exceeded before request")
+        body = {
+            "call_id": call_id,
+            "turn_id": turn_id,
+            "utterance_id": utterance_id,
+            "sample_rate": sample_rate,
+            "pcm_b64": _b64(pcm_s16le),
+        }
         try:
             if self._client is not None:
                 response = await self._client.post(
                     f"{self._base_url}/v1/transcribe",
-                    json={
-                        "call_id": call_id,
-                        "turn_id": turn_id,
-                        "sample_rate": sample_rate,
-                        "pcm_b64": _b64(pcm_s16le),
-                    },
+                    json=body,
                     timeout=min(self._timeout_s, remaining),
                 )
             else:
                 async with httpx.AsyncClient(timeout=min(self._timeout_s, remaining)) as client:
                     response = await client.post(
                         f"{self._base_url}/v1/transcribe",
-                        json={
-                            "call_id": call_id,
-                            "turn_id": turn_id,
-                            "sample_rate": sample_rate,
-                            "pcm_b64": _b64(pcm_s16le),
-                        },
+                        json=body,
                     )
         except httpx.HTTPError as exc:
             raise ProviderUnavailable(str(exc)) from exc
@@ -74,11 +72,28 @@ class HttpSTTProvider:
             raise ProviderUnavailable(f"STT HTTP {response.status_code}: {response.text[:200]}")
         data: dict[str, Any] = response.json()
         quality = _map_quality(data.get("asr_quality", "GOOD"))
+        critical_raw = data.get("critical_terms") or []
+        critical_terms = [
+            CriticalTermMatch(
+                term=str(item.get("term", "")),
+                matched=bool(item.get("matched", False)),
+                logprob=item.get("logprob"),
+            )
+            for item in critical_raw
+            if isinstance(item, dict)
+        ]
         return STTResult(
             text=str(data.get("text", "")),
+            raw_text=str(data.get("raw_text") or data.get("text", "")),
+            duration_ms=int(data.get("duration_ms") or 0) or None,
+            model_revision=str(data.get("model_revision") or "") or None,
             asr_quality=quality,
             avg_logprob=data.get("avg_logprob"),
             no_speech_prob=data.get("no_speech_prob"),
+            critical_terms=critical_terms,
+            audio_quality=AudioQualityHints(
+                rms=float(data.get("pcm_rms") or 0) or None,
+            ),
         )
 
 

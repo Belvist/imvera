@@ -1,0 +1,4 @@
+{"ts": "2026-09-08T01:13:00+00:00", "call_id": "sip-deaf-vad-fixture", "type": "playback.completed", "payload": {}}
+{"ts": "2026-09-08T01:13:01+00:00", "call_id": "sip-deaf-vad-fixture", "type": "stage.timing", "payload": {"stage": "listen.enabled", "elapsed_ms": 0}}
+{"ts": "2026-09-08T01:13:08+00:00", "call_id": "sip-deaf-vad-fixture", "type": "stage.timing", "payload": {"stage": "uplink.summary", "listen_rms_peak": 45.0, "listen_uplink_bytes": 32000}}
+{"ts": "2026-09-08T01:13:09+00:00", "call_id": "sip-deaf-vad-fixture", "type": "stage.timing", "payload": {"stage": "capture.summary", "capture_bytes": 128000, "capture_rms_peak": 890.0, "inject_bytes_sent": 200000}}

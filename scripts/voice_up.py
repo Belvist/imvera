@@ -15,6 +15,8 @@ from packages.voice_runtime.profile import apply_audio_env, audio_settings
 from scripts.local_sip_config import load_or_create
 from scripts.voice_process import ROOT, is_running, start
 from packages.voice_runtime.lab_half_duplex import apply_lab_half_duplex_env
+from packages.voice_runtime.audio_audit import apply_audio_audit_env
+from packages.voice_runtime.audio_audit import apply_audio_audit_env
 from services.tts.lab_fast import apply_lab_fast_env, lab_fast_tts_enabled
 
 VOICE_COMPOSE = ["docker", "compose", "-f", "docker/docker-compose.voice.yml"]
@@ -174,16 +176,21 @@ def _verify_asterisk_modules() -> bool:
 
 
 def main() -> int:
-    profile = os.environ.get("IMVERA_VOICE_PROFILE", "m5-mlx")
-    if profile != "m5-mlx":
-        print(f"BLOCKED: unsupported profile {profile}", file=sys.stderr)
+    profile = os.environ.get("IMVERA_VOICE_PROFILE", "m5-gigaam")
+    if profile not in {"m5-gigaam", "m5-mlx"}:
+        print(
+            f"BLOCKED: unsupported profile {profile} (use m5-gigaam or m5-mlx)",
+            file=sys.stderr,
+        )
         return 1
 
     cfg = load_or_create()
     print("SIP credentials synced to config/local/asterisk/")
 
-    env = apply_lab_half_duplex_env(
-        apply_lab_fast_env(apply_audio_env(os.environ.copy()))
+    env = apply_audio_audit_env(
+        apply_lab_half_duplex_env(
+            apply_lab_fast_env(apply_audio_env(os.environ.copy()))
+        )
     )
     if env.get("IMVERA_TTS_ENGINE") == "silero_lab":
         print("Lab fast TTS: silero_lab (IMVERA_LAB_FAST_TTS=1, ~1-2s warm first_pcm)")
@@ -192,10 +199,11 @@ def main() -> int:
             "macos say fallback if torch/omegaconf missing"
         )
     if env.get("IMVERA_LAB_HALF_DUPLEX", "1") in {"1", "true", "yes"}:
-        pause = env.get("IMVERA_POST_SPEECH_PAUSE_MS", "400")
+        pause = env.get("IMVERA_POST_SPEECH_PAUSE_MS", "100")
+        preroll = env.get("IMVERA_UPLINK_PREROLL_MS", "2000")
         print(
-            f"Lab half-duplex: ON (post-speech pause {pause}ms — "
-            "Vera finishes → pause → then mic)"
+            f"Lab half-duplex: ON (post-speech pause {pause}ms, preroll {preroll}ms — "
+            "Vera finishes → pause → mic; opening_wellness always-listen + echo-ref)"
         )
     elif env.get("IMVERA_ECHO_REF_GATE", "0") in {"1", "true", "yes"}:
         print(
@@ -204,6 +212,11 @@ def main() -> int:
         )
     else:
         print("Lab listen: always-listen, echo-ref gate OFF (raw uplink)")
+    if env.get("IMVERA_AUDIO_AUDIT", "0") in {"1", "true", "yes"}:
+        print(
+            "Audio audit: ON — trace capture.tick / audio.* / stt.request|result; "
+            "dumps .run/captures/<call_id>.pcm + .run/stt_dumps/<call_id>_u-N.wav"
+        )
 
     code = _ensure_workers(env)
     if code != 0:
@@ -327,6 +340,16 @@ def main() -> int:
     if gate.returncode != 0:
         print("BLOCKED: voice-call-gate failed — fix TTS before Zoiper", file=sys.stderr)
         return 1
+
+    try:
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+        ).strip()
+    except subprocess.CalledProcessError:
+        sha = "unknown"
+    print(f"\n  Git SHA: {sha}")
+    print("  Live gate: dial 7000 → hang up → python3 scripts/diagnose_call_trace.py <call_id>")
+    print("  Pass: playback.completed → listen.enabled → speech.started → stt.final")
     return 0
 
 

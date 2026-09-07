@@ -12,7 +12,7 @@ export PYTHONPATH := .
 .PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k
 
 install:
-	$(PYTHON) -m pip install -e ".[dev,api,mlx]"
+	$(PYTHON) -m pip install -e ".[dev,api,mlx,gigaam-stt]"
 
 test:
 	$(PYTHON) -m pytest tests/ -q

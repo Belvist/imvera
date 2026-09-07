@@ -35,6 +35,14 @@ mlx = [
     "huggingface_hub>=0.24",
     "soundfile>=0.12",
 ]
+gigaam-stt = [
+    "gigaam @ git+https://github.com/salute-developers/GigaAM.git",
+    "torch>=2.2",
+    "torchaudio>=2.2",
+    "omegaconf>=2.3",
+    "certifi>=2024.0",
+    "tqdm>=4.66",
+]
 lab-silero = [
     "torch>=2.2",
     "omegaconf>=2.3",
@@ -45,6 +53,10 @@ sip-lab = [
     "pyVoIP==1.6.8",
     "audioop-lts>=0.2.1",
 ]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
 
 [tool.hatch.build.targets.wheel]
 packages = ["packages"]

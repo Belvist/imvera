@@ -26,6 +26,8 @@ from packages.telephony.ws_protocol import (
     parse_control_message,
     parse_media_start,
 )
+from packages.voice_runtime.agent_debug_log import agent_debug_log
+from packages.voice_runtime.audio_audit import apply_audio_audit_env, audio_audit_enabled
 from packages.voice_runtime.audio_channels import extract_client_uplink
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks, build_call_actor
 from packages.voice_runtime.trace import record_event
@@ -148,9 +150,44 @@ class CallSession:
     _inject_first_logged: bool = False
     _capture_task: asyncio.Task | None = None
     _inject_buf: bytearray = field(default_factory=bytearray)
+    _capture_summary_emitted: bool = False
+    _debug_capture_ticks: int = 0
 
 
 _sessions: dict[str, CallSession] = {}
+
+
+def _record_capture_summary(session: CallSession) -> None:
+    """Emit gateway capture stats once per call (Zoiper hangup uses WS disconnect)."""
+    if session._capture_summary_emitted:
+        return
+    session._capture_summary_emitted = True
+    print(
+        f"call {session.call_id} capture_bytes={session.capture_bytes} "
+        f"capture_rms_peak={session.capture_rms_peak:.1f} "
+        f"inject_bytes_sent={session.inject_bytes_sent}",
+        flush=True,
+    )
+    log.info(
+        "call %s capture_bytes=%s capture_rms_peak=%.1f inject_bytes_sent=%s",
+        session.call_id,
+        session.capture_bytes,
+        session.capture_rms_peak,
+        session.inject_bytes_sent,
+    )
+    record_event(
+        session.call_id,
+        RuntimeEvent(
+            session.call_id,
+            RuntimeEventType.STAGE_TIMING,
+            {
+                "stage": "capture.summary",
+                "capture_bytes": session.capture_bytes,
+                "capture_rms_peak": round(session.capture_rms_peak, 1),
+                "inject_bytes_sent": session.inject_bytes_sent,
+            },
+        ),
+    )
 
 
 class OpenCallRequest(BaseModel):
@@ -390,32 +427,7 @@ async def open_call(call_id: str, body: OpenCallRequest) -> dict:
 async def close_call(call_id: str) -> dict:
     session = _sessions.pop(call_id, None)
     if session:
-        print(
-            f"call {call_id} capture_bytes={session.capture_bytes} "
-            f"capture_rms_peak={session.capture_rms_peak:.1f} "
-            f"inject_bytes_sent={session.inject_bytes_sent}",
-            flush=True,
-        )
-        log.info(
-            "call %s capture_bytes=%s capture_rms_peak=%.1f inject_bytes_sent=%s",
-            call_id,
-            session.capture_bytes,
-            session.capture_rms_peak,
-            session.inject_bytes_sent,
-        )
-        record_event(
-            call_id,
-            RuntimeEvent(
-                call_id,
-                RuntimeEventType.STAGE_TIMING,
-                {
-                    "stage": "capture.summary",
-                    "capture_bytes": session.capture_bytes,
-                    "capture_rms_peak": round(session.capture_rms_peak, 1),
-                    "inject_bytes_sent": session.inject_bytes_sent,
-                },
-            ),
-        )
+        _record_capture_summary(session)
         if session._capture_task and not session._capture_task.done():
             session._capture_task.cancel()
         if session._capture_dump is not None:
@@ -534,6 +546,40 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
                 rms = _pcm_rms(pcm)
                 if rms > session.capture_rms_peak:
                     session.capture_rms_peak = rms
+                session._debug_capture_ticks += 1
+                tick = session._debug_capture_ticks
+                if audio_audit_enabled() and (
+                    tick in {1, 50, 200, 500} or tick % 500 == 0
+                ):
+                    record_event(
+                        session.call_id,
+                        RuntimeEvent(
+                            session.call_id,
+                            RuntimeEventType.STAGE_TIMING,
+                            {
+                                "stage": "capture.tick",
+                                "tick": tick,
+                                "capture_bytes": session.capture_bytes,
+                                "rms": round(rms, 1),
+                                "capture_rms_peak": round(session.capture_rms_peak, 1),
+                            },
+                        ),
+                    )
+                if tick in {1, 50, 200, 500}:
+                    # region agent log
+                    agent_debug_log(
+                        "A",
+                        "voice_gateway.py:capture",
+                        "capture_tick",
+                        {
+                            "call_id": session.call_id,
+                            "tick": session._debug_capture_ticks,
+                            "capture_bytes": session.capture_bytes,
+                            "rms": round(rms, 1),
+                            "capture_rms_peak": round(session.capture_rms_peak, 1),
+                        },
+                    )
+                    # endregion
                 await session.actor.push_pcm(pcm, session.capture_sample_rate)
     except WebSocketDisconnect:
         pass
@@ -545,6 +591,7 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
             session.inject_ws = None
             session.inject_ready = False
         if not session.capture_ready and not session.inject_ready:
+            _record_capture_summary(session)
             await session.actor.stop()
             _sessions.pop(session.call_id, None)
 

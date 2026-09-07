@@ -55,6 +55,7 @@ class STTProvider(Protocol):
         call_id: str,
         turn_id: int,
         deadline: float,
+        utterance_id: str = "",
     ) -> STTResult: ...
 
 

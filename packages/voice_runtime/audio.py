@@ -3,7 +3,21 @@
 from __future__ import annotations
 
 import array
+import math
+import struct
 from dataclasses import dataclass
+
+
+def pcm_rms_s16le(pcm: bytes) -> float:
+    """Root-mean-square of signed 16-bit mono PCM (0 = silence)."""
+    if len(pcm) < 2:
+        return 0.0
+    count = len(pcm) // 2
+    samples = struct.unpack(f"<{count}h", pcm[: count * 2])
+    if not samples:
+        return 0.0
+    mean_sq = sum(s * s for s in samples) / len(samples)
+    return math.sqrt(mean_sq)
 
 
 def pcm16_frame_bytes(sample_rate: int, frame_ms: int = 20) -> int:

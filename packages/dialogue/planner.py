@@ -3,7 +3,7 @@
 import re
 
 from packages.contracts.core import TerminationReason
-from packages.contracts.enums import AnswerJudgement, FsmState, GoalStatus, SlotStatus
+from packages.contracts.enums import AnswerJudgement, AsrQuality, FsmState, GoalStatus, SlotStatus
 from packages.contracts.mandatory import PILOT_SLOT_CHECKS
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.fsm import CallFsm
@@ -20,6 +20,14 @@ _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
 _GOODBYE_FINAL = "До свидания. Хорошего дня."
 _GOODBYE_MARKERS = ("до свидания", "всего доброго")
 _MAX_SLOT_UNCLEAR = 2
+_STT_GARBAGE_PHRASES = frozenset(
+    {
+        "ответ",
+        "пять вы",
+        "сд",
+        "сейчас",
+    }
+)
 
 _VERA_INTRO = "Я Вера, голосовой помощник IMVERA."
 _DEFER_ACK = "Поняла. Поговорим в другой раз. До свидания."
@@ -122,6 +130,17 @@ class Planner:
         )
 
     @staticmethod
+    def _normalize_stt_key(text: str) -> str:
+        return re.sub(r"[^\wа-яё]+", "", text.strip().casefold())
+
+    @staticmethod
+    def _looks_like_stt_garbage(user_text: str) -> bool:
+        key = Planner._normalize_stt_key(user_text)
+        if not key:
+            return True
+        return key in _STT_GARBAGE_PHRASES
+
+    @staticmethod
     def plan_after_user(
         state: DialogueState,
         user_text: str,
@@ -130,12 +149,39 @@ class Planner:
         interp: UserInterpretation | None = None,
         *,
         utterance_id: str = "",
+        asr_quality: AsrQuality = AsrQuality.GOOD,
     ) -> TurnProposal:
         if state.is_terminal() and state.goodbye_confirmed:
             return Planner._terminal_noop(state, turn_id, generation_id)
 
         if interp is None:
             interp = interpret_user_turn(state, user_text)
+
+        if (
+            asr_quality in (AsrQuality.LOW, AsrQuality.UNUSABLE)
+            and state.pending_slot
+            and not state.risk_handling
+        ):
+            return Planner._ask_slot_question(
+                state,
+                state.pending_slot,
+                turn_id,
+                generation_id,
+                clarification=True,
+            )
+
+        if (
+            Planner._looks_like_stt_garbage(user_text)
+            and state.pending_slot
+            and not state.risk_handling
+        ):
+            return Planner._ask_slot_question(
+                state,
+                state.pending_slot,
+                turn_id,
+                generation_id,
+                clarification=True,
+            )
 
         if interp.revoke_consent:
             return Planner._handle_revoke_consent(state, turn_id, generation_id)

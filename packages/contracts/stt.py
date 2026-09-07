@@ -34,3 +34,7 @@ class STTResult(BaseModel):
     audio_quality: AudioQualityHints = Field(default_factory=AudioQualityHints)
     critical_terms: list[CriticalTermMatch] = Field(default_factory=list)
     asr_quality: AsrQuality = AsrQuality.GOOD
+    # Observability — raw GigaAM output before normalize (trace stt.result).
+    raw_text: str | None = None
+    duration_ms: int | None = None
+    model_revision: str | None = None

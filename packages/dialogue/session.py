@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pydantic import BaseModel, Field
 
 from packages.contracts.core import CallRecordStore, CallResultSnapshot
-from packages.contracts.enums import AnswerJudgement, DialogueAct, FsmState, RiskLevel
+from packages.contracts.enums import AnswerJudgement, AsrQuality, DialogueAct, FsmState, RiskLevel
 from packages.contracts.events import CallEvent
 from packages.contracts.interpretation import TurnInterpretation
 from packages.contracts.status import SafetySnapshot
@@ -208,6 +208,7 @@ class CallSession:
         interp: UserInterpretation | None = None,
         contract: TurnInterpretation | None = None,
         utterance_id: str | None = None,
+        asr_quality: AsrQuality = AsrQuality.GOOD,
     ) -> SessionTurnResult:
         if self.state.call_finalized:
             gen = self._next_generation_id()
@@ -247,7 +248,12 @@ class CallSession:
             )
 
         return self._apply_user_turn(
-            user_text, next_turn, interp, contract, utterance_id=utterance_id
+            user_text,
+            next_turn,
+            interp,
+            contract,
+            utterance_id=utterance_id,
+            asr_quality=asr_quality,
         )
 
     def _apply_user_turn(
@@ -258,6 +264,7 @@ class CallSession:
         contract: TurnInterpretation,
         *,
         utterance_id: str | None = None,
+        asr_quality: AsrQuality = AsrQuality.GOOD,
     ) -> SessionTurnResult:
         allow_new = not (
             self.state.risk_handling and self.state.fsm_state == FsmState.CONFIRM_SITUATION
@@ -297,6 +304,7 @@ class CallSession:
             self.turn_id,
             interp=interp,
             utterance_id=uid,
+            asr_quality=asr_quality,
         )
         self._append_event(
             "PLANNER_DECISION",

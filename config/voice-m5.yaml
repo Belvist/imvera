@@ -1,5 +1,5 @@
-profile_id: m5-mlx
-description: Apple Silicon MLX local voice profile (engineering candidate)
+profile_id: m5-gigaam
+description: Apple Silicon lab profile — GigaAM v3 STT (PyTorch CPU), MLX TTS/LLM
 
 ports:
   stt: 9101
@@ -8,8 +8,15 @@ ports:
 
 models:
   asr:
-    id: mlx-community/Qwen3-ASR-0.6B-8bit
+    # engine: gigaam (default) | mlx_qwen (explicit opt-in — no silent fallback)
+    engine: gigaam
+    # v3_e2e_rnnt — final RNNT + punctuation; v3_rnnt / v3_ctc also supported
+    id: v3_e2e_rnnt
     language: Russian
+    device: cpu
+    fp16_encoder: false
+    use_flash: false
+    download_root: ~/.cache/gigaam
   llm:
     id: mlx-community/Qwen3-4B-4bit
     max_tokens_interpret: 512

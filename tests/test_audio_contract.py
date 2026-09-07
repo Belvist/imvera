@@ -5,8 +5,14 @@ from packages.voice_runtime.audio import (
     StatefulResampler,
     belongs_to_active_output,
     pcm16_frame_bytes,
+    pcm_rms_s16le,
 )
 from packages.voice_runtime.playback import split_pcm_frames
+
+
+def test_pcm_rms_silence_and_signal() -> None:
+    assert pcm_rms_s16le(b"\x00\x00" * 100) == 0.0
+    assert pcm_rms_s16le(b"\x30\x00" * 100) > 0.0
 
 
 def test_pcm16_frame_sizes() -> None:

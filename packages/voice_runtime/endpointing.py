@@ -36,3 +36,16 @@ class SpeechSegmentCollector:
             self._segment = []
             return out
         return None
+
+    @property
+    def collecting(self) -> bool:
+        return self._collecting
+
+    def force_finalize(self) -> bytes | None:
+        """Return in-progress segment without waiting for speech_ended (listen handoff)."""
+        if not self._collecting or not self._segment:
+            return None
+        self._collecting = False
+        out = b"".join(self._segment)
+        self._segment = []
+        return out

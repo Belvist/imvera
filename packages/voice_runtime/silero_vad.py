@@ -25,7 +25,10 @@ class SileroVad:
 
         telephony = os.environ.get("IMVERA_TELEPHONY_VAD", "1") == "1"
         self._prob_threshold = float(
-            os.environ.get("IMVERA_VAD_PROB", "0.35" if telephony else "0.5")
+            os.environ.get("IMVERA_VAD_PROB", "0.15" if telephony else "0.5")
+        )
+        self._rms_fallback = float(
+            os.environ.get("IMVERA_VAD_RMS_FALLBACK", "350" if telephony else "500")
         )
         import numpy as np
         import onnxruntime as ort
@@ -86,7 +89,14 @@ class SileroVad:
 
             audio = np.array(samples, dtype=np.float32) / 32768.0
             prob = self._probability(audio)
-            loud = prob >= self._prob_threshold
+            import math
+
+            rms = math.sqrt(
+                sum(int(s) * int(s) for s in samples) / max(len(samples), 1)
+            )
+            loud = prob >= self._prob_threshold or (
+                rms >= self._rms_fallback and prob >= 0.05
+            )
             if loud:
                 self._silence_ms = 0
                 self._speech_ms += self._window_ms
