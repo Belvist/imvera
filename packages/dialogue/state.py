@@ -3,9 +3,15 @@
 from pydantic import BaseModel, Field
 
 from packages.contracts.core import TerminationReason
-from packages.contracts.enums import FsmState, SlotStatus
+from packages.contracts.enums import FsmState, GoalStatus, SlotStatus
 from packages.contracts.mandatory import PILOT_MANDATORY_CHECKS, pilot_mandatory_defaults
 from packages.dialogue.facts import FactRecord
+from packages.dialogue.question_ledger import (
+    QuestionGoal,
+    new_goal,
+    semantic_key_for_slot,
+    slot_status_from_goal,
+)
 
 
 class DialogueState(BaseModel):
@@ -46,12 +52,32 @@ class DialogueState(BaseModel):
     slot_unclear_counts: dict[str, int] = Field(default_factory=dict)
     pending_question_delivered: bool = False
     last_committed_utterance_id: str = ""
+    question_ledger: dict[str, QuestionGoal] = Field(default_factory=dict)
+    waiting_on_goal: str | None = None
+    consecutive_unresolved_goals: int = 0
+    pending_action_id: str | None = None
 
     def bump_version(self) -> None:
         self.state_version += 1
 
     def mandatory_remaining(self) -> list[str]:
         return [k for k in PILOT_MANDATORY_CHECKS if not self.mandatory_checks.get(k, False)]
+
+    def ensure_goal(self, slot: str) -> QuestionGoal:
+        key = semantic_key_for_slot(slot)
+        goal = self.question_ledger.get(key)
+        if goal is None:
+            goal = new_goal(slot)
+            self.question_ledger[key] = goal
+        return goal
+
+    def get_goal(self, slot: str) -> QuestionGoal | None:
+        return self.question_ledger.get(semantic_key_for_slot(slot))
+
+    def sync_slot_from_goal(self, slot: str) -> None:
+        goal = self.get_goal(slot)
+        if goal is not None:
+            self.slots[slot] = slot_status_from_goal(goal)
 
     def is_terminal(self) -> bool:
         return self.fsm_state in (

@@ -13,6 +13,18 @@ natural dialogue with Вера, reliable handoff to IMVERA Core for verdicts and
 You are an engineering agent working on **voiseup**. You follow skills in `.agents/skills/`.
 You do not improvise architecture. You do not ship without verification gates.
 
+## Cursor Workflow (active task)
+
+For multi-step voice/SIP work, keep `docs/current-task.md` updated (outcome, branch/SHA, decisions, criteria, next op).
+
+```text
+1. Reproduce failure with runtime truth (SHA, endpoints, trace) before patching
+2. Fix root cause — never weaken e2e assertions to pass
+3. Verify full chain (unit tests + relevant gate script) with commands recorded
+4. Report CHANGED / VERIFIED / NOT VERIFIED / REMAINING RISKS / NEXT GATE
+5. No bare «готово» — every claim maps to a verified command or is NOT VERIFIED
+```
+
 ## Status Vocabulary (mandatory in every completion report)
 
 Never say «готово» based only on green tests. Always report:
@@ -134,6 +146,7 @@ Record irreversible decisions here. Format: `ADR-NNN: title (date) — one line`
 
 ```text
 ADR-008: Product milestones, Core in monorepo, semantic contract (2026-09-06)
+ADR-009: LLM understanding + code state policy, QuestionLedger (2026-09-07)
 ```
 
 ## Commands (when implemented)

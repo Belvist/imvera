@@ -113,8 +113,14 @@ class InMemoryCallRecordStore(CallRecordStore):
                 return PersistResult(ok=True, delivery_stage=stage)
             if snapshot.call_ended:
                 self._finalized_calls.add(snapshot.call_id)
+            existing = self._results.get(snapshot.call_id)
+            merged_metadata = dict(existing.metadata) if existing else {}
+            merged_metadata.update(snapshot.metadata)
             self._results[snapshot.call_id] = snapshot.model_copy(
-                update={"delivery_stage": DeliveryStage.PERSISTED}
+                update={
+                    "delivery_stage": DeliveryStage.PERSISTED,
+                    "metadata": merged_metadata,
+                }
             )
             return PersistResult(ok=True, delivery_stage=DeliveryStage.PERSISTED)
 
@@ -131,6 +137,26 @@ class InMemoryCallRecordStore(CallRecordStore):
             if row is None or row.family_id != family_id:
                 return []
             return list(self._events.get(call_id, []))
+
+    def save_dialogue_snapshot(
+        self,
+        snapshot: CallResultSnapshot,
+        family_id: str,
+    ) -> PersistResult:
+        with self._lock:
+            row = self._results.get(snapshot.call_id)
+            if row is None:
+                return PersistResult(
+                    ok=False,
+                    delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                    error="call missing",
+                )
+            if row.family_id != family_id:
+                return _family_mismatch_result()
+            self._results[snapshot.call_id] = snapshot.model_copy(
+                update={"delivery_stage": DeliveryStage.PERSISTED}
+            )
+            return PersistResult(ok=True, delivery_stage=DeliveryStage.PERSISTED)
 
 
 def observation_from_fact(

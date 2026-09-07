@@ -299,6 +299,50 @@ class PostgresCallRecordStore(CallRecordStore):
         except Exception:
             return []
 
+    def save_dialogue_snapshot(
+        self,
+        snapshot: CallResultSnapshot,
+        family_id: str,
+    ) -> PersistResult:
+        try:
+            with self._connect() as conn:
+                with conn.transaction():
+                    with conn.cursor() as cur:
+                        if not self._check_family(cur, snapshot.call_id, family_id):
+                            return _family_mismatch_result()
+                        cur.execute(
+                            """
+                            UPDATE call_results SET
+                                family_id = %s,
+                                fsm_state = %s,
+                                facts = %s,
+                                fact_quotes = %s,
+                                partial = %s,
+                                termination_reason = %s,
+                                metadata = %s,
+                                updated_at = %s
+                            WHERE call_id = %s
+                            """,
+                            (
+                                family_id,
+                                snapshot.fsm_state.value,
+                                json.dumps(snapshot.facts),
+                                json.dumps(snapshot.fact_quotes),
+                                snapshot.partial,
+                                (
+                                    snapshot.termination_reason.value
+                                    if snapshot.termination_reason
+                                    else None
+                                ),
+                                json.dumps(snapshot.metadata),
+                                datetime.now(UTC),
+                                snapshot.call_id,
+                            ),
+                        )
+            return PersistResult(ok=True, delivery_stage=DeliveryStage.PERSISTED)
+        except Exception as exc:
+            return _persist_error(exc)
+
     @staticmethod
     def _check_family(cur, call_id: str, family_id: str) -> bool:
         cur.execute("SELECT family_id FROM call_results WHERE call_id = %s", (call_id,))

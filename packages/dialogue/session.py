@@ -16,6 +16,7 @@ from packages.dialogue.interpretation import UserInterpretation
 from packages.dialogue.interpreter import Interpreter
 from packages.dialogue.planner import Planner
 from packages.dialogue.state import DialogueState
+from packages.dialogue.transition_store import DialogueTransitionStore
 from packages.dialogue.validator import Validator
 from packages.safety import SafetyEngine
 
@@ -62,6 +63,7 @@ class CallSession:
         )
         self.safety = SafetySnapshot()
         self.store = store or create_call_record_store()
+        self.transitions = DialogueTransitionStore(self.store, family_id)
         self.interpreter = interpreter or Interpreter()
         self.turn_id = 0
         self._generation_seq = 0
@@ -97,6 +99,11 @@ class CallSession:
     def _snapshot(self) -> CallResultSnapshot:
         facts = {k: v.value for k, v in self.state.facts.items()}
         quotes = {k: v.source_quote for k, v in self.state.facts.items()}
+        existing = self.store.get_call_result(self.state.call_id, self.state.family_id)
+        metadata = dict(existing.metadata) if existing else {}
+        from packages.dialogue.transition_store import _state_to_metadata
+
+        metadata.update(_state_to_metadata(self.state, None))
         return CallResultSnapshot(
             call_id=self.state.call_id,
             family_id=self.state.family_id,
@@ -107,6 +114,7 @@ class CallSession:
             partial=bool(self.state.mandatory_remaining()),
             call_ended=self.state.call_finalized,
             termination_reason=self.state.termination_reason,
+            metadata=metadata,
         )
 
     def _finalize_call_if_needed(self) -> tuple[bool, str | None]:
@@ -168,6 +176,7 @@ class CallSession:
         gen = self._next_generation_id()
         proposal = Planner.plan_vera_turn(self.state, self.turn_id, gen)
         validated = Validator.validate(proposal)
+        commit = self.transitions.commit_transition(self.state, proposal)
         contract = TurnInterpretation(
             call_id=self.state.call_id,
             turn_id=self.turn_id,
@@ -187,8 +196,8 @@ class CallSession:
             proposal=proposal,
             validated=validated,
             safety=self.safety.model_copy(deep=True),
-            persist_ok=ensure.ok,
-            persist_error=ensure.error,
+            persist_ok=ensure.ok and commit.ok,
+            persist_error=ensure.error or commit.error,
         )
 
     def handle_user_text(
@@ -302,6 +311,7 @@ class CallSession:
             idempotency_key=f"{self.state.call_id}:planner:{uid}",
         )
         validated = Validator.validate(proposal)
+        commit = self.transitions.commit_transition(self.state, proposal)
 
         obs_ids, ok, err = self._persist_new_facts(self.turn_id)
         if risk_obs_id:
@@ -320,9 +330,52 @@ class CallSession:
             validated=validated,
             safety=self.safety.model_copy(deep=True),
             observation_ids=obs_ids,
-            persist_ok=fin_ok,
-            persist_error=fin_err,
+            persist_ok=fin_ok and commit.ok,
+            persist_error=fin_err or commit.error,
         )
+
+    def handle_wait_expired(self, wait_id: str | None = None) -> SessionTurnResult:
+        """Planner path after CallActor answer-wait timer fires."""
+        self.turn_id += 1
+        self._append_event(
+            "WAIT_EXPIRED",
+            {
+                "turn_id": self.turn_id,
+                "wait_id": wait_id,
+                "pending_slot": self.state.pending_slot,
+            },
+            idempotency_key=f"{self.state.call_id}:wait-expired:{wait_id or self.turn_id}",
+        )
+        gen = self._next_generation_id()
+        proposal = Planner.plan_wait_expired(self.state, self.turn_id, gen)
+        validated = Validator.validate(proposal)
+        commit = self.transitions.commit_transition(self.state, proposal)
+        fin_ok, fin_err = self._finalize_call_if_needed()
+        contract = TurnInterpretation(
+            call_id=self.state.call_id,
+            turn_id=self.turn_id,
+            raw_text="",
+            dialogue_act=DialogueAct.UNCLEAR,
+            judgement=AnswerJudgement.NO_ANSWER,
+            state_version=self.state.state_version,
+        )
+        return SessionTurnResult(
+            user_text="",
+            interpretation=UserInterpretation(
+                judgement=AnswerJudgement.NO_ANSWER,
+                dialogue_act=DialogueAct.UNCLEAR,
+            ),
+            turn_contract=contract,
+            proposal=proposal,
+            validated=validated,
+            safety=self.safety.model_copy(deep=True),
+            persist_ok=fin_ok and commit.ok,
+            persist_error=fin_err or commit.error,
+        )
+
+    def mark_spoken_action(self, generation_id: str) -> bool:
+        result = self.transitions.mark_action_delivered(self.state, generation_id)
+        return result.ok
 
     def _failed_turn(
         self,

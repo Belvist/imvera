@@ -37,6 +37,17 @@ class Validator:
                 validator_notes="terminal noop",
             )
 
+        if not speech and proposal.intent == "wait_for_continuation":
+            return ValidatedTurn(
+                turn_id=proposal.turn_id,
+                generation_id=proposal.generation_id,
+                speech=speech,
+                intent=proposal.intent,
+                fsm_state=proposal.fsm_state,
+                allowed=True,
+                validator_notes="answer wait continuation",
+            )
+
         if not speech:
             return ValidatedTurn(
                 turn_id=proposal.turn_id,
@@ -78,14 +89,35 @@ class Validator:
                 )
 
         if proposal.fsm_state.name in ("SUMMARY", "GOODBYE") and proposal.mandatory_remaining:
+            if proposal.intent not in (
+                "partial_unresolved_close",
+                "goodbye_final",
+                "consent_declined_final",
+                "wrong_person_final",
+                "defer_call_final",
+            ):
+                return ValidatedTurn(
+                    turn_id=proposal.turn_id,
+                    generation_id=proposal.generation_id,
+                    speech=speech,
+                    intent=proposal.intent,
+                    fsm_state=proposal.fsm_state,
+                    allowed=False,
+                    validator_notes="mandatory checks incomplete",
+                )
+
+        if (
+            proposal.intent == "partial_unresolved_close"
+            and proposal.fsm_state.name == "FINAL_CLASSIFICATION"
+        ):
             return ValidatedTurn(
                 turn_id=proposal.turn_id,
                 generation_id=proposal.generation_id,
                 speech=speech,
                 intent=proposal.intent,
                 fsm_state=proposal.fsm_state,
-                allowed=False,
-                validator_notes="mandatory checks incomplete",
+                allowed=True,
+                validator_notes="partial close allowed",
             )
 
         return ValidatedTurn(

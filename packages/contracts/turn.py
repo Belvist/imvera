@@ -17,6 +17,9 @@ class TurnProposal(BaseModel):
     fsm_state: FsmState
     mandatory_remaining: list[str] = Field(default_factory=list)
     actions: list[str] = Field(default_factory=list)
+    wait_ms: int | None = None
+    wait_goal_id: str | None = None
+    question_goal_id: str | None = None
 
 
 class ValidatedTurn(BaseModel):

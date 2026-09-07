@@ -1,12 +1,17 @@
 """Planner — decides what to do next (not how to say it)."""
 
 from packages.contracts.core import TerminationReason
-from packages.contracts.enums import ConsentState, FsmState, SlotStatus
+from packages.contracts.enums import AnswerJudgement, ConsentState, FsmState, GoalStatus, SlotStatus
 from packages.contracts.mandatory import PILOT_SLOT_CHECKS
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.facts import FactRecord
 from packages.dialogue.fsm import CallFsm
 from packages.dialogue.interpretation import UserInterpretation, interpret_user_turn
+from packages.dialogue.question_ledger import (
+    MAX_AUTOMATIC_ATTEMPTS,
+    clarification_for_slot,
+    next_open_slot,
+)
 from packages.dialogue.state import DialogueState
 
 _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
@@ -25,6 +30,7 @@ _SLOT_ALT_CLOSE = (
     "Кажется, сейчас не очень удобно. Можем закончить — "
     "или скажите коротко, как вы себя чувствуете?"
 )
+_PARTIAL_UNRESOLVED_CLOSE = "Сейчас не получилось узнать, как у вас дела. До свидания."
 
 _SLOT_QUESTIONS: dict[str, str] = {
     "wellness": "Расскажите, как вы себя чувствуете сейчас?",
@@ -96,6 +102,16 @@ class Planner:
             return Planner._handle_risk_turn(state, interp, turn_id, generation_id)
 
         if (
+            interp.judgement == AnswerJudgement.BACKCHANNEL
+            and state.pending_slot
+            and state.fsm_state == FsmState.DAILY_CHECK
+            and not state.risk_handling
+        ):
+            return Planner._handle_backchannel_on_active_goal(
+                state, turn_id, generation_id
+            )
+
+        if (
             interp.judgement.name == "UNCLEAR"
             and state.pending_slot
             and not state.risk_handling
@@ -114,6 +130,155 @@ class Planner:
 
         Planner._advance_when_ready(state)
         return Planner._prompt_for_state(state, turn_id, generation_id)
+
+    @staticmethod
+    def plan_wait_expired(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        """After backchannel wait window — spend attempt or mark goal UNRESOLVED."""
+        slot = state.waiting_on_goal
+        state.waiting_on_goal = None
+        if not slot or state.fsm_state != FsmState.DAILY_CHECK:
+            Planner._advance_when_ready(state)
+            return Planner._prompt_for_state(state, turn_id, generation_id)
+
+        goal = state.ensure_goal(slot)
+        if goal.status != GoalStatus.OPEN:
+            Planner._advance_when_ready(state)
+            return Planner._prompt_for_state(state, turn_id, generation_id)
+
+        if goal.automatic_attempts_used >= goal.max_automatic_attempts:
+            return Planner._mark_goal_unresolved(state, slot, turn_id, generation_id)
+
+        return Planner._ask_slot_question(
+            state,
+            slot,
+            turn_id,
+            generation_id,
+            clarification=True,
+        )
+
+    @staticmethod
+    def reserve_question_attempt(state: DialogueState, generation_id: str, slot: str) -> bool:
+        """Atomically reserve an attempt before TTS. Returns False if budget exhausted."""
+        goal = state.ensure_goal(slot)
+        if goal.status != GoalStatus.OPEN:
+            return False
+        if goal.reserved_attempt_id == generation_id:
+            return True
+        if goal.automatic_attempts_used >= goal.max_automatic_attempts:
+            return False
+        goal.reserved_attempt_id = generation_id
+        state.pending_action_id = generation_id
+        state.bump_version()
+        return True
+
+    @staticmethod
+    def mark_question_delivered(state: DialogueState, generation_id: str) -> None:
+        """Count attempt when question audio may reach the channel."""
+        slot = state.pending_slot
+        if not slot:
+            return
+        goal = state.get_goal(slot)
+        if goal is None or goal.reserved_attempt_id != generation_id:
+            return
+        if goal.automatic_attempts_used < goal.max_automatic_attempts:
+            goal.automatic_attempts_used += 1
+        goal.last_question_id = generation_id
+        goal.last_delivery_state = "may_have_reached_channel"
+        goal.audio_may_have_reached_channel = True
+        goal.reserved_attempt_id = None
+        state.pending_question_delivered = True
+        state.pending_action_id = None
+        state.bump_version()
+
+    @staticmethod
+    def _handle_backchannel_on_active_goal(
+        state: DialogueState,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        slot = state.pending_slot
+        if not slot:
+            Planner._advance_when_ready(state)
+            return Planner._prompt_for_state(state, turn_id, generation_id)
+
+        goal = state.ensure_goal(slot)
+        state.waiting_on_goal = slot
+        state.bump_version()
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech="",
+            intent="wait_for_continuation",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+            wait_goal_id=goal.goal_id,
+            semantic_signals=["backchannel_continue"],
+        )
+
+    @staticmethod
+    def _mark_goal_unresolved(
+        state: DialogueState,
+        slot: str,
+        turn_id: int,
+        generation_id: str,
+    ) -> TurnProposal:
+        goal = state.ensure_goal(slot)
+        goal.status = GoalStatus.UNRESOLVED
+        goal.reserved_attempt_id = None
+        state.slots[slot] = SlotStatus.UNRESOLVED
+        state.mandatory_checks[slot] = True
+        state.pending_slot = None
+        state.pending_question = None
+        state.pending_question_delivered = False
+        state.waiting_on_goal = None
+        state.slot_unclear_counts.pop(slot, None)
+        state.consecutive_unresolved_goals += 1
+        state.call_ended_early = True
+        state.final_action_done = True
+        state.goodbye_confirmed = True
+        state.termination_reason = TerminationReason.PARTIAL
+        state.fsm_state = FsmState.FINAL_CLASSIFICATION
+        state.bump_version()
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=_PARTIAL_UNRESOLVED_CLOSE,
+            intent="partial_unresolved_close",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+        )
+
+    @staticmethod
+    def _ask_slot_question(
+        state: DialogueState,
+        slot: str,
+        turn_id: int,
+        generation_id: str,
+        *,
+        clarification: bool = False,
+    ) -> TurnProposal:
+        speech = (
+            clarification_for_slot(slot)
+            if clarification
+            else _SLOT_QUESTIONS[slot]
+        )
+        Planner._arm_pending_slot(state, slot, question=speech)
+        goal = state.ensure_goal(slot)
+        if not Planner.reserve_question_attempt(state, generation_id, slot):
+            return Planner._mark_goal_unresolved(state, slot, turn_id, generation_id)
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=generation_id,
+            speech=speech,
+            intent=f"check_{slot}" if not clarification else f"clarify_{slot}",
+            fsm_state=state.fsm_state,
+            mandatory_remaining=state.mandatory_remaining(),
+            question_goal_id=goal.goal_id,
+        )
 
     @staticmethod
     def _terminal_noop(
@@ -280,6 +445,9 @@ class Planner:
             negated=negated,
         )
         state.slots[field] = SlotStatus.FILLED
+        goal = state.get_goal(field)
+        if goal is not None:
+            goal.status = GoalStatus.ANSWERED
         state.mandatory_checks[field] = True
         state.slot_unclear_counts.pop(field, None)
 
@@ -311,6 +479,11 @@ class Planner:
         turn_id: int,
         generation_id: str,
     ) -> TurnProposal:
+        if state.pending_slot:
+            goal = state.ensure_goal(state.pending_slot)
+            if goal.status == GoalStatus.OPEN:
+                goal.status = GoalStatus.SUSPENDED
+                state.sync_slot_from_goal(state.pending_slot)
         resume = state.pending_question or ""
         if state.fsm_state == FsmState.IDENTIFY_PERSON:
             resume = f"Я разговариваю с {state.elder_display_name}?"
@@ -337,11 +510,14 @@ class Planner:
         turn_id: int,
         generation_id: str,
     ) -> TurnProposal:
+        slot = state.pending_slot
+        if slot:
+            return Planner._mark_goal_unresolved(state, slot, turn_id, generation_id)
         return TurnProposal(
             turn_id=turn_id,
             generation_id=generation_id,
-            speech=_SLOT_ALT_CLOSE,
-            intent="slot_unclear_limit",
+            speech=_PARTIAL_UNRESOLVED_CLOSE,
+            intent="partial_unresolved_close",
             fsm_state=state.fsm_state,
             mandatory_remaining=state.mandatory_remaining(),
         )
@@ -415,11 +591,8 @@ class Planner:
         if state.fsm_state == FsmState.DAILY_CHECK:
             open_slot = Planner._next_open_slot(state)
             if open_slot:
-                Planner._arm_pending_slot(state, open_slot)
-                return TurnProposal(
-                    **base,
-                    speech=_SLOT_QUESTIONS[open_slot],
-                    intent=f"check_{open_slot}",
+                return Planner._ask_slot_question(
+                    state, open_slot, turn_id, generation_id
                 )
 
         if state.fsm_state == FsmState.SUMMARY:
@@ -493,17 +666,18 @@ class Planner:
         )
 
     @staticmethod
-    def _arm_pending_slot(state: DialogueState, slot: str) -> None:
+    def _arm_pending_slot(
+        state: DialogueState,
+        slot: str,
+        question: str | None = None,
+    ) -> None:
         state.pending_slot = slot
-        state.pending_question = _SLOT_QUESTIONS[slot]
+        state.pending_question = question or _SLOT_QUESTIONS[slot]
         state.pending_question_delivered = False
 
     @staticmethod
     def _next_open_slot(state: DialogueState) -> str | None:
-        for slot in PILOT_SLOT_CHECKS:
-            if state.slots[slot] == SlotStatus.OPEN:
-                return slot
-        return None
+        return next_open_slot(state.slots)
 
     @staticmethod
     def _apply_interpretation(
@@ -552,9 +726,16 @@ class Planner:
                     negated=cand.negated,
                 )
             if state.pending_slot and state.pending_slot in state.facts:
+                filled_slot = state.pending_slot
+                goal = state.get_goal(filled_slot)
+                if goal is not None:
+                    goal.status = GoalStatus.ANSWERED
+                state.slots[filled_slot] = SlotStatus.FILLED
+                state.mandatory_checks[filled_slot] = True
                 state.pending_slot = None
                 state.pending_question = None
                 state.pending_question_delivered = False
+                state.waiting_on_goal = None
             state.bump_version()
         elif (
             interp.fills_pending_slot

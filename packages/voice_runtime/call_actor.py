@@ -25,8 +25,9 @@ from packages.dialogue.validator import Validator
 from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler
 from packages.voice_runtime.endpointing import SpeechSegmentCollector
 from packages.voice_runtime.playback import PlaybackQueue
-from packages.voice_runtime.profile import audio_settings
+from packages.voice_runtime.profile import audio_settings, dialogue_timing_settings
 from packages.voice_runtime.silero_vad import create_vad
+from packages.voice_runtime.wait_state import DialogueTimingProfile, WaitState
 from services.llm.http_provider import HttpLLMProvider
 from services.providers.http_clients import get_shared_async_client
 from services.stt.http_provider import HttpSTTProvider
@@ -132,6 +133,13 @@ class CallActor:
     _transport_closed: bool = False
     _capture_lost: bool = False
     _active_llm_request_id: str | None = None
+    _wait_task: asyncio.Task | None = None
+    _wait_state: WaitState | None = None
+    _control_epoch: int = 0
+    _timing_profile: DialogueTimingProfile = field(
+        default_factory=lambda: DialogueTimingProfile(**dialogue_timing_settings())
+    )
+    _monotonic: Callable[[], float] = field(default=time.monotonic, repr=False)
 
     async def _emit_stage(self, stage: str, **payload: object) -> None:
         started = self._active_stage_budget.started_mono if self._active_stage_budget else 0.0
@@ -188,9 +196,9 @@ class CallActor:
         *,
         input_sample_rate: int | None = None,
     ) -> None:
-        await self._ensure_output_chain(output_sample_rate, output_frame_size)
         if input_sample_rate is not None:
             await self._ensure_input_chain(input_sample_rate)
+        await self._ensure_output_chain(output_sample_rate, output_frame_size)
         self._media_ready = True
         if self._playback_task is None:
             self._playback_task = asyncio.create_task(self._playback_pump())
@@ -291,6 +299,20 @@ class CallActor:
         self._vad = create_vad(self.config.target_sample_rate)
         self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
 
+    def _flush_pcm_queue(self) -> None:
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+    def _reset_uplink_endpointing(self) -> None:
+        """Clear VAD/collector after assistant playback — fresh listen window."""
+        if self._input_resampler is None:
+            return
+        self._vad = create_vad(self.config.target_sample_rate)
+        self._collector = SpeechSegmentCollector(self.config.target_sample_rate)
+
     def _tts_resampler(self, generation_id: str, source_rate: int) -> StatefulResampler:
         key = f"{generation_id}:{source_rate}"
         if key not in self._tts_resamplers:
@@ -315,6 +337,7 @@ class CallActor:
         started, ended = self._vad.feed(pcm)
         if started:
             await self._interrupt_playback(flush=True)
+            self._pause_answer_wait()
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {})
             )
@@ -375,6 +398,107 @@ class CallActor:
         for result in deliver_results:
             await self._post_apply_turn(result)
 
+    def _bump_control_epoch(self) -> int:
+        self._control_epoch += 1
+        return self._control_epoch
+
+    async def _cancel_wait_timer(self) -> None:
+        if self._wait_task and not self._wait_task.done():
+            self._wait_task.cancel()
+            try:
+                await self._wait_task
+            except asyncio.CancelledError:
+                pass
+        self._wait_task = None
+        self._wait_state = None
+
+    def _start_answer_wait(
+        self,
+        *,
+        goal_id: str | None,
+        question_id: str | None,
+    ) -> None:
+        if self._wait_task and not self._wait_task.done():
+            self._wait_task.cancel()
+        self._wait_task = None
+        self._wait_state = WaitState.start_answer_wait(
+            goal_id=goal_id,
+            question_id=question_id,
+            control_epoch=self._control_epoch,
+            profile=self._timing_profile,
+            now_mono=self._monotonic(),
+        )
+        self._schedule_wait_timer()
+
+    def _pause_answer_wait(self) -> None:
+        if self._wait_state is None:
+            return
+        self._wait_state.pause_for_speech(now_mono=self._monotonic())
+        if self._wait_task and not self._wait_task.done():
+            self._wait_task.cancel()
+
+    def _resume_answer_wait_if_paused(self) -> None:
+        if self._wait_state is None or not self._wait_state.speech_paused:
+            return
+        self._wait_state.resume_after_speech()
+        self._schedule_wait_timer()
+
+    def _schedule_wait_timer(self) -> None:
+        if self._wait_state is None:
+            return
+        if self._wait_task and not self._wait_task.done():
+            self._wait_task.cancel()
+        wait_id = self._wait_state.wait_id
+        epoch = self._wait_state.control_epoch
+        remaining_ms = self._wait_state.remaining_ms(self._monotonic())
+        if remaining_ms <= 0:
+            self._wait_task = asyncio.create_task(self._on_wait_deadline(wait_id, epoch))
+            return
+
+        async def _sleep_then_fire() -> None:
+            try:
+                await asyncio.sleep(remaining_ms / 1000.0)
+            except asyncio.CancelledError:
+                return
+            await self._on_wait_deadline(wait_id, epoch)
+
+        self._wait_task = asyncio.create_task(_sleep_then_fire())
+
+    async def _on_wait_deadline(self, wait_id: str, control_epoch: int) -> None:
+        self._wait_task = None
+        if self._stopped or self._transport_closed:
+            return
+        if control_epoch != self._control_epoch:
+            return
+        state = self._wait_state
+        if state is None or state.wait_id != wait_id:
+            return
+        if not state.should_fire(self._monotonic()):
+            self._schedule_wait_timer()
+            return
+        if self._inflight_utterances:
+            self._schedule_wait_timer()
+            return
+        self._wait_state = None
+        expired = await asyncio.to_thread(self.session.handle_wait_expired, wait_id)
+        await self._post_apply_turn(expired)
+
+    async def _handle_backchannel_continuation(self, result: SessionTurnResult) -> None:
+        goal_id = result.proposal.wait_goal_id
+        if self._wait_state is None:
+            slot = self.session.state.pending_slot
+            goal = self.session.state.get_goal(slot) if slot else None
+            self._start_answer_wait(
+                goal_id=goal_id or (goal.goal_id if goal else None),
+                question_id=goal.last_question_id if goal else None,
+            )
+        else:
+            self._wait_state.resume_after_speech()
+            self._wait_state.apply_backchannel_extra(
+                self._timing_profile, now_mono=self._monotonic()
+            )
+        self._schedule_wait_timer()
+
     async def _post_apply_turn(self, result: SessionTurnResult) -> None:
         if self._stopped or self._transport_closed:
             return
@@ -390,7 +514,11 @@ class CallActor:
         await self.media.emit(
             RuntimeEvent(self.call_id, RuntimeEventType.PERSISTENCE_COMMITTED, {})
         )
-        if result.proposal.intent.endswith("_final") or self.session.state.final_action_done:
+        if (
+            result.proposal.intent.endswith("_final")
+            or result.proposal.intent == "partial_unresolved_close"
+            or self.session.state.final_action_done
+        ):
             self._hangup_after_playback = True
         if self._inflight_utterances:
             return
@@ -447,6 +575,7 @@ class CallActor:
                 "stt.final", utterance_id=utterance_id, text_len=len(text)
             )
             if not text:
+                self._resume_answer_wait_if_paused()
                 await self._submit_utterance_outcome(
                     _UtteranceOutcome(
                         utterance_seq=utterance_seq,
@@ -545,9 +674,21 @@ class CallActor:
         if self._render_generation != render_generation:
             return False
         await self._speak_phrase(validated.speech, render_generation)
+        if result.proposal.intent.startswith(("check_", "clarify_", "repeat_")):
+            await asyncio.to_thread(
+                self.session.mark_spoken_action, result.proposal.generation_id
+            )
+            self._start_answer_wait(
+                goal_id=result.proposal.question_goal_id,
+                question_id=result.proposal.generation_id,
+            )
         return True
 
     async def _deliver_session_turn(self, result: SessionTurnResult) -> None:
+        if result.proposal.intent == "wait_for_continuation":
+            await self._handle_backchannel_continuation(result)
+            return
+        await self._cancel_wait_timer()
         if self._stopped or self._transport_closed or not result.validated.allowed:
             if self._hangup_after_playback and not result.validated.speech:
                 await self._maybe_hangup_when_idle()
@@ -653,6 +794,7 @@ class CallActor:
 
     async def _interrupt_playback(self, *, flush: bool) -> None:
         if flush:
+            self._bump_control_epoch()
             asyncio.create_task(self.media.flush())
         await self._cancel_active_llm()
         self._render_generation = None
@@ -831,6 +973,8 @@ class CallActor:
         self._tts_resamplers = {
             k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
         }
+        self._flush_pcm_queue()
+        self._reset_uplink_endpointing()
         if self._hangup_after_playback:
             await self._maybe_hangup_when_idle()
 

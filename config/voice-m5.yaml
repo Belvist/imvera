@@ -55,6 +55,12 @@ models:
   vad:
     onnx: silero_vad
 
+dialogue_timing:
+  answer_wait_ms: 7000
+  backchannel_extra_ms: 2000
+  pause_wait_ms: 30000
+  max_pause_wait_ms: 60000
+
 limits:
   max_active_calls: 1
   queue_depth: 4

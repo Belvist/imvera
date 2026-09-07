@@ -24,6 +24,8 @@ class DeliveryStage(StrEnum):
 
 class TerminationReason(StrEnum):
     COMPLETED = "COMPLETED"
+    PARTIAL = "PARTIAL"
+    UNRESOLVED = "UNRESOLVED"
     CONSENT_DECLINED = "CONSENT_DECLINED"
     CONSENT_REVOKED = "CONSENT_REVOKED"
     DEFERRED = "DEFERRED"
@@ -93,3 +95,10 @@ class CallRecordStore(ABC):
 
     @abstractmethod
     def get_events(self, call_id: str, family_id: str) -> list: ...
+
+    @abstractmethod
+    def save_dialogue_snapshot(
+        self,
+        snapshot: CallResultSnapshot,
+        family_id: str,
+    ) -> PersistResult: ...

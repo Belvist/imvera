@@ -75,6 +75,26 @@ def audio_settings() -> dict[str, Any]:
     }
 
 
+def dialogue_timing_settings() -> dict[str, int]:
+    """Answer-wait profile (spec §6.1) — env overrides for lab tuning."""
+    timing = load_profile().get("dialogue_timing") or {}
+    defaults = {
+        "answer_wait_ms": 7000,
+        "backchannel_extra_ms": 2000,
+        "pause_wait_ms": 30000,
+        "max_pause_wait_ms": 60000,
+    }
+    resolved: dict[str, int] = {}
+    for key, default in defaults.items():
+        env_key = f"IMVERA_{key.upper()}"
+        override = os.environ.get(env_key)
+        if override is not None:
+            resolved[key] = int(override)
+        else:
+            resolved[key] = int(timing.get(key, default))
+    return resolved
+
+
 def apply_audio_env(env: dict[str, str] | None = None) -> dict[str, str]:
     """Populate IMVERA_* audio env vars from profile (for voice_up subprocesses)."""
     out = dict(env or os.environ)

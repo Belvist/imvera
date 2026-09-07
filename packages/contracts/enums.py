@@ -70,10 +70,19 @@ class FsmState(StrEnum):
     ESCALATION_HANDOFF = "ESCALATION_HANDOFF"
 
 
+class GoalStatus(StrEnum):
+    OPEN = "OPEN"
+    ANSWERED = "ANSWERED"
+    DECLINED = "DECLINED"
+    UNRESOLVED = "UNRESOLVED"
+    SUSPENDED = "SUSPENDED"
+
+
 class SlotStatus(StrEnum):
     OPEN = "OPEN"
     FILLED = "FILLED"
     DECLINED = "DECLINED"
+    UNRESOLVED = "UNRESOLVED"
 
 
 class DialogueAct(StrEnum):

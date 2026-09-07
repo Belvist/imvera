@@ -31,8 +31,11 @@ class CallFsm:
             return False
         if state.fsm_state == FsmState.GREETING and not state.greeted:
             return False
-        if state.fsm_state == FsmState.DAILY_CHECK and state.mandatory_remaining():
-            return False
+        if state.fsm_state == FsmState.DAILY_CHECK:
+            from packages.dialogue.question_ledger import next_open_slot
+
+            if next_open_slot(state.slots):
+                return False
         if state.fsm_state in (FsmState.SUMMARY, FsmState.GOODBYE):
             return not state.mandatory_remaining()
         if state.fsm_state in (
