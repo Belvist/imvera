@@ -24,7 +24,8 @@ def _session_through_wellness() -> CallSession:
         family_id="fam-test",
         elder_display_name="Даниил",
     )
-    session.start()
+    start = session.start()
+    session.mark_spoken_action(start.proposal.generation_id)
     assert session.state.pending_slot == "wellness"
     assert session.state.fsm_state == FsmState.DAILY_CHECK
     return session
@@ -38,7 +39,7 @@ def test_film_sentence_does_not_fill_wellness() -> None:
     result = session.handle_user_text("Вчера смотрела интересный фильм вечером")
     assert session.state.slots["wellness"] == SlotStatus.OPEN
     assert session.state.pending_slot == "wellness"
-    assert result.proposal.intent in ("check_wellness", "explain_vera_resume", "repeat_wellness")
+    assert result.proposal.intent in ("check_wellness", "explain_vera", "repeat_wellness")
 
 
 def test_poka_vse_horosho_fills_wellness_not_goodbye() -> None:
@@ -54,9 +55,9 @@ def test_who_are_you_gets_explanation() -> None:
     session = _session_through_wellness()
     result = session.handle_user_text("Кто вы такая?")
     assert session.state.slots["wellness"] == SlotStatus.OPEN
-    assert result.proposal.intent == "explain_vera_resume"
+    assert result.proposal.intent == "explain_vera"
     assert "Вера" in result.validated.speech
-    assert "чувствуете" in result.validated.speech.lower()
+    assert "чувствуете" not in result.validated.speech.lower()
 
 
 def test_mne_nehorosho_fills_wellness() -> None:

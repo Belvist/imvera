@@ -49,11 +49,10 @@ def fact(text, field="wellness", *, subject="speaker", temporal_scope="now", quo
 def daily_session():
     session = CallSession(call_id="audit-dialogue", family_id="audit-family",
                           store=InMemoryCallRecordStore())
-    session.start()
+    start = session.start()
     session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
     session.state.greeted = True
-    session.state.fsm_state = FsmState.DAILY_CHECK
-    Planner.plan_vera_turn(session.state, 2, "audit-open")
+    session.mark_spoken_action(start.proposal.generation_id)
     return session
 
 
@@ -119,7 +118,9 @@ def test_yes_to_goodbye_confirmation_closes_voice_path():
 
 
 def test_question_without_delivery_evidence_is_not_complete():
-    session = daily_session()
+    session = CallSession(call_id="audit-dialogue", family_id="audit-family",
+                          store=InMemoryCallRecordStore())
+    session.start()
     ctx = build_turn_context(session.state, turn_id=2, utterance_id="u2", raw_text="Да")
     assert ctx.pending_question_delivery != "complete"
 

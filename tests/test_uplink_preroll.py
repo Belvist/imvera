@@ -7,6 +7,7 @@ from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession
 from packages.voice_runtime.audio_channels import extract_client_uplink
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks
+from packages.voice_runtime.playback import PlaybackQueue
 
 
 async def _noop(*_a, **_k):
@@ -26,8 +27,8 @@ def test_extract_client_uplink_stereo_left_only() -> None:
     assert list(samples) == [100, 200, -50]
 
 
-def test_uplink_ignored_during_playback() -> None:
-    """Client PCM is dropped during TTS so Vera's voice is not fed to STT as echo."""
+def test_uplink_reaches_vad_during_playback() -> None:
+    """Caller PCM always reaches VAD; barge-in interrupts active TTS."""
 
     async def scenario() -> None:
         session = CallSession(
@@ -40,7 +41,7 @@ def test_uplink_ignored_during_playback() -> None:
         class _Vad:
             def feed(self, pcm: bytes) -> tuple[bool, bool]:
                 fed.append(pcm)
-                return False, False
+                return True, False
 
         class _Collector:
             def on_frame(self, _pcm, _started, _ended):
@@ -51,18 +52,21 @@ def test_uplink_ignored_during_playback() -> None:
             family_id="fam-voice",
             session=session,
             stt=SimpleNamespace(),
-            tts=SimpleNamespace(),
+            tts=SimpleNamespace(cancel=_noop),
             llm=SimpleNamespace(),
             media=MediaCallbacks(_noop, _noop, _noop, _noop),
         )
         actor._media_ready = True
         actor._vad = _Vad()
         actor._collector = _Collector()
+        actor._playback = PlaybackQueue(call_id=actor.call_id)
+        actor._playback.begin_phrase("g-vera-speaking", "phrase", "Расскажите...")
         actor._active_generation = "g-vera-speaking"
+        actor._render_generation = "g-vera-speaking"
         frame = b"\x00\x01" * 320
         await actor._feed_uplink_pcm(frame)
-        assert fed == []
-        assert len(actor._playback_uplink_buf) == 0
+        assert fed == [frame]
+        assert actor._active_generation is None
 
     asyncio.run(scenario())
 

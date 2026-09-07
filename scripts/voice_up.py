@@ -14,6 +14,7 @@ from packages.telephony.asterisk import is_stasis_app_registered, normalize_ari_
 from packages.voice_runtime.profile import apply_audio_env, audio_settings
 from scripts.local_sip_config import load_or_create
 from scripts.voice_process import ROOT, is_running, start
+from services.tts.lab_fast import apply_lab_fast_env, lab_fast_tts_enabled
 
 VOICE_COMPOSE = ["docker", "compose", "-f", "docker/docker-compose.voice.yml"]
 WORKERS = ("stt", "tts", "llm")
@@ -34,6 +35,20 @@ def _wait_http(url: str, name: str, timeout_s: float = 600.0) -> bool:
     return False
 
 
+def _tts_matches_lab_fast() -> bool:
+    """When lab fast is on, TTS must be silero_lab — not a warm but slow MLX worker."""
+    if not lab_fast_tts_enabled():
+        return True
+    try:
+        r = httpx.get("http://127.0.0.1:9102/health/ready", timeout=2.0)
+        if r.status_code != 200:
+            return False
+        rev = str(r.json().get("model_revision", ""))
+        return rev.startswith("silero_lab:")
+    except httpx.HTTPError:
+        return False
+
+
 def _workers_ready() -> bool:
     for name in WORKERS:
         if not is_running(name):
@@ -45,10 +60,13 @@ def _workers_ready() -> bool:
                 return False
         except httpx.HTTPError:
             return False
+    if not _tts_matches_lab_fast():
+        print("TTS worker is MLX — lab fast requires silero_lab; will restart workers")
+        return False
     return True
 
 
-def _ensure_workers() -> int:
+def _ensure_workers(env: dict[str, str]) -> int:
     if _workers_ready():
         print("MLX workers already running — skipping models_up")
         return 0
@@ -56,6 +74,7 @@ def _ensure_workers() -> int:
     return subprocess.run(
         [sys.executable, "scripts/models_up.py"],
         cwd=ROOT,
+        env=env,
         check=False,
     ).returncode
 
@@ -162,11 +181,25 @@ def main() -> int:
     cfg = load_or_create()
     print("SIP credentials synced to config/local/asterisk/")
 
-    code = _ensure_workers()
+    env = apply_lab_fast_env(apply_audio_env(os.environ.copy()))
+    if env.get("IMVERA_TTS_ENGINE") == "silero_lab":
+        print("Lab fast TTS: silero_lab (IMVERA_LAB_FAST_TTS=1, ~1-2s warm first_pcm)")
+
+    code = _ensure_workers(env)
     if code != 0:
         return code
 
-    env = apply_audio_env(os.environ.copy())
+    print("Pre-rendering opening phrase cache...")
+    prerender = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "prerender_opening.py")],
+        cwd=ROOT,
+        env=env,
+        check=False,
+    )
+    if prerender.returncode != 0:
+        print("WARN: opening prerender failed — first call may wait on TTS", file=sys.stderr)
+
+    env = apply_audio_env(env)
     env.setdefault("IMVERA_STT_URL", "http://127.0.0.1:9101")
     env.setdefault("IMVERA_TTS_URL", "http://127.0.0.1:9102")
     env.setdefault("IMVERA_LLM_URL", "http://127.0.0.1:9103")
@@ -236,14 +269,18 @@ def main() -> int:
     print(f"  Password: {cfg['password']}")
     print(f"  Dial: {cfg['vera_extension']}")
 
-    print("\nRunning voice call gate (TTS first_pcm budget)...")
+    print("\nRunning voice call gate (warm TTS first_pcm budget)...")
+    gate_env = env.copy()
+    gate_env.setdefault("IMVERA_TTS_WARM_FIRST_PCM_BUDGET_S", "2.0")
     gate = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "voice_call_gate.py")],
         cwd=ROOT,
+        env=gate_env,
         check=False,
     )
     if gate.returncode != 0:
-        print("WARN: voice-call-gate failed — first Zoiper call may be silent", file=sys.stderr)
+        print("BLOCKED: voice-call-gate failed — fix TTS before Zoiper", file=sys.stderr)
+        return 1
     return 0
 
 

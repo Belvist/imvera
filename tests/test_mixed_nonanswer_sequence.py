@@ -25,13 +25,10 @@ def _payload(dialogue_act: str, **kw) -> SemanticPayload:
 def _daily() -> CallSession:
     session = CallSession(call_id="mixed-nonanswer", family_id="audit-family",
                           store=InMemoryCallRecordStore())
-    session.start()
+    start = session.start()
     session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
     session.state.greeted = True
-    session.state.fsm_state = FsmState.DAILY_CHECK
-    open_prop = Planner.plan_vera_turn(session.state, 1, "g1")
-    session.transitions.commit_transition(session.state, open_prop)
-    session.mark_spoken_action("g1")
+    session.mark_spoken_action(start.proposal.generation_id)
     return session
 
 
@@ -62,7 +59,7 @@ def test_mixed_nonanswer_sequence_limited_attempts() -> None:
         intents.append(_turn(session, text, meaning))
 
     assert intents[0] == "wait_for_continuation"
-    assert intents[2] == "explain_vera_resume"
+    assert intents[2] == "explain_vera"
     assert len(session.state.facts) == 0
 
     clarify = session.handle_wait_expired()

@@ -17,7 +17,8 @@ from packages.voice_runtime.tts_gate import measure_tts_first_pcm_s
 ROOT = Path(__file__).resolve().parent.parent
 TTS_URL = os.environ.get("IMVERA_TTS_URL", "http://127.0.0.1:9102")
 GATEWAY_URL = os.environ.get("IMVERA_VOICE_GATEWAY_HTTP", "http://127.0.0.1:9200")
-BUDGET_S = float(os.environ.get("IMVERA_TTS_FIRST_PCM_BUDGET_S", "45.0"))
+WARM_BUDGET_S = float(os.environ.get("IMVERA_TTS_WARM_FIRST_PCM_BUDGET_S", "2.0"))
+COLD_BUDGET_S = float(os.environ.get("IMVERA_TTS_FIRST_PCM_BUDGET_S", "45.0"))
 
 
 def _git_sha() -> str:
@@ -44,14 +45,14 @@ def main() -> int:
         print(f"BLOCKED: TTS synthesize failed: {exc}", file=sys.stderr)
         return 1
 
-    print(f"  TTS first_pcm: {first_s:.2f}s (budget {BUDGET_S:.1f}s)")
+    print(f"  TTS first_pcm: {first_s:.2f}s (warm budget {WARM_BUDGET_S:.1f}s)")
     if first_s <= 0:
         print("BLOCKED: TTS returned no PCM", file=sys.stderr)
         return 1
-    if first_s > BUDGET_S:
+    if first_s > WARM_BUDGET_S:
         print(
-            f"BLOCKED: TTS first_pcm {first_s:.1f}s exceeds budget {BUDGET_S:.1f}s — "
-            "restart TTS worker or run make voice-up",
+            f"BLOCKED: TTS first_pcm {first_s:.1f}s exceeds warm budget {WARM_BUDGET_S:.1f}s — "
+            f"(cold budget {COLD_BUDGET_S:.1f}s) restart TTS or run make voice-up",
             file=sys.stderr,
         )
         return 1

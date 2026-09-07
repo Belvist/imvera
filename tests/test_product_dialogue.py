@@ -9,20 +9,20 @@ from packages.dialogue.session import CallSession
 
 def _session_through_wellness() -> CallSession:
     session = CallSession(call_id="audit", family_id="fam-test")
-    session.start()
+    start = session.start()
     session.state.mandatory_checks.update(
         {"identity": True, "consent": True, "can_talk": True}
     )
     session.state.greeted = True
-    session.state.fsm_state = FsmState.DAILY_CHECK
-    Planner.plan_vera_turn(session.state, 2, "g2")
+    session.mark_spoken_action(start.proposal.generation_id)
     assert session.state.pending_slot == "wellness"
     return session
 
 
 def _session_at_mood() -> CallSession:
     session = _session_through_wellness()
-    session.handle_user_text("нормально")
+    result = session.handle_user_text("нормально")
+    session.mark_spoken_action(result.proposal.generation_id)
     assert session.state.pending_slot == "mood"
     return session
 
@@ -92,11 +92,10 @@ def test_red_turn_not_hijacked_by_slot_unclear() -> None:
 def test_facts_persisted_to_store() -> None:
     store = InMemoryCallRecordStore()
     session = CallSession(call_id="persist", family_id="fam-1", store=store)
-    session.start()
+    start = session.start()
     session.state.mandatory_checks.update({"identity": True, "consent": True, "can_talk": True})
     session.state.greeted = True
-    session.state.fsm_state = FsmState.DAILY_CHECK
-    Planner.plan_vera_turn(session.state, 2, "g2")
+    session.mark_spoken_action(start.proposal.generation_id)
     session.handle_user_text("нормально")
     result = session.get_persisted_result()
     assert result is not None

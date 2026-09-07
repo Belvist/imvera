@@ -245,6 +245,8 @@ class Planner:
             return False
         if goal.reserved_attempt_id == generation_id:
             return True
+        if goal.reserved_attempt_id is not None:
+            return False
         if goal.automatic_attempts_used >= goal.max_automatic_attempts:
             return False
         goal.reserved_attempt_id = generation_id
@@ -598,27 +600,11 @@ class Planner:
         turn_id: int,
         generation_id: str,
     ) -> TurnProposal:
-        if state.pending_slot:
-            goal = state.ensure_goal(state.pending_slot)
-            if goal.status == GoalStatus.OPEN:
-                goal.status = GoalStatus.SUSPENDED
-                state.sync_slot_from_goal(state.pending_slot)
-        resume = state.pending_question or ""
-        if state.fsm_state == FsmState.IDENTIFY_PERSON:
-            resume = f"Я разговариваю с {state.elder_display_name}?"
-        elif state.fsm_state == FsmState.CHECK_CAN_TALK:
-            resume = "Вам сейчас удобно немного поговорить?"
-        elif state.fsm_state == FsmState.CHECK_CONSENT:
-            resume = (
-                "Вы согласны получать регулярные звонки от IMVERA? "
-                "Это важно — звонки только с вашего согласия."
-            )
-        speech = f"{_VERA_INTRO} {resume}".strip()
         return TurnProposal(
             turn_id=turn_id,
             generation_id=generation_id,
-            speech=speech,
-            intent="explain_vera_resume",
+            speech=_VERA_INTRO,
+            intent="explain_vera",
             fsm_state=state.fsm_state,
             mandatory_remaining=state.mandatory_remaining(),
         )

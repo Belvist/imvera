@@ -7,6 +7,7 @@ import base64
 import json
 import os
 import queue
+import threading
 import time
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -28,7 +29,12 @@ from services.inference.common import (
     new_request_id,
 )
 from services.tts.gen_params import build_mlx_gen_kwargs, resolve_model_id, tts_engine
-from services.tts.silero_lab import SILERO_WARNING, synthesize_silero
+from services.tts.lab_fast import lab_fast_tts_enabled
+from services.tts.silero_lab import (
+    SILERO_WARNING,
+    silero_lab_acknowledged,
+    synthesize_silero,
+)
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "voice-m5.yaml"
 _tts = None
@@ -155,25 +161,66 @@ def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
         _produce_mlx_chunks(req, out_q, tts_cfg)
 
 
+MLX_LOAD_TIMEOUT_S = float(os.environ.get("IMVERA_TTS_MLX_LOAD_TIMEOUT_S", "120"))
+
+
+def _init_silero_lab(tts_cfg: dict[str, Any]) -> bool:
+    """Load Silero for lab; set IMVERA_TTS_ENGINE so runtime routes stay consistent."""
+    try:
+        from services.tts.silero_lab import load_silero
+
+        load_silero(tts_cfg.get("silero_lab") or {})
+        speaker = (tts_cfg.get("silero_lab") or {}).get("speaker", "kseniya")
+        state.model_revision = f"silero_lab:{speaker}"
+        state.ready = True
+        state.warmup_error = None
+        os.environ["IMVERA_TTS_ENGINE"] = "silero_lab"
+        print(f"WARNING: {SILERO_WARNING}", flush=True)
+        return True
+    except Exception as exc:
+        state.warmup_error = str(exc)
+        state.ready = False
+        print(f"TTS silero_lab init failed: {exc}", flush=True)
+        return False
+
+
+def _load_mlx_model(model_id: str, timeout_s: float) -> tuple[Any | None, str | None]:
+    """load_model in a thread — avoids indefinite hang blocking HTTP bind."""
+    box: dict[str, Any] = {"model": None, "error": None}
+
+    def _run() -> None:
+        try:
+            from mlx_audio.tts.utils import load_model
+
+            box["model"] = load_model(model_id)
+        except Exception as exc:
+            box["error"] = exc
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout_s)
+    if thread.is_alive():
+        return None, f"load_model timeout after {timeout_s:.0f}s"
+    if box["error"] is not None:
+        return None, str(box["error"])
+    if box["model"] is None:
+        return None, f"load_model returned None for {model_id}"
+    return box["model"], None
+
+
+def _maybe_fallback_silero(tts_cfg: dict[str, Any], reason: str) -> bool:
+    if not lab_fast_tts_enabled() or not silero_lab_acknowledged():
+        return False
+    print(f"TTS MLX unavailable ({reason}) — falling back to silero_lab", flush=True)
+    return _init_silero_lab(tts_cfg)
+
+
 @app.on_event("startup")
 def startup() -> None:
-    global _tts
     cfg = _load_config()
     tts_cfg = cfg["models"]["tts"]
-    engine = tts_engine(tts_cfg)
-    if engine == "silero_lab":
-        try:
-            from services.tts.silero_lab import load_silero
-
-            load_silero(tts_cfg.get("silero_lab") or {})
-            speaker = (tts_cfg.get("silero_lab") or {}).get("speaker", "kseniya")
-            state.model_revision = f"silero_lab:{speaker}"
-            state.ready = True
-            print(f"WARNING: {SILERO_WARNING}")
-        except Exception as exc:
-            state.warmup_error = str(exc)
-            state.ready = False
-        return
+    if tts_engine(tts_cfg) == "silero_lab":
+        _init_silero_lab(tts_cfg)
     # MLX load+warmup runs on the process main thread before HTTP binds (see main()).
 
 
@@ -181,23 +228,30 @@ def _load_and_warmup_mlx(tts_cfg: dict[str, Any], engine: str) -> None:
     global _tts
     model_id = resolve_model_id(tts_cfg)
     try:
-        from mlx_audio.tts.utils import load_model
         from services.tts.warmup import warmup_synthesis
 
-        print(f"TTS loading {model_id}...", flush=True)
-        loaded = load_model(model_id)
+        print(f"TTS loading {model_id} (timeout {MLX_LOAD_TIMEOUT_S:.0f}s)...", flush=True)
+        loaded, err = _load_mlx_model(model_id, MLX_LOAD_TIMEOUT_S)
         if loaded is None:
-            raise RuntimeError(f"load_model returned None for {model_id}")
+            if _maybe_fallback_silero(tts_cfg, err or "load failed"):
+                return
+            state.warmup_error = err or "load failed"
+            state.ready = False
+            return
         _tts = loaded
         state.model_revision = f"{engine}:{model_id}"
         first_s = warmup_synthesis(_produce_chunks, text="А.", timeout_s=180.0)
         if first_s <= 0:
+            if _maybe_fallback_silero(tts_cfg, "warmup synthesis produced no audio"):
+                return
             state.warmup_error = "warmup synthesis produced no audio"
             state.ready = False
             return
         print(f"TTS warmup first chunk in {first_s:.2f}s", flush=True)
         state.ready = True
     except Exception as exc:
+        if _maybe_fallback_silero(tts_cfg, str(exc)):
+            return
         state.warmup_error = str(exc)
         state.ready = False
         print(f"TTS load/warmup failed: {exc}", flush=True)

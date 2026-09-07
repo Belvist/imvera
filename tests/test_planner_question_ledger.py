@@ -20,13 +20,10 @@ def _daily_session() -> CallSession:
         family_id="audit-family",
         store=InMemoryCallRecordStore(),
     )
-    session.start()
+    start = session.start()
     session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
     session.state.greeted = True
-    session.state.fsm_state = FsmState.DAILY_CHECK
-    open_prop = Planner.plan_vera_turn(session.state, session.turn_id + 1, "g-open")
-    session.transitions.commit_transition(session.state, open_prop)
-    session.mark_spoken_action("g-open")
+    session.mark_spoken_action(start.proposal.generation_id)
     return session
 
 

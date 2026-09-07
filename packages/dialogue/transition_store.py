@@ -56,8 +56,9 @@ def _state_to_metadata(
         "state_version": state.state_version,
         "action_outbox": _dump_outbox(outbox),
     }
-    if pending is not None:
-        payload["pending_action"] = pending.model_dump(mode="json")
+    payload["pending_action"] = (
+        pending.model_dump(mode="json") if pending is not None else None
+    )
     return payload
 
 
@@ -278,6 +279,9 @@ class DialogueTransitionStore:
     def replay_pending_action(self, call_id: str) -> PendingAction | None:
         trans = self.load(call_id)
         if trans is None or trans.pending_action is None:
+            return None
+        snap = self._store.get_call_result(call_id, self._family_id)
+        if snap is not None and snap.metadata.get("pending_action") is None:
             return None
         record = self.get_outbox_record(call_id, trans.pending_action.action_id)
         if record is not None and not may_auto_replay(record.status):

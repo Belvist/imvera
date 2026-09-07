@@ -104,6 +104,11 @@ class WaitState:
     def resume_after_speech(self) -> None:
         self.speech_paused = False
 
+    def rebind_control(self, control_epoch: int) -> None:
+        """Re-attach wait to current control epoch after speech onset bumped it."""
+        self.control_epoch = control_epoch
+        self.wait_id = f"wait-{uuid.uuid4().hex[:12]}"
+
     def should_fire(self, now_mono: float | None = None) -> bool:
         if self.speech_paused:
             return False

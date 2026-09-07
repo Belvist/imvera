@@ -25,6 +25,7 @@ from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue.validator import Validator
 from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler
 from packages.voice_runtime.endpointing import SpeechSegmentCollector
+from packages.voice_runtime.opening_cache import load_opening
 from packages.voice_runtime.playback import PlaybackQueue
 from packages.voice_runtime.profile import audio_settings, dialogue_timing_settings
 from packages.voice_runtime.silero_vad import create_vad
@@ -160,6 +161,8 @@ class CallActor:
     _monotonic: Callable[[], float] = field(default=time.monotonic, repr=False)
     _outbox_action_id: str | None = None
     _pending_answer_wait: tuple[str | None, str | None] | None = None
+    _pending_mark_spoken_id: str | None = None
+    _pending_mark_render_gen: str | None = None
     _last_delivered_intent: str | None = None
     _playback_uplink_buf: bytearray = field(default_factory=bytearray)
     _tts_first_pcm_gens: set[str] = field(default_factory=set)
@@ -361,13 +364,10 @@ class CallActor:
 
     async def _feed_uplink_pcm(self, pcm: bytes) -> None:
         assert self._vad and self._collector
-        if self._active_generation:
-            # Ignore uplink while Vera speaks — tail flush caused STT echo of her question
-            # (see sip-132cf68add: "Я разговариваю с Даниил" instead of user "да").
-            return
         started, ended = self._vad.feed(pcm)
         if started:
-            await self._interrupt_playback(flush=True)
+            if self._active_generation:
+                await self._interrupt_playback(flush=True)
             self._pause_answer_wait()
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {})
@@ -549,6 +549,7 @@ class CallActor:
             self._wait_state.apply_backchannel_extra(
                 self._timing_profile, now_mono=self._monotonic()
             )
+            self._wait_state.rebind_control(self._control_epoch)
         self._schedule_wait_timer()
 
     def _start_pause_wait(self) -> None:
@@ -788,13 +789,26 @@ class CallActor:
         if self._render_generation != render_generation:
             return False
         self._last_delivered_intent = result.proposal.intent
-        await self._speak_phrase(validated.speech, render_generation)
-        if result.proposal.intent.startswith(("check_", "clarify_", "repeat_")) or (
-            result.proposal.intent == "opening_wellness"
-        ):
-            await asyncio.to_thread(
-                self.session.mark_spoken_action, result.proposal.generation_id
+        cached = (
+            load_opening(validated.speech)
+            if result.proposal.intent == "opening_wellness"
+            else None
+        )
+        if cached is not None:
+            await self._speak_cached_pcm(
+                validated.speech,
+                cached.pcm_s16le,
+                cached.sample_rate,
+                render_generation,
             )
+        else:
+            await self._speak_phrase(validated.speech, render_generation)
+        marks_delivered = result.proposal.intent.startswith(
+            ("check_", "clarify_", "repeat_")
+        ) or result.proposal.intent == "opening_wellness"
+        if marks_delivered:
+            self._pending_mark_spoken_id = result.proposal.generation_id
+            self._pending_mark_render_gen = render_generation
         mandatory_wait_intents = (
             "confirm_identity",
             "repeat_identity",
@@ -963,6 +977,75 @@ class CallActor:
         self._tts_resamplers = {
             k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
         }
+
+    async def _speak_cached_pcm(
+        self,
+        text: str,
+        pcm: bytes,
+        sample_rate: int,
+        render_generation: str,
+    ) -> None:
+        """Play pre-rendered opening — no TTS HTTP wait on warm calls."""
+        if (
+            not pcm
+            or not self._playback
+            or self._stopped
+            or self._transport_closed
+            or self._render_generation != render_generation
+        ):
+            return
+        generation_id = render_generation
+        phrase_id = f"p-cache-{uuid.uuid4().hex[:8]}"
+        new_turn = self._playback_turn_generation != render_generation
+        self._active_generation = generation_id
+        self._playback.begin_phrase(
+            generation_id, phrase_id, text, new_turn=new_turn
+        )
+        self._playback_turn_generation = render_generation
+        await self._emit_stage(
+            "tts.start",
+            phrase_id=phrase_id,
+            text_len=len(text),
+            cached=True,
+        )
+        seq = 0
+        frame_samples = max(1, self._output_sample_rate * self.config.frame_ms // 1000)
+        frame_bytes = frame_samples * 2
+        offset = 0
+        first_logged = False
+        while offset < len(pcm):
+            if (
+                generation_id != self._active_generation
+                or self._render_generation != render_generation
+                or self._stopped
+            ):
+                break
+            chunk_pcm = pcm[offset : offset + frame_bytes * 4]
+            offset += len(chunk_pcm)
+            out_pcm = self._resample_tts_chunk(
+                generation_id, chunk_pcm, sample_rate
+            )
+            if not first_logged and out_pcm:
+                first_logged = True
+                await self._emit_stage(
+                    "tts.first_pcm",
+                    generation_id=generation_id,
+                    samples=len(out_pcm) // 2,
+                    cached=True,
+                )
+            env = AudioEnvelope(
+                call_id=self.call_id,
+                generation_id=generation_id,
+                phrase_id=phrase_id,
+                sequence=seq,
+                sample_rate=self._output_sample_rate,
+                pcm_s16le=out_pcm,
+            )
+            seq += 1
+            if self._playback:
+                await self._playback.enqueue_wait(env)
+        if self._playback and generation_id == self._active_generation:
+            self._playback.mark_generation_done(generation_id, outcome="success")
 
     async def _speak_phrase(self, text: str, render_generation: str) -> None:
         if (
@@ -1148,6 +1231,16 @@ class CallActor:
             )
             if marks_question:
                 self.session.state.pending_question_delivered = True
+        if (
+            self._pending_mark_render_gen == gen
+            and self._pending_mark_spoken_id
+            and ledger.sent_samples > 0
+        ):
+            await asyncio.to_thread(
+                self.session.mark_spoken_action, self._pending_mark_spoken_id
+            )
+            self._pending_mark_spoken_id = None
+            self._pending_mark_render_gen = None
         finish = self.media.finish or self.media.flush
         await finish()
         sent = ledger.sent_samples

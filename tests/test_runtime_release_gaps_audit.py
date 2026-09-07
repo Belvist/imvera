@@ -24,11 +24,10 @@ def session_at_wellness():
         family_id="audit-family",
         store=InMemoryCallRecordStore(),
     )
-    session.start()
+    start = session.start()
     session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
     session.state.greeted = True
-    session.state.fsm_state = FsmState.DAILY_CHECK
-    Planner.plan_vera_turn(session.state, 2, "g2")
+    session.mark_spoken_action(start.proposal.generation_id)
     return session
 
 

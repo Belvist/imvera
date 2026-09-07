@@ -37,12 +37,10 @@ def _session_at_wellness() -> CallSession:
         family_id="audit-family",
         store=InMemoryCallRecordStore(),
     )
+    start = session.start()
     session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
     session.state.greeted = True
-    session.state.fsm_state = FsmState.DAILY_CHECK
-    open_prop = Planner.plan_vera_turn(session.state, 1, "g1")
-    session.transitions.commit_transition(session.state, open_prop)
-    session.mark_spoken_action("g1")
+    session.mark_spoken_action(start.proposal.generation_id)
     return session
 
 
@@ -131,11 +129,12 @@ def test_call_actor_backchannel_extends_once_before_expiry() -> None:
 
         actor._start_answer_wait(
             goal_id=session.state.ensure_goal("wellness").goal_id,
-            question_id="g1",
+            question_id=session.state.get_goal("wellness").last_question_id,
         )
         assert spoken == []
 
         await actor._handle_backchannel_continuation(_wait_result(session))
+        session.state.waiting_on_goal = "wellness"
         clock.advance(5.0)
         assert not actor._wait_state.should_fire(clock.now())
         assert spoken == []
@@ -149,7 +148,9 @@ def test_call_actor_backchannel_extends_once_before_expiry() -> None:
         await actor._on_wait_deadline(wait_id, epoch)
         goal = session.state.get_goal("wellness")
         assert goal is not None
-        assert goal.automatic_attempts_used == 2
+        assert goal.automatic_attempts_used == 1
+        assert len(spoken) == 1
+        assert "двух словах" in spoken[0]
 
     asyncio.run(scenario())
 

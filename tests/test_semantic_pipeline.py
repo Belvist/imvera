@@ -49,7 +49,9 @@ def _daily_session() -> CallSession:
         store=InMemoryCallRecordStore(),
     )
     session.start()
-    session.mark_spoken_action(session.state.pending_action_id or "g1")
+    start_gen = session.state.pending_action_id
+    if start_gen:
+        session.mark_spoken_action(start_gen)
     return session
 
 
@@ -112,7 +114,7 @@ def test_adapter_mixed_sleep_and_who_are_you() -> None:
     )
     result = session.handle_user_text(text, interp=interp)
     assert session.state.slots["sleep"] == SlotStatus.FILLED
-    assert result.proposal.intent == "explain_vera_resume"
+    assert result.proposal.intent == "explain_vera"
     assert "Вера" in result.proposal.speech
 
 
