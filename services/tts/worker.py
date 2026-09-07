@@ -32,6 +32,7 @@ from services.tts.gen_params import build_mlx_gen_kwargs, resolve_model_id, tts_
 from services.tts.lab_fast import lab_fast_tts_enabled
 from services.tts.silero_lab import (
     SILERO_WARNING,
+    lab_backend_name,
     silero_lab_acknowledged,
     synthesize_silero,
 )
@@ -170,8 +171,7 @@ def _init_silero_lab(tts_cfg: dict[str, Any]) -> bool:
         from services.tts.silero_lab import load_silero
 
         load_silero(tts_cfg.get("silero_lab") or {})
-        speaker = (tts_cfg.get("silero_lab") or {}).get("speaker", "kseniya")
-        state.model_revision = f"silero_lab:{speaker}"
+        state.model_revision = f"silero_lab:{lab_backend_name(tts_cfg.get('silero_lab') or {})}"
         state.ready = True
         state.warmup_error = None
         os.environ["IMVERA_TTS_ENGINE"] = "silero_lab"

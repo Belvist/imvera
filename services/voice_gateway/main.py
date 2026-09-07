@@ -217,7 +217,7 @@ async def _inference_blockers() -> list[str]:
     return blockers
 
 
-@app.get("/health/ready")
+@app.get("/health/ready", response_model=None)
 async def ready() -> JSONResponse | dict:
     stt, tts, llm = _urls()
     blockers = await _inference_blockers()
