@@ -3,10 +3,26 @@
 ## Primary assignment
 
 Live Zoiper **7000** — wellness dialogue on real audio.  
-**Incident 2026-09-08 00:08 (`sip-31365dee13`):** echo self-barge-in — greeting cut ~187ms; STT `Сд.`/`Сейчас`; no `playback.completed`. Cause: `8accf9a` R1 unmuted uplink during TTS. **Fix (working tree):** half-duplex mute + echo prefix discard; stack restarted. **Live redial NOT VERIFIED.**  
+**Incident 2026-09-08 00:08 (`sip-31365dee13`):** echo self-barge-in — greeting cut ~187ms; STT `Сд.`/`Сейчас`; no `playback.completed`. Cause: `8accf9a` R1 unmuted uplink during TTS.  
+**Incident 2026-09-08 ~00:29 (`sip-97e9d693a5`):** after half-duplex — **deaf**: `playback.completed` ×2, **no** `speech.*` / `listen.enabled`; «чувствую себя хорошо» ignored. Cause: unmute after drain not reliable (finalize race + pause gate). **Fix:** idempotent finalize + `_force_listen_enabled` in `finally` + auto-expire pause gate. **Live redial NOT VERIFIED** until user redials 7000 on restarted stack.  
 Policy matrix: `tests/test_wellness_call_scenarios.py`.  
 **1k corpus + load harness:** `make test-corpus-1k` / `scripts/run_dialogue_corpus.py` (Session/Planner scale proof; **NOT** live SIP×1000).  
 Architecture: [ADR-009](adr/009-llm-understanding-state-policy.md).
+
+## Why friend's MVP works vs our SIP path
+
+Honest gap list (friend solved local mic loop first; we jumped to Asterisk/Zoiper):
+
+| Friend (local MVP, ~3h) | Our Zoiper/SIP path |
+|-------------------------|---------------------|
+| sounddevice mic/speakers first | Asterisk + ExternalMedia + snoop + softphone |
+| Strict half-duplex: speak → finish → pause → **then** mic | We briefly re-broke with audit R1 always-listen; echo self-barge-in |
+| Whisper local + WebRTC VAD | MLX STT + Silero/energy VAD over RTP |
+| Silero Xenia (`kseniya`) | Lab often falls back to **macos say** (robotic) if torch missing |
+| Dialogue orchestrator owns flow | Same Planner/Session; **Core owns GREEN/YELLOW/RED** — we must not copy friend's verdict ownership into voiseup |
+| One failure mode: acoustic loop | ×10: echo, snoop mix, codec, inject lag, capture loss, finalize races |
+
+Same root bug class (hearing Vera). Complexity ≠ smarter dialogue. Lab flag: `IMVERA_LAB_HALF_DUPLEX=1` (default), `IMVERA_POST_SPEECH_PAUSE_MS=400`.
 
 ## Branch / SHA — truth table
 

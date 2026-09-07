@@ -26,6 +26,10 @@ from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue.validator import Validator
 from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler
 from packages.voice_runtime.endpointing import SpeechSegmentCollector
+from packages.voice_runtime.lab_half_duplex import (
+    lab_half_duplex_enabled,
+    post_speech_pause_ms,
+)
 from packages.voice_runtime.opening_cache import load_opening
 from packages.voice_runtime.playback import PlaybackQueue
 from packages.voice_runtime.profile import audio_settings, dialogue_timing_settings
@@ -112,6 +116,9 @@ class CallActorConfig:
     playback_buffer_ms: int = 60
     frame_ms: int = 20
     telephony_stream: bool = True
+    # Lab Zoiper/softphone: mute uplink during Vera + pause after drain (friend MVP).
+    lab_half_duplex: bool = True
+    post_speech_pause_ms: int = 400
 
 
 @dataclass
@@ -169,6 +176,10 @@ class CallActor:
     _tts_first_pcm_gens: set[str] = field(default_factory=set)
     _tts_slow_watch: asyncio.Task | None = None
     _hold_turn_finalize: bool = False
+    # Monotonic deadline: discard uplink until this time (post-speech pause).
+    _listen_gated_until: float | None = None
+    _finalized_playback_gens: set[str] = field(default_factory=set)
+    _finalize_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     async def _emit_stage(self, stage: str, **payload: object) -> None:
         started = self._active_stage_budget.started_mono if self._active_stage_budget else 0.0
@@ -389,13 +400,73 @@ class CallActor:
         if not self._delivered_phrases or self._delivered_phrases[-1] != spoken:
             self._delivered_phrases.append(spoken)
 
+    def _uplink_listen_blocked(self) -> bool:
+        """Strict half-duplex: no VAD while Vera speaks or during post-speech pause."""
+        if self._active_generation:
+            return True
+        if not self.config.lab_half_duplex:
+            return False
+        until = self._listen_gated_until
+        if until is None:
+            return False
+        # Auto-expire: never leave mic muted if pause await was skipped/cancelled.
+        if self._monotonic() >= until:
+            self._listen_gated_until = None
+            return False
+        return True
+
+    def _force_listen_enabled(self) -> None:
+        """Unmute uplink immediately — post-speech pause must not stick forever."""
+        self._listen_gated_until = None
+
+    def _arm_post_speech_pause(self) -> None:
+        """After playback.completed: keep mic muted for a short quiet window."""
+        if not self.config.lab_half_duplex:
+            self._listen_gated_until = None
+            return
+        pause_ms = max(0, min(2000, int(self.config.post_speech_pause_ms)))
+        if pause_ms <= 0:
+            self._listen_gated_until = None
+            return
+        self._listen_gated_until = self._monotonic() + (pause_ms / 1000.0)
+
+    async def _await_post_speech_pause(self) -> None:
+        """Block until post-speech pause elapses; always clear gate afterward."""
+        until = self._listen_gated_until
+        if until is None:
+            return
+        try:
+            while True:
+                remaining = until - self._monotonic()
+                if remaining <= 0:
+                    break
+                await asyncio.sleep(min(remaining, 0.05))
+        finally:
+            self._force_listen_enabled()
+
+    async def _enable_listen_after_playback(self) -> None:
+        """Pause (optional) → force unmute → fresh VAD. Never leave uplink muted."""
+        try:
+            await self._await_post_speech_pause()
+        finally:
+            self._force_listen_enabled()
+            self._flush_pcm_queue()
+            self._playback_uplink_buf.clear()
+            self._reset_uplink_endpointing()
+            await self._emit_stage(
+                "listen.enabled",
+                pause_ms=int(self.config.post_speech_pause_ms),
+                lab_half_duplex=bool(self.config.lab_half_duplex),
+            )
+
     async def _feed_uplink_pcm(self, pcm: bytes) -> None:
         assert self._vad and self._collector
         # Half-duplex listen gate: Zoiper/softphone leaks TTS into capture.
         # Continuous VAD during playback (8accf9a R1) caused echo self-barge-in
         # (sip-31365dee13: greeting interrupted ~187ms; STT "Сд." / "Сейчас").
+        # Friend MVP: Vera finishes → pause → THEN enable mic (no self-dialogue).
         # AUDIO_CONTRACT Phase 5: barge_in must stay false while elder is silent.
-        if self._active_generation:
+        if self._uplink_listen_blocked():
             return
         started, ended = self._vad.feed(pcm)
         if started:
@@ -1019,6 +1090,7 @@ class CallActor:
             )
         )
         self._active_generation = None
+        self._force_listen_enabled()
         self._playback_uplink_buf.clear()
         self._tts_resamplers = {
             k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
@@ -1329,6 +1401,7 @@ class CallActor:
         if ledger.sent_samples <= 0 or ledger.generation_outcome != "success":
             if not self._hold_turn_finalize:
                 self._active_generation = None
+                self._force_listen_enabled()
             return
         spoken = ledger.canonical_text
         self._remember_assistant_phrase(spoken or "")
@@ -1338,63 +1411,82 @@ class CallActor:
 
     async def _finalize_turn_playback(self) -> None:
         assert self._playback
-        gen = self._active_generation
-        if not gen or not self._playback.playback_complete():
-            return
-        ledger = self._playback._ledger
-        if not ledger:
-            return
-        if ledger.sent_samples <= 0 or ledger.generation_outcome != "success":
+        pending_wait: tuple[str | None, str | None] | None = None
+        hangup = False
+        async with self._finalize_lock:
+            gen = self._active_generation
+            if not gen or not self._playback.playback_complete():
+                return
+            if gen in self._finalized_playback_gens:
+                # Already finalized — never leave mute stuck on a replay.
+                if self._active_generation == gen:
+                    self._active_generation = None
+                return
+            ledger = self._playback._ledger
+            if not ledger:
+                self._active_generation = None
+                self._force_listen_enabled()
+                return
+            if ledger.sent_samples <= 0 or ledger.generation_outcome != "success":
+                self._active_generation = None
+                self._force_listen_enabled()
+                return
+            self._playback.mark_completed()
+            intent = self._last_delivered_intent or ""
+            marks_question = intent in _QUESTION_DELIVERY_INTENTS or intent.startswith(
+                ("check_", "clarify_", "repeat_")
+            )
+            if marks_question:
+                self.session.state.pending_question_delivered = True
+            if (
+                self._pending_mark_render_gen == gen
+                and self._pending_mark_spoken_id
+                and ledger.sent_samples > 0
+            ):
+                await asyncio.to_thread(
+                    self.session.mark_spoken_action, self._pending_mark_spoken_id
+                )
+                self._pending_mark_spoken_id = None
+                self._pending_mark_render_gen = None
+            finish = self.media.finish or self.media.flush
+            await finish()
+            sent = ledger.sent_samples
+            await self._finalize_outbox_action(
+                sent_samples=sent, outcome=ledger.generation_outcome
+            )
+            await self.media.emit(
+                RuntimeEvent(
+                    self.call_id,
+                    RuntimeEventType.PLAYBACK_COMPLETED,
+                    {
+                        "generation_id": gen,
+                        "sent_samples": ledger.sent_samples,
+                        "queued_samples": ledger.queued_samples,
+                        "generated_samples": ledger.generated_samples,
+                    },
+                )
+            )
+            self._finalized_playback_gens.add(gen)
+            # Drop generation mute BEFORE pause await so a cancelled pause
+            # cannot leave Vera permanently deaf (sip-97e9d693a5).
+            self._arm_post_speech_pause()
             self._active_generation = None
-            return
-        self._playback.mark_completed()
-        intent = self._last_delivered_intent or ""
-        marks_question = intent in _QUESTION_DELIVERY_INTENTS or intent.startswith(
-            ("check_", "clarify_", "repeat_")
-        )
-        if marks_question:
-            self.session.state.pending_question_delivered = True
-        if (
-            self._pending_mark_render_gen == gen
-            and self._pending_mark_spoken_id
-            and ledger.sent_samples > 0
-        ):
-            await asyncio.to_thread(
-                self.session.mark_spoken_action, self._pending_mark_spoken_id
-            )
-            self._pending_mark_spoken_id = None
-            self._pending_mark_render_gen = None
-        finish = self.media.finish or self.media.flush
-        await finish()
-        sent = ledger.sent_samples
-        await self._finalize_outbox_action(sent_samples=sent, outcome=ledger.generation_outcome)
-        await self.media.emit(
-            RuntimeEvent(
-                self.call_id,
-                RuntimeEventType.PLAYBACK_COMPLETED,
-                {
-                    "generation_id": gen,
-                    "sent_samples": ledger.sent_samples,
-                    "queued_samples": ledger.queued_samples,
-                    "generated_samples": ledger.generated_samples,
-                },
-            )
-        )
-        self._active_generation = None
-        self._tts_resamplers = {
-            k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
-        }
-        self._flush_pcm_queue()
-        self._playback_uplink_buf.clear()
-        self._reset_uplink_endpointing()
-        pending_wait = self._pending_answer_wait
-        if pending_wait is not None:
+            self._tts_resamplers = {
+                k: v
+                for k, v in self._tts_resamplers.items()
+                if not k.startswith(gen)
+            }
+            pending_wait = self._pending_answer_wait
             self._pending_answer_wait = None
+            hangup = self._hangup_after_playback
+
+        await self._enable_listen_after_playback()
+        if pending_wait is not None:
             self._start_answer_wait(
                 goal_id=pending_wait[0],
                 question_id=pending_wait[1],
             )
-        if self._hangup_after_playback:
+        if hangup:
             await self._maybe_hangup_when_idle()
 
     async def _maybe_hangup_when_idle(self) -> None:
@@ -1455,5 +1547,7 @@ def build_call_actor(
             frame_ms=profile_audio["frame_ms"],
             playback_buffer_ms=playback_buffer_ms,
             telephony_stream=os.environ.get("IMVERA_TELEPHONY_STREAM", "1") == "1",
+            lab_half_duplex=lab_half_duplex_enabled(),
+            post_speech_pause_ms=post_speech_pause_ms(),
         ),
     )

@@ -57,7 +57,7 @@ def test_streaming_phrases_speak_sequentially_not_concurrently():
             tts=SimpleNamespace(synthesize=synthesize, cancel=noop),
             llm=SimpleNamespace(render_stream=stream, cancel_request=noop),
             media=MediaCallbacks(noop, noop, noop, noop),
-            config=CallActorConfig(telephony_stream=False),
+            config=CallActorConfig(telephony_stream=False, post_speech_pause_ms=0),
         )
         actor._playback = PlaybackQueue(call_id=actor.call_id, sample_rate=16000)
         actor._playback_task = asyncio.create_task(actor._playback_pump())
@@ -96,7 +96,7 @@ def test_barge_in_during_multi_phrase_cancels_render_generation():
             tts=SimpleNamespace(synthesize=synthesize, cancel=noop),
             llm=SimpleNamespace(render_stream=stream, cancel_request=noop),
             media=MediaCallbacks(noop, noop, noop, noop),
-            config=CallActorConfig(telephony_stream=False),
+            config=CallActorConfig(telephony_stream=False, post_speech_pause_ms=0),
         )
         actor._playback = PlaybackQueue(call_id=actor.call_id, sample_rate=16000)
         actor._playback_task = asyncio.create_task(actor._playback_pump())
@@ -136,7 +136,7 @@ def test_tts_failure_releases_reserved_attempt_without_starting_wait():
             tts=SimpleNamespace(synthesize=failing_synthesize, cancel=noop),
             llm=SimpleNamespace(cancel_request=noop),
             media=MediaCallbacks(noop, noop, noop, noop),
-            config=CallActorConfig(telephony_stream=False),
+            config=CallActorConfig(telephony_stream=False, post_speech_pause_ms=0),
         )
         actor._playback = PlaybackQueue(call_id=actor.call_id, sample_rate=16000)
         actor._playback_task = asyncio.create_task(actor._playback_pump())
@@ -190,7 +190,7 @@ def test_opening_cache_plays_without_live_tts(monkeypatch):
             tts=SimpleNamespace(synthesize=synthesize, cancel=noop),
             llm=SimpleNamespace(cancel_request=noop),
             media=MediaCallbacks(send_pcm, noop, noop, noop),
-            config=CallActorConfig(telephony_stream=False),
+            config=CallActorConfig(telephony_stream=False, post_speech_pause_ms=0),
         )
         actor._playback = PlaybackQueue(call_id=actor.call_id, sample_rate=16000)
         actor._playback_task = asyncio.create_task(actor._playback_pump())
@@ -229,7 +229,7 @@ def test_barge_in_before_second_phrase_skips_second_tts():
             tts=SimpleNamespace(synthesize=synthesize, cancel=noop),
             llm=SimpleNamespace(render_stream=stream, cancel_request=noop),
             media=MediaCallbacks(noop, noop, noop, noop),
-            config=CallActorConfig(telephony_stream=False),
+            config=CallActorConfig(telephony_stream=False, post_speech_pause_ms=0),
         )
         actor._playback = PlaybackQueue(call_id=actor.call_id, sample_rate=16000)
         actor._playback_task = asyncio.create_task(actor._playback_pump())

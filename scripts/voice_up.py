@@ -14,6 +14,7 @@ from packages.telephony.asterisk import is_stasis_app_registered, normalize_ari_
 from packages.voice_runtime.profile import apply_audio_env, audio_settings
 from scripts.local_sip_config import load_or_create
 from scripts.voice_process import ROOT, is_running, start
+from packages.voice_runtime.lab_half_duplex import apply_lab_half_duplex_env
 from services.tts.lab_fast import apply_lab_fast_env, lab_fast_tts_enabled
 
 VOICE_COMPOSE = ["docker", "compose", "-f", "docker/docker-compose.voice.yml"]
@@ -181,9 +182,21 @@ def main() -> int:
     cfg = load_or_create()
     print("SIP credentials synced to config/local/asterisk/")
 
-    env = apply_lab_fast_env(apply_audio_env(os.environ.copy()))
+    env = apply_lab_half_duplex_env(
+        apply_lab_fast_env(apply_audio_env(os.environ.copy()))
+    )
     if env.get("IMVERA_TTS_ENGINE") == "silero_lab":
         print("Lab fast TTS: silero_lab (IMVERA_LAB_FAST_TTS=1, ~1-2s warm first_pcm)")
+        print(
+            "  speaker: kseniya (Silero Xenia) — NC lab only; "
+            "macos say fallback if torch missing"
+        )
+    if env.get("IMVERA_LAB_HALF_DUPLEX", "1") in {"1", "true", "yes"}:
+        pause = env.get("IMVERA_POST_SPEECH_PAUSE_MS", "400")
+        print(
+            f"Lab half-duplex: ON (post-speech pause {pause}ms — "
+            "Vera finishes → pause → then mic)"
+        )
 
     code = _ensure_workers(env)
     if code != 0:

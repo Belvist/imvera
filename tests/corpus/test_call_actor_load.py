@@ -59,7 +59,7 @@ async def _multi_phrase_once(call_id: str, *, barge_in: bool = False) -> list[st
         tts=SimpleNamespace(synthesize=synthesize, cancel=_noop),
         llm=SimpleNamespace(render_stream=stream, cancel_request=_noop),
         media=MediaCallbacks(_noop, _noop, _noop, _noop),
-        config=CallActorConfig(telephony_stream=False),
+        config=CallActorConfig(telephony_stream=False, post_speech_pause_ms=0),
     )
     actor._playback = PlaybackQueue(call_id=actor.call_id, sample_rate=16000)
     actor._playback_task = asyncio.create_task(actor._playback_pump())
@@ -104,7 +104,7 @@ async def _tts_fail_release(call_id: str) -> None:
         tts=SimpleNamespace(synthesize=failing_synthesize, cancel=_noop),
         llm=SimpleNamespace(cancel_request=_noop),
         media=MediaCallbacks(_noop, _noop, _noop, _noop),
-        config=CallActorConfig(telephony_stream=False),
+        config=CallActorConfig(telephony_stream=False, post_speech_pause_ms=0),
     )
     actor._playback = PlaybackQueue(call_id=actor.call_id, sample_rate=16000)
     actor._playback_task = asyncio.create_task(actor._playback_pump())

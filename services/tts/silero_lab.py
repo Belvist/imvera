@@ -1,6 +1,7 @@
 """Silero v5_5_ru — LOCAL LAB ONLY (CC BY-NC-SA 4.0, not for production).
 
-When torch is unavailable on macOS, falls back to native ``say`` for sub-2s lab TTS.
+# Silero v5_5_ru speaker ``kseniya`` ≈ English «Xenia» (friend's Silero Xenia).
+# When torch is unavailable on macOS, falls back to native ``say`` for sub-2s lab TTS.
 """
 
 from __future__ import annotations
