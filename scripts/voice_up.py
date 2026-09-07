@@ -203,6 +203,16 @@ def main() -> int:
     if not _wait_http("http://127.0.0.1:9201/health/live", "asterisk_app", 30):
         return 1
 
+    voice_service_port = int(os.environ.get("IMVERA_VOICE_SERVICE_PORT", "9300"))
+    print(f"Starting voice-service on :{voice_service_port}...")
+    start(
+        "voice_service",
+        [sys.executable, str(ROOT / "services" / "voice_service" / "main.py")],
+        env=env,
+    )
+    if not _wait_http(f"http://127.0.0.1:{voice_service_port}/health/live", "voice_service", 30):
+        return 1
+
     print("Starting Asterisk container...")
     subprocess.run([*VOICE_COMPOSE, "up", "-d", "--build"], cwd=ROOT, check=False)
     if not _verify_asterisk_modules():

@@ -36,10 +36,35 @@ class VoiceCallSession:
     events: asyncio.Queue[dict[str, Any]] = field(default_factory=asyncio.Queue)
     event_seq: int = 0
     stopped: bool = False
+    audio_out: asyncio.Queue[bytes] = field(default_factory=lambda: asyncio.Queue(maxsize=64))
+    media_connected: bool = False
 
 
 _sessions: dict[str, VoiceCallSession] = {}
 _max_sessions = int(os.environ.get("IMVERA_VOICE_MAX_SESSIONS", "4"))
+_audio_queue_max = int(os.environ.get("IMVERA_VOICE_AUDIO_QUEUE_MAX", "64"))
+
+
+async def _enqueue_audio(session: VoiceCallSession, pcm: bytes) -> None:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 5.0
+    while True:
+        try:
+            session.audio_out.put_nowait(pcm)
+            return
+        except asyncio.QueueFull:
+            if loop.time() >= deadline:
+                raise RuntimeError("voice media downlink backpressure timeout")
+            await asyncio.sleep(0.01)
+
+
+async def _audio_writer(session: VoiceCallSession, websocket: WebSocket) -> None:
+    while not session.stopped:
+        try:
+            pcm = await asyncio.wait_for(session.audio_out.get(), timeout=0.5)
+        except TimeoutError:
+            continue
+        await websocket.send_bytes(pcm)
 
 
 class CreateCallRequest(BaseModel):
@@ -125,6 +150,7 @@ async def create_call(body: CreateCallRequest) -> dict[str, str]:
         await _enqueue_event(session_holder, event)
 
     async def send_pcm(pcm: bytes) -> None:
+        await _enqueue_audio(session_holder, pcm)
         await emit(
             RuntimeEvent(call_id, RuntimeEventType.TTS_CHUNK_READY, {"bytes": len(pcm)})
         )
@@ -229,7 +255,12 @@ async def media_ws(websocket: WebSocket, call_id: str) -> None:
     if session is None:
         await websocket.close(code=4404)
         return
+    if session.media_connected:
+        await websocket.close(code=4409, reason="media already connected")
+        return
     await websocket.accept()
+    session.media_connected = True
+    writer_task = asyncio.create_task(_audio_writer(session, websocket))
     output_rate = int(websocket.query_params.get("sample_rate", "16000"))
     frame_bytes = output_rate * 2 * 20 // 1000
     await session.actor.on_media_ready(
@@ -252,6 +283,15 @@ async def media_ws(websocket: WebSocket, call_id: str) -> None:
     except WebSocketDisconnect:
         pass
     finally:
+        session.media_connected = False
+        try:
+            while True:
+                pcm = session.audio_out.get_nowait()
+                await websocket.send_bytes(pcm)
+        except asyncio.QueueEmpty:
+            pass
+        writer_task.cancel()
+        await asyncio.gather(writer_task, return_exceptions=True)
         await stop_call(call_id)
 
 

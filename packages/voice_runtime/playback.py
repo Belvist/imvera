@@ -62,20 +62,29 @@ class PlaybackQueue:
         self._max_frames = frames_in_buffer
         self._queue = asyncio.Queue(maxsize=frames_in_buffer)
 
-    def begin_phrase(self, generation_id: str, phrase_id: str, canonical_text: str) -> None:
+    def begin_phrase(
+        self,
+        generation_id: str,
+        phrase_id: str,
+        canonical_text: str,
+        *,
+        new_turn: bool = True,
+    ) -> None:
+        same_turn = not new_turn and self._active_generation == generation_id
         self._active_generation = generation_id
-        self._frame_carry.clear()
+        if not same_turn:
+            self._frame_carry.clear()
+            while not self._queue.empty():
+                try:
+                    self._queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
         self._ledger = PlaybackLedger(
             phrase_id=phrase_id,
             generation_id=generation_id,
             canonical_text=canonical_text,
             state=PlaybackState.GENERATING,
         )
-        while not self._queue.empty():
-            try:
-                self._queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
 
     def cancel_generation(self, generation_id: str) -> None:
         self._cancelled_generations.add(generation_id)

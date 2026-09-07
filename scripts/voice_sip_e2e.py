@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import signal
 import subprocess
 import sys
 import threading
@@ -15,11 +17,15 @@ import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
 ARTIFACT_DIR = ROOT / ".run" / "sip-e2e"
-GATEWAY = "http://127.0.0.1:9200"
+RESULT_PATH = ARTIFACT_DIR / "result.json"
+GATEWAY = os.environ.get("IMVERA_VOICE_GATEWAY_HTTP", "http://127.0.0.1:9200")
 SPEECH_TEXT = "да это я"
 FRAME_BYTES = 160  # 20 ms @ 8 kHz unsigned PCM mono
 SILENCE_BYTE = 0x80
 PYVOIP_VERSION = "1.6.8"
+DEFAULT_SIP_PORT = int(os.environ.get("IMVERA_E2E_SIP_PORT", "5075"))
+DEFAULT_SUBPROCESS_TIMEOUT_S = int(os.environ.get("IMVERA_E2E_TIMEOUT_S", "180"))
+MIN_USER_TURNS = int(os.environ.get("IMVERA_E2E_MIN_USER_TURNS", "2"))
 
 
 def _git_sha() -> str:
@@ -91,19 +97,47 @@ def _trace_rows(call_id: str) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
-def _cleanup_stale_calls() -> None:
+def _write_result(status: str, **payload: object) -> None:
+    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    body = {
+        "status": status,
+        "git_sha": _git_sha(),
+        "updated_at": time.time(),
+        **payload,
+    }
+    RESULT_PATH.write_text(json.dumps(body, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _preflight_sip_port(port: int) -> None:
+    import socket
+
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        r = httpx.get(f"{GATEWAY}/internal/calls/active", timeout=2.0)
-        if r.status_code != 200:
-            return
-        for call_id in r.json().get("calls", []):
-            httpx.post(f"http://127.0.0.1:9201/internal/calls/{call_id}/hangup", timeout=5.0)
-            httpx.post(f"{GATEWAY}/internal/calls/{call_id}/close", timeout=5.0)
+        probe.bind(("127.0.0.1", port))
+    except OSError as exc:
+        raise RuntimeError(
+            f"SIP test port {port} is already in use; set IMVERA_E2E_SIP_PORT"
+        ) from exc
+    finally:
+        probe.close()
+
+
+def _cleanup_call(call_id: str | None) -> None:
+    if not call_id:
+        return
+    try:
+        httpx.post(f"http://127.0.0.1:9201/internal/calls/{call_id}/hangup", timeout=5.0)
+        httpx.post(f"{GATEWAY}/internal/calls/{call_id}/close", timeout=5.0)
     except httpx.HTTPError:
         pass
 
 
-def _wait_new_call(since_ts: float, timeout_s: float = 20.0) -> str | None:
+def _cleanup_stale_calls() -> None:
+    """Legacy helper — avoid closing unrelated active calls in normal runner."""
+    return
+
+
+def _wait_new_call(since_ts: float, timeout_s: float = 20.0, sip_call_id: str | None = None) -> str | None:
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         candidates = []
@@ -112,7 +146,17 @@ def _wait_new_call(since_ts: float, timeout_s: float = 20.0) -> str | None:
                 candidates.append((path.stat().st_mtime, path.stem))
         if candidates:
             candidates.sort(key=lambda item: item[0])
-            return candidates[-1][1]
+            chosen = candidates[-1][1]
+            if sip_call_id:
+                rows = _trace_rows(chosen)
+                linked = any(
+                    row.get("payload", {}).get("sip_call_id") == sip_call_id
+                    for row in rows
+                )
+                if not linked and len(candidates) > 1:
+                    time.sleep(0.1)
+                    continue
+            return chosen
         time.sleep(0.1)
     return None
 
@@ -224,7 +268,7 @@ def _prime_rtp_symmetric(call) -> None:
 
 
 def _run_sip_session(
-    caller_pcm: bytes, *, send_speech: bool
+    caller_pcm: bytes, *, send_speech: bool, sip_port: int = DEFAULT_SIP_PORT
 ) -> tuple[str | None, bytes, str | None, int]:
     from pyVoIP.VoIP import CallState, VoIPPhone
 
@@ -240,7 +284,7 @@ def _run_sip_session(
         sip_user,
         sip_pass,
         myIP=media_host,
-        sipPort=5075,
+        sipPort=sip_port,
         rtpPortLow=13000,
         rtpPortHigh=13100,
     )
@@ -262,7 +306,7 @@ def _run_sip_session(
             print("BLOCKED: SIP call not answered", file=sys.stderr)
             return None, b"", sip_call_id, 0
 
-        internal_call_id = _wait_new_call(since_ts, 20.0)
+        internal_call_id = _wait_new_call(since_ts, 20.0, sip_call_id=sip_call_id)
         if not internal_call_id:
             print("BLOCKED: no new gateway call_id after SIP answer", file=sys.stderr)
             return None, b"", sip_call_id, 0
@@ -311,7 +355,18 @@ def _assert_downlink(received: bytes, call_id: str) -> None:
         raise AssertionError(f"missing downlink trace events {sorted(missing)}")
 
 
+def _downlink_energy(received: bytes) -> int:
+    return sum(1 for b in received if b != SILENCE_BYTE)
+
+
 def _assert_full_conversation(received: bytes, call_id: str, capture_bytes: int) -> None:
+    non_silence = _downlink_energy(received)
+    if non_silence < FRAME_BYTES * 5:
+        raise AssertionError(
+            f"insufficient downlink voice energy ({non_silence} non-silence bytes); "
+            f"silence-only capture is not a conversation"
+        )
+
     rows = _trace_rows(call_id)
     seen = {row["type"] for row in rows}
     required = {
@@ -329,12 +384,13 @@ def _assert_full_conversation(received: bytes, call_id: str, capture_bytes: int)
     if capture_bytes <= 0:
         raise AssertionError(f"capture_bytes={capture_bytes}; uplink audio not received")
 
-    stt_texts = [
-        str(row.get("payload", {}).get("text", "")).lower()
-        for row in rows
-        if row.get("type") == "stt.final"
-    ]
-    if not stt_texts or not any("да" in t for t in stt_texts):
+    stt_rows = [row for row in rows if row.get("type") == "stt.final"]
+    stt_texts = [str(row.get("payload", {}).get("text", "")).lower() for row in stt_rows]
+    if len(stt_texts) < MIN_USER_TURNS:
+        raise AssertionError(
+            f"expected at least {MIN_USER_TURNS} user turns, got {len(stt_texts)}"
+        )
+    if not any("да" in t for t in stt_texts):
         raise AssertionError(f"STT did not match test phrase; got {stt_texts}")
 
     phrases = [
@@ -342,10 +398,12 @@ def _assert_full_conversation(received: bytes, call_id: str, capture_bytes: int)
         for row in rows
         if row.get("type") == "renderer.phrase_ready"
     ]
-    if len(phrases) < 2:
-        raise AssertionError("expected greeting + follow-up renderer phrases")
-    if phrases[0] == phrases[1]:
-        raise AssertionError("dialogue did not advance after user reply")
+    if len(phrases) < MIN_USER_TURNS + 1:
+        raise AssertionError(
+            f"expected greeting plus {MIN_USER_TURNS} follow-up renderer phrases"
+        )
+    if len(set(phrases)) < MIN_USER_TURNS + 1:
+        raise AssertionError("dialogue did not advance across turns")
 
     completed = [
         row
@@ -353,8 +411,10 @@ def _assert_full_conversation(received: bytes, call_id: str, capture_bytes: int)
         if row.get("type") == "playback.completed"
         and int(row.get("payload", {}).get("sent_samples", 0)) > 0
     ]
-    if len(completed) < 2:
-        raise AssertionError("expected at least two non-empty playback.completed events")
+    if len(completed) < MIN_USER_TURNS + 1:
+        raise AssertionError(
+            f"expected at least {MIN_USER_TURNS + 1} non-empty playback.completed events"
+        )
 
     if len(received) < FRAME_BYTES * 20:
         raise AssertionError(f"insufficient downlink PCM for response ({len(received)} bytes)")
@@ -388,59 +448,158 @@ def _write_artifacts(
     return wav_path
 
 
-def run_downlink_smoke() -> int:
-    print(f"git_sha: {_git_sha()}")
+def run_downlink_smoke(sip_port: int = DEFAULT_SIP_PORT) -> int:
+    print(f"git_sha: {_git_sha()}", flush=True)
+    _write_result("RUNNING", mode="downlink-only", stage="preflight")
     code = subprocess.call([sys.executable, str(ROOT / "scripts" / "voice_doctor.py")])
     if code != 0:
+        _write_result("FAILED", mode="downlink-only", stage="voice_doctor", exit_code=code)
         return code
     _require_pyvoip()
-    _cleanup_stale_calls()
+    _preflight_sip_port(sip_port)
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     caller_path = ARTIFACT_DIR / "caller_speech.pcm"
     _generate_u8_speech(SPEECH_TEXT, caller_path)
-    call_id, received, sip_call_id, capture_bytes = _run_sip_session(
-        caller_path.read_bytes(), send_speech=False
-    )
-    if not call_id:
-        return 1
+    call_id: str | None = None
     try:
+        call_id, received, sip_call_id, capture_bytes = _run_sip_session(
+            caller_path.read_bytes(), send_speech=False, sip_port=sip_port
+        )
+        if not call_id:
+            _write_result("FAILED", mode="downlink-only", stage="sip_session")
+            return 1
         _assert_downlink(received, call_id)
     except AssertionError as exc:
-        print(f"BLOCKED: {exc}", file=sys.stderr)
+        print(f"BLOCKED: {exc}", file=sys.stderr, flush=True)
+        _write_result(
+            "FAILED",
+            mode="downlink-only",
+            call_id=call_id,
+            error=str(exc),
+        )
         return 1
+    finally:
+        _cleanup_call(call_id)
     wav_path = _write_artifacts(call_id, received, sip_call_id, capture_bytes)
-    print(f"voice-sip-downlink-smoke OK call_id={call_id}")
-    print(f"  trace: {ARTIFACT_DIR / f'{call_id}.jsonl'}")
-    print(f"  audio: {wav_path}")
+    _write_result(
+        "PASSED",
+        mode="downlink-only",
+        call_id=call_id,
+        wav_path=str(wav_path),
+    )
+    print(f"voice-sip-downlink-smoke OK call_id={call_id}", flush=True)
+    print(f"  trace: {ARTIFACT_DIR / f'{call_id}.jsonl'}", flush=True)
+    print(f"  audio: {wav_path}", flush=True)
     return 0
 
 
-def run_full_conversation() -> int:
-    print(f"git_sha: {_git_sha()}")
+def run_full_conversation(sip_port: int = DEFAULT_SIP_PORT) -> int:
+    print(f"git_sha: {_git_sha()}", flush=True)
+    _write_result("RUNNING", mode="full-conversation", stage="preflight")
     code = subprocess.call([sys.executable, str(ROOT / "scripts" / "voice_doctor.py")])
     if code != 0:
+        _write_result("FAILED", mode="full-conversation", stage="voice_doctor", exit_code=code)
         return code
     _require_pyvoip()
-    _cleanup_stale_calls()
+    _preflight_sip_port(sip_port)
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     caller_path = ARTIFACT_DIR / "caller_speech.pcm"
     _generate_u8_speech(SPEECH_TEXT, caller_path)
-    call_id, received, sip_call_id, capture_bytes = _run_sip_session(
-        caller_path.read_bytes(), send_speech=True
-    )
-    if not call_id:
-        return 1
+    call_id: str | None = None
     try:
+        call_id, received, sip_call_id, capture_bytes = _run_sip_session(
+            caller_path.read_bytes(), send_speech=True, sip_port=sip_port
+        )
+        if not call_id:
+            _write_result("FAILED", mode="full-conversation", stage="sip_session")
+            return 1
         _assert_full_conversation(received, call_id, capture_bytes)
     except AssertionError as exc:
-        print(f"BLOCKED: {exc}", file=sys.stderr)
+        print(f"BLOCKED: {exc}", file=sys.stderr, flush=True)
+        _write_result(
+            "FAILED",
+            mode="full-conversation",
+            call_id=call_id,
+            error=str(exc),
+        )
         return 1
+    finally:
+        _cleanup_call(call_id)
     wav_path = _write_artifacts(call_id, received, sip_call_id, capture_bytes)
-    print(f"voice-sip-e2e: full conversation OK call_id={call_id}")
-    print(f"  trace: {ARTIFACT_DIR / f'{call_id}.jsonl'}")
-    print(f"  audio: {wav_path}")
-    print(f"  capture_bytes: {capture_bytes}")
+    _write_result(
+        "PASSED",
+        mode="full-conversation",
+        call_id=call_id,
+        capture_bytes=capture_bytes,
+        wav_path=str(wav_path),
+    )
+    print(f"voice-sip-e2e: full conversation OK call_id={call_id}", flush=True)
+    print(f"  trace: {ARTIFACT_DIR / f'{call_id}.jsonl'}", flush=True)
+    print(f"  audio: {wav_path}", flush=True)
+    print(f"  capture_bytes: {capture_bytes}", flush=True)
     return 0
+
+
+def _child_entry(mode: str, sip_port: int) -> int:
+    if mode == "downlink-only":
+        return run_downlink_smoke(sip_port=sip_port)
+    return run_full_conversation(sip_port=sip_port)
+
+
+def _run_with_subprocess_deadline(
+    mode: str,
+    *,
+    sip_port: int,
+    timeout_s: int,
+) -> int:
+    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    _write_result("RUNNING", mode=mode, stage="spawn", timeout_s=timeout_s)
+    cmd = [
+        sys.executable,
+        "-u",
+        str(ROOT / "scripts" / "voice_sip_e2e.py"),
+        "--child",
+        mode,
+        "--sip-port",
+        str(sip_port),
+    ]
+    proc = subprocess.Popen(
+        cmd,
+        cwd=ROOT,
+        start_new_session=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        stdout, _ = proc.communicate(timeout=timeout_s)
+        if stdout:
+            print(stdout, end="", flush=True)
+        if proc.returncode is None:
+            proc.wait(timeout=1)
+        if RESULT_PATH.exists():
+            result = json.loads(RESULT_PATH.read_text(encoding="utf-8"))
+            if result.get("status") == "RUNNING":
+                _write_result(
+                    "FAILED",
+                    mode=mode,
+                    error="child exited without final result status",
+                    exit_code=proc.returncode,
+                )
+        return int(proc.returncode or 0)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGTERM)
+        stdout, _ = proc.communicate(timeout=5)
+        if stdout:
+            print(stdout, end="", flush=True)
+        _write_result(
+            "TIMED_OUT",
+            mode=mode,
+            timeout_s=timeout_s,
+            output_tail=(stdout or "").splitlines()[-20:],
+        )
+        print(f"BLOCKED: timed out after {timeout_s}s", file=sys.stderr, flush=True)
+        return 1
 
 
 def main() -> int:
@@ -450,10 +609,32 @@ def main() -> int:
         action="store_true",
         help="Run greeting/downlink smoke only (no uplink STT gate)",
     )
+    parser.add_argument(
+        "--child",
+        choices=("downlink-only", "full-conversation"),
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--sip-port",
+        type=int,
+        default=DEFAULT_SIP_PORT,
+        help=f"SIP client bind port (default {DEFAULT_SIP_PORT})",
+    )
+    parser.add_argument(
+        "--timeout-s",
+        type=int,
+        default=DEFAULT_SUBPROCESS_TIMEOUT_S,
+        help=f"Parent wall-clock deadline in seconds (default {DEFAULT_SUBPROCESS_TIMEOUT_S})",
+    )
     args = parser.parse_args()
-    if args.downlink_only:
-        return run_downlink_smoke()
-    return run_full_conversation()
+    mode = "downlink-only" if args.downlink_only else "full-conversation"
+    if args.child:
+        return _child_entry(args.child, sip_port=args.sip_port)
+    return _run_with_subprocess_deadline(
+        mode,
+        sip_port=args.sip_port,
+        timeout_s=args.timeout_s,
+    )
 
 
 if __name__ == "__main__":

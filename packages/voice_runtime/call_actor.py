@@ -65,6 +65,24 @@ class ActorEvent:
 
 
 @dataclass
+class _TurnBudget:
+    started_mono: float
+    deadline: float
+
+
+@dataclass
+class _UtteranceOutcome:
+    utterance_seq: int
+    utterance_id: str
+    ok: bool
+    text: str = ""
+    interp: object | None = None
+    legacy_contract: object | None = None
+    error_stage: str | None = None
+    error: str | None = None
+
+
+@dataclass
 class CallActorConfig:
     target_sample_rate: int = 16000
     stt_deadline_s: float = 12.0
@@ -106,15 +124,18 @@ class CallActor:
     _output_frame_bytes: int = 640
     _inflight_utterances: set[int] = field(default_factory=set)
     _last_applied_utterance_seq: int = 0
+    _utterance_outcomes: dict[int, _UtteranceOutcome] = field(default_factory=dict)
+    _utterance_budgets: dict[int, _TurnBudget] = field(default_factory=dict)
+    _active_stage_budget: _TurnBudget | None = None
+    _playback_turn_generation: str | None = None
     _hangup_after_playback: bool = False
     _transport_closed: bool = False
     _capture_lost: bool = False
-    _turn_deadline: float = 0.0
-    _turn_started_mono: float = 0.0
     _active_llm_request_id: str | None = None
 
     async def _emit_stage(self, stage: str, **payload: object) -> None:
-        elapsed_ms = int((time.monotonic() - self._turn_started_mono) * 1000) if self._turn_started_mono else 0
+        started = self._active_stage_budget.started_mono if self._active_stage_budget else 0.0
+        elapsed_ms = int((time.monotonic() - started) * 1000) if started else 0
         await self.media.emit(
             RuntimeEvent(
                 self.call_id,
@@ -302,129 +323,59 @@ class CallActor:
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_ENDED, {})
             )
-            seq = self._utterance_seq + 1
-            self._inflight_utterances.add(seq)
-            asyncio.create_task(self._handle_utterance(segment, seq))
+            async with self._policy_lock:
+                utterance_seq = self._utterance_seq + 1
+                self._utterance_seq = utterance_seq
+            self._inflight_utterances.add(utterance_seq)
+            asyncio.create_task(self._handle_utterance(segment, utterance_seq))
 
-    async def _handle_utterance(self, pcm: bytes, utterance_seq: int) -> None:
-        if self._stopped or self._transport_closed:
-            self._inflight_utterances.discard(utterance_seq)
-            return
-        self._utterance_seq = utterance_seq
-        utterance_id = f"u-{utterance_seq}"
-        turn_id = self.session.turn_id + 1
-        self._turn_started_mono = time.monotonic()
-        self._turn_deadline = self._turn_started_mono + (
-            self.config.stt_deadline_s + self.config.llm_deadline_s
-        )
-        await self._emit_stage("utterance.start", utterance_id=utterance_id, turn_id=turn_id)
-        try:
-            stt_result = await self.stt.transcribe_final(
-                pcm,
-                self.config.target_sample_rate,
-                call_id=self.call_id,
-                turn_id=turn_id,
-                deadline=self._turn_deadline,
-            )
-        except Exception as exc:
-            self._inflight_utterances.discard(utterance_seq)
-            if not self._stopped:
-                await self.media.emit(
-                    RuntimeEvent(
-                        self.call_id,
-                        RuntimeEventType.INTERPRETATION_FAILED,
-                        {"error": str(exc), "stage": "stt"},
-                    )
-                )
-            return
-        if self._stopped or self._transport_closed:
-            self._inflight_utterances.discard(utterance_seq)
-            return
+    async def _submit_utterance_outcome(self, outcome: _UtteranceOutcome) -> None:
+        self._utterance_outcomes[outcome.utterance_seq] = outcome
+        await self._drain_utterance_outcomes()
 
-        text = (stt_result.text or "").strip()
-        await self.media.emit(
-            RuntimeEvent(
-                self.call_id,
-                RuntimeEventType.STT_FINAL,
-                {"utterance_id": utterance_id, "text": text},
-            )
-        )
-        await self._emit_stage("stt.final", utterance_id=utterance_id, text_len=len(text))
-        if not text:
-            self._inflight_utterances.discard(utterance_seq)
-            return
-
-        llm_request_id = f"llm-{uuid.uuid4().hex[:8]}"
-        self._active_llm_request_id = llm_request_id
-        ctx = build_turn_context(
-            self.session.state,
-            turn_id=turn_id,
-            utterance_id=utterance_id,
-            raw_text=text,
-            asr_quality=stt_result.asr_quality,
-            delivered_phrases=tuple(self._delivered_phrases[-6:]),
-        )
-        try:
-            semantic = await self.llm.interpret_turn(
-                ctx,
-                deadline=self._turn_deadline,
-                request_id=llm_request_id,
-            )
-        except Exception as exc:
-            self._inflight_utterances.discard(utterance_seq)
-            if not self._stopped:
-                await self.media.emit(
-                    RuntimeEvent(
-                        self.call_id,
-                        RuntimeEventType.INTERPRETATION_FAILED,
-                        {"error": str(exc), "stage": "llm"},
-                    )
-                )
-            return
-        finally:
-            if self._active_llm_request_id == llm_request_id:
-                self._active_llm_request_id = None
-
-        if self._stopped or self._transport_closed:
-            self._inflight_utterances.discard(utterance_seq)
-            return
-
-        await self._emit_stage("interpret.ready", utterance_id=utterance_id)
-        await self.media.emit(
-            RuntimeEvent(self.call_id, RuntimeEventType.INTERPRETATION_READY, {})
-        )
-        qkind = active_question_kind(self.session.state)
-        interp = semantic_to_user_interpretation(
-            text,
-            semantic.payload,
-            active_question_kind=qkind,
-            pending_slot=self.session.state.pending_slot,
-        )
-        legacy_contract: TurnInterpretation = to_turn_interpretation(
-            self.session.state,
-            turn_id,
-            text,
-            interp,
-            state_version=self.session.state.state_version,
-            asr_quality=stt_result.asr_quality,
-        )
-
+    async def _drain_utterance_outcomes(self) -> None:
+        deliver_results: list[SessionTurnResult] = []
+        failed_events: list[RuntimeEvent] = []
         async with self._policy_lock:
-            while self._last_applied_utterance_seq + 1 < utterance_seq:
-                await asyncio.sleep(0)
-            if self._stopped or self._transport_closed:
-                self._inflight_utterances.discard(utterance_seq)
-                return
-            result = await asyncio.to_thread(
-                self.session.handle_user_text,
-                text,
-                interp=interp,
-                contract=legacy_contract,
-                utterance_id=utterance_id,
-            )
-            self._last_applied_utterance_seq = utterance_seq
+            while True:
+                next_seq = self._last_applied_utterance_seq + 1
+                outcome = self._utterance_outcomes.get(next_seq)
+                if outcome is None:
+                    break
+                self._utterance_outcomes.pop(next_seq, None)
+                self._inflight_utterances.discard(next_seq)
+                self._last_applied_utterance_seq = next_seq
+                if self._stopped or self._transport_closed:
+                    continue
+                if not outcome.ok:
+                    if outcome.error and not self._stopped:
+                        failed_events.append(
+                            RuntimeEvent(
+                                self.call_id,
+                                RuntimeEventType.INTERPRETATION_FAILED,
+                                {
+                                    "error": outcome.error,
+                                    "stage": outcome.error_stage or "unknown",
+                                },
+                            )
+                        )
+                    continue
+                if not outcome.text or outcome.interp is None or outcome.legacy_contract is None:
+                    continue
+                result = await asyncio.to_thread(
+                    self.session.handle_user_text,
+                    outcome.text,
+                    interp=outcome.interp,
+                    contract=outcome.legacy_contract,
+                    utterance_id=outcome.utterance_id,
+                )
+                deliver_results.append(result)
+        for event in failed_events:
+            await self.media.emit(event)
+        for result in deliver_results:
+            await self._post_apply_turn(result)
 
-        self._inflight_utterances.discard(utterance_seq)
+    async def _post_apply_turn(self, result: SessionTurnResult) -> None:
         if self._stopped or self._transport_closed:
             return
         if not result.persist_ok:
@@ -444,6 +395,135 @@ class CallActor:
         if self._inflight_utterances:
             return
         await self._deliver_session_turn(result)
+
+    async def _handle_utterance(self, pcm: bytes, utterance_seq: int) -> None:
+        if self._stopped or self._transport_closed:
+            self._inflight_utterances.discard(utterance_seq)
+            return
+        utterance_id = f"u-{utterance_seq}"
+        turn_id = self.session.turn_id + 1
+        budget = _TurnBudget(
+            started_mono=time.monotonic(),
+            deadline=time.monotonic()
+            + self.config.stt_deadline_s
+            + self.config.llm_deadline_s,
+        )
+        self._utterance_budgets[utterance_seq] = budget
+        self._active_stage_budget = budget
+        await self._emit_stage("utterance.start", utterance_id=utterance_id, turn_id=turn_id)
+        try:
+            try:
+                stt_result = await self.stt.transcribe_final(
+                    pcm,
+                    self.config.target_sample_rate,
+                    call_id=self.call_id,
+                    turn_id=turn_id,
+                    deadline=budget.deadline,
+                )
+            except Exception as exc:
+                await self._submit_utterance_outcome(
+                    _UtteranceOutcome(
+                        utterance_seq=utterance_seq,
+                        utterance_id=utterance_id,
+                        ok=False,
+                        error_stage="stt",
+                        error=str(exc),
+                    )
+                )
+                return
+            if self._stopped or self._transport_closed:
+                self._inflight_utterances.discard(utterance_seq)
+                return
+
+            text = (stt_result.text or "").strip()
+            await self.media.emit(
+                RuntimeEvent(
+                    self.call_id,
+                    RuntimeEventType.STT_FINAL,
+                    {"utterance_id": utterance_id, "text": text},
+                )
+            )
+            await self._emit_stage(
+                "stt.final", utterance_id=utterance_id, text_len=len(text)
+            )
+            if not text:
+                await self._submit_utterance_outcome(
+                    _UtteranceOutcome(
+                        utterance_seq=utterance_seq,
+                        utterance_id=utterance_id,
+                        ok=False,
+                    )
+                )
+                return
+
+            llm_request_id = f"llm-{uuid.uuid4().hex[:8]}"
+            self._active_llm_request_id = llm_request_id
+            ctx = build_turn_context(
+                self.session.state,
+                turn_id=turn_id,
+                utterance_id=utterance_id,
+                raw_text=text,
+                asr_quality=stt_result.asr_quality,
+                delivered_phrases=tuple(self._delivered_phrases[-6:]),
+            )
+            try:
+                semantic = await self.llm.interpret_turn(
+                    ctx,
+                    deadline=budget.deadline,
+                    request_id=llm_request_id,
+                )
+            except Exception as exc:
+                await self._submit_utterance_outcome(
+                    _UtteranceOutcome(
+                        utterance_seq=utterance_seq,
+                        utterance_id=utterance_id,
+                        ok=False,
+                        error_stage="llm",
+                        error=str(exc),
+                    )
+                )
+                return
+            finally:
+                if self._active_llm_request_id == llm_request_id:
+                    self._active_llm_request_id = None
+
+            if self._stopped or self._transport_closed:
+                self._inflight_utterances.discard(utterance_seq)
+                return
+
+            await self._emit_stage("interpret.ready", utterance_id=utterance_id)
+            await self.media.emit(
+                RuntimeEvent(self.call_id, RuntimeEventType.INTERPRETATION_READY, {})
+            )
+            qkind = active_question_kind(self.session.state)
+            interp = semantic_to_user_interpretation(
+                text,
+                semantic.payload,
+                active_question_kind=qkind,
+                pending_slot=self.session.state.pending_slot,
+            )
+            legacy_contract: TurnInterpretation = to_turn_interpretation(
+                self.session.state,
+                turn_id,
+                text,
+                interp,
+                state_version=self.session.state.state_version,
+                asr_quality=stt_result.asr_quality,
+            )
+            await self._submit_utterance_outcome(
+                _UtteranceOutcome(
+                    utterance_seq=utterance_seq,
+                    utterance_id=utterance_id,
+                    ok=True,
+                    text=text,
+                    interp=interp,
+                    legacy_contract=legacy_contract,
+                )
+            )
+        finally:
+            self._utterance_budgets.pop(utterance_seq, None)
+            if self._active_stage_budget == budget:
+                self._active_stage_budget = None
 
     async def _speak_validated_proposal(
         self,
@@ -480,11 +560,8 @@ class CallActor:
 
         render_generation = f"g-{uuid.uuid4().hex[:8]}"
         self._render_generation = render_generation
-        render_deadline = (
-            self._turn_deadline
-            if self._turn_deadline > time.monotonic()
-            else time.monotonic() + self.config.llm_deadline_s
-        )
+        self._playback_turn_generation = None
+        render_deadline = time.monotonic() + self.config.llm_deadline_s
 
         if result.proposal.intent in _SKIP_RENDER_INTENTS:
             await self._speak_validated_proposal(result, planner_text, render_generation)
@@ -510,6 +587,7 @@ class CallActor:
         render_request_id = f"render-{uuid.uuid4().hex[:8]}"
         self._active_llm_request_id = render_request_id
         buffer = ""
+        stream_spoken_parts: list[str] = []
         first_phrase_started = False
         try:
             async for chunk in self.llm.render_stream(
@@ -531,21 +609,30 @@ class CallActor:
                         if await self._speak_validated_proposal(
                             result, phrase, render_generation
                         ):
+                            stream_spoken_parts.append(phrase)
                             first_phrase_started = True
                             await self._emit_stage(
                                 "render.first_phrase",
                                 phrase_len=len(phrase),
                             )
                 elif chunk.done:
-                    tail = (chunk.text or buffer).strip()
-                    if tail and not first_phrase_started:
+                    done_text = (chunk.text or buffer).strip()
+                    confirmed = " ".join(stream_spoken_parts).strip()
+                    if not first_phrase_started and done_text:
                         await self._speak_validated_proposal(
-                            result, tail, render_generation
+                            result, done_text, render_generation
                         )
-                    elif tail and tail not in self._delivered_phrases[-1:]:
-                        await self._speak_validated_proposal(
-                            result, tail, render_generation
-                        )
+                    elif done_text and done_text != confirmed:
+                        if confirmed and done_text.startswith(confirmed):
+                            remainder = done_text[len(confirmed) :].strip().lstrip(".")
+                            if remainder:
+                                await self._speak_validated_proposal(
+                                    result, remainder, render_generation
+                                )
+                        elif buffer.strip() and buffer.strip() not in stream_spoken_parts:
+                            await self._speak_validated_proposal(
+                                result, buffer.strip(), render_generation
+                            )
                     await self._emit_stage("render.complete")
                     return
         except Exception:
@@ -569,6 +656,7 @@ class CallActor:
             asyncio.create_task(self.media.flush())
         await self._cancel_active_llm()
         self._render_generation = None
+        self._playback_turn_generation = None
         if not self._playback or not self._active_generation:
             return
         gen = self._active_generation
@@ -597,10 +685,14 @@ class CallActor:
             or self._render_generation != render_generation
         ):
             return
-        generation_id = f"g-{uuid.uuid4().hex[:8]}"
+        generation_id = render_generation
         phrase_id = f"p-{uuid.uuid4().hex[:8]}"
+        new_turn = self._playback_turn_generation != render_generation
         self._active_generation = generation_id
-        self._playback.begin_phrase(generation_id, phrase_id, text)
+        self._playback.begin_phrase(
+            generation_id, phrase_id, text, new_turn=new_turn
+        )
+        self._playback_turn_generation = render_generation
         deadline = time.monotonic() + self.config.tts_deadline_s
         seq = 0
 
