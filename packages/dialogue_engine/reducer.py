@@ -28,6 +28,14 @@ from packages.dialogue_engine.policy import (
     release_reservation,
     reserve_question,
 )
+from packages.dialogue_engine.check_path import (
+    ProbeAction,
+    advance_probe_phase,
+    apply_wellness_branch,
+    classify_wellness_path,
+    is_urgent_concern,
+)
+from packages.dialogue_engine.state import CheckPath
 from packages.dialogue_engine.response_plan import build_response_plan, compose_speech
 from packages.dialogue_engine.semantic import SemanticAct
 from packages.dialogue_engine.state import (
@@ -97,7 +105,10 @@ def _on_call_started(state: EngineState) -> tuple[EngineState, list[Effect]]:
     state.opening_play_count += 1
     return _emit_speak(
         state,
-        text=questions.opening_speech(state.elder_display_name),
+        text=questions.opening_speech(
+            state.elder_display_name,
+            state.prior_call_context or None,
+        ),
         intent="opening_wellness",
         slot="wellness",
         marks_question=True,
@@ -205,7 +216,7 @@ def _on_playout_completed(
         return state, []
     state.active_playout = None
     state.bump_revision()
-    if ap.intent in ("goodbye_final", "partial_unresolved_close"):
+    if ap.intent in ("goodbye_final", "partial_unresolved_close", "urgent_close"):
         return state, [
             EndCallEffect(
                 effect_id=_new_effect_id(),
@@ -332,6 +343,14 @@ def _apply_semantic(
         return state, []
 
     if semantic.act == SemanticAct.UNCLEAR and answer_slot:
+        if state.probe_phase:
+            count = state.slot_unclear_counts.get(f"probe_{state.probe_phase}", 0) + 1
+            state.slot_unclear_counts[f"probe_{state.probe_phase}"] = count
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            if count >= 2:
+                return _advance_probe_after_answer(state, semantic.source_quote or "")
+            return _speak_probe(state, state.probe_phase, clarification=True)
         count = state.slot_unclear_counts.get(answer_slot, 0) + 1
         state.slot_unclear_counts[answer_slot] = count
         state.processing_turn_id = None
@@ -341,6 +360,13 @@ def _apply_semantic(
         if can_ask_slot(state, answer_slot):
             return _speak_slot_question(state, answer_slot, clarification=True)
         return state, []
+
+    if state.probe_phase and semantic.act == SemanticAct.ANSWER:
+        text = semantic.value or semantic.source_quote
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.waiting_on_slot = None
+        return _advance_probe_after_answer(state, text)
 
     filled = fill_from_semantic(
         state, semantic, turn_id=state.processing_turn_id or ""
@@ -362,18 +388,15 @@ def _advance_after_fills(
     filled_slots: list[str],
 ) -> tuple[EngineState, list[Effect]]:
     state.delivered_question = None
+
+    if "wellness" in filled_slots:
+        branch = _branch_after_wellness(state)
+        if branch is not None:
+            return branch
+
     next_slot = state.next_open_slot()
     if next_slot is None:
-        state.fsm_state = FsmState.SUMMARY
-        state.summary_spoken = True
-        state.bump_revision()
-        return _emit_speak(
-            state,
-            text=questions._SUMMARY_TEXT,
-            intent="summary",
-            slot=None,
-            marks_question=False,
-        )
+        return _emit_summary(state)
     if not can_ask_slot(state, next_slot):
         return _close_partial(state)
     plan = build_response_plan(state, newly_filled=filled_slots, next_slot=next_slot)
@@ -385,6 +408,109 @@ def _advance_after_fills(
         intent=intent,
         slot=next_slot,
         marks_question=True,
+    )
+
+
+def _branch_after_wellness(state: EngineState) -> tuple[EngineState, list[Effect]] | None:
+    if not state.wellness_probes_enabled:
+        return None
+    rec = state.slot_records.get("wellness")
+    text = rec.value if rec else state.slot_values.get("wellness", "")
+    polarity = rec.polarity if rec else None
+    branch = classify_wellness_path(wellness_text=text, polarity=polarity)
+    if branch.path == CheckPath.STANDARD:
+        return None
+    apply_wellness_branch(state, branch)
+    if branch.urgent:
+        return _emit_urgent_close(state)
+    if branch.probe_phase:
+        return _speak_probe(state, branch.probe_phase)
+    return None
+
+
+def _advance_probe_after_answer(
+    state: EngineState,
+    text: str,
+) -> tuple[EngineState, list[Effect]]:
+    step = advance_probe_phase(state, text)
+    if step.action == ProbeAction.CONTINUE_LADDER:
+        return _advance_after_fills(state, [])
+    if step.action == ProbeAction.URGENT_CLOSE:
+        return _emit_urgent_close(state)
+    if step.action == ProbeAction.SPEAK_PROBE and step.probe_phase:
+        return _speak_probe(state, step.probe_phase)
+    if step.action == ProbeAction.SPEAK_SLOT and step.next_slot:
+        if not can_ask_slot(state, step.next_slot):
+            return _close_partial(state)
+        ack = questions.wellness_ack(
+            polarity=step.ack_polarity,
+            value=state.wellness_concern or text,
+        )
+        question = questions.slot_question(step.next_slot, state=state)
+        return _emit_speak(
+            state,
+            text=f"{ack} {question}".strip(),
+            intent=f"check_{step.next_slot}",
+            slot=step.next_slot,
+            marks_question=True,
+        )
+    if step.action == ProbeAction.SPEAK_PLANS:
+        if not can_ask_slot(state, "plans"):
+            return _close_partial(state)
+        question = questions.plans_question(state)
+        return _emit_speak(
+            state,
+            text=f"Понимаю. {question}".strip(),
+            intent="check_plans",
+            slot="plans",
+            marks_question=True,
+        )
+    return _advance_after_fills(state, [])
+
+
+def _speak_probe(
+    state: EngineState,
+    phase: str,
+    *,
+    clarification: bool = False,
+) -> tuple[EngineState, list[Effect]]:
+    text = questions.probe_question(phase, clarification=clarification)
+    intent = f"probe_{phase}"
+    slot = f"probe_{phase}"
+    return _emit_speak(
+        state,
+        text=text,
+        intent=intent,
+        slot=slot,
+        marks_question=True,
+    )
+
+
+def _emit_summary(state: EngineState) -> tuple[EngineState, list[Effect]]:
+    state.fsm_state = FsmState.SUMMARY
+    state.summary_spoken = True
+    state.bump_revision()
+    return _emit_speak(
+        state,
+        text=questions._SUMMARY_TEXT,
+        intent="summary",
+        slot=None,
+        marks_question=False,
+    )
+
+
+def _emit_urgent_close(state: EngineState) -> tuple[EngineState, list[Effect]]:
+    state.fsm_state = FsmState.SUMMARY
+    state.summary_spoken = True
+    state.call_closed = True
+    state.closing_reason = "urgent"
+    state.bump_revision()
+    return _emit_speak(
+        state,
+        text=questions._URGENT_CLOSE,
+        intent="urgent_close",
+        slot=None,
+        marks_question=False,
     )
 
 
@@ -403,7 +529,7 @@ def _speak_slot_question(
 ) -> tuple[EngineState, list[Effect]]:
     if not can_ask_slot(state, slot):
         return _close_partial(state)
-    text = questions.slot_question(slot, clarification=clarification)
+    text = questions.slot_question(slot, clarification=clarification, state=state)
     intent = f"clarify_{slot}" if clarification else f"check_{slot}"
     return _emit_speak(
         state,
@@ -538,6 +664,9 @@ def _on_timer_expired(state: EngineState, event: TimerExpired) -> tuple[EngineSt
     state.bump_revision()
     if not slot or state.fsm_state != FsmState.DAILY_CHECK:
         return state, []
+    if slot.startswith("probe_"):
+        phase = slot.removeprefix("probe_")
+        return _speak_probe(state, phase, clarification=True)
     if not can_ask_slot(state, slot):
         return _close_partial(state)
     return _speak_slot_question(state, slot, clarification=True)

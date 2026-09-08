@@ -95,6 +95,8 @@ def may_close_partial(state: EngineState, slot: str) -> bool:
 
 def can_ask_slot(state: EngineState, slot: str) -> bool:
     goal = state.ensure_goal(slot)
+    if slot.startswith("probe_"):
+        return goal.delivered_attempts < goal.max_attempts
     if state.slots.get(slot) != SlotStatus.OPEN:
         return False
     if goal.delivered_attempts >= goal.max_attempts:

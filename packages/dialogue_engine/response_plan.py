@@ -14,7 +14,7 @@ def build_response_plan(
     next_slot: str,
 ) -> ResponsePlan:
     ack = _acknowledge_fills(state, newly_filled)
-    question = questions.slot_question(next_slot)
+    question = questions.slot_question(next_slot, state=state)
     return ResponsePlan(
         acknowledge=ack,
         facts_to_reference=list(newly_filled),

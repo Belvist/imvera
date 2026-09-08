@@ -72,12 +72,8 @@ def ensure_silero_opening_cache(env: dict[str, str]) -> bool:
     except httpx.HTTPError as exc:
         print(f"BLOCKED: TTS unreachable: {exc}", file=__import__("sys").stderr)
         return False
-    if (
-        "macos_say" in tts_rev
-        or not tts_rev.startswith("silero_lab:silero:")
-        or "xenia" not in tts_rev
-    ):
-        print(f"BLOCKED: TTS must be silero:xenia, got {tts_rev!r}", file=__import__("sys").stderr)
+    if "macos_say" in tts_rev or not tts_rev.startswith("silero_lab:silero:"):
+        print(f"BLOCKED: TTS must be silero_lab (Silero), got {tts_rev!r}", file=__import__("sys").stderr)
         return False
     env["IMVERA_TTS_MODEL_REVISION"] = tts_rev
     print(f"  TTS revision: {tts_rev}")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from packages.contracts.enums import FsmState, GoalStatus, SlotStatus
+from packages.contracts.mandatory import PILOT_SLOT_CHECKS
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.state import DialogueState
 from packages.dialogue_engine.delivery import Decision, EffectDispatcher, EffectOutbox
@@ -35,10 +36,13 @@ class DialogueEngine:
         *,
         call_id: str,
         elder_display_name: str = "Анной Петровной",
+        prior_call_context: dict[str, str] | None = None,
     ) -> None:
         self.state = EngineState(
             call_id=call_id,
             elder_display_name=elder_display_name,
+            prior_call_context=dict(prior_call_context or {}),
+            follow_up_opening=bool(prior_call_context),
         )
         self._outbox = EffectOutbox(call_id=call_id)
         self._dispatcher = EffectDispatcher(self._outbox)
@@ -217,6 +221,16 @@ class DialogueEngine:
     def peek_pending_speak_effects(self) -> list[SpeakEffect]:
         return self._outbox.peek_pending_speaks()
 
+    def slot_mandatory_remaining(self) -> list[str]:
+        """Daily-check slots only — legacy identity/consent/can_talk are not engine-owned."""
+        eng = self.state
+        return [
+            slot
+            for slot in PILOT_SLOT_CHECKS
+            if slot not in eng.skipped_slots
+            and eng.slots.get(slot) != SlotStatus.FILLED
+        ]
+
     def effect_to_proposal(self, effect: SpeakEffect, turn_id: int, legacy: DialogueState) -> TurnProposal:
         goal_id = None
         if effect.slot:
@@ -227,7 +241,7 @@ class DialogueEngine:
             speech=effect.text,
             intent=effect.intent,
             fsm_state=legacy.fsm_state,
-            mandatory_remaining=legacy.mandatory_remaining(),
+            mandatory_remaining=self.slot_mandatory_remaining(),
             question_goal_id=goal_id,
         )
 

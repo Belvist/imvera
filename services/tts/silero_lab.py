@@ -134,7 +134,7 @@ def load_silero(silero_cfg: dict[str, Any]) -> tuple[Any, Any]:
     model.to(device)
     _silero_model = model
     _silero_device = device
-    speaker = silero_cfg.get("speaker", "xenia")
+    speaker = silero_cfg.get("speaker", "kseniya")
     print(f"Lab TTS: Silero {model_name} speaker={speaker}", flush=True)
     return model, device
 
@@ -143,7 +143,7 @@ def lab_backend_name(silero_cfg: dict[str, Any]) -> str:
     model, _ = load_silero(silero_cfg)
     if model == MACOS_SAY_SENTINEL:
         return f"macos_say:{MACOS_RU_VOICE}"
-    speaker = silero_cfg.get("speaker", "xenia")
+    speaker = silero_cfg.get("speaker", "kseniya")
     model_name = silero_cfg.get("model", "v5_ru")
     return f"silero:{model_name}:{speaker}"
 
@@ -165,7 +165,7 @@ def synthesize_silero(
         if not macos_say_allowed():
             raise RuntimeError("macos_say disabled; Silero Xenia required")
         return _synthesize_macos_say(text, sample_rate)
-    speaker = silero_cfg.get("speaker", "xenia")
+    speaker = silero_cfg.get("speaker", "kseniya")
     audio = model.apply_tts(text=text, speaker=speaker, sample_rate=sample_rate)
     arr = np.asarray(audio, dtype=np.float32)
     if arr.ndim > 1:

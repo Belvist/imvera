@@ -58,9 +58,10 @@ ENGINE_SPEAK_INTENTS = frozenset(
         "repair_repeat",
         "partial_unresolved_close",
         "summary",
+        "urgent_close",
         "goodbye_confirm",
         "goodbye_final",
     }
 ) | frozenset({f"check_{s}" for s in ("wellness", "mood", "sleep", "plans")}) | frozenset(
     {f"clarify_{s}" for s in ("wellness", "mood", "sleep", "plans")}
-)
+) | frozenset({f"probe_{s}" for s in ("concern", "duration", "pain_night")})

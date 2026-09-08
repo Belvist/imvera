@@ -11,7 +11,7 @@ from typing import Any
 from tools.blackbox_caller.audio import load_wav_u8, play_u8_on_call
 from tools.blackbox_caller.config import VOICE_MANIFEST, BlackboxConfig
 from tools.blackbox_caller.scenarios.catalog import BlackboxScenario, ScenarioStep
-from tools.blackbox_caller.sip_client import PyVoIPSipClient
+from tools.blackbox_caller.sip_client import create_sip_client
 
 
 @dataclass
@@ -66,7 +66,7 @@ def run_scenario(
     config: BlackboxConfig,
     *,
     manifest: dict[str, str] | None = None,
-) -> tuple[ScenarioRunResult, PyVoIPSipClient | None, float]:
+) -> tuple[ScenarioRunResult, object | None, float]:
     manifest = manifest or load_manifest()
     started = time.time()
     result = ScenarioRunResult(
@@ -77,9 +77,9 @@ def run_scenario(
         user_turns_sent=0,
         timestamps={"started_at": started},
     )
-    client: PyVoIPSipClient | None = None
+    client: object | None = None
     try:
-        client = PyVoIPSipClient(config)
+        client = create_sip_client(config)
         info = client.connect()
         result.sip_connected = info.answered
         if not info.answered:

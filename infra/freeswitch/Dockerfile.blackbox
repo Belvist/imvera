@@ -1,0 +1,27 @@
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc python3-dev ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml README.md ./
+COPY packages ./packages
+COPY services ./services
+COPY scripts ./scripts
+COPY tools ./tools
+COPY tests/assets/blackbox_voice ./tests/assets/blackbox_voice
+COPY config ./config
+
+RUN pip install --no-cache-dir -e '.[api]' pyVoIP==1.6.8
+
+ENV IMVERA_INTERNAL_DOCKER_SMOKE=1
+ENV FS_SIP_HOST=freeswitch
+ENV FS_SIP_PORT=5060
+ENV FS_GATE_USER=fs-gate-caller
+ENV FS_GATE_PASSWORD=gate
+ENV IMVERA_LIVE_EXTENSION=7000
+ENV IMVERA_BLACKBOX_SIP_BACKEND=pyvoip
+
+CMD ["python", "scripts/internal_docker_live_smoke.py"]

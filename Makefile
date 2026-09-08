@@ -9,8 +9,9 @@ export PYTHONPATH := .
 .PHONY: models-prepare models-up voice-setup voice-up voice-doctor voice-down zoiper-info zoiper-fix voice-e2e voice-sip-e2e
 .PHONY: voice-refs-prepare tts-preview tts-preview-list tts-preview-compare
 .PHONY: voice-open test-contracts test-dialogue-e2e test-persistence-e2e test-voice test-sip
-.PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k dialogue-corpus-gate effect-delivery-chaos-gate
-.PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera
+.PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k dialogue-corpus-gate effect-delivery-chaos-gate stress-gate stress-gate-100
+.PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera live-debug-1 live-daily-check-100
+.PHONY: internal-docker-live-smoke-1 internal-docker-live-smoke-10 pjsua2-transport-gate
 
 install:
 	$(PYTHON) -m pip install -e ".[dev,api,mlx,gigaam-stt]"
@@ -31,6 +32,14 @@ dialogue-corpus-gate:
 effect-delivery-chaos-gate:
 	@echo "LAYER: Effect Delivery V2 outbox lifecycle chaos"
 	$(PYTHON) -m pytest tests/test_effect_delivery_v2.py tests/test_engine_effect_delivery.py -q
+
+stress-gate:
+	@echo "LAYER: stress gate — IMVERA_STRESS_COUNT=$${IMVERA_STRESS_COUNT:-100} scenarios, JSONL in .run/stress_gate/"
+	$(PYTHON) scripts/stress_gate.py --count $${IMVERA_STRESS_COUNT:-100}
+
+stress-gate-100:
+	@echo "LAYER: 100-scenario stress (engine + call_actor + session), full JSONL logging"
+	$(PYTHON) scripts/stress_gate.py --count 100 --workers 8 --concurrency 4
 
 lint:
 	$(PYTHON) -m ruff check packages services tests scripts
@@ -125,6 +134,15 @@ freeswitch-zoiper-voice-up:
 freeswitch-zoiper-voice-down:
 	@$(PYTHON) scripts/freeswitch_zoiper_voice_down.py
 
+perception-up:
+	docker compose -f infra/freeswitch/docker-compose.yml up -d --build perception
+
+perception-down:
+	docker compose -f infra/freeswitch/docker-compose.yml stop perception
+
+perception-health:
+	curl -sf http://127.0.0.1:9110/health/ready | $(PYTHON) -m json.tool
+
 freeswitch-forensic-collect:
 	@$(PYTHON) scripts/freeswitch_forensic_collect.py $(UUID) --call-id $(CALL_ID)
 
@@ -205,6 +223,27 @@ live-call-1:
 live-call-soak:
 	@echo "LAYER: black-box SIP/RTP soak — IMVERA_LIVE_CALLS=$${IMVERA_LIVE_CALLS:-10}"
 	@$(PYTHON) tools/blackbox_caller/main.py --calls $${IMVERA_LIVE_CALLS:-10}
+
+live-debug-1:
+	@echo "LAYER: real SIP full daily-check — 1 call, server trace + DEBUG_REPORT.md"
+	@$(PYTHON) scripts/live_daily_check_gate.py --calls 1 --profile full --scenario $${IMVERA_LIVE_DEBUG_SCENARIO:-good-clean_short-00}
+
+live-daily-check-100:
+	@echo "LAYER: real SIP full daily-check soak — 100 calls, stop on first fail"
+	@$(PYTHON) scripts/live_daily_check_gate.py --calls 100 --profile full --stop-on-fail
+
+internal-docker-live-smoke-1:
+	@echo "PHASE A: internal docker live smoke — 1 full daily-check (diagnostic only)"
+	@$(PYTHON) scripts/internal_docker_live_smoke_gate.py
+
+internal-docker-live-smoke-10:
+	@echo "PHASE A: internal docker live smoke — up to 10 calls (runtime stability)"
+	@IMVERA_INTERNAL_DOCKER_CALLS=10 IMVERA_LIVE_DEBUG_STOP_ON_FAIL=0 \
+		$(PYTHON) scripts/internal_docker_live_smoke_gate.py
+
+pjsua2-transport-gate:
+	@echo "PHASE B: PJSUA2 transport gate — REGISTER/INVITE/RTP/WAV (no dialogue)"
+	@$(PYTHON) scripts/pjsua2_transport_gate.py
 
 blackbox-write-catalog:
 	@$(PYTHON) tools/blackbox_caller/main.py --write-catalog

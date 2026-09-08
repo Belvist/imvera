@@ -202,12 +202,10 @@ def test_negative_wellness_gets_empathetic_ack() -> None:
     r = _runner()
     result = r.run([CallStarted(), "мне плохо"])
     assert result.state.slots["wellness"] == SlotStatus.FILLED
-    mood_speaks = [
-        e.text for e in result.speak_effects if e.intent == "check_mood"
-    ]
-    assert mood_speaks, "expected mood question after wellness fill"
-    assert mood_speaks[0].startswith("Мне жаль это слышать.")
-    assert "Хорошо." not in mood_speaks[0]
+    intents = [e.intent for e in result.speak_effects]
+    assert "probe_concern" in intents
+    probe = next(e for e in result.speak_effects if e.intent == "probe_concern")
+    assert "беспокоит" in probe.text.lower()
 
 
 def test_tebe_ploho_fast_path_negative_wellness() -> None:
@@ -232,6 +230,32 @@ def test_plans_none_fast_path_to_summary() -> None:
     summary = [e for e in result.speak_effects if e.intent == "summary"]
     assert summary, "expected summary after all slots filled"
     assert summary[-1].text == "Спасибо за разговор."
+
+
+def test_plans_colloquial_none_phrase() -> None:
+    sem, confident = fast_interpret_semantic(
+        "Планов никаких нету.",
+        answer_slot="plans",
+    )
+    assert confident
+    assert sem.act.value == "answer"
+    assert sem.target_slot == "plans"
+
+
+@pytest.mark.parametrize(
+    ("text", "slot"),
+    [
+        ("Великолепное настроение.", "mood"),
+        ("Не очень, на самом деле, настроение у меня.", "mood"),
+        ("Хорошо, спал.", "sleep"),
+        ("Спало великолепно.", "sleep"),
+        ("Планов нету на сегодня.", "plans"),
+    ],
+)
+def test_live_colloquial_fast_path(text: str, slot: str) -> None:
+    fsem, fok = fast_interpret_semantic(text, answer_slot=slot)
+    assert fok, f"no fast path for {text!r} @ {slot}"
+    assert fsem.act.value == "answer"
 
 
 def test_full_daily_check_to_goodbye() -> None:

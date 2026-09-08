@@ -138,6 +138,27 @@ class InMemoryCallRecordStore(CallRecordStore):
                 return []
             return list(self._events.get(call_id, []))
 
+    def get_latest_family_snapshot(
+        self,
+        family_id: str,
+        *,
+        exclude_call_id: str | None = None,
+    ) -> CallResultSnapshot | None:
+        """Most recent finalized call for a family — used for cross-call follow-up."""
+        with self._lock:
+            candidates: list[CallResultSnapshot] = []
+            for call_id, row in self._results.items():
+                if row.family_id != family_id:
+                    continue
+                if exclude_call_id and call_id == exclude_call_id:
+                    continue
+                if not row.call_ended:
+                    continue
+                candidates.append(row)
+            if not candidates:
+                return None
+            return candidates[-1]
+
     def save_dialogue_snapshot(
         self,
         snapshot: CallResultSnapshot,

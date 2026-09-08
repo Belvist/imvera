@@ -151,6 +151,9 @@ def _base_turns(
         steps.append(ScenarioStep(action="play_wav", phrase_id=mood))
         steps.append(ScenarioStep(action="wait_bot_finish", wait_s=30.0))
         steps.append(ScenarioStep(action="play_wav", phrase_id="goodbye_01"))
+        steps.append(ScenarioStep(action="wait_bot_finish", wait_s=25.0))
+        steps.append(ScenarioStep(action="play_wav", phrase_id="goodbye_confirm_01"))
+        steps.append(ScenarioStep(action="wait_bot_finish", wait_s=30.0))
         return steps
 
     if family == "repair_allo":
@@ -167,6 +170,9 @@ def _base_turns(
                 ScenarioStep(action="play_wav", phrase_id=plans),
                 ScenarioStep(action="wait_bot_finish", wait_s=30.0),
                 ScenarioStep(action="play_wav", phrase_id="goodbye_01"),
+                ScenarioStep(action="wait_bot_finish", wait_s=25.0),
+                ScenarioStep(action="play_wav", phrase_id="goodbye_confirm_01"),
+                ScenarioStep(action="wait_bot_finish", wait_s=30.0),
             ]
         )
         return steps
@@ -189,6 +195,9 @@ def _base_turns(
                 ScenarioStep(action="play_wav", phrase_id=plans),
                 ScenarioStep(action="wait_bot_finish", wait_s=30.0),
                 ScenarioStep(action="play_wav", phrase_id="goodbye_01"),
+                ScenarioStep(action="wait_bot_finish", wait_s=25.0),
+                ScenarioStep(action="play_wav", phrase_id="goodbye_confirm_01"),
+                ScenarioStep(action="wait_bot_finish", wait_s=30.0),
             ]
         )
         return steps
@@ -207,6 +216,9 @@ def _base_turns(
                 ScenarioStep(action="play_wav", phrase_id=_pick(PLANS_PHRASES, key + ":plans")),
                 ScenarioStep(action="wait_bot_finish", wait_s=45.0),
                 ScenarioStep(action="play_wav", phrase_id="goodbye_01"),
+                ScenarioStep(action="wait_bot_finish", wait_s=25.0),
+                ScenarioStep(action="play_wav", phrase_id="goodbye_confirm_01"),
+                ScenarioStep(action="wait_bot_finish", wait_s=30.0),
             ]
         )
         return steps
@@ -238,7 +250,9 @@ def _base_turns(
         [
             ScenarioStep(action="wait_bot_finish", wait_s=45.0),
             ScenarioStep(action="play_wav", phrase_id="goodbye_01"),
-            ScenarioStep(action="wait_bot_finish", wait_s=20.0),
+            ScenarioStep(action="wait_bot_finish", wait_s=25.0),
+            ScenarioStep(action="play_wav", phrase_id="goodbye_confirm_01"),
+            ScenarioStep(action="wait_bot_finish", wait_s=30.0),
         ]
     )
     return steps
@@ -286,6 +300,135 @@ def generate_catalog() -> list[BlackboxScenario]:
                     )
                 )
     return scenarios
+
+
+def live_daily_branch_scenarios() -> list[BlackboxScenario]:
+    """10 explicit live daily-check branches — wellness probes enabled in CallActor."""
+
+    def _steps_from_phrases(phrases: list[str]) -> list[ScenarioStep]:
+        steps: list[ScenarioStep] = [ScenarioStep(action="wait_bot_finish", wait_s=45.0)]
+        for pid in phrases:
+            steps.append(ScenarioStep(action="play_wav", phrase_id=pid))
+            steps.append(ScenarioStep(action="wait_bot_finish", wait_s=30.0))
+        steps.extend(
+            [
+                ScenarioStep(action="play_wav", phrase_id="goodbye_01"),
+                ScenarioStep(action="wait_bot_finish", wait_s=25.0),
+                ScenarioStep(action="play_wav", phrase_id="goodbye_confirm_01"),
+                ScenarioStep(action="wait_bot_finish", wait_s=30.0),
+            ]
+        )
+        return steps
+
+    def _scenario(
+        sid: str,
+        tags: list[str],
+        phrase_path: list[str],
+        expected: list[str],
+        category: WellnessCategory = "good",
+    ) -> BlackboxScenario:
+        return BlackboxScenario(
+            id=sid,
+            wellness_category=category,
+            family="live_branch",
+            variant=0,
+            tags=["live_branch", *tags],
+            steps=_steps_from_phrases(phrase_path),
+            expected_intents=expected,
+            skip_if_missing_assets=True,
+        )
+
+    return [
+        _scenario(
+            "live-branch-01-clean-good",
+            ["standard"],
+            ["wellness_good_01", "mood_positive_01", "sleep_good_01", "plans_walk_01"],
+            ["opening", "check_mood", "check_sleep", "check_plans", "summary", "goodbye_final"],
+        ),
+        _scenario(
+            "live-branch-02-bad-probe",
+            ["negative_probe"],
+            [
+                "wellness_bad_01",
+                "wellness_bad_02",
+                "wellness_bad_03",
+                "mood_negative_01",
+                "sleep_bad_01",
+                "plans_home_01",
+            ],
+            [
+                "opening",
+                "probe_concern",
+                "probe_duration",
+                "check_mood",
+                "check_sleep",
+                "check_plans",
+                "summary",
+                "goodbye_final",
+            ],
+            category="bad",
+        ),
+        _scenario(
+            "live-branch-03-pain-short",
+            ["pain_short"],
+            ["wellness_normal_01", "sleep_bad_01", "plans_none_01"],
+            ["opening", "probe_pain_night", "check_plans", "summary", "goodbye_final"],
+            category="normal",
+        ),
+        _scenario(
+            "live-branch-04-repair-kakoe",
+            ["repair"],
+            ["wellness_bad_01", "repair_allo_01", "mood_negative_01", "sleep_bad_01", "plans_home_01"],
+            ["opening", "probe_concern", "repair_repeat", "check_mood", "summary", "goodbye_final"],
+            category="bad",
+        ),
+        _scenario(
+            "live-branch-05-plans-colloquial",
+            ["plans_colloquial"],
+            ["wellness_good_01", "mood_positive_01", "sleep_good_01", "plans_none_01"],
+            ["opening", "check_mood", "check_sleep", "check_plans", "summary", "goodbye_final"],
+        ),
+        _scenario(
+            "live-branch-06-negative-chain",
+            ["negative_chain"],
+            [
+                "wellness_bad_01",
+                "wellness_bad_02",
+                "wellness_bad_03",
+                "mood_negative_01",
+                "sleep_bad_01",
+                "plans_none_01",
+            ],
+            ["opening", "probe_concern", "probe_duration", "check_mood", "summary", "goodbye_final"],
+            category="bad",
+        ),
+        _scenario(
+            "live-branch-07-backchannel",
+            ["backchannel"],
+            ["wellness_good_01", "backchannel_01", "mood_positive_01", "sleep_good_01", "plans_walk_01"],
+            ["opening", "check_mood", "check_sleep", "check_plans", "summary", "goodbye_final"],
+        ),
+        _scenario(
+            "live-branch-08-so-so",
+            ["so_so"],
+            ["wellness_so_so_01", "mood_uncertain_01", "sleep_normal_01", "plans_uncertain_01"],
+            ["opening", "check_mood", "check_sleep", "check_plans", "summary", "goodbye_final"],
+            category="so_so",
+        ),
+        _scenario(
+            "live-branch-09-doctor-plans",
+            ["plans_doctor"],
+            ["wellness_normal_01", "mood_neutral_01", "sleep_normal_01", "plans_doctor_01"],
+            ["opening", "check_mood", "check_sleep", "check_plans", "summary", "goodbye_final"],
+            category="normal",
+        ),
+        _scenario(
+            "live-branch-10-mixed-good",
+            ["mixed"],
+            ["wellness_good_03", "mood_positive_01", "sleep_good_01", "plans_walk_01"],
+            ["opening", "check_mood", "check_sleep", "check_plans", "summary", "goodbye_final"],
+        ),
+    ]
 
 
 def catalog_size() -> int:

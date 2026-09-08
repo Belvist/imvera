@@ -51,7 +51,7 @@ def _tts_matches_lab_fast() -> bool:
         if r.status_code != 200:
             return False
         rev = str(r.json().get("model_revision", ""))
-        return rev.startswith("silero_lab:silero:") and "macos_say" not in rev and "xenia" in rev
+        return rev.startswith("silero_lab:silero:") and "macos_say" not in rev
     except httpx.HTTPError:
         return False
 
@@ -199,7 +199,7 @@ def main() -> int:
     if env.get("IMVERA_TTS_ENGINE") == "silero_lab":
         print("Lab fast TTS: silero_lab (IMVERA_LAB_FAST_TTS=1, ~1-2s warm first_pcm)")
         print(
-            "  speaker: xenia (Silero) — NC lab only; "
+            "  speaker: kseniya (Silero v5_ru) — NC lab only; "
             "macos say fallback if torch/omegaconf missing"
         )
     if env.get("IMVERA_LAB_HALF_DUPLEX", "1") in {"1", "true", "yes"}:
@@ -238,9 +238,8 @@ def main() -> int:
         not tts_ok
         or "macos_say" in tts_rev
         or not tts_rev.startswith("silero_lab:silero:")
-        or "xenia" not in tts_rev
     ):
-        print(f"BLOCKED: TTS must be silero:xenia, got {tts_rev!r}", file=sys.stderr)
+        print(f"BLOCKED: TTS must be silero_lab (Silero), got {tts_rev!r}", file=sys.stderr)
         return 1
     env["IMVERA_TTS_MODEL_REVISION"] = tts_rev
     os.environ["IMVERA_TTS_MODEL_REVISION"] = tts_rev

@@ -56,6 +56,7 @@ class CorpusRunner:
             call_id=scenario.id,
             elder_display_name="Даниил",
         )
+        self.engine.state.wellness_probes_enabled = False
         self.interpret_delay_s = interpret_delay_s
         self.effects: list = []
         self.speak_effects: list[SpeakEffect] = []

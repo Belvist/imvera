@@ -17,6 +17,7 @@ LIVE_E2E_ROOT = ROOT / ".run" / "live_e2e"
 @dataclass(frozen=True)
 class BlackboxConfig:
     sip_host: str
+    sip_domain: str
     sip_port: int
     extension: str
     sip_user: str
@@ -61,21 +62,142 @@ def load_profile() -> dict:
     return {}
 
 
-def load_config() -> BlackboxConfig:
+def _is_lan_ipv4(addr: str) -> bool:
+    if not addr or addr.startswith("127."):
+        return False
+    parts = addr.split(".")
+    if len(parts) != 4:
+        return False
+    try:
+        octets = [int(p) for p in parts]
+    except ValueError:
+        return False
+    if octets[0] == 10:
+        return True
+    if octets[0] == 192 and octets[1] == 168:
+        return True
+    if octets[0] == 172 and 16 <= octets[1] <= 31:
+        return True
+    return False
+
+
+def _loopback_fs_reachable(port: int = 5060) -> bool:
+    import socket as _socket
+
+    try:
+        probe = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        probe.settimeout(0.5)
+        ok = probe.connect_ex(("127.0.0.1", port)) == 0
+        probe.close()
+        return ok
+    except OSError:
+        return False
+
+
+def _host_reachable(host: str, port: int = 5060) -> bool:
+    import socket as _socket
+
+    if host in {"127.0.0.1", "localhost"}:
+        return _loopback_fs_reachable(port)
+    try:
+        probe = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        probe.settimeout(0.5)
+        ok = probe.connect_ex((host, port)) == 0
+        probe.close()
+        return ok
+    except OSError:
+        return False
+
+
+def is_docker_internal_smoke() -> bool:
+    return os.environ.get("IMVERA_INTERNAL_DOCKER_SMOKE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def load_docker_internal_config() -> BlackboxConfig:
+    """Phase A: pyVoIP caller inside docker-compose network (diagnostic only)."""
+    host = os.environ.get("FS_SIP_HOST", "freeswitch").strip()
+    port = int(os.environ.get("FS_SIP_PORT", "5060"))
     profile = load_profile()
-    host = os.environ.get("IMVERA_LIVE_SIP_HOST") or profile.get("sip_host") or "127.0.0.1"
+    sip_domain = (
+        os.environ.get("IMVERA_LIVE_SIP_DOMAIN")
+        or profile.get("sip_host")
+        or host
+    ).strip()
     return BlackboxConfig(
         sip_host=host,
-        sip_port=int(os.environ.get("IMVERA_LIVE_SIP_PORT", profile.get("sip_port", 5060))),
+        sip_domain=sip_domain,
+        sip_port=port,
+        extension=os.environ.get("IMVERA_LIVE_EXTENSION", "7000"),
+        sip_user=os.environ.get("FS_GATE_USER", "fs-gate-caller"),
+        sip_password=os.environ.get("FS_GATE_PASSWORD", "gate"),
+        transport=os.environ.get("IMVERA_LIVE_SIP_TRANSPORT", "udp"),
+        local_sip_port=int(os.environ.get("IMVERA_LIVE_LOCAL_SIP_PORT", "5088")),
+        rtp_port_low=int(os.environ.get("IMVERA_LIVE_RTP_LOW", "15000")),
+        rtp_port_high=int(os.environ.get("IMVERA_LIVE_RTP_HIGH", "15100")),
+        transport_mode="docker_internal",
+        stop_on_fail=os.environ.get("IMVERA_LIVE_STOP_ON_FAIL", "1") not in {"0", "false", "no"},
+        sample_rate=int(os.environ.get("IMVERA_LIVE_SAMPLE_RATE", "8000")),
+        frame_ms=int(os.environ.get("IMVERA_LIVE_FRAME_MS", "20")),
+        bot_silence_ms=int(os.environ.get("IMVERA_LIVE_BOT_SILENCE_MS", "900")),
+        barge_in_delay_ms=int(os.environ.get("IMVERA_LIVE_BARGE_IN_MS", "500")),
+        max_call_s=float(os.environ.get("IMVERA_LIVE_MAX_CALL_S", "180")),
+        asr_command=os.environ.get("IMVERA_BLACKBOX_ASR_CMD", ""),
+        production_git_sha=_git_sha(),
+        caller_git_sha=_git_sha(),
+    )
+
+
+def load_config() -> BlackboxConfig:
+    if is_docker_internal_smoke():
+        return load_docker_internal_config()
+    profile = load_profile()
+    profile_host = (profile.get("sip_host") or "").strip()
+    env_host = (os.environ.get("IMVERA_LIVE_SIP_HOST") or "").strip()
+    sip_domain = (
+        os.environ.get("IMVERA_LIVE_SIP_DOMAIN")
+        or profile_host
+        or env_host
+        or "127.0.0.1"
+    ).strip()
+    port = int(os.environ.get("IMVERA_LIVE_SIP_PORT", profile.get("sip_port", 5060)))
+
+    preferred_host = env_host or profile_host or "127.0.0.1"
+    if preferred_host in {"127.0.0.1", "localhost"}:
+        signal_host = preferred_host
+    elif _host_reachable(preferred_host, port):
+        signal_host = preferred_host
+    elif _loopback_fs_reachable(port):
+        signal_host = "127.0.0.1"
+        if _is_lan_ipv4(preferred_host):
+            sip_domain = preferred_host
+    else:
+        signal_host = preferred_host
+
+    if signal_host in {"127.0.0.1", "localhost"} and _is_lan_ipv4(sip_domain):
+        pass  # realm stays on LAN domain for FS directory lookup
+    elif not sip_domain:
+        sip_domain = signal_host
+    sip_user = (
+        os.environ.get("IMVERA_LIVE_SIP_USER")
+        or profile.get("username")
+        or os.environ.get("FS_GATE_USER", "fs-gate-caller")
+    )
+    sip_password = (
+        os.environ.get("IMVERA_LIVE_SIP_PASSWORD")
+        or profile.get("password")
+        or os.environ.get("FS_GATE_PASSWORD", "gate")
+    )
+    return BlackboxConfig(
+        sip_host=signal_host,
+        sip_domain=sip_domain,
+        sip_port=port,
         extension=os.environ.get("IMVERA_LIVE_EXTENSION", profile.get("dial_number", "7000")),
-        sip_user=os.environ.get(
-            "IMVERA_LIVE_SIP_USER",
-            os.environ.get("FS_GATE_USER", "fs-gate-caller"),
-        ),
-        sip_password=os.environ.get(
-            "IMVERA_LIVE_SIP_PASSWORD",
-            os.environ.get("FS_GATE_PASSWORD", "gate"),
-        ),
+        sip_user=sip_user,
+        sip_password=sip_password,
         transport=os.environ.get("IMVERA_LIVE_SIP_TRANSPORT", profile.get("transport", "udp")),
         local_sip_port=int(os.environ.get("IMVERA_LIVE_LOCAL_SIP_PORT", "5088")),
         rtp_port_low=int(os.environ.get("IMVERA_LIVE_RTP_LOW", "15000")),

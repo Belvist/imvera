@@ -10,6 +10,13 @@ from packages.contracts.enums import FsmState, SlotStatus
 from packages.dialogue_engine.effects import SpeakEffect
 from packages.dialogue_engine.context import SlotValue
 
+
+class CheckPath(StrEnum):
+    STANDARD = "standard"
+    NEGATIVE_PROBE = "negative_probe"
+    PAIN_SHORT = "pain_short"
+    URGENT = "urgent"
+
 MAX_SLOT_ATTEMPTS = 2
 
 
@@ -93,6 +100,16 @@ class EngineState(BaseModel):
     deferred_speak: SpeakEffect | None = None
     slot_corrections: list[dict[str, str]] = Field(default_factory=list)
 
+    check_path: CheckPath = CheckPath.STANDARD
+    probe_phase: str | None = None
+    skipped_slots: set[str] = Field(default_factory=set)
+    wellness_concern: str = ""
+    wellness_duration: str = ""
+    pain_at_night: str = ""
+    prior_call_context: dict[str, str] = Field(default_factory=dict)
+    follow_up_opening: bool = False
+    wellness_probes_enabled: bool = True
+
     def bump_revision(self) -> None:
         self.revision += 1
 
@@ -109,6 +126,8 @@ class EngineState(BaseModel):
 
     def answer_context_slot(self) -> str | None:
         """Slot used to interpret the next user answer — delivered, not planned."""
+        if self.probe_phase:
+            return f"probe_{self.probe_phase}"
         if self.delivered_question is not None:
             return self.delivered_question.slot
         if self.playing_question is not None:
@@ -116,7 +135,11 @@ class EngineState(BaseModel):
         return None
 
     def next_open_slot(self) -> str | None:
+        if self.check_path == CheckPath.URGENT:
+            return None
         for slot in ("wellness", "mood", "sleep", "plans"):
+            if slot in self.skipped_slots:
+                continue
             if self.slots.get(slot) == SlotStatus.OPEN:
                 return slot
         return None

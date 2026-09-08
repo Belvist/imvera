@@ -1,0 +1,18 @@
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml README.md ./
+COPY packages ./packages
+COPY services/imvera_perception ./services/imvera_perception
+
+RUN pip install --no-cache-dir -e '.[api]'
+
+ENV IMVERA_PERCEPTION_PORT=9110
+EXPOSE 9110
+
+CMD ["python", "services/imvera_perception/main.py"]

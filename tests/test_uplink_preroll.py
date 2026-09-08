@@ -709,7 +709,7 @@ def test_opening_wellness_half_duplex_user_reaches_collector() -> None:
         await actor._feed_uplink_pcm(user_pcm)
         assert fed == [], "User buffered during opening bot speech"
         actor._turn_manager.on_playback_completed(time.monotonic())
-        actor._turn_manager.tick(time.monotonic() + 0.35)
+        actor._turn_manager.tick(time.monotonic() + 0.5)
         actor._active_generation = None
         await actor._feed_uplink_pcm(user_pcm)
         assert fed == [user_pcm], "User speech reaches VAD after echo tail"
@@ -1017,7 +1017,7 @@ def test_opening_uncertain_uplink_reaches_vad() -> None:
         await actor._feed_uplink_pcm(speech)
         assert fed == [], "Buffered during opening bot speech"
         actor._turn_manager.on_playback_completed(time.monotonic())
-        actor._turn_manager.tick(time.monotonic() + 0.35)
+        actor._turn_manager.tick(time.monotonic() + 0.5)
         actor._active_generation = None
         await actor._feed_uplink_pcm(speech)
         assert fed == [speech], "Speech reaches VAD after echo tail"

@@ -10,6 +10,7 @@ from packages.dialogue_engine.fast_interpreter import (
     _BACKCHANNEL,
     _HEARING_CHECK,
     _MOOD_NEGATIVE,
+    _MOOD_NEGATIVE_PHRASE,
     _MOOD_POSITIVE,
     _NEGATIVE,
     _NORMAL,
@@ -52,8 +53,11 @@ _PLANS_INVALID_SHORT = frozenset(
 )
 
 _MOOD_IN_TEXT = re.compile(
-    r"(настроени\w*\s+(?:плох\w*|ужасн\w*|груст\w*|хорош\w*|отличн\w*|никак\w*|"
-    r"не\s+очень|плохое|хорошее)|"
+    r"(настроени\w*\s+(?:плох\w*|ужасн\w*|груст\w*|хорош\w*|отличн\w*|великолепн\w*|"
+    r"прекрасн\w*|никак\w*|не\s+очень|плохое|хорошее)|"
+    r"(?:великолепн\w*|прекрасн\w*|отличн\w*|хорош\w*)\s+настроени\w*|"
+    r"не\s+очень.{0,40}настроени\w*|"
+    r"настроени\w*.{0,40}не\s+очень|"
     r"но\s+настроени\w*\s+\w+)",
     re.I,
 )
@@ -92,7 +96,9 @@ def interpret_structured(text: str, ctx: InterpretContext) -> StructuredMeaning:
     normalized = raw.lower()
     core = _normalize_core(raw)
 
-    if re.match(r"^что\??$", core, re.I) or _REPAIR.search(normalized) or _HEARING_CHECK.search(normalized):
+    if re.match(r"^что\??$", core, re.I) or re.match(
+        r"^(какое|какая|какой|какие)\??$", core, re.I
+    ) or _REPAIR.search(normalized) or _HEARING_CHECK.search(normalized):
         return StructuredMeaning(
             act=SemanticAct.REPAIR_REQUEST.value,
             answers_to=ctx.answer_slot,
@@ -100,6 +106,40 @@ def interpret_structured(text: str, ctx: InterpretContext) -> StructuredMeaning:
             raw_text=raw,
             confidence=0.98,
         )
+
+    if ctx.answer_slot and ctx.answer_slot.startswith("probe_"):
+        probe = ctx.answer_slot.removeprefix("probe_")
+        if probe == "duration":
+            from packages.dialogue_engine.check_path import is_urgent_concern, looks_like_duration_answer
+
+            if looks_like_duration_answer(raw) or is_urgent_concern(raw):
+                return StructuredMeaning(
+                    act=SemanticAct.ANSWER.value,
+                    answers_to=ctx.answer_slot,
+                    slots={
+                        ctx.answer_slot: SlotCandidate(
+                            value=raw,
+                            polarity="negative" if is_urgent_concern(raw) else "neutral",
+                            confidence=0.93,
+                        )
+                    },
+                    raw_text=raw,
+                    confidence=0.93,
+                )
+        if len(core.split()) >= 1 and core not in _BACKCHANNEL:
+            return StructuredMeaning(
+                act=SemanticAct.ANSWER.value,
+                answers_to=ctx.answer_slot,
+                slots={
+                    ctx.answer_slot: SlotCandidate(
+                        value=raw,
+                        polarity=_detect_polarity(raw) or "neutral",
+                        confidence=0.9,
+                    )
+                },
+                raw_text=raw,
+                confidence=0.9,
+            )
 
     if any(marker in normalized for marker in questions._GOODBYE_MARKERS):
         return StructuredMeaning(
@@ -201,6 +241,32 @@ def interpret_structured(text: str, ctx: InterpretContext) -> StructuredMeaning:
             confidence=0.94,
         )
 
+    if ctx.answer_slot == "mood" and (
+        _MOOD_NEGATIVE_PHRASE.search(normalized)
+        or (
+            re.search(r"настроени\w*", normalized)
+            and re.search(r"не\s+очень|плох\w*|ужасн\w*|груст\w*|никак\w*", normalized)
+        )
+    ):
+        return StructuredMeaning(
+            act=SemanticAct.ANSWER.value,
+            answers_to="mood",
+            slots={"mood": SlotCandidate(value=raw, polarity="negative", confidence=0.94)},
+            raw_text=raw,
+            confidence=0.94,
+        )
+
+    if ctx.answer_slot == "mood" and re.search(
+        r"великолепн\w*|прекрасн\w*|отличн\w*", normalized
+    ) and re.search(r"настроени\w*", normalized):
+        return StructuredMeaning(
+            act=SemanticAct.ANSWER.value,
+            answers_to="mood",
+            slots={"mood": SlotCandidate(value=raw, polarity="positive", confidence=0.94)},
+            raw_text=raw,
+            confidence=0.94,
+        )
+
     if ctx.answer_slot == "plans" and _PLANS_ANSWER.search(normalized):
         return StructuredMeaning(
             act=SemanticAct.ANSWER.value,
@@ -211,7 +277,10 @@ def interpret_structured(text: str, ctx: InterpretContext) -> StructuredMeaning:
         )
 
     if ctx.answer_slot == "sleep" and (
-        _SLEEP_ANSWER.search(normalized) or _SO_SO.match(core) or _NORMAL.match(core)
+        _SLEEP_ANSWER.search(normalized)
+        or _SO_SO.match(core)
+        or _NORMAL.match(core)
+        or re.search(r"хорошо[,\s]+спал", normalized)
     ):
         pol = _detect_polarity(raw) or "neutral"
         if "не спал" in normalized or "плохо" in normalized:
@@ -328,15 +397,18 @@ def _extract_multi_slots(text: str, ctx: InterpretContext) -> dict[str, SlotCand
             slots["mood"] = SlotCandidate(value=text, polarity="positive", confidence=0.9)
 
     if _SLEEP_ANSWER.search(normalized) or re.search(
-        r"(не\s+спал\w*|почти\s+не\s+спал\w*|выспал\w*|мало\s+спал\w*)", normalized
+        r"(не\s+спал\w*|почти\s+не\s+спал\w*|выспал\w*|мало\s+спал\w*|"
+        r"хорошо[,\s]+спал\w*|спало\s+\w+)",
+        normalized,
     ):
         pol = "negative" if re.search(r"не\s+спал|плохо|мало|беспокойн", normalized) else "positive"
         slots["sleep"] = SlotCandidate(value=text, polarity=pol, confidence=0.9)
 
     if _PLANS_ANSWER.search(normalized) or re.search(
         r"(пойду\s+гуля\w*|гуля\w*\s+с\s+\w+|"
-        r"план\w*\s+никак|никак\w*\s+план|"
-        r"вечером\s+к\s+врач|к\s+врач\w*)",
+        r"план\w*\s+никак|никак\w*\s+план|план\w*\s+нет\w*|"
+        r"вечером\s+к\s+врач|к\s+врач\w*|"
+        r"ничего\s+не\s+(?:буду|делать)|сидеть\s+дома)",
         normalized,
     ):
         slots["plans"] = SlotCandidate(value=text, polarity="neutral", confidence=0.9)
@@ -387,8 +459,14 @@ def _extract_mixed_sentiment(text: str, ctx: InterpretContext) -> StructuredMean
 
 def _apply_correction(text: str, ctx: InterpretContext) -> StructuredMeaning | None:
     normalized = text.lower()
+    if _CORRECTION.search(normalized):
+        parts = re.split(r"хотя\s+нет[,\s]*", normalized, maxsplit=1)
+        if len(parts) == 2 and parts[1].strip():
+            normalized = parts[1].strip()
     slot = ctx.answer_slot or "wellness"
-    if re.search(r"плох\w*|не\s+очень|ужасн", normalized):
+    if re.search(r"плох\w*|не\s+очень|ужасн", normalized) and not re.search(
+        r"хорош\w*|нормально|отлично", normalized
+    ):
         return StructuredMeaning(
             act=SemanticAct.ANSWER.value,
             answers_to=slot,

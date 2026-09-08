@@ -42,20 +42,35 @@ _WELLNESS_NEGATIVE = re.compile(
 )
 _MOOD_NEGATIVE = re.compile(r"^(плох\w+|груст\w+|ужасн\w+|тоскл\w+)\.?$", re.I)
 _SLEEP_ANSWER = re.compile(
-    r"(спал\w*\s+(нормально|хорошо|плохо)|сон\s+(хорош\w*|плох\w*|нормальн\w*)|"
+    r"(спал\w*\s+(?:нормально|хорошо|плохо|великолепн\w*|отличн\w*)|"
+    r"спало\s+(?:нормально|хорошо|плохо|великолепн\w*|отличн\w*)|"
+    r"хорошо[,\s]+спал\w*|"
+    r"сон\s+(?:хорош\w*|плох\w*|нормальн\w*)|"
     r"не\s+спал\w*|выспал\w*|мало\s+спал\w*|недоспал\w*|просыпал\w*|"
     r"часов\s+\w+|пять\s+часов|шесть\s+часов|беспокойн\w*)",
     re.I,
 )
 _PLANS_ANSWER = re.compile(
-    r"(никак\w*\s+план\w*\s+нет|нет\s+план\w*|ничего\s+не\s+план|"
+    r"(никак\w*\s+план\w*\s+нет|план\w*\s+никак\w*\s+нет\w*|"
+    r"план\w*\s+нет\w*(?:\s+на\s+сегодня)?|нет\s+план\w*|ничего\s+не\s+план|"
+    r"ничего\s+не\s+(?:буду|делать)|сидеть\s+дома|"
+    r"дома\s+(?:сижу|посижу|никуда)|никуда\s+не\s+(?:пойду|еду)|"
     r"нигде|дома\s+посижу|дома|в\s+больниц\w*|врач\w*|"
-    r"магазин|продукт|погуля|при[её]м|делам|уборк|внук|дет)",
+    r"магазин|продукт|погуля|при[её]м|делам|уборк|внук|дет|"
+    r"отдых|лежать|телевизор|ничего\s+особенного)",
     re.I,
 )
 _MOOD_POSITIVE = re.compile(
-    r"(настроени\w*\s+хорош\w*|хорош\w*\s+настроени\w*|весел\w*|радост\w*|"
-    r"^хороше\w*\.?$|^прекрасн\w*\.?$|^отличн\w*\.?$|^нормальн\w*\.?$|^обычн\w*\.?$|^спокойн\w*\.?$)",
+    r"(настроени\w*\s+(?:хорош\w*|отличн\w*|великолепн\w*|прекрасн\w*|замечательн\w*)|"
+    r"(?:хорош\w*|отличн\w*|великолепн\w*|прекрасн\w*)\s+настроени\w*|"
+    r"хорош\w*\s+настроени\w*|весел\w*|радост\w*|"
+    r"^хороше\w*\.?$|^прекрасн\w*\.?$|^отличн\w*\.?$|^великолепн\w*\.?$|"
+    r"^нормальн\w*\.?$|^обычн\w*\.?$|^спокойн\w*\.?$)",
+    re.I,
+)
+_MOOD_NEGATIVE_PHRASE = re.compile(
+    r"(?:не\s+очень|плох\w*|ужасн\w*|груст\w*|никак\w*).{0,40}настроени\w*|"
+    r"настроени\w*.{0,40}(?:не\s+очень|плох\w*|ужасн\w*|груст\w*|никак\w*)",
     re.I,
 )
 _REPAIR = re.compile(
@@ -121,6 +136,47 @@ def fast_interpret_semantic(
             ),
             True,
         )
+
+    if re.match(r"^(какое|какая|какой|какие)\??$", core, re.I):
+        return (
+            SemanticTurn(
+                act=SemanticAct.REPAIR_REQUEST,
+                target_slot=answer_slot,
+                confidence=0.97,
+                source_quote=raw,
+            ),
+            True,
+        )
+
+    if answer_slot and answer_slot.startswith("probe_"):
+        probe = answer_slot.removeprefix("probe_")
+        if probe == "duration":
+            from packages.dialogue_engine.check_path import is_urgent_concern, looks_like_duration_answer
+
+            if looks_like_duration_answer(raw) or is_urgent_concern(raw):
+                return (
+                    SemanticTurn(
+                        act=SemanticAct.ANSWER,
+                        target_slot=answer_slot,
+                        polarity="negative" if is_urgent_concern(raw) else "neutral",
+                        confidence=0.93,
+                        source_quote=raw,
+                        value=raw,
+                    ),
+                    True,
+                )
+        if len(core.split()) >= 1 and core not in _BACKCHANNEL:
+            return (
+                SemanticTurn(
+                    act=SemanticAct.ANSWER,
+                    target_slot=answer_slot,
+                    polarity=_detect_polarity(raw) or "neutral",
+                    confidence=0.9,
+                    source_quote=raw,
+                    value=raw,
+                ),
+                True,
+            )
 
     if _REPAIR.search(normalized) or _HEARING_CHECK.search(normalized):
         return (
@@ -190,6 +246,34 @@ def fast_interpret_semantic(
                 act=SemanticAct.ANSWER,
                 target_slot="mood",
                 polarity="negative",
+                confidence=0.94,
+                source_quote=raw,
+                value=raw,
+            ),
+            True,
+        )
+
+    if answer_slot == "mood" and _MOOD_NEGATIVE_PHRASE.search(normalized):
+        return (
+            SemanticTurn(
+                act=SemanticAct.ANSWER,
+                target_slot="mood",
+                polarity="negative",
+                confidence=0.94,
+                source_quote=raw,
+                value=raw,
+            ),
+            True,
+        )
+
+    if answer_slot == "mood" and re.search(
+        r"великолепн\w*|прекрасн\w*|отличн\w*", normalized
+    ) and re.search(r"настроени\w*", normalized):
+        return (
+            SemanticTurn(
+                act=SemanticAct.ANSWER,
+                target_slot="mood",
+                polarity="positive",
                 confidence=0.94,
                 source_quote=raw,
                 value=raw,
@@ -294,10 +378,26 @@ def fast_interpret_semantic(
 def _detect_polarity(text: str) -> str | None:
     core = _normalize_core(text)
     normalized = text.lower()
+    # Contradiction: «хорошо, но состояние не очень» must not read as positive.
+    if re.search(r"\bно\b", normalized) and re.search(
+        r"(не\s+очень|плох\w*|тяжел\w*|слаб\w*|плохое)",
+        normalized,
+    ):
+        return "negative"
+    if re.search(r"состояни\w*\s+не\s+очень|не\s+очень\s+хорош", normalized):
+        return "negative"
     if _WELLNESS_NEGATIVE.search(normalized):
         return "negative"
     if re.match(r"^плох\w*", core) or re.search(r"мне\s+не\s+очень", normalized):
         return "negative"
+    if re.search(r"настроени\w*", normalized) and re.search(
+        r"не\s+очень|плох\w*|ужасн\w*|груст\w*|никак\w*", normalized
+    ):
+        return "negative"
+    if re.search(r"великолепн\w*|прекрасн\w*", normalized) and re.search(
+        r"настроени\w*", normalized
+    ):
+        return "positive"
     if _SO_SO.match(core) or re.search(
         r"\b(так\s+себе|сойд[её]т|пойд[её]т|средн\w*|терпимо|ну\s+такое)\b", core, re.I
     ):

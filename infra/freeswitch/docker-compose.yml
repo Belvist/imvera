@@ -51,6 +51,25 @@ services:
     networks:
       - p0a
 
+  perception:
+    build:
+      context: ../..
+      dockerfile: infra/freeswitch/Dockerfile.perception
+    container_name: imvera-perception
+    ports:
+      - "127.0.0.1:9110:9110"
+    environment:
+      IMVERA_ECHO_REF_GATE: "1"
+      IMVERA_LAB_HALF_DUPLEX: "0"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9110/health/ready')"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - p0a
+
   synthetic-gate:
     profiles: ["gate"]
     build:
@@ -71,6 +90,36 @@ services:
       IMVERA_FS_SYNTH_SIP_PORT: "5077"
     volumes:
       - ../../.run/freeswitch-gate:/app/.run/freeswitch-gate
+    networks:
+      - p0a
+
+  internal-blackbox-gate:
+    profiles: ["internal-smoke"]
+    platform: linux/amd64
+    build:
+      context: ../..
+      dockerfile: infra/freeswitch/Dockerfile.blackbox
+    depends_on:
+      freeswitch:
+        condition: service_started
+    environment:
+      IMVERA_INTERNAL_DOCKER_SMOKE: "1"
+      IMVERA_BLACKBOX_SIP_BACKEND: pyvoip
+      FS_SIP_HOST: freeswitch
+      FS_SIP_PORT: "5060"
+      FS_NODE_IP: auto
+      FS_GATE_USER: fs-gate-caller
+      FS_GATE_PASSWORD: gate
+      IMVERA_LIVE_EXTENSION: "7000"
+      IMVERA_INTERNAL_DOCKER_CALLS: "1"
+      IMVERA_LIVE_DEBUG_SCENARIO: good-clean_short-00
+      IMVERA_LIVE_DEBUG_STOP_ON_FAIL: "1"
+    volumes:
+      - ../../.run:/app/.run
+      - ../../tests/assets/blackbox_voice:/app/tests/assets/blackbox_voice:ro
+      - ../../tools:/app/tools:ro
+      - ../../scripts:/app/scripts:ro
+      - ../../packages:/app/packages:ro
     networks:
       - p0a
 

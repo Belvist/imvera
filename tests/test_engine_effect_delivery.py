@@ -370,6 +370,57 @@ def test_fs_14c79443_full_sequence_reaches_goodbye_final() -> None:
         assert result.state.slots[slot] == SlotStatus.FILLED
 
 
+def test_session_summary_allowed_after_probe_path_plans_fill() -> None:
+    """Regression fs-8054b8c5: Validator must not block engine summary on legacy identity/consent."""
+    from packages.core.memory_store import InMemoryCallRecordStore
+    from packages.dialogue.session import CallSession
+    from packages.dialogue_engine.context import InterpretContext
+    from packages.dialogue_engine.contextual_interpreter import contextual_interpret
+    from packages.dialogue_engine.semantic import semantic_to_interpretation
+    from packages.dialogue.interpretation import to_turn_interpretation
+
+    session = CallSession(
+        call_id="fs-8054b8c5",
+        family_id="audit-family",
+        store=InMemoryCallRecordStore(),
+    )
+    session.start()
+    turns = [
+        "Плохо.",
+        "Беспокоит головная боль, тошнота.",
+        "в течение часа",
+        "Нормально.",
+        "Пойдёт, нормально.",
+        "Планов никаких нету.",
+    ]
+    for i, text in enumerate(turns, 1):
+        eng = session._engine
+        assert eng is not None
+        ctx = InterpretContext.from_engine_state(eng.state, turn_id=f"u-{i}")
+        sem, _ = contextual_interpret(text, ctx)
+        interp = semantic_to_interpretation(sem)
+        contract = to_turn_interpretation(
+            session.state,
+            session.turn_id + 1,
+            text,
+            interp,
+            state_version=session.state.state_version,
+        )
+        result = session.handle_user_text(
+            text,
+            interp=interp,
+            contract=contract,
+            utterance_id=f"u-{i}",
+        )
+        if i < len(turns):
+            assert result.proposal.intent != "summary"
+        else:
+            assert result.proposal.intent == "summary"
+            assert result.validated.allowed is True
+            assert result.speak_effect is not None
+            assert result.speak_effect.intent == "summary"
+
+
 def test_session_handle_stale_replaces_deferred_summary() -> None:
     session = _session()
     assert session._engine is not None

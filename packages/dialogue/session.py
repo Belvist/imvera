@@ -95,9 +95,21 @@ class CallSession:
             log_runtime_truth(_log)
             _session_runtime_logged = True
         if dialogue_engine_active():
+            prior: dict[str, str] = {}
+            if hasattr(self.store, "get_latest_family_snapshot"):
+                snap = self.store.get_latest_family_snapshot(
+                    family_id,
+                    exclude_call_id=call_id,
+                )
+                if snap is not None:
+                    prior.update(snap.facts)
+                    prior.update(
+                        {k: str(v) for k, v in snap.metadata.items() if isinstance(v, str)}
+                    )
             self._engine = DialogueEngine(
                 call_id=call_id,
                 elder_display_name=elder_display_name,
+                prior_call_context=prior,
             )
             _log.info(
                 "DialogueEngine.on_session call_id=%s mode=single_writer",
@@ -137,9 +149,12 @@ class CallSession:
         existing = self.store.get_call_result(self.state.call_id, self.state.family_id)
         metadata = dict(existing.metadata) if existing else {}
         from packages.dialogue.transition_store import _load_outbox, _state_to_metadata
+        from packages.dialogue_engine.check_path import build_call_metadata
 
         outbox = _load_outbox(metadata)
         metadata.update(_state_to_metadata(self.state, None, outbox))
+        if self._engine is not None:
+            metadata.update(build_call_metadata(self._engine.state))
         return CallResultSnapshot(
             call_id=self.state.call_id,
             family_id=self.state.family_id,

@@ -1,0 +1,5 @@
+{"call_id": "fs-68d06379", "utterance_id": "u-1", "expected_text": "Хорошо.", "bucket": "clean", "notes": "wellness slot"}
+{"call_id": "fs-68d06379", "utterance_id": "u-2", "expected_text": "", "bucket": "echo", "notes": "user likely answered mood; STT echoed Vera clarify"}
+{"call_id": "fs-68d06379", "utterance_id": "u-3", "expected_text": "плохое настроение", "bucket": "echo", "notes": "operator-reported ground truth"}
+{"call_id": "fs-68d06379", "utterance_id": "u-4", "expected_text": "Плохо.", "bucket": "short", "notes": "sleep slot"}
+{"call_id": "fs-68d06379", "utterance_id": "u-5", "expected_text": "На сегодня нету никаких.", "bucket": "clean", "notes": "plans slot"}
