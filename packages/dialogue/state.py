@@ -58,6 +58,11 @@ class DialogueState(BaseModel):
     consecutive_unresolved_goals: int = 0
     pending_action_id: str | None = None
     last_reflected_turn_id: int = 0
+    # DialogueEngine sync — answer context uses delivered, not planned slot
+    opening_delivered: bool = False
+    opening_play_count: int = 0
+    first_user_turn_received: bool = False
+    delivered_answer_slot: str | None = None
 
     def bump_version(self) -> None:
         self.state_version += 1

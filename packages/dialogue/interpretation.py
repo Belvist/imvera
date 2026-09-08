@@ -15,7 +15,7 @@ from packages.contracts.interpretation import FactCandidate, TurnInterpretation
 from packages.dialogue.fact_extraction import extract_fact_candidates
 from packages.dialogue.state import DialogueState
 
-_BACKCHANNEL_EXACT = frozenset({"ага", "угу", "алло", "да", "нет"})
+_BACKCHANNEL_EXACT = frozenset({"ага", "угу", "да", "нет"})
 _AFFIRM_PHRASES = frozenset(
     {
         "да",
@@ -50,6 +50,10 @@ _WRONG_PERSON = re.compile(
 )
 _REPEAT = re.compile(
     r"\b(повторите|повтори|еще\s+раз|ещё\s+раз|не\s+понял[аи]?|не\s+расслышал[аи]?|что\s+вы\s+сказали)\b",
+    re.I,
+)
+_HEARING_CHECK = re.compile(
+    r"\b(алло|слышите|слышишь|ты\s+меня|меня\s+слыш|вы\s+меня\s+слыш|что\s*\?)\b",
     re.I,
 )
 _STOP_CALL = re.compile(
@@ -196,6 +200,8 @@ def _topic_refusal_slot(text: str, pending_slot: str | None) -> str | None:
 
 
 def _effective_pending_slot(state: DialogueState) -> str | None:
+    if state.delivered_answer_slot and state.pending_question_delivered:
+        return state.delivered_answer_slot
     if state.pending_slot:
         return state.pending_slot
     if state.fsm_state == FsmState.DAILY_CHECK:
@@ -339,6 +345,17 @@ def interpret_user_turn(state: DialogueState, user_text: str) -> UserInterpretat
         )
 
     if _REPEAT.search(normalized):
+        return UserInterpretation(
+            judgement=AnswerJudgement.UNCLEAR,
+            dialogue_act=DialogueAct.REPEAT,
+            requests_repeat=True,
+        )
+
+    if (
+        state.fsm_state == FsmState.DAILY_CHECK
+        and state.pending_question_delivered
+        and _HEARING_CHECK.search(normalized)
+    ):
         return UserInterpretation(
             judgement=AnswerJudgement.UNCLEAR,
             dialogue_act=DialogueAct.REPEAT,

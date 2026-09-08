@@ -1,7 +1,14 @@
 # VoiseUp — System Architecture
 
-> **Version:** Architecture Freeze v1 (see [PLAN.md](PLAN.md) v1.2)  
-> **Status:** Phase 1 — specification only, no runtime pipeline code yet.
+> **Historical:** Architecture Freeze v1 / PLAN.md v1.2 (Phase 1 spec; Asterisk diagrams below are **not** the production path).  
+> **Production path (chosen, not accepted):** [ADR-013](adr/013-production-telephony-freeswitch.md) + [ADR-014](adr/014-architecture-freeze-acceptance-gates.md).  
+> **Do not start a fourth system.** Acceptance stamps (`ARCHITECTURE = FROZEN`, `TELEPHONY = ACCEPTED`, …) only after ADR-014 gates.
+
+```text
+SIP operator → FreeSWITCH → mod_imvera_audio → CallActor
+→ VAD → GigaAM → DialogueEngine → local LLM only when needed
+→ Silero TTS → FreeSWITCH → caller
+```
 
 ## Purpose
 

@@ -96,6 +96,7 @@ class Planner:
         speech = Planner._opening_wellness_speech(state)
         Planner._arm_pending_slot(state, "wellness", question=speech)
         goal = state.ensure_goal("wellness")
+        state.opening_play_count += 1
         if not Planner.reserve_question_attempt(state, generation_id, "wellness"):
             return Planner._mark_goal_unresolved(state, "wellness", turn_id, generation_id)
         return TurnProposal(
@@ -115,6 +116,8 @@ class Planner:
         generation_id: str,
     ) -> TurnProposal:
         """Emit Vera's line for the current FSM state (call opening / re-prompt)."""
+        if state.first_user_turn_received or state.opening_delivered:
+            return Planner._prompt_for_state(state, turn_id, generation_id)
         if state.fsm_state == FsmState.CALL_START:
             if direct_wellness_opening_enabled():
                 Planner._begin_direct_daily_check(state)
@@ -330,7 +333,10 @@ class Planner:
         goal.audio_may_have_reached_channel = True
         goal.reserved_attempt_id = None
         state.pending_question_delivered = True
+        state.delivered_answer_slot = slot
         state.pending_action_id = None
+        if slot == "wellness" and state.opening_play_count > 0:
+            state.opening_delivered = True
         state.bump_version()
 
     @staticmethod
@@ -478,6 +484,12 @@ class Planner:
         )
         Planner._arm_pending_slot(state, slot, question=speech)
         goal = state.ensure_goal(slot)
+        if (
+            goal.reserved_attempt_id
+            and goal.reserved_attempt_id != generation_id
+            and not state.pending_question_delivered
+        ):
+            Planner.release_question_attempt(state, goal.reserved_attempt_id)
         if not Planner.reserve_question_attempt(state, generation_id, slot):
             return Planner._mark_goal_unresolved(state, slot, turn_id, generation_id)
         return TurnProposal(
@@ -880,9 +892,14 @@ class Planner:
         turn_id: int,
         generation_id: str,
     ) -> TurnProposal:
-        speech = state.pending_question or "Повторите, пожалуйста."
-        intent = "repeat_question"
-        if state.pending_slot:
+        base_question = state.pending_question or "Повторите, пожалуйста."
+        speech = base_question
+        intent = "repair_repeat"
+        if state.fsm_state == FsmState.DAILY_CHECK:
+            speech = f"Да, слышу. {base_question.rstrip('?')}?".replace("??", "?")
+            if not speech.endswith("?"):
+                speech = f"{speech}?"
+        elif state.pending_slot:
             intent = f"repeat_{state.pending_slot}"
         elif state.fsm_state == FsmState.CHECK_CONSENT:
             speech = (

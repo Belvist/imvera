@@ -1,0 +1,20 @@
+---
+description: ADR-014 freeze — finish current path, no fourth system, no features until 100 full calls
+alwaysApply: true
+---
+
+# Finish the frozen path
+
+Production path is frozen (ADR-014):
+
+```text
+SIP operator → FreeSWITCH → mod_imvera_audio → CallActor
+→ VAD → GigaAM → DialogueEngine → local LLM only when needed
+→ Silero TTS → FreeSWITCH → caller
+```
+
+Do not start a fourth system. Do not add features, scenarios, voice design, or new models until 100 consecutive full calls (answer → understand → scenario → goodbye → hangup) are VERIFIED.
+
+Allowed: residual bugs on `DialogueEngine ↔ CallActor ↔ playout` (stale effects, timer/wait ownership, no repeated opening, soak).
+
+Do not claim `ARCHITECTURE = FROZEN` or `* = ACCEPTED` from unit tests.

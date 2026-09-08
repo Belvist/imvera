@@ -1,5 +1,6 @@
 # IMVERA VoiseUp — Master Plan v1.2 (Architecture Freeze candidate)
 
+> **Активный freeze:** [ADR-014](adr/014-architecture-freeze-acceptance-gates.md) (2026-09-08). Этот документ — исторический v1.2; не начинать четвёртую систему.
 > **Статус:** Phase 0 ✅. Phase 1 — contracts + ADR (не pipeline code).  
 > **Дата:** 2026-09-06  
 > **Ревизия v1.2:** full-duplex topology, 4-axis status model, RED false-alarm protocol, realtime provider contracts, event consistency, LLM wording fix.  

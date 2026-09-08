@@ -33,6 +33,13 @@ def _bridge_mode() -> str:
 app = FastAPI(title="IMVERA Media Bridge", version="0.3.0")
 
 
+@app.on_event("startup")
+async def startup() -> None:
+    from packages.dialogue_engine.runtime import log_runtime_truth
+
+    log_runtime_truth(log)
+
+
 async def _noop_inbound(_frame) -> None:
     return
 
@@ -58,7 +65,9 @@ async def ready() -> JSONResponse | dict:
         stt = os.environ.get("IMVERA_STT_URL", "http://127.0.0.1:9101")
         tts = os.environ.get("IMVERA_TTS_URL", "http://127.0.0.1:9102")
         llm = os.environ.get("IMVERA_LLM_URL", "http://127.0.0.1:9103")
-        payload.update({"stt": stt, "tts": tts, "llm": llm})
+        from packages.dialogue_engine.runtime import runtime_truth
+
+        payload.update({"stt": stt, "tts": tts, "llm": llm, "dialogue": runtime_truth()})
     return payload
 
 
@@ -158,6 +167,9 @@ def _write_session_artifacts(session: FreeSwitchBridgeSession) -> None:
 
 def main() -> None:
     GATE_ROOT.mkdir(parents=True, exist_ok=True)
+    from packages.dialogue_engine.runtime import log_runtime_truth
+
+    log_runtime_truth(log)
     port = int(os.environ.get("IMVERA_MEDIA_BRIDGE_PORT", "9210"))
     mode = _bridge_mode()
     log.info("media_bridge.start mode=%s port=%s", mode, port)

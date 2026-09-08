@@ -1,35 +1,47 @@
-# Current task — FreeSWITCH P0-A / P0-B gates (ADR-013)
+# Current task — finish the frozen path (ADR-014)
 
-**Outcome:** Split telephony proof from AI duplex bridge.
-
-## P0-A — FreeSWITCH core (NOW)
-
-No AI. Community `mod_audio_stream` **uplink only**. Outbound 880 Hz = **FS `tone_stream`**.
+**Outcome:** One production path, 100 consecutive full calls. **No fourth system.**
 
 ```text
-440 Hz caller → FS → mod_audio_stream mono → bridge → raw_inbound.wav
-FS tone_stream 880 Hz → caller
+SIP operator → FreeSWITCH → mod_imvera_audio → CallActor
+→ VAD → GigaAM → DialogueEngine → local LLM only when needed
+→ Silero TTS → FreeSWITCH → caller
 ```
 
-Acceptance: 1 → 10 → 100 calls.
+Nearest goal (not new features):
 
-```bash
-make freeswitch-media-gate                    # unit
-make freeswitch-up
-python3 services/imvera_media_bridge/main.py  # uplink_only, no WS probe
-IMVERA_FS_GATE_REQUIRE_STACK=1 make freeswitch-synthetic-sip
-IMVERA_FS_GATE_REQUIRE_STACK=1 IMVERA_FS_SOAK_CALLS=100 make freeswitch-soak-gate
+```text
+позвонил → Вера сняла → услышала → правильно поняла
+→ не зависла → не повторилась → дошла по сценарию
+→ попрощалась → корректно положила трубку
 ```
 
-## P0-B — after P0-A 100/100
+**100 times in a row.** Then, and only then: `ARCHITECTURE = FROZEN` / `TELEPHONY = ACCEPTED` / `DIALOGUE_ENGINE = ACCEPTED` / `VOICE_RUNTIME = ACCEPTED` / `PRODUCTION PILOT = READY`.
 
-Build `mod_imvera_audio` (READ/WRITE WS). Wire CallActor. **Not** commercial mod_audio_stream bidirectional.
+## Allowed now
+
+Residual bugs on `DialogueEngine ↔ CallActor ↔ playout`:
+
+- live daily-check through `goodbye_final` (no planner fallback, no second opening, no lost summary/goodbye)
+- timer/wait fully owned by `DialogueEngine` (CallActor only fires the timer)
+- stale-safe effect delivery
+- soak + hangup cleanup evidence
+
+## Forbidden now
+
+New features, scenarios, voice design, models, or architecture. See ADR-014.
 
 ## NOT VERIFIED
 
-- Live P0-A on Linux with mod_audio_stream built into FS image
-- 100/100 soak
+- Telephony gate 100/100 full calls (answer, uplink, downlink, cleanup, 0 hung channels, 0 silent)
+- DialogueEngine-only live path to `goodbye_final`
+- Scenario matrix (алло / barge-in / silence / repeat / bad STT / unexpected)
+- Latency: short phrase without LLM; conversational STT→reply start
+- Reliability soak (leaks, cross-call audio, dup TTS, lost turns)
+- Failure path STT/TTS/LLM down
+- Production: real trunk, Linux, pinned images, health, restart, monitoring
+- P0-A tone 100/100 (ADR-013) — still not a substitute for ADR-014 gate 1
 
 ## NEXT GATE
 
-P0-A `100/100` on Linux → start `mod_imvera_audio` design.
+One live daily-check on the frozen path to `goodbye_final` with `call_id` trace: no `planner_legacy`, no repeated opening, hangup cleanup. Then repeat toward 100.

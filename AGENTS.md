@@ -85,6 +85,8 @@ Transport → SIP/RTP only
 ❌ family consent replacing elder consent
 ❌ silence == consent
 ❌ pass-stubs, fake return ok, TODO in prod paths
+❌ fourth system / new architecture while ADR-014 gates are open
+❌ new features, scenarios, voice design, or models before 100 consecutive full calls
 ```
 
 ### Voice dialogue invariants
@@ -149,6 +151,7 @@ ADR-008: Product milestones, Core in monorepo, semantic contract (2026-09-06)
 ADR-009: LLM understanding + code state policy, QuestionLedger (2026-09-07)
 ADR-012: Self-hosted LiveKit + LiveKit SIP — lab/spike only (2026-09-08)
 ADR-013: Production telephony FreeSWITCH + PCM WS bridge (2026-09-08)
+ADR-014: Architecture freeze + 7 acceptance gates; no fourth system (2026-09-08)
 ```
 
 ## Commands (when implemented)
@@ -172,7 +175,8 @@ Until these exist, agent reports exact commands run.
 
 ## Related Files
 
-- `docs/PLAN.md` — master implementation plan v1.2 (Architecture Freeze candidate)
+- `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
+- `docs/adr/014-architecture-freeze-acceptance-gates.md` — active freeze + 7 gates
 - `PROJECT_CONTEXT.md` — product + architecture context
 - `README-AGENT-SYSTEM.md` — how to use skills and rules
 - `.cursor/rules/00-project-core.mdc` — Cursor always-on rule

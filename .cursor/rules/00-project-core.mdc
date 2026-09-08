@@ -25,6 +25,8 @@ Before coding: read `AGENTS.md` and `PROJECT_CONTEXT.md`.
 - tests green == production ready
 - TECHNICAL/NO_CONTACT → GREEN
 - Stubs (`pass`, fake `ok`, TODO) in production paths
+- Fourth system / architecture rewrite (ADR-014)
+- New features, scenarios, voice design, or models until 100 consecutive full calls (ADR-014)
 
 ## Skills
 

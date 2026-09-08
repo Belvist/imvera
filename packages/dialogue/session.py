@@ -1,5 +1,6 @@
 """Unified call session — single entry for user events and policy ordering."""
 
+import logging
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
@@ -18,7 +19,14 @@ from packages.dialogue.planner import Planner
 from packages.dialogue.state import DialogueState
 from packages.dialogue.transition_store import DialogueTransitionStore
 from packages.dialogue.validator import Validator
+from packages.dialogue_engine.engine import DialogueEngine
+from packages.dialogue_engine.effects import SpeakEffect, TimerEffect
+from packages.dialogue_engine.runtime import dialogue_engine_active, log_runtime_truth
+from packages.dialogue_engine.semantic import semantic_from_legacy
 from packages.safety import SafetyEngine
+
+_log = logging.getLogger("dialogue.session")
+_session_runtime_logged = False
 
 _RED_INTERRUPT_STATES = frozenset(
     {
@@ -41,6 +49,10 @@ class SessionTurnResult(BaseModel):
     observation_ids: list[str] = Field(default_factory=list)
     persist_ok: bool = True
     persist_error: str | None = None
+    from_engine: bool = False
+    followup_speak_effects: list = Field(default_factory=list)
+    speak_effect: SpeakEffect | None = None
+    timer_effect: TimerEffect | None = None
 
     model_config = {"frozen": True}
 
@@ -71,6 +83,27 @@ class CallSession:
         self._event_seq = 0
         self._persisted_obs_ids: list[str] = []
         self._persisted_keys: set[str] = set()
+        self._engine: DialogueEngine | None = None
+        self._playout_meta: dict[str, tuple[int, str]] = {}
+        self._deferred_engine_turn: SessionTurnResult | None = None
+        self._engine_playout_followup: SessionTurnResult | None = None
+        self._completed_playout_ids: set[str] = set()
+        global _session_runtime_logged
+        if not _session_runtime_logged:
+            log_runtime_truth(_log)
+            _session_runtime_logged = True
+        if dialogue_engine_active():
+            self._engine = DialogueEngine(
+                call_id=call_id,
+                elder_display_name=elder_display_name,
+            )
+            _log.info(
+                "DialogueEngine.on_session call_id=%s mode=single_writer",
+                call_id,
+            )
+
+    def uses_dialogue_engine(self) -> bool:
+        return self._engine is not None
 
     def _next_generation_id(self) -> str:
         self._generation_seq += 1
@@ -171,9 +204,196 @@ class CallSession:
         self._persisted_obs_ids.append(obs.observation_id)
         return obs.observation_id, True, None
 
+    def _build_engine_turn_result(
+        self,
+        user_text: str,
+        interp: UserInterpretation,
+        contract: TurnInterpretation,
+        *,
+        observation_ids: list[str] = (),
+        persist_ok: bool = True,
+        persist_error: str | None = None,
+    ) -> SessionTurnResult:
+        assert self._engine is not None
+        speak = self._engine.pop_speak_effect()
+        timer = self._engine.pop_timer_effect() if speak is None else None
+        if speak is None and timer is not None:
+            self._engine.sync_to_legacy(self.state)
+            slot = self.state.waiting_on_goal or self.state.pending_slot
+            goal = self.state.get_goal(slot) if slot else None
+            gen = self._next_generation_id()
+            proposal = TurnProposal(
+                turn_id=self.turn_id,
+                generation_id=gen,
+                speech="",
+                intent="wait_for_continuation",
+                fsm_state=self.state.fsm_state,
+                mandatory_remaining=self.state.mandatory_remaining(),
+                wait_goal_id=goal.goal_id if goal else None,
+            )
+            validated = Validator.validate(proposal)
+            commit = self.transitions.commit_transition(self.state, proposal)
+            return SessionTurnResult(
+                user_text=user_text,
+                interpretation=interp,
+                turn_contract=contract,
+                proposal=proposal,
+                validated=validated,
+                safety=self.safety.model_copy(deep=True),
+                observation_ids=list(observation_ids),
+                persist_ok=persist_ok and commit.ok,
+                persist_error=persist_error or commit.error,
+                from_engine=True,
+                timer_effect=timer,
+            )
+        if speak is None:
+            gen = self._next_generation_id()
+            proposal = Planner._terminal_noop(self.state, self.turn_id, gen)
+            validated = Validator.validate(proposal)
+            return SessionTurnResult(
+                user_text=user_text,
+                interpretation=interp,
+                turn_contract=contract,
+                proposal=proposal,
+                validated=validated,
+                safety=self.safety.model_copy(deep=True),
+                observation_ids=list(observation_ids),
+                persist_ok=persist_ok,
+                persist_error=persist_error,
+                from_engine=True,
+            )
+        followups = self._engine.drain_speak_effects()
+        self._engine.sync_to_legacy(self.state)
+        self._playout_meta[speak.generation_id] = (speak.generation, speak.question_id)
+        for fx in followups:
+            self._playout_meta[fx.generation_id] = (fx.generation, fx.question_id)
+        proposal = self._engine.effect_to_proposal(speak, self.turn_id, self.state)
+        validated = Validator.validate(proposal)
+        commit = self.transitions.commit_transition(self.state, proposal)
+        return SessionTurnResult(
+            user_text=user_text,
+            interpretation=interp,
+            turn_contract=contract,
+            proposal=proposal,
+            validated=validated,
+            safety=self.safety.model_copy(deep=True),
+            observation_ids=list(observation_ids),
+            persist_ok=persist_ok and commit.ok,
+            persist_error=persist_error or commit.error,
+            from_engine=True,
+            followup_speak_effects=followups,
+            speak_effect=speak,
+        )
+
+    def defer_engine_turn(self, result: SessionTurnResult) -> None:
+        if self._engine is None or result.speak_effect is None:
+            return
+        self._deferred_engine_turn = result
+        self._engine.on_delivery_deferred(result.speak_effect)
+
+    def is_engine_speak_valid(self, effect: SpeakEffect) -> bool:
+        if self._engine is None:
+            return True
+        return self._engine.is_speak_effect_valid(effect)
+
+    def flush_deferred_engine_turn(self) -> SessionTurnResult | None:
+        if self._engine is None or self._deferred_engine_turn is None:
+            return None
+        result = self._deferred_engine_turn
+        effect = result.speak_effect
+        if effect is not None and not self._engine.is_speak_effect_valid(effect):
+            self._deferred_engine_turn = None
+            return self.handle_stale_speak_effect(effect)
+        self._deferred_engine_turn = None
+        self._engine.clear_deferred_speak()
+        return result
+
+    def handle_stale_speak_effect(self, effect: SpeakEffect) -> SessionTurnResult | None:
+        if self._engine is None:
+            return None
+        self._engine.on_speak_effect_stale(effect)
+        if (
+            self._deferred_engine_turn is not None
+            and self._deferred_engine_turn.speak_effect is not None
+            and self._deferred_engine_turn.speak_effect.effect_id == effect.effect_id
+        ):
+            self._deferred_engine_turn = None
+        return self._build_engine_followup_result()
+
+    def _build_engine_followup_result(self) -> SessionTurnResult | None:
+        if self._engine is None:
+            return None
+        contract = TurnInterpretation(
+            call_id=self.state.call_id,
+            turn_id=self.turn_id,
+            raw_text="",
+            dialogue_act=DialogueAct.UNCLEAR,
+            judgement=AnswerJudgement.NO_ANSWER,
+            state_version=self.state.state_version,
+        )
+        interp = UserInterpretation(
+            judgement=AnswerJudgement.NO_ANSWER,
+            dialogue_act=DialogueAct.UNCLEAR,
+        )
+        result = self._build_engine_turn_result(
+            "",
+            interp,
+            contract,
+            persist_ok=True,
+        )
+        if result.speak_effect is None and result.timer_effect is None:
+            return None
+        return result
+
+    def pop_engine_playout_followup(self) -> SessionTurnResult | None:
+        followup = self._engine_playout_followup
+        self._engine_playout_followup = None
+        return followup
+
+    def cancel_playout_action(self, generation_id: str) -> None:
+        if self._engine is not None:
+            meta = self._playout_meta.pop(generation_id, None)
+            if meta:
+                self._engine.on_playout_cancelled(meta[0], meta[1])
+                self._engine.sync_to_legacy(self.state)
+            return
+        Planner.release_question_attempt(self.state, generation_id)
+
     def start(self) -> SessionTurnResult:
         ensure = self.store.ensure_call(self.state.call_id, self.state.family_id)
         self.turn_id += 1
+        if self._engine is not None:
+            self._engine.start()
+            contract = TurnInterpretation(
+                call_id=self.state.call_id,
+                turn_id=self.turn_id,
+                raw_text="",
+                dialogue_act=DialogueAct.UNCLEAR,
+                judgement=AnswerJudgement.NO_ANSWER,
+                state_version=0,
+            )
+            interp = UserInterpretation(
+                judgement=AnswerJudgement.NO_ANSWER,
+                dialogue_act=DialogueAct.UNCLEAR,
+            )
+            self._append_event("CALL_STARTED", {"family_id": self.state.family_id})
+            result = self._build_engine_turn_result(
+                "",
+                interp,
+                contract,
+                persist_ok=ensure.ok,
+                persist_error=ensure.error,
+            )
+            self._append_event(
+                "ENGINE_DECISION",
+                {
+                    "turn_id": self.turn_id,
+                    "intent": result.proposal.intent,
+                    "revision": self._engine.revision,
+                },
+                idempotency_key=f"{self.state.call_id}:engine:start",
+            )
+            return result
         gen = self._next_generation_id()
         proposal = Planner.plan_vera_turn(self.state, self.turn_id, gen)
         validated = Validator.validate(proposal)
@@ -296,6 +516,48 @@ class CallSession:
         self.turn_id = next_turn
         uid = utterance_id or f"u-{self.turn_id}"
         self.state.last_committed_utterance_id = uid
+        self.state.first_user_turn_received = True
+        if self._engine is not None:
+            answer_slot = self._engine.answer_context_slot()
+            semantic = semantic_from_legacy(
+                interp, text=user_text, answer_slot=answer_slot
+            )
+            self._engine.on_user_turn(uid, user_text, semantic)
+            self._append_event(
+                "ENGINE_DECISION",
+                {
+                    "turn_id": self.turn_id,
+                    "utterance_id": uid,
+                    "intent": semantic.act.value,
+                    "revision": self._engine.revision,
+                    "answer_slot": answer_slot,
+                    "skip_planner": True,
+                },
+                idempotency_key=f"{self.state.call_id}:engine:{uid}",
+            )
+            _log.info(
+                "ENGINE_DECISION call_id=%s turn=%s intent=%s skip_planner=true revision=%s",
+                self.state.call_id,
+                self.turn_id,
+                semantic.act.value,
+                self._engine.revision,
+            )
+            obs_ids, ok, err = self._persist_new_facts(self.turn_id)
+            if risk_obs_id:
+                obs_ids.append(risk_obs_id)
+            if not ok:
+                return self._failed_turn(
+                    user_text, interp, contract, err or "fact persist"
+                )
+            fin_ok, fin_err = self._finalize_call_if_needed()
+            return self._build_engine_turn_result(
+                user_text,
+                interp,
+                contract,
+                observation_ids=obs_ids,
+                persist_ok=fin_ok,
+                persist_error=fin_err,
+            )
         gen = self._next_generation_id()
         proposal = Planner.plan_after_user(
             self.state,
@@ -316,8 +578,15 @@ class CallSession:
                 "state_version": self.state.state_version,
                 "pending_slot": self.state.pending_slot,
                 "user_act": interp.dialogue_act.value,
+                "skip_planner": False,
             },
             idempotency_key=f"{self.state.call_id}:planner:{uid}",
+        )
+        _log.info(
+            "PLANNER_DECISION call_id=%s turn=%s intent=%s skip_planner=false",
+            self.state.call_id,
+            self.turn_id,
+            proposal.intent,
         )
         validated = Validator.validate(proposal)
         commit = self.transitions.commit_transition(self.state, proposal)
@@ -373,7 +642,7 @@ class CallSession:
         )
 
     def handle_wait_expired(self, wait_id: str | None = None) -> SessionTurnResult:
-        """Planner path after CallActor answer-wait timer fires."""
+        """Answer-wait timer — DialogueEngine when active, else legacy planner (tests only)."""
         self.turn_id += 1
         self._append_event(
             "WAIT_EXPIRED",
@@ -384,11 +653,6 @@ class CallSession:
             },
             idempotency_key=f"{self.state.call_id}:wait-expired:{wait_id or self.turn_id}",
         )
-        gen = self._next_generation_id()
-        proposal = Planner.plan_wait_expired(self.state, self.turn_id, gen)
-        validated = Validator.validate(proposal)
-        commit = self.transitions.commit_transition(self.state, proposal)
-        fin_ok, fin_err = self._finalize_call_if_needed()
         contract = TurnInterpretation(
             call_id=self.state.call_id,
             turn_id=self.turn_id,
@@ -397,12 +661,35 @@ class CallSession:
             judgement=AnswerJudgement.NO_ANSWER,
             state_version=self.state.state_version,
         )
+        interp = UserInterpretation(
+            judgement=AnswerJudgement.NO_ANSWER,
+            dialogue_act=DialogueAct.UNCLEAR,
+        )
+        if self._engine is not None:
+            self._engine.on_timer_expired(wait_id or "")
+            _log.info(
+                "ENGINE_DECISION call_id=%s turn=%s event=timer_expired skip_planner=true",
+                self.state.call_id,
+                self.turn_id,
+            )
+            fin_ok, fin_err = self._finalize_call_if_needed()
+            return self._build_engine_turn_result(
+                "",
+                interp,
+                contract,
+                persist_ok=fin_ok,
+                persist_error=fin_err,
+            )
+        if dialogue_engine_active():
+            raise RuntimeError("handle_wait_expired: planner path blocked while DialogueEngine is active")
+        gen = self._next_generation_id()
+        proposal = Planner.plan_wait_expired(self.state, self.turn_id, gen)
+        validated = Validator.validate(proposal)
+        commit = self.transitions.commit_transition(self.state, proposal)
+        fin_ok, fin_err = self._finalize_call_if_needed()
         return SessionTurnResult(
             user_text="",
-            interpretation=UserInterpretation(
-                judgement=AnswerJudgement.NO_ANSWER,
-                dialogue_act=DialogueAct.UNCLEAR,
-            ),
+            interpretation=interp,
             turn_contract=contract,
             proposal=proposal,
             validated=validated,
@@ -412,7 +699,24 @@ class CallSession:
         )
 
     def mark_spoken_action(self, generation_id: str) -> bool:
-        result = self.transitions.mark_action_delivered(self.state, generation_id)
+        if self._engine is not None:
+            if generation_id in self._completed_playout_ids:
+                return True
+            meta = self._playout_meta.pop(generation_id, None)
+            if meta:
+                self._engine.on_playout_completed(meta[0], meta[1])
+                self._completed_playout_ids.add(generation_id)
+            followup = self._build_engine_followup_result()
+            if followup is not None and (
+                followup.speak_effect is not None or followup.timer_effect is not None
+            ):
+                self._engine_playout_followup = followup
+            self._engine.sync_to_legacy(self.state)
+        result = self.transitions.mark_action_delivered(
+            self.state,
+            generation_id,
+            skip_planner=self._engine is not None,
+        )
         return result.ok
 
     def _failed_turn(

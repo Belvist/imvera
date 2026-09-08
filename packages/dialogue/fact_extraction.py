@@ -60,6 +60,8 @@ def _classify_clause(clause: str, pending_slot: str | None) -> str | None:
     if _WELLNESS_POSITIVE.search(lower) or (
         _WELLNESS.search(lower) and not _MOOD.search(lower)
     ):
+        if pending_slot == "mood":
+            return "mood"
         return "wellness"
     if _MOOD.search(lower):
         return "mood"

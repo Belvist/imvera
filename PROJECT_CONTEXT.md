@@ -38,34 +38,27 @@ IMVERA — семейный сервис заботы о пожилых близ
 - Notification delivery implementation beyond one pilot channel (TG bot)
 - Safety verdict final authority — Core `SafetyEngine` projection
 
-## Target Architecture (v0 — design intent)
+## Target Architecture (production path — ADR-013 / ADR-014)
+
+Chosen. **Not accepted** until ADR-014 gates. Do not start a fourth system.
 
 ```text
-PSTN / mobile / SIP trunk
-        │
-        ▼
-Telephony Edge (SIP/RTP only)
-  - answer / hangup / DTMF / codecs / NAT
-  - NO dialogue logic
-  - NO Vera speech generation
-        │
-        ▼ continuous PCM16 mono 16 kHz / 20 ms frames
-VoiceRuntime (one process per node)
-  - 1 CallSession actor per active call until hangup
-  - VAD / endpointing / barge-in / playback queue
-  - generation_id hard boundary for cancel + stale drop
-  - NO business SQL in hot path
-        │
-   ┌────┴────┬────────┐
-   ▼         ▼        ▼
-  STT     Dialogue    TTS
-          Brain
-            │
-            ▼
-           LLM (interpretation + renderer assist — NOT owner of state or verdicts)
-        │
-        └── async CallEvents ──► IMVERA Core API
+SIP operator
+→ FreeSWITCH
+→ mod_imvera_audio
+→ CallActor
+→ VAD
+→ GigaAM
+→ DialogueEngine
+→ local LLM only when needed
+→ Silero TTS
+→ FreeSWITCH
+→ caller
 ```
+
+Transport (SIP/RTP) never generates Vera speech. `canonical_assistant_text == phone_spoken_text`.  
+LLM is interpretation assist, not owner of state or verdicts.  
+Feature freeze until 100 consecutive full calls — see ADR-014.
 
 ## Ownership Model (non-negotiable)
 
@@ -125,12 +118,14 @@ StatusEngine maps axes → 6 public statuses. RED active risk wins over TECHNICA
 
 ## Audio Contract (v1.2 — ADR-008)
 
-Provider selection: **ADR-003 (STT), ADR-006 (TTS)** — not legacy Silero-only path.
+**Production path during ADR-014 freeze:** GigaAM (STT) + Silero TTS. ADR-003 / ADR-006 are historical benchmarks — not a license to swap models until gates pass.
+
+Provider selection records: **ADR-003 (STT), ADR-006 (TTS)**.
 
 ```text
-PSTN 8kHz → Asterisk → transport → PCM S16LE
-  STT branch: resample → 16kHz → ASR (Qwen3-ASR per ADR-003 benchmark)
-  TTS branch: CosyVoice3 / benchmark winner → resample → wire rate → PSTN
+PSTN / SIP trunk → FreeSWITCH → PCM S16LE (directional)
+  STT: GigaAM v3 RNNT (local)
+  TTS: Silero (local) → FreeSWITCH → caller
 ```
 
 **20 ms frame sizes (PCM16):**

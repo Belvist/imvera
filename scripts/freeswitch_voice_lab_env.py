@@ -37,8 +37,27 @@ def build_freeswitch_voice_lab_env() -> dict[str, str]:
     env.setdefault("IMVERA_OPENING_CACHE", "0")
     # Product opening: «Здравствуйте. Это сервис IMVERA, <name>. Как вы себя чувствуете?»
     env.setdefault("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1")
+    # Single-writer DialogueEngine for daily-check pilot (must match session.py gate).
+    env.setdefault("IMVERA_DIALOGUE_ENGINE", "1")
+    env.setdefault("IMVERA_NEGOTIATED_CODEC", "G722")
     env.setdefault("PYTHONPATH", str(ROOT))
     return env
+
+
+def print_dialogue_engine_lab_truth() -> None:
+    """Stdout banner when bringing up Zoiper lab — grep-friendly runtime truth."""
+    from packages.dialogue_engine.runtime import runtime_truth
+
+    truth = runtime_truth()
+    print(
+        f"  dialogue.engine.enabled={truth['dialogue.engine.enabled']} "
+        f"dialogue.engine.mode={truth['dialogue.engine.mode']} "
+        f"dialogue.engine.version={truth['dialogue.engine.version']}"
+    )
+    print(
+        f"  IMVERA_DIALOGUE_ENGINE={truth['IMVERA_DIALOGUE_ENGINE']} "
+        f"IMVERA_VOICE_DIRECT_WELLNESS_OPENING={truth['IMVERA_VOICE_DIRECT_WELLNESS_OPENING']}"
+    )
 
 
 def ensure_silero_opening_cache(env: dict[str, str]) -> bool:

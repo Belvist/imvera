@@ -19,4 +19,14 @@ Record irreversible technical decisions here.
 | [011](011-telephony-adapter-telnyx.md) | Telnyx media stream (managed API) | **rejected** → [012](012-self-hosted-telephony-livekit.md) |
 | [012](012-self-hosted-telephony-livekit.md) | Self-hosted LiveKit + LiveKit SIP; full stack on our servers | accepted |
 
-Master plan: [PLAN.md](../PLAN.md) v1.2
+## Production freeze (2026-09-08)
+
+| ADR | Title | Status |
+|-----|-------|--------|
+| [013](013-production-telephony-freeswitch.md) | Production telephony: FreeSWITCH + PCM WS | accepted |
+| [014](014-architecture-freeze-acceptance-gates.md) | Architecture freeze + 7 acceptance gates; no fourth system | accepted |
+
+ADR-012 is **lab/spike only** for production telephony (see ADR-013).  
+ADR-014 **does not** stamp `ARCHITECTURE = FROZEN` until gates 1–7 are VERIFIED.
+
+Master plan: [PLAN.md](../PLAN.md) v1.2 (historical freeze candidate). Active freeze: ADR-014.

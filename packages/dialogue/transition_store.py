@@ -257,8 +257,15 @@ class DialogueTransitionStore:
     def mark_outbox_cancelled(self, state: DialogueState, action_id: str) -> PersistResult:
         return self._transition_outbox(state, action_id, ActionOutboxStatus.CANCELLED)
 
-    def mark_action_delivered(self, state: DialogueState, action_id: str) -> PersistResult:
-        Planner.mark_question_delivered(state, action_id)
+    def mark_action_delivered(
+        self,
+        state: DialogueState,
+        action_id: str,
+        *,
+        skip_planner: bool = False,
+    ) -> PersistResult:
+        if not skip_planner:
+            Planner.mark_question_delivered(state, action_id)
         dispatch = self.mark_outbox_dispatching(state, action_id)
         if not dispatch.ok:
             return dispatch

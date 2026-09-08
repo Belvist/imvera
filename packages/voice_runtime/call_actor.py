@@ -24,7 +24,10 @@ from packages.contracts.turn import TurnProposal
 from packages.dialogue.context_builder import active_question_kind, build_turn_context
 from packages.dialogue.planner import Planner
 from packages.dialogue.semantic_adapter import adapt_semantic_turn
-from packages.dialogue.interpretation import to_turn_interpretation, interpret_user_turn
+from packages.dialogue.interpretation import to_turn_interpretation
+from packages.dialogue_engine.effects import ENGINE_SPEAK_INTENTS, SpeakEffect, TimerEffect
+from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
+from packages.dialogue_engine.semantic import semantic_from_legacy, semantic_to_interpretation
 from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue.validator import Validator
 from packages.voice_runtime.agent_debug_log import agent_debug_log
@@ -68,8 +71,13 @@ _SKIP_RENDER_INTENTS = frozenset(
         "repeat_identity",
         "confirm_consent",
         "check_can_talk",
+        "ack_wellness",
+        "repair_repeat",
+        "partial_unresolved_close",
     }
-)
+) | frozenset({f"check_{s}" for s in ("wellness", "mood", "sleep", "plans")}) | frozenset(
+    {f"clarify_{s}" for s in ("wellness", "mood", "sleep", "plans")}
+) | frozenset({f"repeat_{s}" for s in ("wellness", "mood", "sleep", "plans")})
 _QUESTION_DELIVERY_INTENTS = frozenset(
     {
         "opening_wellness",
@@ -189,6 +197,9 @@ class CallActor:
     _active_llm_request_id: str | None = None
     _wait_task: asyncio.Task | None = None
     _wait_state: WaitState | None = None
+    _engine_timer_task: asyncio.Task | None = None
+    _engine_timer_id: str | None = None
+    _engine_timer_revision: int | None = None
     _control_epoch: int = 0
     _timing_profile: DialogueTimingProfile = field(
         default_factory=lambda: DialogueTimingProfile(**dialogue_timing_settings())
@@ -1048,11 +1059,55 @@ class CallActor:
         for event in failed_events:
             await self.media.emit(event)
         for result in deliver_results:
-            await self._post_apply_turn(result)
+            await self._enqueue_turn_delivery(result)
+        await self._flush_deferred_engine_turn()
 
     def _bump_control_epoch(self) -> int:
         self._control_epoch += 1
         return self._control_epoch
+
+    async def _cancel_engine_timer(self) -> None:
+        if self._engine_timer_task and not self._engine_timer_task.done():
+            self._engine_timer_task.cancel()
+            try:
+                await self._engine_timer_task
+            except asyncio.CancelledError:
+                pass
+        self._engine_timer_task = None
+        self._engine_timer_id = None
+        self._engine_timer_revision = None
+
+    async def _schedule_engine_timer(self, timer: TimerEffect) -> None:
+        await self._cancel_engine_timer()
+        self._engine_timer_id = timer.timer_id
+        self._engine_timer_revision = timer.revision
+        wait_ms = timer.wait_ms
+        timer_id = timer.timer_id
+        revision = timer.revision
+
+        async def _sleep_then_fire() -> None:
+            try:
+                await asyncio.sleep(wait_ms / 1000.0)
+            except asyncio.CancelledError:
+                return
+            await self._on_engine_timer_expired(timer_id, revision)
+
+        self._engine_timer_task = asyncio.create_task(_sleep_then_fire())
+
+    async def _on_engine_timer_expired(self, timer_id: str, revision: int) -> None:
+        self._engine_timer_task = None
+        if self._stopped or self._transport_closed:
+            return
+        if revision != self._engine_timer_revision:
+            return
+        while self._inflight_utterances and not self._stopped:
+            await asyncio.sleep(0.05)
+        if self._stopped or self._transport_closed:
+            return
+        if not self.session.uses_dialogue_engine():
+            return
+        expired = await asyncio.to_thread(self.session.handle_wait_expired, timer_id)
+        await self._post_apply_turn(expired)
 
     async def _cancel_wait_timer(self) -> None:
         if self._wait_task and not self._wait_task.done():
@@ -1239,14 +1294,93 @@ class CallActor:
         await self.media.emit(
             RuntimeEvent(self.call_id, RuntimeEventType.PERSISTENCE_COMMITTED, {})
         )
+        if result.from_engine:
+            await self._emit_stage(
+                "dialogue.engine_decision",
+                intent=result.proposal.intent,
+                skip_planner=True,
+                turn_id=result.proposal.turn_id,
+            )
+        else:
+            await self._emit_stage(
+                "dialogue.planner_decision",
+                intent=result.proposal.intent,
+                skip_planner=False,
+                turn_id=result.proposal.turn_id,
+            )
         if (
             result.proposal.intent.endswith("_final")
             or result.proposal.intent == "partial_unresolved_close"
             or self.session.state.final_action_done
         ):
             self._hangup_after_playback = True
-        if self._inflight_utterances:
+        await self._enqueue_turn_delivery(result)
+
+    async def _enqueue_turn_delivery(self, result: SessionTurnResult) -> None:
+        if self._stopped or self._transport_closed:
             return
+        if self._inflight_utterances and result.speak_effect is not None:
+            await self._emit_stage(
+                "delivery.deferred",
+                effect_id=result.speak_effect.effect_id,
+                revision=result.speak_effect.revision,
+                intent=result.proposal.intent,
+            )
+            await asyncio.to_thread(self.session.defer_engine_turn, result)
+            return
+        if result.speak_effect is not None:
+            valid = await asyncio.to_thread(
+                self.session.is_engine_speak_valid, result.speak_effect
+            )
+            if not valid:
+                await self._on_stale_speak_effect(
+                    result.speak_effect,
+                    intent=result.proposal.intent,
+                    reason="enqueue",
+                )
+                return
+        await self._deliver_session_turn(result)
+
+    async def _on_stale_speak_effect(
+        self,
+        effect: SpeakEffect,
+        *,
+        intent: str,
+        reason: str,
+    ) -> None:
+        await self._emit_stage(
+            "stale_speak_effect_dropped",
+            effect_id=effect.effect_id,
+            revision=effect.revision,
+            engine_revision=self.session._engine.revision
+            if self.session._engine
+            else None,
+            intent=intent,
+            reason=reason,
+        )
+        replacement = await asyncio.to_thread(
+            self.session.handle_stale_speak_effect, effect
+        )
+        if replacement is not None:
+            await self._post_apply_turn(replacement)
+
+    async def _flush_deferred_engine_turn(self) -> None:
+        if self._inflight_utterances or self._stopped or self._transport_closed:
+            return
+        result = await asyncio.to_thread(self.session.flush_deferred_engine_turn)
+        if result is None:
+            return
+        if result.speak_effect is not None:
+            valid = await asyncio.to_thread(
+                self.session.is_engine_speak_valid, result.speak_effect
+            )
+            if not valid:
+                await self._on_stale_speak_effect(
+                    result.speak_effect,
+                    intent=result.proposal.intent,
+                    reason="deferred_flush",
+                )
+                return
         await self._deliver_session_turn(result)
 
     def _stt_dump_pcm(self, pcm: bytes, utterance_id: str) -> str | None:
@@ -1264,6 +1398,14 @@ class CallActor:
         return str(path)
 
     async def _handle_utterance(self, pcm: bytes, utterance_seq: int) -> None:
+        try:
+            await self._handle_utterance_inner(pcm, utterance_seq)
+        finally:
+            await self._flush_deferred_engine_turn()
+
+    async def _handle_utterance_inner(self, pcm: bytes, utterance_seq: int) -> None:
+        if self.session.uses_dialogue_engine():
+            await self._cancel_engine_timer()
         if self._stopped or self._transport_closed:
             self._inflight_utterances.discard(utterance_seq)
             return
@@ -1333,7 +1475,9 @@ class CallActor:
                 return
 
             text = normalize_transcript((stt_result.text or "").strip())
-            raw_text = (stt_result.raw_text or stt_result.text or "").strip()
+            raw_text = (
+                getattr(stt_result, "raw_text", None) or stt_result.text or ""
+            ).strip()
             await self._emit_stage(
                 "stt.result",
                 utterance_id=utterance_id,
@@ -1341,11 +1485,11 @@ class CallActor:
                 text=text,
                 normalized_changed=raw_text != text,
                 asr_quality=str(stt_result.asr_quality),
-                duration_ms=stt_result.duration_ms or duration_ms,
+                duration_ms=getattr(stt_result, "duration_ms", None) or duration_ms,
                 pcm_rms=pcm_rms,
                 stt_elapsed_ms=stt_elapsed_ms,
-                model_revision=stt_result.model_revision or "",
-                audio_rms=stt_result.audio_quality.rms,
+                model_revision=getattr(stt_result, "model_revision", None) or "",
+                audio_rms=getattr(getattr(stt_result, "audio_quality", None), "rms", pcm_rms),
             )
             await self.media.emit(
                 RuntimeEvent(
@@ -1387,30 +1531,53 @@ class CallActor:
 
             await self._cancel_wait_timer()
 
+            answer_slot = None
+            if self.session.uses_dialogue_engine() and self.session._engine:
+                answer_slot = self.session._engine.answer_context_slot()
+            else:
+                answer_slot = (
+                    self.session.state.delivered_answer_slot
+                    or self.session.state.pending_slot
+                )
+
+            semantic = None
+            fast_confident = False
+            if self.session.uses_dialogue_engine():
+                sem, fast_confident = fast_interpret_semantic(text, answer_slot=answer_slot)
+                if fast_confident:
+                    semantic = sem
+                    interp = semantic_to_interpretation(sem)
+                    await self._emit_stage(
+                        "interpret.fast_path",
+                        utterance_id=utterance_id,
+                        answer_slot=answer_slot or "",
+                    )
             llm_request_id = f"llm-{uuid.uuid4().hex[:8]}"
             self._active_llm_request_id = llm_request_id
-            ctx = build_turn_context(
-                self.session.state,
-                turn_id=turn_id,
-                utterance_id=utterance_id,
-                raw_text=text,
-                asr_quality=stt_result.asr_quality,
-                delivered_phrases=tuple(self._delivered_phrases[-6:]),
-            )
-            semantic = None
+            semantic_payload = None
             try:
-                semantic = await self.llm.interpret_turn(
-                    ctx,
-                    deadline=budget.deadline,
-                    request_id=llm_request_id,
-                )
-            except Exception as exc:
-                log.warning(
-                    "LLM interpret failed call_id=%s utterance=%s: %s — rule fallback",
-                    self.call_id,
-                    utterance_id,
-                    exc,
-                )
+                if not fast_confident:
+                    ctx = build_turn_context(
+                        self.session.state,
+                        turn_id=turn_id,
+                        utterance_id=utterance_id,
+                        raw_text=text,
+                        asr_quality=stt_result.asr_quality,
+                        delivered_phrases=tuple(self._delivered_phrases[-6:]),
+                    )
+                    try:
+                        semantic_payload = await self.llm.interpret_turn(
+                            ctx,
+                            deadline=budget.deadline,
+                            request_id=llm_request_id,
+                        )
+                    except Exception as exc:
+                        log.warning(
+                            "LLM interpret failed call_id=%s utterance=%s: %s — rule fallback",
+                            self.call_id,
+                            utterance_id,
+                            exc,
+                        )
             finally:
                 if self._active_llm_request_id == llm_request_id:
                     self._active_llm_request_id = None
@@ -1424,16 +1591,22 @@ class CallActor:
                 RuntimeEvent(self.call_id, RuntimeEventType.INTERPRETATION_READY, {})
             )
             qkind = active_question_kind(self.session.state)
-            if semantic is not None:
+            if semantic_payload is not None:
                 interp, _validated = adapt_semantic_turn(
                     text,
-                    semantic.payload,
+                    semantic_payload.payload,
                     state=self.session.state,
                     active_question_kind=qkind,
-                    pending_slot=self.session.state.pending_slot,
+                    pending_slot=answer_slot,
                 )
-            else:
+                if self.session.uses_dialogue_engine():
+                    semantic = semantic_from_legacy(interp, text=text, answer_slot=answer_slot)
+            elif not fast_confident:
+                from packages.dialogue.interpretation import interpret_user_turn
+
                 interp = interpret_user_turn(self.session.state, text)
+                if self.session.uses_dialogue_engine():
+                    semantic = semantic_from_legacy(interp, text=text, answer_slot=answer_slot)
             if stt_result.asr_quality in (AsrQuality.LOW, AsrQuality.UNUSABLE):
                 await self._emit_stage(
                     "stt.low_quality",
@@ -1496,7 +1669,10 @@ class CallActor:
         marks_delivered = result.proposal.intent.startswith(
             ("check_", "clarify_", "repeat_")
         ) or result.proposal.intent == "opening_wellness"
-        if marks_delivered:
+        if result.from_engine and result.speak_effect is not None:
+            self._pending_mark_spoken_id = result.speak_effect.generation_id
+            self._pending_mark_render_gen = render_generation
+        elif marks_delivered:
             self._pending_mark_spoken_id = result.proposal.generation_id
             self._pending_mark_render_gen = render_generation
         mandatory_wait_intents = (
@@ -1506,7 +1682,7 @@ class CallActor:
             "confirm_consent",
             "check_can_talk",
         )
-        if (
+        if not self.session.uses_dialogue_engine() and (
             result.proposal.intent.startswith(("check_", "clarify_", "repeat_"))
             or result.proposal.intent in mandatory_wait_intents
         ):
@@ -1532,10 +1708,50 @@ class CallActor:
             await self._speak_phrase(validated.speech, render_generation)
         return True
 
+    async def _deliver_followup_speaks(
+        self,
+        result: SessionTurnResult,
+        render_generation: str,
+    ) -> None:
+        for fx in result.followup_speak_effects:
+            if not isinstance(fx, SpeakEffect):
+                continue
+            if self.session.uses_dialogue_engine():
+                valid = await asyncio.to_thread(self.session.is_engine_speak_valid, fx)
+                if not valid:
+                    await self._on_stale_speak_effect(
+                        fx,
+                        intent=fx.intent,
+                        reason="followup",
+                    )
+                    continue
+            sub = SessionTurnResult(
+                user_text=result.user_text,
+                interpretation=result.interpretation,
+                turn_contract=result.turn_contract,
+                proposal=result.proposal.model_copy(
+                    update={
+                        "generation_id": fx.generation_id,
+                        "speech": fx.text,
+                        "intent": fx.intent,
+                    }
+                ),
+                validated=result.validated.model_copy(update={"speech": fx.text}),
+                safety=result.safety,
+                from_engine=True,
+                speak_effect=fx,
+            )
+            await self._speak_validated_proposal(sub, fx.text, render_generation)
+
     async def _deliver_session_turn(self, result: SessionTurnResult) -> None:
         if result.proposal.intent == "wait_for_continuation":
+            if self.session.uses_dialogue_engine() and result.timer_effect is not None:
+                await self._schedule_engine_timer(result.timer_effect)
+                return
             await self._handle_backchannel_continuation(result)
             return
+        if self.session.uses_dialogue_engine():
+            await self._cancel_engine_timer()
         await self._cancel_wait_timer()
         self._outbox_action_id = result.proposal.generation_id
         if result.proposal.intent == "pause_ack":
@@ -1562,8 +1778,9 @@ class CallActor:
         self._playback_turn_generation = None
         render_deadline = time.monotonic() + self.config.llm_deadline_s
 
-        if result.proposal.intent in _SKIP_RENDER_INTENTS:
+        if result.from_engine or result.proposal.intent in ENGINE_SPEAK_INTENTS:
             await self._speak_validated_proposal(result, planner_text, render_generation)
+            await self._deliver_followup_speaks(result, render_generation)
             return
 
         facts = [
@@ -1791,6 +2008,11 @@ class CallActor:
             )
             return
         action_id = self._pending_mark_spoken_id or render_generation
+        if self.session.uses_dialogue_engine():
+            await asyncio.to_thread(
+                self.session.cancel_playout_action, action_id
+            )
+            return
         await asyncio.to_thread(
             Planner.release_question_attempt,
             self.session.state,
@@ -2053,8 +2275,13 @@ class CallActor:
                 await asyncio.to_thread(
                     self.session.mark_spoken_action, self._pending_mark_spoken_id
                 )
+                followup = await asyncio.to_thread(
+                    self.session.pop_engine_playout_followup
+                )
                 self._pending_mark_spoken_id = None
                 self._pending_mark_render_gen = None
+                if followup is not None:
+                    await self._post_apply_turn(followup)
             finish = self.media.finish or self.media.flush
             await finish()
             sent = ledger.sent_samples
@@ -2088,7 +2315,7 @@ class CallActor:
             hangup = self._hangup_after_playback
 
         await self._enable_listen_after_playback()
-        if pending_wait is not None:
+        if pending_wait is not None and not self.session.uses_dialogue_engine():
             self._start_answer_wait(
                 goal_id=pending_wait[0],
                 question_id=pending_wait[1],

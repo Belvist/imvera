@@ -73,7 +73,10 @@ class DialogueReducer:
                     negated=cand.negated,
                 )
             filled_slot = None
-            if state.pending_slot and state.pending_slot in state.facts:
+            answer_slot = state.delivered_answer_slot or state.pending_slot
+            if answer_slot and answer_slot in state.facts:
+                filled_slot = answer_slot
+            elif state.pending_slot and state.pending_slot in state.facts:
                 filled_slot = state.pending_slot
             else:
                 for cand in interp.fact_candidates:
