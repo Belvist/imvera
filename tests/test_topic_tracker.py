@@ -89,6 +89,35 @@ def test_abdominal_onset_from_turn_context() -> None:
     assert dimensions_satisfied(state, TopicFamily.ABDOMINAL_PAIN, "onset")
 
 
+def test_limb_pain_not_duplicated_as_general_symptom() -> None:
+    families = detect_families_in_clause("Нога болит.")
+    assert TopicFamily.LIMB_PAIN in families
+    assert TopicFamily.GENERAL_SYMPTOM not in families
+
+
+def test_off_topic_answer_does_not_fill_asked_dimension() -> None:
+    state = EngineState(call_id="t1", elder_display_name="")
+    prime_topics(state, "Плохо спал.")
+    state.topic_asked_dimension = "pattern"
+    ingest_user_turn_topics(state, "А вы кто вообще?")
+    assert "pattern" not in state.topic_dimensions.get(TopicFamily.SLEEP, [])
+
+
+def test_headache_at_sleep_slot_starts_topic_not_clarify() -> None:
+    """Background sleep slot + headache complaint → topic flow, not sleep clarify loop."""
+    result = _runner().run(
+        [
+            CallStarted(),
+            "Хорошо себя чувствую.",
+            "Хорошее настроение.",
+            "Голова сильно болит.",
+        ]
+    )
+    intents = [e.intent for e in result.speak_effects]
+    assert any(i.startswith("topic_headache_") for i in intents)
+    assert "clarify_sleep" not in intents
+
+
 def test_poor_sleep_at_wellness_starts_topic_not_probe() -> None:
     """Regression fs-592f4ea0: «плохо спал» at wellness → sleep topic, not concern probe."""
     result = _runner().run(

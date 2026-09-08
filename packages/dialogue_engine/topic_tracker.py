@@ -178,7 +178,12 @@ def detect_families_in_clause(clause: str) -> list[str]:
     if any(m in n for m in _MEDICATION_MARKERS):
         found.append(TopicFamily.MEDICATION)
     if re.search(r"\b(болит|боль|болел\w*|плохо\s+себя)\b", n):
-        if TopicFamily.ABDOMINAL_PAIN not in found and TopicFamily.HEADACHE not in found:
+        specific = {
+            TopicFamily.ABDOMINAL_PAIN,
+            TopicFamily.HEADACHE,
+            TopicFamily.LIMB_PAIN,
+        }
+        if not specific.intersection(found):
             found.append(TopicFamily.GENERAL_SYMPTOM)
     return found
 
@@ -425,9 +430,6 @@ def ingest_user_turn_topics(
         fam = state.active_topic
         dims = infer_dimensions(fam, turn_text, turn_context=turn_text)
         _mark_dimensions(state, fam, dims)
-        asked = state.topic_asked_dimension
-        if asked and asked not in state.topic_dimensions.get(fam, []):
-            _mark_dimensions(state, fam, [asked])
 
     _apply_focus_policy(state, _sort_by_priority(detected))
 
@@ -521,12 +523,26 @@ def _complete_topic(state: EngineState, family: str) -> None:
     state.topic_asked_dimension = None
 
 
+_BACKGROUND_CHECK_SLOTS = frozenset({"sleep"})
+
+_CONCRETE_SYMPTOM_FAMILIES = frozenset(
+    {
+        TopicFamily.ABDOMINAL_PAIN,
+        TopicFamily.HEADACHE,
+        TopicFamily.LIMB_PAIN,
+        TopicFamily.GENERAL_SYMPTOM,
+    }
+)
+
+
 def should_start_topic_flow(state: EngineState, text: str, *, answer_slot: str | None) -> bool:
     if is_topic_slot(answer_slot):
         return True
     families = detect_families(text)
     if not families:
         return False
+    if answer_slot in _BACKGROUND_CHECK_SLOTS:
+        return bool(_CONCRETE_SYMPTOM_FAMILIES.intersection(families))
     if answer_slot == "wellness":
         return TopicFamily.SLEEP in families or TopicFamily.ABDOMINAL_PAIN in families
     if answer_slot and answer_slot.startswith("probe_"):

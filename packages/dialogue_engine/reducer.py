@@ -4,9 +4,21 @@ from __future__ import annotations
 
 import uuid
 
-from packages.contracts.enums import FsmState, SlotStatus
+from packages.contracts.enums import FsmState
 from packages.dialogue_engine import questions
-from packages.dialogue_engine.effects import Effect, EndCallEffect, InterpretEffect, SpeakEffect, TimerEffect
+from packages.dialogue_engine.check_path import (
+    ProbeAction,
+    advance_probe_phase,
+    apply_wellness_branch,
+    classify_wellness_path,
+)
+from packages.dialogue_engine.effects import (
+    Effect,
+    EndCallEffect,
+    InterpretEffect,
+    SpeakEffect,
+    TimerEffect,
+)
 from packages.dialogue_engine.events import (
     CallStarted,
     DeliveryDeferred,
@@ -28,19 +40,17 @@ from packages.dialogue_engine.policy import (
     release_reservation,
     reserve_question,
 )
-from packages.dialogue_engine.check_path import (
-    ProbeAction,
-    advance_probe_phase,
-    apply_wellness_branch,
-    classify_wellness_path,
-    is_urgent_concern,
-)
-from packages.dialogue_engine.state import CheckPath
 from packages.dialogue_engine.response_plan import build_response_plan, compose_speech
 from packages.dialogue_engine.semantic import SemanticAct
+from packages.dialogue_engine.state import (
+    CheckPath,
+    EngineState,
+    OpeningState,
+    Question,
+    QuestionPhase,
+)
 from packages.dialogue_engine.topic_tracker import (
     TopicPrompt,
-    family_from_slot,
     is_topic_slot,
     next_topic_prompt,
     observe_topic_answer,
@@ -48,12 +58,6 @@ from packages.dialogue_engine.topic_tracker import (
     should_start_topic_flow,
     topic_ack_for_family,
     topic_slot,
-)
-from packages.dialogue_engine.state import (
-    EngineState,
-    OpeningState,
-    Question,
-    QuestionPhase,
 )
 
 _STALE = "STALE_EFFECT_IGNORED"
@@ -91,7 +95,12 @@ def _tag_effects(effects: list[Effect], state: EngineState) -> list[Effect]:
     for eff in effects:
         if hasattr(eff, "model_copy"):
             tagged.append(
-                eff.model_copy(update={"revision": state.revision, "effect_id": eff.effect_id or _new_effect_id()})
+                eff.model_copy(
+                    update={
+                        "revision": state.revision,
+                        "effect_id": eff.effect_id or _new_effect_id(),
+                    }
+                )
             )
         else:
             tagged.append(eff)

@@ -7,8 +7,8 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 from packages.contracts.enums import FsmState, SlotStatus
-from packages.dialogue_engine.effects import SpeakEffect
 from packages.dialogue_engine.context import SlotValue
+from packages.dialogue_engine.effects import SpeakEffect
 
 
 class CheckPath(StrEnum):
@@ -89,7 +89,7 @@ class EngineState(BaseModel):
         }
     )
     slot_values: dict[str, str] = Field(default_factory=dict)
-    slot_records: dict[str, "SlotValue"] = Field(default_factory=dict)
+    slot_records: dict[str, SlotValue] = Field(default_factory=dict)
     goals: dict[str, GoalState] = Field(default_factory=dict)
 
     planned_question: Question | None = None

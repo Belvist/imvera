@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import pytest
 
+from packages.contracts.enums import SlotStatus
 from packages.dialogue_engine.events import CallStarted
 from packages.dialogue_engine.scenario_runner import ScenarioRunner
 from packages.dialogue_engine.state import TopicResolution
-from packages.dialogue_engine.topic_tracker import TopicFamily
+from packages.dialogue_engine.topic_tracker import TopicFamily, dimensions_satisfied
 
 pytestmark = pytest.mark.dialogue_engine
 
@@ -33,12 +34,16 @@ def test_fs_592f4ea0_sleep_then_mixed_turn_then_improving_abdominal() -> None:
 
     result = runner.run(["Усталость есть."])
     state = result.state
-    assert state.slots.get("sleep") is not None or state.active_topic != TopicFamily.SLEEP
+    assert state.slots["sleep"] == SlotStatus.FILLED
+    assert state.active_topic == TopicFamily.ABDOMINAL_PAIN
+    assert TopicFamily.ABDOMINAL_PAIN not in state.pending_topics
 
     result = runner.run(["Сейчас живот почти не болит."])
     state = result.state
     intents = [e.intent for e in result.speak_effects]
     assert state.topic_resolution.get(TopicFamily.ABDOMINAL_PAIN) == TopicResolution.IMPROVING
+    assert dimensions_satisfied(state, TopicFamily.ABDOMINAL_PAIN, "current")
+    assert dimensions_satisfied(state, TopicFamily.ABDOMINAL_PAIN, "onset")
     assert "topic_abdominal_pain_onset" not in intents
 
     result = runner.run(["Хорошее настроение.", "Планов нет."])
