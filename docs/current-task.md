@@ -1,30 +1,44 @@
-# Current task — Self-hosted LiveKit telephony (ADR-012)
+# Current task — LiveKit PRE-LIVE ACCEPT (gate split)
 
-**Outcome:** Production telephony = **LiveKit SIP + LiveKit Server** (self-hosted, `livekit.rtc` only — NOT Agents framework).
+**Outcome:** Freeze transport architecture. Prove caller audio reaches IMVERA PCM **before** AI stack.
 
-## Done (hardening PR)
+## Architecture freeze
 
-- [x] `livekit.yaml` — `udp_port: 7882` WebRTC mux (removed 10000–20000 from server config)
-- [x] Firewall docs: 7882 = IMVERA participant; 10000–20000 = SIP RTP
-- [x] `make livekit-up` prints public IP + port summary
-- [x] `make livekit-health` — 9 separate component statuses
-- [x] Opaque `call_id` (`lk-<uuid>`), redacted `room_ref` / `participant_ref` in traces
-- [x] Session FSM + `TRACK_TIMEOUT` + `MEDIA_READY` before `CallActor.on_media_ready()`
-- [x] `CALL_NOT_READY` if STT/TTS/LLM down before session start
-- [x] Webhook idempotency: duplicate join, double close guard
+No new telephony architecture changes until Linux media-gate PASS.
+
+## Gates
+
+| Gate | Command | Requires |
+|------|---------|----------|
+| Transport | `make livekit-media-gate` | redis, livekit, SIP, gateway with `IMVERA_LIVEKIT_MEDIA_GATE=1` |
+| AI | `make livekit-sip-gate` | media-gate stamp + Silero/GigaAM/LLM/TTS |
+
+## Linux sequence
+
+```bash
+export LIVEKIT_NODE_IP=<PUBLIC_IP>
+make livekit-up
+make livekit-health          # --mode media (default)
+make livekit-setup-sip
+
+# voice gateway with IMVERA_LIVEKIT_MEDIA_GATE=1
+IMVERA_LIVEKIT_GATE_REQUIRE_STACK=1 make livekit-media-gate
+# STOP if FAIL
+
+# start inference stack, gateway without media_gate-only if needed
+IMVERA_LIVEKIT_GATE_REQUIRE_STACK=1 make livekit-sip-gate
+```
+
+## Privacy (production blocker)
+
+`dispatchRuleIndividual` embeds caller digits in LiveKit `room_name` (LiveKit internal logs — no PII redaction). OK for synthetic gate; **must** move to opaque room routing before PSTN.
 
 ## NOT VERIFIED
 
-- Full synthetic SIP → GigaAM «хорошо» → UserTurn (needs Linux + livekit-up + voice stack)
-- Barge-in full-duplex live test
+- Live media-gate on Linux host (needs `IMVERA_LIVEKIT_GATE_REQUIRE_STACK=1`)
+- 10/100 deterministic call soak
 - Real SIP trunk operator
 
 ## NEXT GATE
 
-```bash
-make livekit-up && make livekit-setup-sip
-# voice gateway + STT/TTS/LLM up
-IMVERA_LIVEKIT_GATE_REQUIRE_STACK=1 make livekit-sip-gate
-```
-
-Acceptance: synthetic SIP «хорошо» → nonzero inbound PCM → GigaAM → Vera outbound track → zero Vera in raw_inbound.wav
+`IMVERA_LIVEKIT_MEDIA_GATE=1` + `make livekit-media-gate` on Linux → nonzero PCM in `raw_inbound.wav`

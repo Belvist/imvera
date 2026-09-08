@@ -18,6 +18,8 @@ class LiveKitMediaCounters:
     transport_rx_frames: int = 0
     transport_rx_bytes: int = 0
     actor_pcm_bytes: int = 0
+    actor_pcm_frames: int = 0
+    nonzero_pcm_frames: int = 0
 
     def note_inbound_frame(self, nbytes: int) -> None:
         self.livekit_audio_frames_rx += 1
@@ -42,6 +44,8 @@ class LiveKitMediaCounters:
             "transport_rx_frames": self.transport_rx_frames,
             "transport_rx_bytes": self.transport_rx_bytes,
             "actor_pcm_bytes": self.actor_pcm_bytes,
+            "actor_pcm_frames": self.actor_pcm_frames,
+            "nonzero_pcm_frames": self.nonzero_pcm_frames,
         }
 
 

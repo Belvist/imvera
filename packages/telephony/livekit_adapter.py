@@ -73,6 +73,8 @@ def build_livekit_session(
     note_transport=None,
     artifact_dir=None,
     call_id: str | None = None,
+    media_gate_mode: bool = False,
+    publish_outbound: bool = True,
 ) -> LiveKitCallSession:
     from packages.telephony.livekit_session import new_livekit_call_id
 
@@ -92,4 +94,6 @@ def build_livekit_session(
         emit_stage=emit_stage,
         note_transport=note_transport,
         artifact_dir=artifact_dir,
+        media_gate_mode=media_gate_mode,
+        publish_outbound=publish_outbound,
     )

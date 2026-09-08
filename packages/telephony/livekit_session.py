@@ -14,6 +14,7 @@ from typing import Any
 
 from packages.telephony.adapter import InboundMediaFrame, StreamTrack
 from packages.telephony.livekit_counters import LiveKitInboundFrameStats, LiveKitMediaCounters
+from packages.telephony.livekit_gate_evidence import MediaGateEvidence, write_evidence
 from packages.telephony.livekit_outbound import LiveKitOutboundPump
 from packages.telephony.livekit_privacy import new_imvera_call_id, redact_room_name, redact_sip_identity
 from packages.telephony.livekit_readiness import LiveKitReadinessTracker, LiveKitSessionPhase
@@ -62,6 +63,8 @@ class LiveKitCallSession:
     note_transport: NoteTransportFn | None = None
     on_media_ready: MediaReadyFn | None = None
     artifact_dir: Path | None = None
+    media_gate_mode: bool = False
+    publish_outbound: bool = True
     counters: LiveKitMediaCounters = field(default_factory=LiveKitMediaCounters)
     inbound_stats: LiveKitInboundFrameStats = field(default_factory=LiveKitInboundFrameStats)
     readiness: LiveKitReadinessTracker = field(
@@ -79,6 +82,8 @@ class LiveKitCallSession:
     _vera_outbound: bytearray = field(default_factory=bytearray)
     _sip_track_sid: str = ""
     _media_ready_fired: bool = False
+    _first_livekit_frame_at: float | None = None
+    _first_imvera_pcm_at: float | None = None
 
     @property
     def phase(self) -> LiveKitSessionPhase:
@@ -120,20 +125,21 @@ class LiveKitCallSession:
             room_sid=self.keys.room_sid,
             call_id=self.call_id,
         )
-        self._audio_source = rtc.AudioSource(TARGET_SAMPLE_RATE, 1, queue_size_ms=200)
-        self._local_track = rtc.LocalAudioTrack.create_audio_track(VERA_TRACK_NAME, self._audio_source)
-        self._outbound_pump.bind_source(
-            self._audio_source,
-            emit_stage=self.emit_stage,
-            on_frame_sent=lambda n: self._on_outbound_bytes(n),
-        )
-        self._outbound_pump.start()
-        await self._room.local_participant.publish_track(self._local_track)
-        await self.emit_stage(
-            "livekit.outbound.track_published",
-            track_name=VERA_TRACK_NAME,
-            room_ref=redact_room_name(self.keys.room_name),
-        )
+        if self.publish_outbound:
+            self._audio_source = rtc.AudioSource(TARGET_SAMPLE_RATE, 1, queue_size_ms=200)
+            self._local_track = rtc.LocalAudioTrack.create_audio_track(VERA_TRACK_NAME, self._audio_source)
+            self._outbound_pump.bind_source(
+                self._audio_source,
+                emit_stage=self.emit_stage,
+                on_frame_sent=lambda n: self._on_outbound_bytes(n),
+            )
+            self._outbound_pump.start()
+            await self._room.local_participant.publish_track(self._local_track)
+            await self.emit_stage(
+                "livekit.outbound.track_published",
+                track_name=VERA_TRACK_NAME,
+                room_ref=redact_room_name(self.keys.room_name),
+            )
         await self._subscribe_existing_sip_tracks()
 
     async def _on_track_timeout(self) -> None:
@@ -253,6 +259,8 @@ class LiveKitCallSession:
                 pcm = bytes(frame.data)
                 if not pcm:
                     continue
+                if self._first_livekit_frame_at is None:
+                    self._first_livekit_frame_at = time.time()
                 if not self.readiness.is_media_ready():
                     await self._signal_media_ready()
                 received_at = time.monotonic()
@@ -266,6 +274,11 @@ class LiveKitCallSession:
                 seq = self.inbound_stats.record(len(pcm), rms, peak)
                 self.counters.note_inbound_frame(len(pcm))
                 self.counters.actor_pcm_bytes += len(pcm)
+                self.counters.actor_pcm_frames += 1
+                if peak > 50 or rms > 50.0:
+                    self.counters.nonzero_pcm_frames += 1
+                    if self._first_imvera_pcm_at is None:
+                        self._first_imvera_pcm_at = time.time()
                 self._raw_inbound.extend(pcm)
                 if self.note_transport:
                     self.note_transport(len(pcm), rms)
@@ -341,6 +354,8 @@ class LiveKitCallSession:
                 call_id=self.call_id,
             )
         self._write_artifacts()
+        if self.media_gate_mode:
+            self._write_media_gate_evidence()
         self._started = False
 
     def _on_participant_disconnected(self, participant: Any) -> None:
@@ -364,6 +379,49 @@ class LiveKitCallSession:
             self._write_wav(self.artifact_dir / "raw_inbound.wav", bytes(self._raw_inbound))
         if self._vera_outbound:
             self._write_wav(self.artifact_dir / "vera_outbound.wav", bytes(self._vera_outbound))
+
+    def _write_media_gate_evidence(self) -> None:
+        if self.artifact_dir is None:
+            return
+        invite_meta = self._load_synthetic_invite_meta()
+        peak = max((p for _, _, p in self.inbound_stats.frames), default=0)
+        rms_peak = max((r for _, r, _ in self.inbound_stats.frames), default=0.0)
+        evidence = MediaGateEvidence(
+            call_id=self.call_id,
+            room_ref=redact_room_name(self.keys.room_name),
+            room_sid=self.keys.room_sid,
+            sip_participant_sid=self.keys.sip_participant_sid,
+            remote_track_sid=self._sip_track_sid,
+            invite_sent_at=invite_meta.get("invite_sent_at"),
+            sip_answered_at=invite_meta.get("sip_answered_at"),
+            first_livekit_frame_at=self._first_livekit_frame_at,
+            first_imvera_pcm_at=self._first_imvera_pcm_at,
+            sip_rtp_rx_packets=int(invite_meta.get("sip_rtp_tx_packets", 0)),
+            sip_rtp_rx_bytes=int(invite_meta.get("sip_rtp_tx_bytes", 0)),
+            livekit_track_frames=self.counters.livekit_audio_frames_rx,
+            livekit_track_bytes=self.counters.livekit_audio_bytes_rx,
+            actor_pcm_frames=self.counters.actor_pcm_frames,
+            actor_pcm_bytes=self.counters.actor_pcm_bytes,
+            nonzero_pcm_frames=self.counters.nonzero_pcm_frames,
+            inbound_rms_peak=rms_peak,
+            inbound_peak_sample=peak,
+            vera_bytes_in_inbound=self.counters.livekit_audio_bytes_tx,
+            raw_inbound_wav=str(self.artifact_dir / "raw_inbound.wav"),
+            negotiated_codecs=list(invite_meta.get("negotiated_codecs", [])),
+        )
+        write_evidence(self.artifact_dir / "media_gate_evidence.json", evidence)
+
+    @staticmethod
+    def _load_synthetic_invite_meta() -> dict:
+        meta_path = Path(".run/livekit-gate/synthetic_invite.json")
+        if not meta_path.exists():
+            return {}
+        import json
+
+        try:
+            return json.loads(meta_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
 
     @staticmethod
     def _write_wav(path: Path, pcm: bytes) -> None:

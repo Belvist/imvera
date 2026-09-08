@@ -41,7 +41,7 @@ def _livekit_env() -> tuple[str, str, str]:
 class LiveKitSupervisorSession:
     call_id: str
     room_name: str
-    actor: CallActor
+    actor: CallActor | None
     lk_session: Any
     _started: bool = False
 
@@ -94,6 +94,13 @@ class LiveKitSupervisor:
                 "status": "already_active",
                 "call_id": self._room_index[event.room_name],
             }
+        if os.environ.get("IMVERA_LIVEKIT_MEDIA_GATE") == "1":
+            return await self._start_media_gate_session(
+                room_name=event.room_name,
+                room_sid=event.room_sid,
+                sip_identity=identity,
+                sip_sid=event.participant_sid,
+            )
         return await self._start_session(
             room_name=event.room_name,
             room_sid=event.room_sid,
@@ -111,6 +118,13 @@ class LiveKitSupervisor:
             }
         if not event.participant_identity:
             return {"status": "ignored"}
+        if os.environ.get("IMVERA_LIVEKIT_MEDIA_GATE") == "1":
+            return await self._start_media_gate_session(
+                room_name=event.room_name,
+                room_sid=event.room_sid,
+                sip_identity=event.participant_identity,
+                sip_sid=event.participant_sid,
+            )
         return await self._start_session(
             room_name=event.room_name,
             room_sid=event.room_sid,
@@ -256,6 +270,84 @@ class LiveKitSupervisor:
             )
             return {"status": "started", "call_id": call_id}
 
+    async def _start_media_gate_session(
+        self,
+        *,
+        room_name: str,
+        room_sid: str,
+        sip_identity: str,
+        sip_sid: str,
+    ) -> dict[str, str]:
+        """Transport-only session — no STT/TTS/LLM/CallActor dialogue."""
+        lock = self._start_locks.setdefault(room_name, asyncio.Lock())
+        async with lock:
+            if room_name in self._room_index:
+                return {
+                    "status": "already_active",
+                    "call_id": self._room_index[room_name],
+                }
+
+            livekit_url, api_key, api_secret = _livekit_env()
+            call_id = new_imvera_call_id()
+
+            async def emit_stage(stage: str, **payload: Any) -> None:
+                record_event(
+                    call_id,
+                    RuntimeEvent(
+                        call_id,
+                        RuntimeEventType.STAGE_TIMING,
+                        {"stage": stage, **payload},
+                    ),
+                )
+
+            async def push_pcm(pcm: bytes, sample_rate: int) -> None:
+                del pcm, sample_rate
+
+            artifact_dir = GATE_ARTIFACT_ROOT / call_id
+
+            lk_session = build_livekit_session(
+                room_name=room_name,
+                room_sid=room_sid,
+                sip_identity=sip_identity,
+                sip_sid=sip_sid,
+                livekit_url=livekit_url,
+                api_key=api_key,
+                api_secret=api_secret,
+                push_pcm=push_pcm,
+                emit_stage=emit_stage,
+                artifact_dir=artifact_dir,
+                call_id=call_id,
+                media_gate_mode=True,
+                publish_outbound=False,
+            )
+
+            await emit_stage(
+                "livekit.sip_participant.detected",
+                room_ref=redact_room_name(room_name),
+                room_sid=room_sid,
+                participant_ref=redact_sip_identity(sip_identity),
+                participant_sid=sip_sid,
+                media_gate=True,
+            )
+
+            self._room_index[room_name] = call_id
+            await lk_session.start()
+
+            wrapped = LiveKitSupervisorSession(
+                call_id=call_id,
+                room_name=room_name,
+                actor=None,
+                lk_session=lk_session,
+                _started=True,
+            )
+            self._sessions[call_id] = wrapped
+            log.info(
+                "LiveKit media-gate session started call_id=%s room_ref=%s",
+                call_id,
+                redact_room_name(room_name),
+            )
+            return {"status": "started", "call_id": call_id, "mode": "media_gate"}
+
     async def _close_room(self, room_name: str, *, reason: str) -> None:
         cid = self._room_index.get(room_name)
         if cid is None:
@@ -272,7 +364,8 @@ class LiveKitSupervisor:
             return
         self._room_index.pop(wrapped.room_name, None)
         await wrapped.lk_session.shutdown()
-        await wrapped.actor.stop()
+        if wrapped.actor is not None:
+            await wrapped.actor.stop()
         self._closing.discard(call_id)
         log.info("LiveKit session closed call_id=%s reason=%s", call_id, reason)
 

@@ -96,10 +96,19 @@ livekit-down:
 	@$(PYTHON) scripts/livekit_down.py
 
 livekit-health:
-	@$(PYTHON) scripts/livekit_health.py
+	@$(PYTHON) scripts/livekit_health.py --mode media
+
+livekit-health-ai:
+	@$(PYTHON) scripts/livekit_health.py --mode ai
+
+livekit-health-all:
+	@$(PYTHON) scripts/livekit_health.py --mode all
 
 livekit-setup-sip:
 	@$(PYTHON) scripts/livekit_setup_sip.py
+
+livekit-media-gate:
+	@$(PYTHON) scripts/livekit_media_gate.py
 
 livekit-sip-gate:
 	@$(PYTHON) scripts/livekit_sip_gate.py

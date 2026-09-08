@@ -74,6 +74,7 @@ asyncio_mode = "auto"
 pythonpath = ["."]
 markers = [
     "livekit_live: requires self-hosted LiveKit + SIP stack (Linux host networking)",
+    "livekit_media_live: requires livekit-media-gate PASS on Linux host",
 ]
 
 [tool.ruff]
