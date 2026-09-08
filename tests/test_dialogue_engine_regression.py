@@ -206,7 +206,7 @@ def test_negative_wellness_gets_empathetic_ack() -> None:
         e.text for e in result.speak_effects if e.intent == "check_mood"
     ]
     assert mood_speaks, "expected mood question after wellness fill"
-    assert mood_speaks[0].startswith("Жаль это слышать.")
+    assert mood_speaks[0].startswith("Мне жаль это слышать.")
     assert "Хорошо." not in mood_speaks[0]
 
 

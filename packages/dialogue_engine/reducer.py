@@ -11,6 +11,7 @@ from packages.dialogue_engine.events import (
     CallStarted,
     DeliveryDeferred,
     DialogueEvent,
+    EffectFailed,
     InterpretationCompleted,
     PlayoutCancelled,
     PlayoutCompleted,
@@ -27,6 +28,7 @@ from packages.dialogue_engine.policy import (
     release_reservation,
     reserve_question,
 )
+from packages.dialogue_engine.response_plan import build_response_plan, compose_speech
 from packages.dialogue_engine.semantic import SemanticAct
 from packages.dialogue_engine.state import (
     EngineState,
@@ -60,6 +62,8 @@ def reduce(
         return _on_delivery_deferred(state, event)
     if isinstance(event, SpeakEffectStale):
         return _on_speak_effect_stale(state, event)
+    if isinstance(event, EffectFailed):
+        return _on_effect_failed(state, event)
     return state, []
 
 
@@ -316,11 +320,14 @@ def _apply_semantic(
             return _speak_slot_question(state, answer_slot, clarification=True)
         return state, []
 
-    filled = fill_from_semantic(state, semantic)
+    filled = fill_from_semantic(
+        state, semantic, turn_id=state.processing_turn_id or ""
+    )
     if filled:
         state.processing_turn_id = None
         state.processing_effect_id = None
-        return _advance_after_fill(state, filled)
+        state.waiting_on_slot = None
+        return _advance_after_fills(state, filled)
 
     state.processing_turn_id = None
     state.processing_effect_id = None
@@ -328,9 +335,9 @@ def _apply_semantic(
     return state, []
 
 
-def _advance_after_fill(
+def _advance_after_fills(
     state: EngineState,
-    filled_slot: str,
+    filled_slots: list[str],
 ) -> tuple[EngineState, list[Effect]]:
     state.delivered_question = None
     next_slot = state.next_open_slot()
@@ -347,11 +354,8 @@ def _advance_after_fill(
         )
     if not can_ask_slot(state, next_slot):
         return _close_partial(state)
-    text = questions.slot_question(next_slot)
-    if filled_slot == "wellness":
-        val = state.slot_values.get("wellness", "")
-        ack = questions.wellness_ack(value=val)
-        text = f"{ack} {text}"
+    plan = build_response_plan(state, newly_filled=filled_slots, next_slot=next_slot)
+    text = compose_speech(plan)
     intent = f"check_{next_slot}"
     return _emit_speak(
         state,
@@ -360,6 +364,13 @@ def _advance_after_fill(
         slot=next_slot,
         marks_question=True,
     )
+
+
+def _advance_after_fill(
+    state: EngineState,
+    filled_slot: str,
+) -> tuple[EngineState, list[Effect]]:
+    return _advance_after_fills(state, [filled_slot])
 
 
 def _speak_slot_question(
@@ -444,6 +455,14 @@ def _on_delivery_deferred(
     return state, []
 
 
+def _on_effect_failed(
+    state: EngineState,
+    event: EffectFailed,
+) -> tuple[EngineState, list[Effect]]:
+    state.bump_revision()
+    return state, []
+
+
 def _on_speak_effect_stale(
     state: EngineState,
     event: SpeakEffectStale,
@@ -510,8 +529,16 @@ def _handle_closing_turn(
     state: EngineState,
     semantic,
 ) -> tuple[EngineState, list[Effect]] | None:
+    if semantic.act == SemanticAct.REPAIR_REQUEST:
+        return None
+    if semantic.act == SemanticAct.BACKCHANNEL and not state.awaiting_goodbye_confirm:
+        return None
+    if semantic.act == SemanticAct.UNCLEAR and not state.awaiting_goodbye_confirm:
+        return None
     text = semantic.source_quote.lower().strip()
-    if semantic.act == SemanticAct.GOODBYE_CONFIRM or _confirms_goodbye(text):
+    if semantic.act == SemanticAct.GOODBYE_CONFIRM or (
+        state.awaiting_goodbye_confirm and _confirms_goodbye(text)
+    ):
         state.goodbye_confirmed = True
         state.awaiting_goodbye_confirm = False
         state.fsm_state = FsmState.FINAL_CLASSIFICATION

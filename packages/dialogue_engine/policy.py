@@ -3,28 +3,84 @@
 from __future__ import annotations
 
 from packages.contracts.enums import SlotStatus
+from packages.dialogue_engine.context import SlotCandidate, SlotValue
 from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
 from packages.dialogue_engine.state import EngineState, MAX_SLOT_ATTEMPTS
 
 _MAX_UNCLEAR = 2
 
 
-def apply_slot_answer(state: EngineState, slot: str, value: str) -> None:
+def apply_slot_answer(
+    state: EngineState,
+    slot: str,
+    value: str,
+    *,
+    turn_id: str = "",
+    polarity: str | None = None,
+    confidence: float = 0.9,
+    correction: bool = False,
+) -> None:
+    prev = state.slot_records.get(slot)
+    if prev and correction:
+        state.slot_corrections.append(
+            {
+                "slot": slot,
+                "old": prev.value,
+                "new": value,
+                "source_turn": turn_id,
+            }
+        )
     state.slots[slot] = SlotStatus.FILLED
     state.slot_values[slot] = value
+    state.slot_records[slot] = SlotValue(
+        value=value,
+        confidence=confidence,
+        source_turn_id=turn_id,
+        source_text=value,
+        polarity=polarity,
+        confirmed=False,
+    )
     goal = state.ensure_goal(slot)
     goal.status = SlotStatus.FILLED
     state.slot_unclear_counts.pop(slot, None)
 
 
-def fill_from_semantic(state: EngineState, semantic: SemanticTurn) -> str | None:
+def fill_from_semantic(
+    state: EngineState, semantic: SemanticTurn, *, turn_id: str = ""
+) -> list[str]:
+    """Apply all slot candidates; return list of newly filled slots."""
     if semantic.act != SemanticAct.ANSWER:
-        return None
+        return []
+    turn_id = turn_id or semantic.answers_to or ""
+    filled: list[str] = []
+    if semantic.slots:
+        for slot, cand in semantic.slots.items():
+            if state.slots.get(slot) != SlotStatus.OPEN:
+                continue
+            apply_slot_answer(
+                state,
+                slot,
+                cand.value,
+                turn_id=turn_id,
+                polarity=cand.polarity,
+                confidence=cand.confidence,
+                correction=semantic.correction,
+            )
+            filled.append(slot)
+        return filled
     slot = semantic.target_slot
     if not slot or state.slots.get(slot) != SlotStatus.OPEN:
-        return None
-    apply_slot_answer(state, slot, semantic.value or semantic.source_quote)
-    return slot
+        return []
+    apply_slot_answer(
+        state,
+        slot,
+        semantic.value or semantic.source_quote,
+        turn_id=turn_id,
+        polarity=semantic.polarity,
+        confidence=semantic.confidence,
+        correction=semantic.correction,
+    )
+    return [slot]
 
 
 def may_close_partial(state: EngineState, slot: str) -> bool:

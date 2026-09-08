@@ -85,7 +85,7 @@ def _patch_config(host: str, port: int, username: str, password: str, dial: str)
 
     root = ET.fromstring(text)
     changes: list[str] = []
-    target_domain = f"{host}:{port}"
+    target_domain = host
     account_name = f"{username}@{host}"
 
     accounts = root.find("accounts")
@@ -108,6 +108,10 @@ def _patch_config(host: str, port: int, username: str, password: str, dial: str)
         changes.append("mwi_subscribe_usage → none")
     if _set_text(account, "SIP_domain", target_domain):
         changes.append(f"SIP_domain → {target_domain}")
+    if _set_text(account, "mwi_subscribe_usage", "none"):
+        changes.append("mwi_subscribe_usage → none")
+    if _set_text(account, "use_number_rewriting", "false"):
+        changes.append("use_number_rewriting → false")
     if _set_text(account, "SIP_transport_type", "udp"):
         changes.append("SIP_transport_type → udp")
     if _set_text(account, "SIP_use_auth_username", "true"):
@@ -120,6 +124,17 @@ def _patch_config(host: str, port: int, username: str, password: str, dial: str)
     if use_stun is not None and use_stun.text != "disabled":
         use_stun.text = "disabled"
         changes.append("use_stun → disabled")
+
+    sip_options = root.find("sip_options")
+    if sip_options is not None:
+        port_el = sip_options.find("port")
+        if port_el is not None and port_el.text != "5070":
+            port_el.text = "5070"
+            changes.append("sip_options.port → 5070 (Docker owns host :5060)")
+        random_el = sip_options.find("use_random_port")
+        if random_el is not None and random_el.text != "true":
+            random_el.text = "true"
+            changes.append("sip_options.use_random_port → true")
 
     new_body = ET.tostring(root, encoding="unicode")
     if text.startswith("<?xml"):

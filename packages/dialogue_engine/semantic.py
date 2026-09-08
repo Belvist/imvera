@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from packages.dialogue_engine.context import SlotCandidate
 
 
 class SemanticAct(StrEnum):
@@ -21,11 +23,16 @@ class SemanticTurn(BaseModel):
     """Fast/LLM NLU result — reducer owns all FSM transitions."""
 
     act: SemanticAct
+    answers_to: str | None = None
+    slots: dict[str, SlotCandidate] = Field(default_factory=dict)
     target_slot: str | None = None
     polarity: str | None = None  # positive | negative | uncertain
     confidence: float = 0.0
     source_quote: str = ""
     value: str = ""
+    correction: bool = False
+    repair: bool = False
+    backchannel: bool = False
 
     model_config = {"frozen": True}
 
@@ -47,20 +54,33 @@ def semantic_to_interpretation(semantic: SemanticTurn):
             judgement=AnswerJudgement.BACKCHANNEL,
             dialogue_act=DialogueAct.BACKCHANNEL,
         )
-    if semantic.act == SemanticAct.ANSWER and semantic.target_slot:
-        return UserInterpretation(
-            judgement=AnswerJudgement.VALID,
-            dialogue_act=DialogueAct.ANSWER,
-            fills_pending_slot=True,
-            slot_value=semantic.value or semantic.source_quote,
-            fact_candidates=[
+    if semantic.act == SemanticAct.ANSWER and (semantic.slots or semantic.target_slot):
+        candidates = []
+        if semantic.slots:
+            for field, cand in semantic.slots.items():
+                candidates.append(
+                    FactCandidate(
+                        field=field,
+                        value=cand.value,
+                        source_quote=semantic.source_quote,
+                        answers_pending=field == semantic.answers_to,
+                    )
+                )
+        elif semantic.target_slot:
+            candidates.append(
                 FactCandidate(
                     field=semantic.target_slot,
                     value=semantic.value or semantic.source_quote,
                     source_quote=semantic.source_quote,
                     answers_pending=True,
                 )
-            ],
+            )
+        return UserInterpretation(
+            judgement=AnswerJudgement.VALID,
+            dialogue_act=DialogueAct.ANSWER,
+            fills_pending_slot=True,
+            slot_value=semantic.value or semantic.source_quote,
+            fact_candidates=candidates,
         )
     if semantic.act == SemanticAct.GOODBYE_REQUEST:
         return UserInterpretation(
@@ -101,9 +121,11 @@ def semantic_from_legacy(interp, *, text: str, answer_slot: str | None) -> Seman
             confidence=0.95,
             source_quote=text,
         )
+    if getattr(interp, "requests_repeat", False):
         return SemanticTurn(
             act=SemanticAct.REPAIR_REQUEST,
             target_slot=answer_slot,
+            repair=True,
             confidence=0.9,
             source_quote=text,
         )
@@ -119,9 +141,12 @@ def semantic_from_legacy(interp, *, text: str, answer_slot: str | None) -> Seman
         from packages.dialogue_engine.fast_interpreter import _detect_polarity
 
         pol = _detect_polarity(cand.value or text) or "positive"
+        slot = cand.field
         return SemanticTurn(
             act=SemanticAct.ANSWER,
-            target_slot=cand.field,
+            answers_to=slot,
+            target_slot=slot,
+            slots={slot: SlotCandidate(value=cand.value, polarity=pol, confidence=0.9)},
             polarity=pol,
             confidence=0.9,
             source_quote=text,
@@ -153,7 +178,20 @@ def semantic_from_legacy(interp, *, text: str, answer_slot: str | None) -> Seman
 
 def fast_interpret_legacy(text: str, *, answer_slot: str | None):
     """Compatibility shim for tests expecting (UserInterpretation, confident)."""
-    from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
+    from packages.dialogue_engine.context import InterpretContext
+    from packages.dialogue_engine.contextual_interpreter import contextual_interpret
+    from packages.dialogue_engine.state import EngineState
 
-    sem, confident = fast_interpret_semantic(text, answer_slot=answer_slot)
+    state = EngineState(call_id="shim", elder_display_name="")
+    if answer_slot:
+        from packages.dialogue_engine.state import Question, QuestionPhase
+
+        state.delivered_question = Question(
+            question_id="q-shim",
+            slot=answer_slot,
+            text="",
+            phase=QuestionPhase.DELIVERED,
+        )
+    ctx = InterpretContext.from_engine_state(state)
+    sem, confident = contextual_interpret(text, ctx)
     return semantic_to_interpretation(sem), confident

@@ -42,13 +42,15 @@ _WELLNESS_NEGATIVE = re.compile(
 )
 _MOOD_NEGATIVE = re.compile(r"^(плох\w+|груст\w+|ужасн\w+|тоскл\w+)\.?$", re.I)
 _SLEEP_ANSWER = re.compile(
-    r"(спал\w*\s+(нормально|хорошо|плохо)|сон\s+(хорош\w*|плох\w*)|"
-    r"не\s+спал\w*|выспал\w*|мало\s+спал\w*)",
+    r"(спал\w*\s+(нормально|хорошо|плохо)|сон\s+(хорош\w*|плох\w*|нормальн\w*)|"
+    r"не\s+спал\w*|выспал\w*|мало\s+спал\w*|недоспал\w*|просыпал\w*|"
+    r"часов\s+\w+|пять\s+часов|шесть\s+часов|беспокойн\w*)",
     re.I,
 )
 _PLANS_ANSWER = re.compile(
     r"(никак\w*\s+план\w*\s+нет|нет\s+план\w*|ничего\s+не\s+план|"
-    r"нигде|дома\s+посижу|дома|в\s+больниц\w*|врач\w*)",
+    r"нигде|дома\s+посижу|дома|в\s+больниц\w*|врач\w*|"
+    r"магазин|продукт|погуля|при[её]м|делам|уборк|внук|дет)",
     re.I,
 )
 _MOOD_POSITIVE = re.compile(
@@ -73,13 +75,23 @@ def _strip(text: str) -> str:
 
 
 def _normalize_core(text: str) -> str:
-    """Drop leading fillers so «ну плохо» → «плохо» for polarity rules."""
+    """Drop leading fillers and corpus paraphrase wrappers."""
     core = _strip(text)
+    # Paraphrase family wrappers (corpus + live colloquial).
+    for pat in (
+        r"^скажу\s+так\s*",
+        r"^если\s+коротко\s*",
+        r"^по\s+сну\s*",
+        r"^планы\s+такие\s*",
+        r"^настроение\s*",
+    ):
+        core = re.sub(pat, "", core, flags=re.I).strip()
     for _ in range(3):
         m = re.match(r"^(ну|да|вот|сегодня)\s+", core, re.I)
         if not m:
             break
         core = core[m.end():].strip()
+    core = re.sub(r"\s+(вроде|наверное|кажется)\.?$", "", core, flags=re.I).strip()
     return core
 
 
@@ -98,6 +110,17 @@ def fast_interpret_semantic(
 
     normalized = raw.lower()
     core = _normalize_core(raw)
+
+    if re.match(r"^что\??$", core, re.I):
+        return (
+            SemanticTurn(
+                act=SemanticAct.REPAIR_REQUEST,
+                target_slot=answer_slot,
+                confidence=0.97,
+                source_quote=raw,
+            ),
+            True,
+        )
 
     if _REPAIR.search(normalized) or _HEARING_CHECK.search(normalized):
         return (
@@ -275,10 +298,20 @@ def _detect_polarity(text: str) -> str | None:
         return "negative"
     if re.match(r"^плох\w*", core) or re.search(r"мне\s+не\s+очень", normalized):
         return "negative"
-    if _SO_SO.match(core):
+    if _SO_SO.match(core) or re.search(
+        r"\b(так\s+себе|сойд[её]т|пойд[её]т|средн\w*|терпимо|ну\s+такое)\b", core, re.I
+    ):
         return "uncertain"
     if _NORMAL.match(core):
         return "positive"
+    if re.match(
+        r"^(отличн\w*|хорош\w*|прекрасн\w*|нормальн\w*|обычн\w*|спокойн\w*)\.?$",
+        core,
+        re.I,
+    ):
+        return "positive"
+    if re.match(r"^(средн\w*|грустн\w*)\.?$", core, re.I):
+        return "negative" if core.startswith("груст") else "uncertain"
     if _POSITIVE.match(core) or _WELLNESS_POSITIVE.search(normalized):
         return "positive"
     if _NEGATIVE.match(core) or _MOOD_NEGATIVE.match(core):

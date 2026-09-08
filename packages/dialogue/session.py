@@ -85,6 +85,7 @@ class CallSession:
         self._persisted_keys: set[str] = set()
         self._engine: DialogueEngine | None = None
         self._playout_meta: dict[str, tuple[int, str]] = {}
+        self._playout_effect_meta: dict[str, str] = {}
         self._deferred_engine_turn: SessionTurnResult | None = None
         self._engine_playout_followup: SessionTurnResult | None = None
         self._completed_playout_ids: set[str] = set()
@@ -265,8 +266,10 @@ class CallSession:
         followups = self._engine.drain_speak_effects()
         self._engine.sync_to_legacy(self.state)
         self._playout_meta[speak.generation_id] = (speak.generation, speak.question_id)
+        self._playout_effect_meta[speak.generation_id] = speak.effect_id
         for fx in followups:
             self._playout_meta[fx.generation_id] = (fx.generation, fx.question_id)
+            self._playout_effect_meta[fx.generation_id] = fx.effect_id
         proposal = self._engine.effect_to_proposal(speak, self.turn_id, self.state)
         validated = Validator.validate(proposal)
         commit = self.transitions.commit_transition(self.state, proposal)
@@ -284,6 +287,12 @@ class CallSession:
             followup_speak_effects=followups,
             speak_effect=speak,
         )
+
+    def handle_effect_failed(self, effect_id: str, *, stage: str, error: str = "") -> None:
+        if self._engine is None:
+            return
+        self._engine.on_effect_failed(effect_id, stage=stage, error=error)
+        self._engine.sync_to_legacy(self.state)
 
     def defer_engine_turn(self, result: SessionTurnResult) -> None:
         if self._engine is None or result.speak_effect is None:
@@ -352,6 +361,9 @@ class CallSession:
 
     def cancel_playout_action(self, generation_id: str) -> None:
         if self._engine is not None:
+            effect_id = self._playout_effect_meta.pop(generation_id, None)
+            if effect_id:
+                self._engine.outbox.mark_cancelled(effect_id, reason="barge_in")
             meta = self._playout_meta.pop(generation_id, None)
             if meta:
                 self._engine.on_playout_cancelled(meta[0], meta[1])
@@ -702,8 +714,21 @@ class CallSession:
         if self._engine is not None:
             if generation_id in self._completed_playout_ids:
                 return True
+            effect_id = self._playout_effect_meta.get(generation_id)
+            if effect_id:
+                record = self._engine.outbox.get_record(effect_id)
+                if record and record.status.value in {
+                    "COMPLETED",
+                    "CANCELLED",
+                    "STALE",
+                    "FAILED",
+                }:
+                    return True
             meta = self._playout_meta.pop(generation_id, None)
             if meta:
+                if effect_id:
+                    self._engine.outbox.mark_completed(effect_id)
+                    self._playout_effect_meta.pop(generation_id, None)
                 self._engine.on_playout_completed(meta[0], meta[1])
                 self._completed_playout_ids.add(generation_id)
             followup = self._build_engine_followup_result()

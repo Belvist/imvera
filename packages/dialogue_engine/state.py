@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from packages.contracts.enums import FsmState, SlotStatus
 from packages.dialogue_engine.effects import SpeakEffect
+from packages.dialogue_engine.context import SlotValue
 
 MAX_SLOT_ATTEMPTS = 2
 
@@ -66,6 +67,7 @@ class EngineState(BaseModel):
         }
     )
     slot_values: dict[str, str] = Field(default_factory=dict)
+    slot_records: dict[str, "SlotValue"] = Field(default_factory=dict)
     goals: dict[str, GoalState] = Field(default_factory=dict)
 
     planned_question: Question | None = None
@@ -88,6 +90,7 @@ class EngineState(BaseModel):
     turn_seq: int = 0
     generation_seq: int = 0
     deferred_speak: SpeakEffect | None = None
+    slot_corrections: list[dict[str, str]] = Field(default_factory=list)
 
     def bump_revision(self) -> None:
         self.revision += 1

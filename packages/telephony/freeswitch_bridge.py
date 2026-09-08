@@ -43,7 +43,8 @@ class FreeSwitchBridgeSession:
     call_id: str
     fs_uuid: str
     on_inbound: PushInboundFn
-    sample_rate: int = TARGET_SAMPLE_RATE
+    capture_sample_rate: int = TARGET_SAMPLE_RATE
+    playback_sample_rate: int = TARGET_SAMPLE_RATE
     counters: TelephonyMediaCounters = field(default_factory=TelephonyMediaCounters)
     _outbound_queue: asyncio.Queue[bytes] = field(default_factory=asyncio.Queue)
     _outbound_task: asyncio.Task | None = None
@@ -78,9 +79,15 @@ class FreeSwitchBridgeSession:
                 self.counters.carrier_rx_bytes += len(data)
                 self.counters.gateway_rx_frames += 1
                 self._raw_inbound.extend(data)
+                if self.counters.gateway_rx_frames == 1:
+                    log.info(
+                        "FS bridge first uplink pcm call_id=%s bytes=%s",
+                        self.call_id,
+                        len(data),
+                    )
                 frame = InboundMediaFrame(
                     pcm_s16le=data,
-                    sample_rate=self.sample_rate,
+                    sample_rate=self.capture_sample_rate,
                     track=StreamTrack.INBOUND,
                     call_id=self.call_id,
                     carrier_call_ref=self.fs_uuid,
@@ -105,7 +112,7 @@ class FreeSwitchBridgeSession:
             while not self._closed:
                 pcm = await self._outbound_queue.get()
                 if self.outbound_mode is FreeSwitchOutboundMode.STREAM_AUDIO_JSON:
-                    message = encode_stream_audio_json(pcm, self.sample_rate)
+                    message = encode_stream_audio_json(pcm, self.playback_sample_rate)
                     await websocket.send_text(message)
                     tx_bytes = len(message.encode("utf-8"))
                 else:

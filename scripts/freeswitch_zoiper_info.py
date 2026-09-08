@@ -66,7 +66,7 @@ def main() -> int:
         print("  P0-A tones:     make freeswitch-up\n")
 
     print("--- Zoiper account ---")
-    print(f"  Domain / Host:  {host}:{port}")
+    print(f"  Domain / Host:  {host}  (port {port} UDP — do not put :5060 in domain field)")
     print("  Transport:      UDP")
     print(f"  Username:       {data['username']}")
     print(f"  Password:       {data['password']}")

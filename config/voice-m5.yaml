@@ -81,15 +81,14 @@ limits:
 audio:
   # STT/VAD branch — Silero + ASR expect 16 kHz; do not raise for SIP lab wideband.
   internal_sample_rate: 16000
-  # SIP lab downlink: slin48 @ 48 kHz on chan_websocket inject (TTS ~24 kHz → upsample once).
-  # PSTN prod trunks: set inject_format=ulaw via IMVERA_INJECT_FORMAT.
-  inject_format: slin48
+  # FS chan_websocket inject: slin24 matches Silero 24 kHz (one FS resample to G.722 @ 16 kHz).
+  # Opus/slin48 clients: override via IMVERA_INJECT_FORMAT + IMVERA_NEGOTIATED_CODEC.
+  inject_format: slin24
   capture_format: slin16
-  output_sample_rate: 48000
+  output_sample_rate: 24000
   frame_ms: 20
-  # Zoiper 5 Mac has no L16/48000 — lab wideband is G.722 @ 16 kHz (not slin48 on RTP leg).
-  # Full 48 kHz: browser WS client (gateway /media/{call_id}) or slin48 SIP softphone.
-  sip_codecs: g722,slin48,slin24,slin16
+  # Zoiper 5 Mac lab: G.722 @ 16 kHz wideband (not slin48 on RTP leg).
+  sip_codecs: g722,slin24,slin16
   # PyVoIP SIP e2e (scripts/voice_sip_e2e.py) — account 1002, G.711 only.
   sip_codecs_e2e: ulaw,alaw
 

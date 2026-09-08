@@ -1,5 +1,8 @@
 """Deterministic ≥1000 dialogue scenarios (seeded; category-labeled).
 
+Full end-to-end wellness matrix (400 scenarios, 100 per polarity bucket):
+see ``tests/corpus/wellness_matrix.py`` and ``tests/test_wellness_scenario_matrix.py``.
+
 Layer honesty:
 - Exercises CallSession + rule interpreter (+ StatusEngine invariants).
 - Does NOT prove live SIP, STT, TTS, or LLM accuracy.
@@ -68,7 +71,9 @@ _STT_NOISE_NOFILL = (
     "qwerty",
 )
 
-_BACKCHANNELS = ("ага", "угу", "алло", "Ага!", "Угу.", "алло?", "ага…", "угу!")
+_ACK_BACKCHANNELS = ("ага", "угу", "Ага!", "Угу.", "ага…", "угу!")
+_REPAIR_GREETINGS = ("алло", "алло?")
+_BACKCHANNELS = _ACK_BACKCHANNELS + _REPAIR_GREETINGS
 
 _MOOD_ANSWERS = ("хорошее", "плохое", "нормальное", "грустно", "весело")
 _SLEEP_ANSWERS = (
@@ -204,8 +209,8 @@ def _stt_noise_nofill_cases() -> list[Scenario]:
 def _backchannel_cases() -> list[Scenario]:
     out: list[Scenario] = []
     n = 0
-    # Pending wellness
-    for bc in _BACKCHANNELS:
+    # Pending wellness (opening already delivered in execute)
+    for bc in _ACK_BACKCHANNELS:
         for wrap in ("{}", " {}", "{}!", "{}…", " {} "):
             text = wrap.format(bc).strip() if "{}" in wrap else bc
             out.append(
@@ -219,8 +224,22 @@ def _backchannel_cases() -> list[Scenario]:
                 )
             )
             n += 1
+    for bc in _REPAIR_GREETINGS:
+        for wrap in ("{}", " {}", "{}!"):
+            text = wrap.format(bc).strip() if "{}" in wrap else bc
+            out.append(
+                Scenario(
+                    id=_sid("backchannel", n),
+                    category="backchannel",
+                    turns=(text,),
+                    expect_slots={"wellness": "OPEN"},
+                    never_fill=("wellness", "mood", "sleep", "plans"),
+                    expect_intent_in=("repair_repeat",),
+                )
+            )
+            n += 1
     # After wellness filled — pending mood
-    for bc in _BACKCHANNELS:
+    for bc in _ACK_BACKCHANNELS:
         for wellness in ("хорошо", "нормально", "плохо", "не очень"):
             out.append(
                 Scenario(
@@ -234,7 +253,7 @@ def _backchannel_cases() -> list[Scenario]:
             )
             n += 1
     # After mood — pending sleep
-    for bc in _BACKCHANNELS:
+    for bc in _ACK_BACKCHANNELS:
         out.append(
             Scenario(
                 id=_sid("backchannel", n),
@@ -247,7 +266,7 @@ def _backchannel_cases() -> list[Scenario]:
         )
         n += 1
     # After sleep — pending plans
-    for bc in _BACKCHANNELS:
+    for bc in _ACK_BACKCHANNELS:
         out.append(
             Scenario(
                 id=_sid("backchannel", n),

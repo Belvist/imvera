@@ -80,6 +80,14 @@ class SpeakEffectStale(DialogueEvent):
     revision: int = 0
 
 
+class EffectFailed(DialogueEvent):
+    kind: Literal["effect_failed"] = "effect_failed"
+    effect_id: str
+    stage: Literal["TTS", "PLAYOUT", "TIMER"]
+    error: str = ""
+    revision: int = 0
+
+
 class BotOpeningDelivered(DialogueEvent):
     kind: Literal["bot_opening_delivered"] = "bot_opening_delivered"
     question_id: str = "opening-1"

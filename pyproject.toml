@@ -76,6 +76,9 @@ pythonpath = ["."]
 markers = [
     "livekit_live: requires self-hosted LiveKit + SIP stack (Linux host networking)",
     "livekit_media_live: requires livekit-media-gate PASS on Linux host",
+    "dialogue_engine: run with DialogueEngine enabled (IMVERA_DIALOGUE_ENGINE=1)",
+    "wellness_matrix: full end-to-end wellness scenario matrix (400 cases)",
+    "live_sip: requires FreeSWITCH + human blackbox WAV + pyVoIP + independent ASR",
 ]
 
 [tool.ruff]

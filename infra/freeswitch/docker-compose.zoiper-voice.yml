@@ -4,5 +4,6 @@ services:
     volumes:
       - ./conf/generated/vars_imvera.runtime.xml:/etc/freeswitch/vars_imvera.xml:ro
       - ./conf/generated/internal.zoiper-voice.xml:/etc/freeswitch/sip_profiles/internal.xml:ro
+      - ../../.run/freeswitch-forensic:/var/imvera/forensic
     extra_hosts:
       - "host.docker.internal:host-gateway"

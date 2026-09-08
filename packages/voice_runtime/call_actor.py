@@ -26,6 +26,8 @@ from packages.dialogue.planner import Planner
 from packages.dialogue.semantic_adapter import adapt_semantic_turn
 from packages.dialogue.interpretation import to_turn_interpretation
 from packages.dialogue_engine.effects import ENGINE_SPEAK_INTENTS, SpeakEffect, TimerEffect
+from packages.dialogue_engine.context import InterpretContext
+from packages.dialogue_engine.contextual_interpreter import contextual_interpret
 from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
 from packages.dialogue_engine.semantic import semantic_from_legacy, semantic_to_interpretation
 from packages.dialogue.session import CallSession, SessionTurnResult
@@ -200,6 +202,7 @@ class CallActor:
     _engine_timer_task: asyncio.Task | None = None
     _engine_timer_id: str | None = None
     _engine_timer_revision: int | None = None
+    _engine_timer_effect_id: str | None = None
     _control_epoch: int = 0
     _timing_profile: DialogueTimingProfile = field(
         default_factory=lambda: DialogueTimingProfile(**dialogue_timing_settings())
@@ -208,6 +211,7 @@ class CallActor:
     _outbox_action_id: str | None = None
     _pending_answer_wait: tuple[str | None, str | None] | None = None
     _pending_mark_spoken_id: str | None = None
+    _pending_speak_effect_id: str | None = None
     _pending_mark_render_gen: str | None = None
     _last_delivered_intent: str | None = None
     _playback_uplink_buf: bytearray = field(default_factory=bytearray)
@@ -749,6 +753,8 @@ class CallActor:
             )
             # endregion
             self._pause_answer_wait()
+            if self.session.uses_dialogue_engine():
+                await self._cancel_engine_timer_on_speech_start()
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {})
             )
@@ -1066,6 +1072,15 @@ class CallActor:
         self._control_epoch += 1
         return self._control_epoch
 
+    async def _cancel_engine_timer_on_speech_start(self) -> None:
+        timer_id = self._engine_timer_id
+        if not timer_id:
+            return
+        await self._cancel_engine_timer()
+        engine = self.session._engine
+        if engine is not None:
+            engine.outbox.cancel_timer_by_id(timer_id)
+
     async def _cancel_engine_timer(self) -> None:
         if self._engine_timer_task and not self._engine_timer_task.done():
             self._engine_timer_task.cancel()
@@ -1076,11 +1091,13 @@ class CallActor:
         self._engine_timer_task = None
         self._engine_timer_id = None
         self._engine_timer_revision = None
+        self._engine_timer_effect_id = None
 
     async def _schedule_engine_timer(self, timer: TimerEffect) -> None:
         await self._cancel_engine_timer()
         self._engine_timer_id = timer.timer_id
         self._engine_timer_revision = timer.revision
+        self._engine_timer_effect_id = timer.effect_id
         wait_ms = timer.wait_ms
         timer_id = timer.timer_id
         revision = timer.revision
@@ -1100,9 +1117,7 @@ class CallActor:
             return
         if revision != self._engine_timer_revision:
             return
-        while self._inflight_utterances and not self._stopped:
-            await asyncio.sleep(0.05)
-        if self._stopped or self._transport_closed:
+        if self._inflight_utterances:
             return
         if not self.session.uses_dialogue_engine():
             return
@@ -1543,7 +1558,14 @@ class CallActor:
             semantic = None
             fast_confident = False
             if self.session.uses_dialogue_engine():
-                sem, fast_confident = fast_interpret_semantic(text, answer_slot=answer_slot)
+                ctx = InterpretContext.from_engine_state(
+                    self.session._engine.state, turn_id=utterance_id
+                )
+                sem, fast_confident = contextual_interpret(text, ctx)
+                if not fast_confident:
+                    sem, fast_confident = fast_interpret_semantic(
+                        text, answer_slot=answer_slot
+                    )
                 if fast_confident:
                     semantic = sem
                     interp = semantic_to_interpretation(sem)
@@ -1671,7 +1693,10 @@ class CallActor:
         ) or result.proposal.intent == "opening_wellness"
         if result.from_engine and result.speak_effect is not None:
             self._pending_mark_spoken_id = result.speak_effect.generation_id
+            self._pending_speak_effect_id = result.speak_effect.effect_id
             self._pending_mark_render_gen = render_generation
+            if self.session._engine is not None:
+                self.session._engine.outbox.mark_started(result.speak_effect.effect_id)
         elif marks_delivered:
             self._pending_mark_spoken_id = result.proposal.generation_id
             self._pending_mark_render_gen = render_generation
@@ -2115,6 +2140,13 @@ class CallActor:
                     phrase_id,
                     exc,
                 )
+                if self._pending_speak_effect_id and self.session.uses_dialogue_engine():
+                    await asyncio.to_thread(
+                        self.session.handle_effect_failed,
+                        self._pending_speak_effect_id,
+                        stage="TTS",
+                        error=str(exc)[:200],
+                    )
                 await self._emit_stage(
                     "tts.failed",
                     generation_id=generation_id,

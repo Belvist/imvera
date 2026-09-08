@@ -86,6 +86,8 @@ def test_call_actor_defers_to_session_not_local_queue() -> None:
         actor._deliver_session_turn = deliver  # type: ignore[method-assign]
 
         assert session._engine is not None
+        session._engine.state.fsm_state = FsmState.SUMMARY
+        session._engine.state.summary_spoken = True
         session._engine.state.active_playout_generation = 1
         speak = SpeakEffect(
             effect_id="fx-summary",

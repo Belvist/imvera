@@ -123,7 +123,8 @@ def test_repeat_request_reasks_same_question() -> None:
     state = DialogueState(call_id="repeat", fsm_state=FsmState.DAILY_CHECK)
     Planner.plan_vera_turn(state, 1, "g1")
     proposal = Planner.plan_after_user(state, "Повторите вопрос", "g1", 2)
-    assert proposal.intent == "repeat_wellness"
+    assert proposal.intent == "repair_repeat"
+    assert "чувствуете" in proposal.speech.lower()
     assert state.slots["wellness"] == SlotStatus.OPEN
 
 

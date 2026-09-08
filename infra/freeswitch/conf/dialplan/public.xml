@@ -21,6 +21,8 @@
         <action application="set" data="STREAM_PLAYBACK=1"/>
         <action application="set" data="imvera_ws_url=$${imvera_media_bridge_ws}/${uuid}"/>
         <action application="eval" data="${uuid_audio_stream(${uuid} start ${imvera_ws_url} mono 16k)}"/>
+        <action application="set" data="RECORD_READ_ONLY=true"/>
+        <action application="record_session" data="/var/imvera/forensic/${uuid}_read.wav"/>
         <action application="sleep" data="3600000"/>
         <action application="hangup"/>
       </condition>

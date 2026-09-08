@@ -10,9 +10,14 @@ from types import SimpleNamespace
 
 import pytest
 
+from packages.contracts.enums import AnswerJudgement, DialogueAct
+from packages.contracts.interpretation import TurnInterpretation
+from packages.contracts.turn import TurnProposal
 from packages.core.memory_store import InMemoryCallRecordStore
+from packages.dialogue.interpretation import UserInterpretation
 from packages.dialogue.planner import Planner
-from packages.dialogue.session import CallSession
+from packages.dialogue.session import CallSession, SessionTurnResult
+from packages.dialogue.validator import Validator
 from packages.voice_runtime.call_actor import CallActor, CallActorConfig, MediaCallbacks
 from packages.voice_runtime.playback import PlaybackQueue
 from services.llm.http_provider import RenderChunk
@@ -37,7 +42,34 @@ def _wellness_session(call_id: str) -> CallSession:
 
 async def _multi_phrase_once(call_id: str, *, barge_in: bool = False) -> list[str]:
     session = _wellness_session(call_id)
-    result = session.handle_user_text("Чувствую себя хорошо")
+    session.turn_id += 1
+    proposal = TurnProposal(
+        turn_id=session.turn_id,
+        generation_id="g-render",
+        speech="Спасибо.",
+        intent="explain_vera",
+        fsm_state=session.state.fsm_state,
+        mandatory_remaining=session.state.mandatory_remaining(),
+    )
+    validated = Validator.validate(proposal)
+    result = SessionTurnResult(
+        user_text="болит спина",
+        interpretation=UserInterpretation(
+            judgement=AnswerJudgement.VALID,
+            dialogue_act=DialogueAct.ANSWER,
+        ),
+        turn_contract=TurnInterpretation(
+            call_id=session.state.call_id,
+            turn_id=session.turn_id,
+            raw_text="болит спина",
+            dialogue_act=DialogueAct.ANSWER,
+            judgement=AnswerJudgement.VALID,
+            state_version=session.state.state_version,
+        ),
+        proposal=proposal,
+        validated=validated,
+        safety=session.safety.model_copy(deep=True),
+    )
     tts_started: list[str] = []
 
     async def synthesize(text, **kwargs):

@@ -59,7 +59,9 @@ def audio_settings() -> dict[str, Any]:
         or audio.get("internal_sample_rate", 16000)
     )
     output_sr = int(
-        audio.get("output_sample_rate") or _format_sample_rate(inject_format)
+        os.environ.get("IMVERA_OUTPUT_SAMPLE_RATE")
+        or audio.get("output_sample_rate")
+        or _format_sample_rate(inject_format)
     )
     frame_ms = int(audio.get("frame_ms", 20))
     sip_codecs = str(audio.get("sip_codecs", "g722,slin48,slin24,slin16"))
@@ -102,6 +104,7 @@ def apply_audio_env(env: dict[str, str] | None = None) -> dict[str, str]:
     out.setdefault("IMVERA_INJECT_FORMAT", audio["inject_format"])
     out.setdefault("IMVERA_CAPTURE_FORMAT", audio["capture_format"])
     out.setdefault("IMVERA_INTERNAL_SAMPLE_RATE", str(audio["internal_sample_rate"]))
+    out.setdefault("IMVERA_OUTPUT_SAMPLE_RATE", str(audio["output_sample_rate"]))
     out.setdefault(
         "IMVERA_PLAYBACK_BUFFER_MS",
         str(load_profile().get("limits", {}).get("playback_buffer_ms", 60)),

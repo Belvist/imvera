@@ -30,7 +30,11 @@ RUN mkdir -p /etc/freeswitch \
     && sed -i 's|<param name="manage-presence" value="true"/>|<param name="manage-presence" value="false"/>|' \
         /etc/freeswitch/sip_profiles/internal.xml \
     && sed -i 's|<param name="apply-inbound-acl" value="domains"/>|<param name="apply-inbound-acl" value=""/>|' \
-        /etc/freeswitch/sip_profiles/internal.xml
+        /etc/freeswitch/sip_profiles/internal.xml \
+    && sed -i 's|<!-- <param name="rtp-start-port" value="16384"/> -->|<param name="rtp-start-port" value="16384"/>|' \
+        /etc/freeswitch/autoload_configs/switch.conf.xml \
+    && sed -i 's|<!-- <param name="rtp-end-port" value="32768"/> -->|<param name="rtp-end-port" value="16484"/>|' \
+        /etc/freeswitch/autoload_configs/switch.conf.xml
 
 COPY conf/dialplan/public.xml /etc/freeswitch/dialplan/public.xml
 COPY conf/vars_imvera.xml /etc/freeswitch/vars_imvera.xml
@@ -41,7 +45,12 @@ COPY conf/autoload_configs/event_socket.conf.xml /etc/freeswitch/autoload_config
 RUN grep -q 'vars_imvera.xml' /etc/freeswitch/vars.xml \
     || echo '<X-PRE-PROCESS cmd="include" data="vars_imvera.xml"/>' >> /etc/freeswitch/vars.xml
 
-EXPOSE 5060/udp 5060/tcp 8021/tcp 16384-32768/udp
+EXPOSE 5060/udp 5060/tcp 8021/tcp 16384-16484/udp
+
+# Fail fast if custom image lost mod_audio_stream (vanilla safarov has none).
+HEALTHCHECK --interval=5s --timeout=5s --retries=24 --start-period=20s \
+  CMD fs_cli -x 'status' | grep -qi up \
+  && fs_cli -x 'module_exists mod_audio_stream' | grep -qx true
 
 ENV SOUND_TYPES=
 ENV SOUND_RATES=

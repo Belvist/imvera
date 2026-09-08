@@ -9,7 +9,8 @@ export PYTHONPATH := .
 .PHONY: models-prepare models-up voice-setup voice-up voice-doctor voice-down zoiper-info zoiper-fix voice-e2e voice-sip-e2e
 .PHONY: voice-refs-prepare tts-preview tts-preview-list tts-preview-compare
 .PHONY: voice-open test-contracts test-dialogue-e2e test-persistence-e2e test-voice test-sip
-.PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k
+.PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k dialogue-corpus-gate
+.PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera
 
 install:
 	$(PYTHON) -m pip install -e ".[dev,api,mlx,gigaam-stt]"
@@ -21,6 +22,11 @@ test-corpus-1k:
 	@echo "LAYER: CallSession dialogue corpus (NOT live SIP×1000)"
 	$(PYTHON) scripts/run_dialogue_corpus.py --workers 4 --minimum 1000
 	$(PYTHON) -m pytest tests/corpus/test_call_actor_load.py -q
+
+dialogue-corpus-gate:
+	@echo "LAYER: DialogueEngine >=500 full daily-check FSM trajectories"
+	$(PYTHON) scripts/dialogue_corpus_gate.py
+	$(PYTHON) -m pytest tests/test_dialogue_corpus_gate.py -q
 
 lint:
 	$(PYTHON) -m ruff check packages services tests scripts
@@ -115,6 +121,15 @@ freeswitch-zoiper-voice-up:
 freeswitch-zoiper-voice-down:
 	@$(PYTHON) scripts/freeswitch_zoiper_voice_down.py
 
+freeswitch-forensic-collect:
+	@$(PYTHON) scripts/freeswitch_forensic_collect.py $(UUID) --call-id $(CALL_ID)
+
+freeswitch-readiness:
+	@$(PYTHON) scripts/freeswitch_readiness_check.py --wait 120
+
+freeswitch-external-gate:
+	@$(PYTHON) scripts/freeswitch_external_gate.py
+
 media-bridge-up:
 	@$(PYTHON) services/imvera_media_bridge/main.py
 
@@ -177,7 +192,22 @@ test-sip:
 	@$(PYTHON) scripts/test_sip.py
 
 test-pstn:
-	@echo "BLOCKED: PSTN trunk not in scope for Zoiper sprint"
+	@echo "BLOCKED: PSTN trunk — use IMVERA_LIVE_TRANSPORT=pstn make live-call-soak"
+
+live-call-1:
+	@echo "LAYER: black-box SIP/RTP E2E — 1 real call via external pyVoIP caller"
+	@$(PYTHON) tools/blackbox_caller/main.py --calls 1
+
+live-call-soak:
+	@echo "LAYER: black-box SIP/RTP soak — IMVERA_LIVE_CALLS=$${IMVERA_LIVE_CALLS:-10}"
+	@$(PYTHON) tools/blackbox_caller/main.py --calls $${IMVERA_LIVE_CALLS:-10}
+
+blackbox-write-catalog:
+	@$(PYTHON) tools/blackbox_caller/main.py --write-catalog
+
+blackbox-synthesize-vera:
+	@echo "L3-A: synthesize black-box uplink WAV via Vera Silero TTS (NOT human voice bank)"
+	@$(PYTHON) scripts/blackbox_synthesize_vera_voice.py
 
 trace-bench:
 	@echo "BLOCKED: tools/voice_lab bench harness pending"

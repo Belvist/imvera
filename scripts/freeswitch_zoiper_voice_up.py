@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import time
@@ -18,6 +19,17 @@ from scripts.voice_process import ROOT, is_running, start, stop
 COMPOSE = ROOT / "infra" / "freeswitch" / "docker-compose.yml"
 VOICE_OVERLAY = ROOT / "infra" / "freeswitch" / "docker-compose.zoiper-voice.yml"
 BRIDGE_URL = "http://127.0.0.1:9210/health/ready"
+
+
+def _git_image_tag() -> str:
+    proc = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=ROOT,
+    )
+    return proc.stdout.strip() if proc.returncode == 0 else "local"
 
 
 def _compose_cmd(*args: str) -> list[str]:
@@ -76,26 +88,45 @@ def main() -> int:
         print("BLOCKED: MLX workers failed to start", file=sys.stderr)
         return 1
 
-    env = build_freeswitch_voice_lab_env()
-    if not ensure_silero_opening_cache(env):
+    lab_env = build_freeswitch_voice_lab_env()
+    if not ensure_silero_opening_cache(lab_env):
         return 1
 
     media_host = sync_freeswitch_zoiper_profile()["sip_host"]
     write_zoiper_runtime_config(media_host)
     print(f"  FreeSWITCH RTP/SIP external IP: {media_host}")
 
-    elder = env.get("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
+    elder = lab_env.get("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
     print(f"CallActor lab: elder={elder}, opening=IMVERA wellness → dialogue by state")
+    from scripts.freeswitch_voice_lab_env import print_dialogue_engine_lab_truth
+
+    print_dialogue_engine_lab_truth()
 
     print("Starting FreeSWITCH (voice overlay, bridge on host)...")
     subprocess.run(_compose_cmd("stop", "media-bridge"), cwd=ROOT, check=False)
+    compose_env = os.environ.copy()
+    compose_env["IMVERA_FS_IMAGE_TAG"] = _git_image_tag()
     up = subprocess.run(
         _compose_cmd("up", "-d", "--build", "--no-deps", "freeswitch"),
         cwd=ROOT,
         check=False,
+        env=compose_env,
     )
     if up.returncode != 0:
         return up.returncode
+
+    readiness = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "freeswitch_readiness_check.py"), "--wait", "120"],
+        cwd=ROOT,
+        check=False,
+    )
+    if readiness.returncode != 0:
+        print(
+            "BLOCKED: FreeSWITCH not ready — calls would get silence. "
+            "Rebuild imvera-freeswitch image (not vanilla safarov).",
+            file=sys.stderr,
+        )
+        return readiness.returncode
 
     subprocess.run(_compose_cmd("stop", "media-bridge"), cwd=ROOT, check=False)
 
@@ -103,7 +134,7 @@ def main() -> int:
     start(
         "freeswitch_media_bridge",
         [sys.executable, str(ROOT / "services" / "imvera_media_bridge" / "main.py")],
-        env=env,
+        env=lab_env,
     )
 
     if not _wait_http(BRIDGE_URL, "media-bridge"):
@@ -117,6 +148,7 @@ def main() -> int:
     print(f'  Opening: «Здравствуйте. Это сервис IMVERA, {elder}. Как вы себя чувствуете?»')
     print("  Then: dialogue by FSM state (wellness → mood → …)")
     print("\n  Logs:   .run/freeswitch_media_bridge.log")
+    print("  Forensic after call: make freeswitch-forensic-collect UUID=<fs_uuid> CALL_ID=fs-xxxxxxxx")
     print("  Stop:   make freeswitch-zoiper-voice-down")
     return 0
 

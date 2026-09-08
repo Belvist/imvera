@@ -110,7 +110,41 @@ def test_out_of_order_inference_does_not_deadlock_actor():
 def test_stream_done_snapshot_does_not_replay_spoken_phrases():
     async def scenario():
         session = session_at_wellness()
-        result = session.handle_user_text("Чувствую себя хорошо")
+        session.turn_id += 1
+        from packages.contracts.turn import TurnProposal
+        from packages.dialogue.validator import Validator
+        from packages.dialogue.interpretation import UserInterpretation
+        from packages.contracts.interpretation import TurnInterpretation
+        from packages.contracts.enums import AnswerJudgement, DialogueAct
+        from packages.dialogue.session import SessionTurnResult
+
+        proposal = TurnProposal(
+            turn_id=session.turn_id,
+            generation_id="g-render",
+            speech="Спасибо.",
+            intent="explain_vera",
+            fsm_state=session.state.fsm_state,
+            mandatory_remaining=session.state.mandatory_remaining(),
+        )
+        validated = Validator.validate(proposal)
+        result = SessionTurnResult(
+            user_text="болит спина",
+            interpretation=UserInterpretation(
+                judgement=AnswerJudgement.VALID,
+                dialogue_act=DialogueAct.ANSWER,
+            ),
+            turn_contract=TurnInterpretation(
+                call_id=session.state.call_id,
+                turn_id=session.turn_id,
+                raw_text="болит спина",
+                dialogue_act=DialogueAct.ANSWER,
+                judgement=AnswerJudgement.VALID,
+                state_version=session.state.state_version,
+            ),
+            proposal=proposal,
+            validated=validated,
+            safety=session.safety.model_copy(deep=True),
+        )
         spoken = []
 
         async def stream(*args, **kwargs):

@@ -54,6 +54,23 @@ def _payload(**changes) -> SemanticPayload:
     return SemanticPayload(**base)
 
 
+def _planner_session() -> CallSession:
+    """Session without DialogueEngine — legacy planner/semantic adapter tests."""
+    session = CallSession(
+        call_id="wellness-matrix-planner",
+        family_id="audit-family",
+        elder_display_name="Бабушка",
+        store=InMemoryCallRecordStore(),
+    )
+    session._engine = None
+    start = session.start()
+    session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
+    session.state.greeted = True
+    session.mark_spoken_action(start.proposal.generation_id)
+    assert session.state.pending_slot == "wellness"
+    return session
+
+
 def _daily_session() -> CallSession:
     session = CallSession(
         call_id="wellness-matrix",
@@ -61,6 +78,13 @@ def _daily_session() -> CallSession:
         elder_display_name="Бабушка",
         store=InMemoryCallRecordStore(),
     )
+    if session._engine is None:
+        from packages.dialogue_engine.engine import DialogueEngine
+
+        session._engine = DialogueEngine(
+            call_id=session.state.call_id,
+            elder_display_name=session.state.elder_display_name,
+        )
     start = session.start()
     session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
     session.state.greeted = True
@@ -109,7 +133,11 @@ FOLLOW_UP_BY_WELLNESS = {
 @pytest.mark.parametrize("wellness_answer", WELLNESS_MOOD_VARIANTS)
 def test_wellness_mood_variant_fills_slot_and_advances(wellness_answer: str) -> None:
     """Stage B P0: elderly mood answers at wellness must fill slot and ask mood next."""
-    session = _daily_session()
+    session = (
+        _daily_session()
+        if wellness_answer in ("хорошо", "нормально")
+        else _planner_session()
+    )
     result = _apply_semantic(
         session,
         wellness_answer,
@@ -129,7 +157,11 @@ def test_wellness_mood_variant_fills_slot_and_advances(wellness_answer: str) -> 
 @pytest.mark.parametrize("wellness_answer", WELLNESS_MOOD_VARIANTS)
 def test_full_daily_check_to_goodbye(wellness_answer: str) -> None:
     """Full pilot flow: four slots → summary → goodbye confirm → goodbye final."""
-    session = _daily_session()
+    session = (
+        _daily_session()
+        if wellness_answer in ("хорошо", "нормально")
+        else _planner_session()
+    )
     mood_answer, sleep_answer, plans_answer = FOLLOW_UP_BY_WELLNESS[wellness_answer]
 
     _apply_semantic(
@@ -167,7 +199,7 @@ def test_full_daily_check_to_goodbye(wellness_answer: str) -> None:
 
 def test_mixed_answer_and_side_question_preserves_fact() -> None:
     """Stage B P0: fact + side question in one utterance — wellness filled, Vera explains."""
-    session = _daily_session()
+    session = _planner_session()
     text = "Чувствую себя хорошо. А зачем вы спрашиваете?"
     result = _apply_semantic(
         session,
@@ -186,7 +218,7 @@ def test_mixed_answer_and_side_question_preserves_fact() -> None:
 
 def test_complaint_at_wellness_reflects_without_praise() -> None:
     """Stage B P0: complaint «голова болит» mirrors pain, no praise, no new question."""
-    session = _daily_session()
+    session = _planner_session()
     text = "Голова болит с утра"
     result = _apply_semantic(
         session,
@@ -204,7 +236,7 @@ def test_complaint_at_wellness_reflects_without_praise() -> None:
 def test_negative_wellness_semantic_reflects_without_praise() -> None:
     """плохо / не очень via semantic path — empathy reflection before next slot."""
     for phrase in ("плохо", "не очень"):
-        session = _daily_session()
+        session = _planner_session()
         result = _apply_semantic(
             session,
             phrase,
@@ -218,7 +250,7 @@ def test_negative_wellness_semantic_reflects_without_praise() -> None:
 
 def test_complaint_mid_call_after_wellness_reflects_without_praise() -> None:
     """Complaint during mood slot — reflect_report, no praise, slot flow continues."""
-    session = _daily_session()
+    session = _planner_session()
     _apply_semantic(
         session,
         "нормально",
@@ -247,7 +279,11 @@ def test_rule_baseline_wellness_short_answers_still_work() -> None:
         ("плохо", "reflect_report"),
         ("не очень", "reflect_report"),
     ):
-        session = _daily_session()
+        session = (
+            _daily_session()
+            if expected_intent == "check_mood"
+            else _planner_session()
+        )
         result = session.handle_user_text(phrase)
         assert session.state.slots["wellness"] == SlotStatus.FILLED
         assert result.proposal.intent == expected_intent

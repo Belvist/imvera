@@ -24,6 +24,9 @@ class SpeakEffect(Effect):
     question_id: str = ""
     slot: str | None = None
     marks_question: bool = False
+    semantic_scope_id: str = ""
+    supersedes_effect_id: str = ""
+    reissue_count: int = 0
 
 
 class InterpretEffect(Effect):
@@ -37,6 +40,7 @@ class TimerEffect(Effect):
     timer_id: str
     wait_ms: int
     reason: str = "answer_wait"
+    semantic_scope_id: str = ""
 
 
 class EndCallEffect(Effect):

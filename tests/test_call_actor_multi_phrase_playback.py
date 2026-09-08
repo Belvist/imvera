@@ -3,9 +3,14 @@
 import asyncio
 from types import SimpleNamespace
 
+from packages.contracts.enums import AnswerJudgement, DialogueAct
+from packages.contracts.interpretation import TurnInterpretation
+from packages.contracts.turn import TurnProposal
 from packages.core.memory_store import InMemoryCallRecordStore
+from packages.dialogue.interpretation import UserInterpretation
+from packages.dialogue.validator import Validator
 from packages.dialogue.planner import Planner
-from packages.dialogue.session import CallSession
+from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.voice_runtime.call_actor import CallActor, CallActorConfig, MediaCallbacks
 from packages.voice_runtime.opening_cache import CachedOpening
 from packages.voice_runtime.playback import PlaybackQueue
@@ -29,10 +34,44 @@ def wellness_session():
     return session
 
 
+def render_stream_turn(session: CallSession) -> SessionTurnResult:
+    """Turn that still uses LLM render_stream (not planner-direct slot questions)."""
+    session.turn_id += 1
+    proposal = TurnProposal(
+        turn_id=session.turn_id,
+        generation_id="g-render",
+        speech="Спасибо.",
+        intent="explain_vera",
+        fsm_state=session.state.fsm_state,
+        mandatory_remaining=session.state.mandatory_remaining(),
+    )
+    validated = Validator.validate(proposal)
+    interp = UserInterpretation(
+        judgement=AnswerJudgement.VALID,
+        dialogue_act=DialogueAct.ANSWER,
+    )
+    contract = TurnInterpretation(
+        call_id=session.state.call_id,
+        turn_id=session.turn_id,
+        raw_text="болит спина",
+        dialogue_act=DialogueAct.ANSWER,
+        judgement=AnswerJudgement.VALID,
+        state_version=session.state.state_version,
+    )
+    return SessionTurnResult(
+        user_text="болит спина",
+        interpretation=interp,
+        turn_contract=contract,
+        proposal=proposal,
+        validated=validated,
+        safety=session.safety.model_copy(deep=True),
+    )
+
+
 def test_streaming_phrases_speak_sequentially_not_concurrently():
     async def scenario():
         session = wellness_session()
-        result = session.handle_user_text("Чувствую себя хорошо")
+        result = render_stream_turn(session)
         tts_started: list[str] = []
         tts_active: list[str] = []
         pcm = b"\x01\x00" * 320
@@ -66,7 +105,7 @@ def test_streaming_phrases_speak_sequentially_not_concurrently():
 
         assert tts_started == ["Поняла.", "Как вы спали?"]
         assert actor._delivered_phrases == ["Поняла.", "Как вы спали?"]
-        assert actor._wait_state is not None, "Answer wait starts only after full turn"
+        assert actor._wait_state is None, "explain_vera render path does not arm slot wait"
         actor._playback_task.cancel()
         await actor._cancel_wait_timer()
         await asyncio.gather(actor._playback_task, return_exceptions=True)
@@ -77,7 +116,7 @@ def test_streaming_phrases_speak_sequentially_not_concurrently():
 def test_barge_in_during_multi_phrase_cancels_render_generation():
     async def scenario():
         session = wellness_session()
-        result = session.handle_user_text("Чувствую себя хорошо")
+        result = render_stream_turn(session)
 
         async def synthesize(text, **kwargs):
             yield SimpleNamespace(pcm_s16le=b"\x01\x00" * 320, sample_rate=16000)
@@ -212,7 +251,7 @@ def test_opening_cache_plays_without_live_tts(monkeypatch):
 def test_barge_in_before_second_phrase_skips_second_tts():
     async def scenario():
         session = wellness_session()
-        result = session.handle_user_text("Чувствую себя хорошо")
+        result = render_stream_turn(session)
         tts_started: list[str] = []
 
         async def synthesize(text, **kwargs):

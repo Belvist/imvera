@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -18,9 +19,9 @@ GATE_ROOT = ROOT / ".run" / "freeswitch-gate"
 BRIDGE_HEALTH = "http://127.0.0.1:9210/health/ready"
 
 
-def _run(cmd: list[str], *, check: bool = True) -> int:
+def _run(cmd: list[str], *, check: bool = True, env: dict[str, str] | None = None) -> int:
     print("+", " ".join(cmd))
-    proc = subprocess.run(cmd, cwd=ROOT)
+    proc = subprocess.run(cmd, cwd=ROOT, env=env)
     if check and proc.returncode != 0:
         raise SystemExit(proc.returncode)
     return proc.returncode
@@ -40,30 +41,30 @@ def _wait_bridge(timeout_s: float = 90.0) -> None:
     raise SystemExit(1)
 
 
+def _git_image_tag() -> str:
+    proc = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=ROOT,
+    )
+    return proc.stdout.strip() if proc.returncode == 0 else "local"
+
+
 def _wait_fs_module(timeout_s: float = 90.0) -> None:
-    needle = "Successfully Loaded [mod_audio_stream]"
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
-        proc = subprocess.run(
-            [
-                "docker",
-                "compose",
-                "-f",
-                str(COMPOSE),
-                "exec",
-                "-T",
-                "freeswitch",
-                "sh",
-                "-c",
-                f"grep -q '{needle}' /var/log/freeswitch/freeswitch.log 2>/dev/null",
-            ],
-            cwd=ROOT,
+    proc = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "freeswitch_readiness_check.py"), "--wait", str(int(timeout_s))],
+        cwd=ROOT,
+        check=False,
+    )
+    if proc.returncode != 0:
+        print(
+            "freeswitch-docker-gate: FREESWITCH NOT READY reason=MOD_AUDIO_STREAM_MISSING",
+            file=sys.stderr,
         )
-        if proc.returncode == 0:
-            print("freeswitch-docker-gate: mod_audio_stream loaded")
-            return
-        time.sleep(2)
-    print("freeswitch-docker-gate: mod_audio_stream load not confirmed — continuing", file=sys.stderr)
+        raise SystemExit(1)
+    print("freeswitch-docker-gate: mod_audio_stream ready")
 
 
 def _clear_gate_artifacts() -> None:
@@ -82,6 +83,9 @@ def main() -> int:
 
     _clear_gate_artifacts()
 
+    compose_env = os.environ.copy()
+    compose_env["IMVERA_FS_IMAGE_TAG"] = _git_image_tag()
+
     _run(
         [
             "docker",
@@ -93,7 +97,8 @@ def main() -> int:
             "--build",
             "media-bridge",
             "freeswitch",
-        ]
+        ],
+        env=compose_env,
     )
     _wait_bridge()
     time.sleep(15)

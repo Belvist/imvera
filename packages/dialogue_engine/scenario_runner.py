@@ -17,6 +17,8 @@ from packages.dialogue_engine.events import (
     User,
     UserTurnReceived,
 )
+from packages.dialogue_engine.context import InterpretContext
+from packages.dialogue_engine.contextual_interpreter import contextual_interpret
 from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
 from packages.dialogue_engine.invariants import check_all, count_opening_generations
 from packages.dialogue_engine.reducer import reduce
@@ -68,28 +70,33 @@ class ScenarioRunner:
             self._turn += 1
             turn_id = f"u-{self._turn}"
             answer_slot = self.state.answer_context_slot()
+            ctx = InterpretContext.from_engine_state(self.state, turn_id=turn_id)
             if step.semantic is not None:
                 semantic = step.semantic
             else:
-                fast_sem, confident = fast_interpret_semantic(
-                    step.text, answer_slot=answer_slot
-                )
+                sem, confident = contextual_interpret(step.text, ctx)
                 if confident:
-                    semantic = fast_sem
+                    semantic = sem
                 else:
-                    shadow = DialogueState(
-                        call_id=self.state.call_id,
-                        elder_display_name=self.state.elder_display_name,
-                        family_id="fam-test",
-                        fsm_state=self.state.fsm_state,
-                        pending_slot=answer_slot,
-                        pending_question_delivered=answer_slot is not None,
-                        delivered_answer_slot=answer_slot,
+                    fast_sem, fast_conf = fast_interpret_semantic(
+                        step.text, answer_slot=answer_slot
                     )
-                    interp = interpret_user_turn(shadow, step.text)
-                    semantic = semantic_from_legacy(
-                        interp, text=step.text, answer_slot=answer_slot
-                    )
+                    if fast_conf:
+                        semantic = fast_sem
+                    else:
+                        shadow = DialogueState(
+                            call_id=self.state.call_id,
+                            elder_display_name=self.state.elder_display_name,
+                            family_id="fam-test",
+                            fsm_state=self.state.fsm_state,
+                            pending_slot=answer_slot,
+                            pending_question_delivered=answer_slot is not None,
+                            delivered_answer_slot=answer_slot,
+                        )
+                        interp = interpret_user_turn(shadow, step.text)
+                        semantic = semantic_from_legacy(
+                            interp, text=step.text, answer_slot=answer_slot
+                        )
 
             if self.interpret_delay_s > 0:
                 effect_id = f"ix-{self._turn}"

@@ -155,6 +155,8 @@ def test_valid_deferred_summary_plays_once() -> None:
             from_engine=True,
             speak_effect=speak,
         )
+        session._engine.state.fsm_state = FsmState.SUMMARY
+        session._engine.state.summary_spoken = True
         session._engine.state.active_playout_generation = speak.generation
         actor._inflight_utterances.add(1)
         await actor._enqueue_turn_delivery(summary)
@@ -292,6 +294,58 @@ def test_playout_completed_emits_answer_wait_timer() -> None:
     assert followups
     assert isinstance(followups[0], TimerEffect)
     assert followups[0].timer_id == "wait-wellness"
+
+
+def test_pop_speak_effect_preserves_timer_in_queue() -> None:
+    eng = DialogueEngine(call_id="t", elder_display_name="Даниил")
+    eng.start()
+    speak = eng.pop_speak_effect()
+    assert speak is not None
+    eng.on_playout_completed(speak.generation, speak.question_id)
+    assert eng.pop_speak_effect() is None
+    timer = eng.pop_timer_effect()
+    assert timer is not None
+    assert timer.timer_id == "wait-wellness"
+
+
+def test_mark_spoken_followup_survives_pop_speak_effect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression fs-1fbe9a6a: pop_speak_effect must not drop TimerEffect from queue."""
+    monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "1")
+    session = _session()
+    result = session.start()
+    speak = result.speak_effect
+    assert speak is not None
+    session.mark_spoken_action(speak.generation_id)
+    followup = session.pop_engine_playout_followup()
+    assert followup is not None
+    assert followup.proposal.intent == "wait_for_continuation"
+    assert followup.timer_effect is not None
+    assert followup.timer_effect.timer_id == "wait-wellness"
+
+
+def test_check_plans_playout_followup_schedules_wait_timer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After sleep fill → check_plans question, playout complete must arm wait-plans."""
+    monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "1")
+    session = _session()
+    opening = session.start()
+    assert opening.speak_effect is not None
+    session.mark_spoken_action(opening.speak_effect.generation_id)
+    session.pop_engine_playout_followup()
+    last_timer: TimerEffect | None = None
+    for text in ("Хорошо.", "Плохое.", "Спал плохо."):
+        turn = session.handle_user_text(text)
+        assert turn.speak_effect is not None
+        session.mark_spoken_action(turn.speak_effect.generation_id)
+        followup = session.pop_engine_playout_followup()
+        assert followup is not None
+        assert followup.timer_effect is not None
+        last_timer = followup.timer_effect
+    assert last_timer is not None
+    assert last_timer.timer_id == "wait-plans"
 
 
 def test_fs_14c79443_full_sequence_reaches_goodbye_final() -> None:

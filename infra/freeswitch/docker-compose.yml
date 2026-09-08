@@ -23,6 +23,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: imvera-freeswitch:${IMVERA_FS_IMAGE_TAG:-local}
     platform: linux/amd64
     container_name: imvera-freeswitch
     depends_on:
@@ -37,6 +38,16 @@ services:
       - "5060:5060/tcp"
       - "127.0.0.1:8021:8021/tcp"
       - "16384-16484:16384-16484/udp"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "fs_cli -x 'status' | grep -qi up && fs_cli -x 'module_exists mod_audio_stream' | grep -qx true",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
     networks:
       - p0a
 
