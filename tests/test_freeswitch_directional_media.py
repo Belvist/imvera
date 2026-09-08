@@ -59,19 +59,19 @@ def test_classify_directional_violation() -> None:
     assert classify_media_gate(ev) == MediaGateFailure.VERA_IN_INBOUND
 
 
-def test_classify_transport_passed() -> None:
+def test_classify_p0a_passed_without_bridge_tx() -> None:
     ev = MediaGateEvidence(
-        call_id="fs-pass",
+        call_id="fs-p0a",
         fs_answered_at=1.0,
         bridge_ws_connected_at=1.1,
-        first_outbound_pcm_at=1.2,
         bridge_rx_frames=80,
-        bridge_tx_frames=40,
+        bridge_tx_frames=0,
         nonzero_pcm_frames=40,
         inbound_rms_peak=1200.0,
         inbound_has_440_hz=True,
         inbound_has_880_hz=False,
         caller_downlink_has_880_hz=True,
-        synthetic_downlink_wav="/tmp/x",
+        synthetic_downlink_wav="/tmp/downlink.wav",
+        gate_phase="p0a",
     )
-    assert classify_media_gate(ev) == MediaGateFailure.PASSED
+    assert classify_media_gate(ev, phase="p0a") == MediaGateFailure.PASSED

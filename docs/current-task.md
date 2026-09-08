@@ -1,36 +1,35 @@
-# Current task — FreeSWITCH cleanup + P0 transport gate (ADR-013)
+# Current task — FreeSWITCH P0-A / P0-B gates (ADR-013)
 
-**Outcome:** Single production telephony path. Legacy LiveKit/Telnyx/Asterisk removed from active runtime.
+**Outcome:** Split telephony proof from AI duplex bridge.
 
-## Production path (only)
+## P0-A — FreeSWITCH core (NOW)
+
+No AI. Community `mod_audio_stream` **uplink only**. Outbound 880 Hz = **FS `tone_stream`**.
 
 ```text
-SIP → FreeSWITCH (answers) → PCM WS bridge → imvera-media-bridge → (later) CallActor
+440 Hz caller → FS → mod_audio_stream mono → bridge → raw_inbound.wav
+FS tone_stream 880 Hz → caller
 ```
 
-## Cleanup done
-
-- LiveKit → `archive/telephony/livekit/`
-- Telnyx → `archive/telephony/telnyx/`
-- Asterisk → `lab/asterisk/`
-- Generic gate tools → `tools/telephony_gate/`
-- `voice_gateway` — no LiveKit/Telnyx/Asterisk routes
-
-## P0 gate (no GigaAM/STT/LLM/TTS)
+Acceptance: 1 → 10 → 100 calls.
 
 ```bash
-make freeswitch-media-gate          # unit first
-make freeswitch-up                  # requires mod_audio_stream in FS image
-python3 services/imvera_media_bridge/main.py
-# synthetic SIP 440 Hz → FS → bridge → raw_inbound.wav
+make freeswitch-media-gate                    # unit
+make freeswitch-up
+python3 services/imvera_media_bridge/main.py  # uplink_only, no WS probe
+IMVERA_FS_GATE_REQUIRE_STACK=1 make freeswitch-synthetic-sip
+IMVERA_FS_GATE_REQUIRE_STACK=1 IMVERA_FS_SOAK_CALLS=100 make freeswitch-soak-gate
 ```
 
-Acceptance: 100/100 answer + 880 out + 440 in + directional + cleanup.
+## P0-B — after P0-A 100/100
 
-## mod_audio_stream
+Build `mod_imvera_audio` (READ/WRITE WS). Wire CallActor. **Not** commercial mod_audio_stream bidirectional.
 
-P0 validation OK. Production must choose licensed bidirectional OR `mod_imvera_audio` — see ADR-013 + `infra/freeswitch/MOD_AUDIO_STREAM.md`.
+## NOT VERIFIED
+
+- Live P0-A on Linux with mod_audio_stream built into FS image
+- 100/100 soak
 
 ## NEXT GATE
 
-Live Linux: 1 call → 10 → 100 synthetic duplex before AI on phone.
+P0-A `100/100` on Linux → start `mod_imvera_audio` design.

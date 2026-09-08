@@ -94,6 +94,12 @@ freeswitch-down:
 freeswitch-media-gate:
 	@$(PYTHON) scripts/freeswitch_media_gate.py
 
+freeswitch-soak-gate:
+	@$(PYTHON) scripts/freeswitch_soak_gate.py
+
+freeswitch-synthetic-sip:
+	@$(PYTHON) scripts/freeswitch_synthetic_sip_media.py
+
 media-bridge-up:
 	@$(PYTHON) services/imvera_media_bridge/main.py
 

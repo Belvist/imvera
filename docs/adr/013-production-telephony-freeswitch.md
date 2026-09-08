@@ -135,36 +135,44 @@ IMVERA runtime
 
 Add RTPengine when multi-node media relay is required. **Out of scope** for first production slice.
 
-## P0 transport gate (before GigaAM)
+## P0 gates (before GigaAM on phone)
 
-Single Linux host: FreeSWITCH + IMVERA bridge. **No STT/LLM/TTS in gate.**
+Two **independent** gates — do not mix telephony proof with AI duplex bridge.
+
+### P0-A — FreeSWITCH telephony core (current)
+
+Community `mod_audio_stream` = **uplink READ only**. Outbound 880 Hz = **FreeSWITCH `tone_stream`** (not bridge WS).
 
 | # | Criterion |
 |---|-----------|
-| 1 | Outbound dial / inbound INVITE completes |
-| 2 | FreeSWITCH **always** answers (200 OK) |
-| 3 | Caller hears **880 Hz** immediately after answer |
-| 4 | Caller **440 Hz** uplink reaches IMVERA PCM |
-| 5 | **880 Hz absent** from `raw_inbound.wav` (directional) |
-| 6 | Hangup always closes bridge session |
+| 1 | INVITE → 200 OK (FS answers) |
+| 2 | 440 Hz reaches bridge → `raw_inbound.wav` |
+| 3 | Caller hears 880 Hz (FS `tone_stream`) |
+| 4 | 880 Hz **absent** from `raw_inbound.wav` |
+| 5 | Hangup cleanup; second call without restart |
+| 6 | Soak **100/100** |
 
-Pass **100/100** synthetic runs → then enable Silero → GigaAM → dialogue → TTS.
+After P0-A 100/100 → **freeze FreeSWITCH telephony core**.
 
-Trace stages (target):
+### P0-B — duplex bridge (after P0-A)
+
+Custom `mod_imvera_audio` (preferred). **Do not** build production on commercial bidirectional `mod_audio_stream`.
+
+| # | Criterion |
+|---|-----------|
+| 1 | FS READ → WS → IMVERA |
+| 2 | IMVERA → WS → FS WRITE |
+| 3 | Same directional 440/880 invariants |
+| 4 | Then wire CallActor (no STT in module) |
+
+Trace stages (P0-A):
 
 ```text
-fs.invite
-fs.answer
-fs.rtp.established
-bridge.ws.connected
-bridge.read.first_frame
-bridge.write.first_frame   # 880 Hz probe
-bridge.read.caller_440
-fs.hangup
-bridge.session.closed
+fs.invite → fs.answer → bridge.ws.connected
+bridge.read.first_frame (440 Hz)
+fs.tone_stream.880 (caller downlink)
+fs.hangup → bridge.session.closed
 ```
-
-Failure classes mirror LiveKit gate lessons: `FS_ANSWER_FAILURE`, `BRIDGE_STARVATION`, `DOWNLINK_PROBE_MISSING`, `UPLINK_SILENCE`, `DIRECTIONAL_VIOLATION`.
 
 ## Package layout (target)
 

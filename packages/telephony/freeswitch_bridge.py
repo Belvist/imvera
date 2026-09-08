@@ -38,6 +38,7 @@ class FreeSwitchBridgeSession:
     counters: TelephonyMediaCounters = field(default_factory=TelephonyMediaCounters)
     _outbound_queue: asyncio.Queue[bytes] = field(default_factory=asyncio.Queue)
     _outbound_task: asyncio.Task | None = None
+    uplink_only: bool = True
     _closed: bool = False
     ws_connected_at: float | None = None
     first_outbound_pcm_at: float | None = None
@@ -47,7 +48,9 @@ class FreeSwitchBridgeSession:
     async def handle_ws(self, websocket: Any) -> None:
         """Attach mod_audio_stream (or lab client) WebSocket."""
         self.ws_connected_at = time.time()
-        outbound_task = asyncio.create_task(self._pump_outbound_to_ws(websocket))
+        outbound_task: asyncio.Task | None = None
+        if not self.uplink_only:
+            outbound_task = asyncio.create_task(self._pump_outbound_to_ws(websocket))
         try:
             while not self._closed:
                 message = await websocket.receive()
@@ -71,11 +74,12 @@ class FreeSwitchBridgeSession:
                 )
                 await self.on_inbound(frame)
         finally:
-            outbound_task.cancel()
-            try:
-                await outbound_task
-            except asyncio.CancelledError:
-                pass
+            if outbound_task is not None:
+                outbound_task.cancel()
+                try:
+                    await outbound_task
+                except asyncio.CancelledError:
+                    pass
             await self.close()
 
     async def enqueue_outbound_pcm(self, pcm: bytes) -> None:

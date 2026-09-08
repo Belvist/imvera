@@ -49,6 +49,7 @@ class MediaGateEvidence:
     raw_inbound_wav: str = ""
     synthetic_downlink_wav: str = ""
     negotiated_codecs: list[str] = field(default_factory=list)
+    gate_phase: str = "p0a"
     failure: str = ""
     classified_at: float = 0.0
 
@@ -60,7 +61,8 @@ class MediaGateEvidence:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
-def classify_media_gate(evidence: MediaGateEvidence) -> MediaGateFailure:
+def classify_media_gate(evidence: MediaGateEvidence, *, phase: str | None = None) -> MediaGateFailure:
+    gate_phase = phase or evidence.gate_phase or "p0a"
     if evidence.inbound_has_880_hz:
         return MediaGateFailure.VERA_IN_INBOUND
 
@@ -70,20 +72,20 @@ def classify_media_gate(evidence: MediaGateEvidence) -> MediaGateFailure:
     if evidence.fs_answered_at and evidence.bridge_ws_connected_at is None:
         return MediaGateFailure.BRIDGE_WS_FAILURE
 
-    if (
-        evidence.bridge_ws_connected_at is not None
-        and evidence.first_outbound_pcm_at is None
-        and evidence.bridge_tx_frames == 0
-    ):
-        return MediaGateFailure.OUTBOUND_STARVATION
-
-    if (
-        evidence.first_outbound_pcm_at is not None
-        and evidence.bridge_tx_frames > 0
-        and evidence.synthetic_downlink_wav
-        and not evidence.caller_downlink_has_880_hz
-    ):
-        return MediaGateFailure.SIP_DOWNLINK_MEDIA_FAILURE
+    if gate_phase == "p0b":
+        if (
+            evidence.bridge_ws_connected_at is not None
+            and evidence.first_outbound_pcm_at is None
+            and evidence.bridge_tx_frames == 0
+        ):
+            return MediaGateFailure.OUTBOUND_STARVATION
+        if (
+            evidence.first_outbound_pcm_at is not None
+            and evidence.bridge_tx_frames > 0
+            and evidence.synthetic_downlink_wav
+            and not evidence.caller_downlink_has_880_hz
+        ):
+            return MediaGateFailure.SIP_DOWNLINK_MEDIA_FAILURE
 
     if evidence.bridge_ws_connected_at and evidence.bridge_rx_frames == 0:
         return MediaGateFailure.SIP_UPLINK_MEDIA_FAILURE

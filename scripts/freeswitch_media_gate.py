@@ -56,8 +56,8 @@ def main() -> int:
     if path is None:
         report = {
             "status": "unit_only",
-            "message": "No live evidence — run synthetic SIP against FreeSWITCH + imvera-media-bridge",
-            "next": "make freeswitch-up && python3 services/imvera_media_bridge/main.py",
+            "message": "No live evidence — P0-A: FS tone_stream 880 + mod_audio_stream uplink",
+            "next": "make freeswitch-up && python3 services/imvera_media_bridge/main.py && make freeswitch-synthetic-sip",
         }
         _write_report(report)
         print("freeswitch-media-gate: unit OK — live gate NOT RUN (no evidence)")
@@ -78,7 +78,8 @@ def main() -> int:
         evidence.inbound_880_snr = float(spectral["inbound_880_snr"])
         evidence.caller_880_snr = float(spectral["caller_880_snr"])
 
-    failure = classify_media_gate(evidence)
+        evidence.gate_phase = "p0a"
+        failure = classify_media_gate(evidence, phase="p0a")
     evidence.failure = str(failure)
     write_evidence(path, evidence)
 

@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- P0-A: community mod_audio_stream uplink only; 880 Hz downlink = FS tone_stream -->
 <include>
   <context name="public">
     <extension name="imvera_inbound">
       <condition field="destination_number" expression="^\+?15550001000$">
         <action application="answer"/>
-        <action application="log" data="INFO IMVERA FS answered ${uuid}"/>
-        <!-- mod_audio_stream: mono = caller-only READ leg -->
-        <action application="eval" data="${uuid_audio_stream(${uuid} start ${env(IMVERA_MEDIA_BRIDGE_WS)}/${uuid} mono 16k)}"/>
-        <action application="sleep" data="30000"/>
+        <action application="log" data="INFO IMVERA P0-A answered ${uuid}"/>
+        <action application="set" data="imvera_ws_url=${env(IMVERA_MEDIA_BRIDGE_WS)}/${uuid}"/>
+        <!-- READ leg: caller PCM → bridge (community mod_audio_stream, mono) -->
+        <action application="eval" data="${uuid_audio_stream(${uuid} start ${imvera_ws_url} mono 16k)}"/>
+        <!-- WRITE leg probe: FreeSWITCH native tone — NOT bridge WS outbound -->
+        <action application="playback" data="&amp;tone_stream://%(25000,0,880);loops=-1"/>
+        <action application="sleep" data="25000"/>
         <action application="hangup"/>
       </condition>
     </extension>
