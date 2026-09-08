@@ -228,10 +228,17 @@ class CorpusRunner:
     def _deliver_pending_non_question(self) -> None:
         while self._pending_speaks:
             effect = self._pending_speaks.pop(0)
-            self._last_delivered = effect
             if effect.marks_question:
-                self._deliver_speak(effect)
-            # Non-question speaks (summary/goodbye) — recorded as spoken.
+                self._pending_speaks.insert(0, effect)
+                break
+            self._last_delivered = effect
+            self._record(
+                self.engine.on_playout_completed(
+                    effect.generation,
+                    effect.question_id,
+                )
+            )
+            self._drain_speak_effects()
 
     def _deliver_speak(self, effect: SpeakEffect) -> None:
         self._last_delivered = effect

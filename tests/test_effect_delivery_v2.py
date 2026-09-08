@@ -18,9 +18,9 @@ from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue_engine.delivery import EffectOutbox, EffectStatus
 from packages.dialogue_engine.delivery.decision import Decision
 from packages.dialogue_engine.delivery.scope import speak_scope_for, timer_scope_for
-from packages.dialogue_engine.effects import SpeakEffect, TimerEffect
+from packages.dialogue_engine.effects import EndCallEffect, SpeakEffect, TimerEffect
 from packages.dialogue_engine.engine import DialogueEngine
-from packages.dialogue_engine.state import EngineState
+from packages.dialogue_engine.state import EngineState, Question, QuestionPhase
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks
 
 pytestmark = pytest.mark.dialogue_engine
@@ -436,7 +436,7 @@ def test_second_timer_schedule_supersedes_first() -> None:
     asyncio.run(scenario())
 
 
-def test_hangup_after_playback_not_before_speak() -> None:
+def test_end_call_effect_executes_hangup() -> None:
     async def scenario() -> None:
         session = _session()
         hangup_calls: list[str] = []
@@ -453,11 +453,105 @@ def test_hangup_after_playback_not_before_speak() -> None:
             llm=SimpleNamespace(),
             media=MediaCallbacks(_noop, _noop, hangup, _noop),
         )
-        actor._hangup_after_playback = True
-        actor._active_generation = None
-        actor._playback = None
-        await actor._maybe_hangup_when_idle()
+        effect = EndCallEffect(effect_id="fx-hang", revision=1, reason="goodbye")
+        session._engine.outbox.accept_decision(
+            Decision(revision=1, effects=(effect,))
+        )
+        claimed = session._engine.pop_hangup_effect()
+        assert claimed is not None
+        await actor._execute_end_call_effect(claimed)
         assert hangup_calls == ["hangup"]
+        snap = session._engine.outbox.cleanup_snapshot()
+        assert snap["non_terminal_outbox_records"] == 0
+
+    asyncio.run(scenario())
+
+
+def test_goodbye_completed_emits_end_call_effect() -> None:
+    eng = DialogueEngine(call_id="t", elder_display_name="Даниил")
+    state = eng.state
+    gen = state.active_playout_generation + 1
+    state.active_playout_generation = gen
+    state.active_playout = Question(
+        question_id="g-goodbye",
+        slot="",
+        text="До свидания.",
+        intent="goodbye_final",
+        phase=QuestionPhase.PLAYING,
+    )
+    state.call_closed = True
+    state.closing_reason = "goodbye"
+    eng.on_playout_completed(gen, "")
+    hangup = eng.pop_hangup_effect()
+    assert hangup is not None
+    assert hangup.reason == "goodbye"
+
+
+def test_goodbye_cancelled_no_end_call_effect() -> None:
+    eng = DialogueEngine(call_id="t", elder_display_name="Даниил")
+    state = eng.state
+    gen = state.active_playout_generation + 1
+    state.active_playout_generation = gen
+    state.active_playout = Question(
+        question_id="g-goodbye",
+        slot="",
+        text="До свидания.",
+        intent="goodbye_final",
+        phase=QuestionPhase.PLAYING,
+    )
+    eng.on_playout_cancelled(gen, "")
+    assert eng.pop_hangup_effect() is None
+
+
+def test_playout_throws_wires_effect_failed() -> None:
+    async def scenario() -> None:
+        session = _session()
+        speak = _speak(effect_id="fx-playout-live", intent="check_wellness")
+        session._engine.outbox.accept_decision(
+            Decision(revision=1, effects=(speak,))
+        )
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="audit-family",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+        )
+        actor._pending_speak_effect_id = speak.effect_id
+        await actor._fail_pending_speak_playout("pcm write failed")
+        record = session._engine.outbox.get_record(speak.effect_id)
+        assert record is not None
+        assert record.status == EffectStatus.FAILED
+        assert record.fail_stage == "PLAYOUT"
+
+    asyncio.run(scenario())
+
+
+def test_hangup_cleanup_zero_active() -> None:
+    async def scenario() -> None:
+        session = _session()
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="audit-family",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+        )
+        effect = EndCallEffect(effect_id="fx-hang2", revision=1, reason="goodbye")
+        session._engine.outbox.accept_decision(
+            Decision(revision=1, effects=(effect,))
+        )
+        claimed = session._engine.pop_hangup_effect()
+        assert claimed is not None
+        await actor._execute_end_call_effect(claimed)
+        snap = session._engine.outbox.cleanup_snapshot()
+        assert snap["non_terminal_outbox_records"] == 0
+        assert snap["pending_timers"] == 0
+        assert snap["deferred_speaks"] == 0
 
     asyncio.run(scenario())
 

@@ -20,7 +20,7 @@ from packages.dialogue.state import DialogueState
 from packages.dialogue.transition_store import DialogueTransitionStore
 from packages.dialogue.validator import Validator
 from packages.dialogue_engine.engine import DialogueEngine
-from packages.dialogue_engine.effects import SpeakEffect, TimerEffect
+from packages.dialogue_engine.effects import EndCallEffect, SpeakEffect, TimerEffect
 from packages.dialogue_engine.runtime import dialogue_engine_active, log_runtime_truth
 from packages.dialogue_engine.semantic import semantic_from_legacy
 from packages.safety import SafetyEngine
@@ -53,6 +53,7 @@ class SessionTurnResult(BaseModel):
     followup_speak_effects: list = Field(default_factory=list)
     speak_effect: SpeakEffect | None = None
     timer_effect: TimerEffect | None = None
+    end_call_effect: EndCallEffect | None = None
 
     model_config = {"frozen": True}
 
@@ -218,6 +219,11 @@ class CallSession:
         assert self._engine is not None
         speak = self._engine.pop_speak_effect()
         timer = self._engine.pop_timer_effect() if speak is None else None
+        hangup = (
+            self._engine.pop_hangup_effect()
+            if speak is None and timer is None
+            else None
+        )
         if speak is None and timer is not None:
             self._engine.sync_to_legacy(self.state)
             slot = self.state.waiting_on_goal or self.state.pending_slot
@@ -246,6 +252,30 @@ class CallSession:
                 persist_error=persist_error or commit.error,
                 from_engine=True,
                 timer_effect=timer,
+            )
+        if speak is None and hangup is not None:
+            gen = self._next_generation_id()
+            proposal = TurnProposal(
+                turn_id=self.turn_id,
+                generation_id=gen,
+                speech="",
+                intent="end_call",
+                fsm_state=self.state.fsm_state,
+                mandatory_remaining=self.state.mandatory_remaining(),
+            )
+            validated = Validator.validate(proposal)
+            return SessionTurnResult(
+                user_text=user_text,
+                interpretation=interp,
+                turn_contract=contract,
+                proposal=proposal,
+                validated=validated,
+                safety=self.safety.model_copy(deep=True),
+                observation_ids=list(observation_ids),
+                persist_ok=persist_ok,
+                persist_error=persist_error,
+                from_engine=True,
+                end_call_effect=hangup,
             )
         if speak is None:
             gen = self._next_generation_id()
@@ -350,7 +380,11 @@ class CallSession:
             contract,
             persist_ok=True,
         )
-        if result.speak_effect is None and result.timer_effect is None:
+        if (
+            result.speak_effect is None
+            and result.timer_effect is None
+            and result.end_call_effect is None
+        ):
             return None
         return result
 
@@ -711,6 +745,7 @@ class CallSession:
         )
 
     def mark_spoken_action(self, generation_id: str) -> bool:
+        followup: SessionTurnResult | None = None
         if self._engine is not None:
             if generation_id in self._completed_playout_ids:
                 return True
@@ -733,7 +768,9 @@ class CallSession:
                 self._completed_playout_ids.add(generation_id)
             followup = self._build_engine_followup_result()
             if followup is not None and (
-                followup.speak_effect is not None or followup.timer_effect is not None
+                followup.speak_effect is not None
+                or followup.timer_effect is not None
+                or followup.end_call_effect is not None
             ):
                 self._engine_playout_followup = followup
             self._engine.sync_to_legacy(self.state)

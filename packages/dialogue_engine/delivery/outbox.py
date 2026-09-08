@@ -249,6 +249,18 @@ class EffectOutbox:
     def pending_timer_ids(self) -> list[str]:
         return list(self._pending_timers)
 
+    def cleanup_snapshot(self) -> dict[str, int]:
+        non_terminal = sum(
+            1 for record in self._records.values() if record.status not in _TERMINAL
+        )
+        return {
+            "non_terminal_outbox_records": non_terminal,
+            "pending_speaks": len(self._pending_speaks),
+            "pending_timers": len(self._pending_timers),
+            "pending_hangups": len(self._pending_hangups),
+            "deferred_speaks": 1 if self._deferred_speak_id else 0,
+        }
+
     @staticmethod
     def _synthetic_id(effect: Effect) -> str:
         return f"{effect.kind}-{id(effect)}"

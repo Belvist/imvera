@@ -25,7 +25,12 @@ from packages.dialogue.context_builder import active_question_kind, build_turn_c
 from packages.dialogue.planner import Planner
 from packages.dialogue.semantic_adapter import adapt_semantic_turn
 from packages.dialogue.interpretation import to_turn_interpretation
-from packages.dialogue_engine.effects import ENGINE_SPEAK_INTENTS, SpeakEffect, TimerEffect
+from packages.dialogue_engine.effects import (
+    ENGINE_SPEAK_INTENTS,
+    EndCallEffect,
+    SpeakEffect,
+    TimerEffect,
+)
 from packages.dialogue_engine.context import InterpretContext
 from packages.dialogue_engine.contextual_interpreter import contextual_interpret
 from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
@@ -193,7 +198,6 @@ class CallActor:
     _utterance_budgets: dict[int, _TurnBudget] = field(default_factory=dict)
     _active_stage_budget: _TurnBudget | None = None
     _playback_turn_generation: str | None = None
-    _hangup_after_playback: bool = False
     _transport_closed: bool = False
     _capture_lost: bool = False
     _active_llm_request_id: str | None = None
@@ -1324,11 +1328,12 @@ class CallActor:
                 turn_id=result.proposal.turn_id,
             )
         if (
-            result.proposal.intent.endswith("_final")
-            or result.proposal.intent == "partial_unresolved_close"
-            or self.session.state.final_action_done
+            result.end_call_effect is not None
+            and result.speak_effect is None
+            and result.timer_effect is None
         ):
-            self._hangup_after_playback = True
+            await self._execute_end_call_effect(result.end_call_effect)
+            return
         await self._enqueue_turn_delivery(result)
 
     async def _enqueue_turn_delivery(self, result: SessionTurnResult) -> None:
@@ -1789,13 +1794,9 @@ class CallActor:
             return
         await self._cancel_wait_timer()
         if self._stopped or self._transport_closed or not result.validated.allowed:
-            if self._hangup_after_playback and not result.validated.speech:
-                await self._maybe_hangup_when_idle()
             return
         planner_text = result.validated.speech
         if not planner_text:
-            if self._hangup_after_playback:
-                await self._maybe_hangup_when_idle()
             return
 
         render_generation = f"g-{uuid.uuid4().hex[:8]}"
@@ -2057,6 +2058,8 @@ class CallActor:
                 None,
                 "success",
             ):
+                if ledger.generation_outcome == "failed":
+                    await self._fail_pending_speak_playout("playout_failed")
                 if render_generation:
                     await self._abort_undelivered_phrase(render_generation)
                 if not self._hold_turn_finalize:
@@ -2234,7 +2237,19 @@ class CallActor:
                     await self._on_playback_drained()
                 await asyncio.sleep(0.01)
                 continue
-            await self.media.send_pcm(chunk.pcm_s16le)
+            try:
+                await self.media.send_pcm(chunk.pcm_s16le)
+            except Exception as exc:
+                if self._playback._ledger:
+                    self._playback._ledger.generation_outcome = "failed"
+                    self._playback.mark_generation_done("failed")
+                await self._fail_pending_speak_playout(str(exc))
+                await self._emit_stage(
+                    "playout.failed",
+                    generation_id=chunk.generation_id,
+                    error=str(exc)[:200],
+                )
+                continue
             if self._effective_echo_ref_gate():
                 self._push_echo_downlink(chunk.pcm_s16le, chunk.sample_rate)
             if chunk.sequence == 0:
@@ -2259,6 +2274,8 @@ class CallActor:
         if not ledger:
             return
         if ledger.sent_samples <= 0 or ledger.generation_outcome != "success":
+            if ledger.generation_outcome == "failed":
+                await self._fail_pending_speak_playout("playout_drain_failed")
             if not self._hold_turn_finalize:
                 self._active_generation = None
                 self._force_listen_enabled()
@@ -2272,7 +2289,6 @@ class CallActor:
     async def _finalize_turn_playback(self) -> None:
         assert self._playback
         pending_wait: tuple[str | None, str | None] | None = None
-        hangup = False
         async with self._finalize_lock:
             gen = self._active_generation
             if not gen or not self._playback.playback_complete():
@@ -2289,6 +2305,8 @@ class CallActor:
                 self._force_listen_enabled()
                 return
             if ledger.sent_samples <= 0 or ledger.generation_outcome != "success":
+                if ledger.generation_outcome == "failed":
+                    await self._fail_pending_speak_playout("playout_finalize_failed")
                 self._active_generation = None
                 self._force_listen_enabled()
                 return
@@ -2344,7 +2362,6 @@ class CallActor:
             }
             pending_wait = self._pending_answer_wait
             self._pending_answer_wait = None
-            hangup = self._hangup_after_playback
 
         await self._enable_listen_after_playback()
         if pending_wait is not None and not self.session.uses_dialogue_engine():
@@ -2352,10 +2369,20 @@ class CallActor:
                 goal_id=pending_wait[0],
                 question_id=pending_wait[1],
             )
-        if hangup:
-            await self._maybe_hangup_when_idle()
 
-    async def _maybe_hangup_when_idle(self) -> None:
+    async def _fail_pending_speak_playout(self, error: str) -> None:
+        effect_id = self._pending_speak_effect_id
+        if not effect_id or not self.session.uses_dialogue_engine():
+            return
+        await asyncio.to_thread(
+            self.session.handle_effect_failed,
+            effect_id,
+            stage="PLAYOUT",
+            error=error[:200],
+        )
+        self._pending_speak_effect_id = None
+
+    async def _execute_end_call_effect(self, effect: EndCallEffect) -> None:
         if self._stopped or self._transport_closed:
             return
         if self._active_generation or (self._playback and self._playback.pending_frames):
@@ -2364,8 +2391,47 @@ class CallActor:
             return
         if self._tts_task and not self._tts_task.done():
             return
+        engine = self.session._engine
+        if engine is not None:
+            engine.outbox.mark_started(effect.effect_id)
+        await self._emit_stage(
+            "end_call.started",
+            effect_id=effect.effect_id,
+            reason=effect.reason,
+        )
+        await self._cancel_engine_timer()
+        await self._cancel_wait_timer()
         self._transport_closed = True
+        self._stopped = True
         await self.media.hangup()
+        if engine is not None:
+            engine.outbox.mark_completed(effect.effect_id)
+        await self._verify_call_cleanup()
+
+    async def _verify_call_cleanup(self) -> None:
+        engine = self.session._engine
+        if engine is None:
+            return
+        snap = engine.outbox.cleanup_snapshot()
+        active_timers = (
+            1 if self._engine_timer_task and not self._engine_timer_task.done() else 0
+        )
+        playout_active = 1 if self._active_generation else 0
+        tts_active = 1 if self._tts_task and not self._tts_task.done() else 0
+        issues = {
+            k: v
+            for k, v in {
+                **snap,
+                "active_timers": active_timers,
+                "playout_active": playout_active,
+                "tts_active": tts_active,
+            }.items()
+            if v
+        }
+        if issues:
+            await self._emit_stage("CALL_CLEANUP_FAILURE", **issues)
+        else:
+            await self._emit_stage("call.cleanup_ok", **snap)
 
 
 def build_call_actor(

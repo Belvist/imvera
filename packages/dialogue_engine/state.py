@@ -73,6 +73,7 @@ class EngineState(BaseModel):
     planned_question: Question | None = None
     playing_question: Question | None = None
     delivered_question: Question | None = None
+    active_playout: Question | None = None
 
     processing_turn_id: str | None = None
     processing_effect_id: str | None = None

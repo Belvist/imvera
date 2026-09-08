@@ -124,6 +124,7 @@ def _emit_speak(
     )
     state.planned_question = q if marks_question else None
     state.playing_question = q if marks_question else None
+    state.active_playout = q
     if marks_question and slot:
         if not reserve_question(state, slot, gen_id):
             return _close_partial(state)
@@ -167,30 +168,49 @@ def _on_playout_completed(
     if event.generation != state.active_playout_generation:
         return state, []
     q = state.playing_question
-    if q is None or (event.question_id and q.question_id != event.question_id):
+    if q is not None:
+        if event.question_id and q.question_id != event.question_id:
+            return state, []
+        delivered = q.model_copy(update={"phase": QuestionPhase.DELIVERED})
+        state.delivered_question = delivered
+        state.playing_question = None
+        state.planned_question = None
+        state.active_playout = None
+        if q.intent == "opening_wellness":
+            state.opening_state = OpeningState.DELIVERED
+        if q.slot:
+            mark_question_delivered(state, q.slot, q.question_id)
+        state.bump_revision()
+        if (
+            q.slot
+            and state.fsm_state == FsmState.DAILY_CHECK
+            and not state.call_closed
+        ):
+            state.waiting_on_slot = q.slot
+            return state, [
+                TimerEffect(
+                    effect_id=_new_effect_id(),
+                    revision=state.revision,
+                    timer_id=f"wait-{q.slot}",
+                    wait_ms=questions._ANSWER_WAIT_MS,
+                    reason="answer_wait",
+                )
+            ]
         return state, []
-    delivered = q.model_copy(update={"phase": QuestionPhase.DELIVERED})
-    state.delivered_question = delivered
-    state.playing_question = None
-    state.planned_question = None
-    if q.intent == "opening_wellness":
-        state.opening_state = OpeningState.DELIVERED
-    if q.slot:
-        mark_question_delivered(state, q.slot, q.question_id)
+
+    ap = state.active_playout
+    if ap is None:
+        return state, []
+    if event.question_id and ap.question_id and ap.question_id != event.question_id:
+        return state, []
+    state.active_playout = None
     state.bump_revision()
-    if (
-        q.slot
-        and state.fsm_state == FsmState.DAILY_CHECK
-        and not state.call_closed
-    ):
-        state.waiting_on_slot = q.slot
+    if ap.intent in ("goodbye_final", "partial_unresolved_close"):
         return state, [
-            TimerEffect(
+            EndCallEffect(
                 effect_id=_new_effect_id(),
                 revision=state.revision,
-                timer_id=f"wait-{q.slot}",
-                wait_ms=questions._ANSWER_WAIT_MS,
-                reason="answer_wait",
+                reason=state.closing_reason or ap.intent,
             )
         ]
     return state, []
@@ -211,6 +231,8 @@ def _on_playout_cancelled(
         )
         state.playing_question = None
         state.planned_question = None
+    if state.active_playout:
+        state.active_playout = None
     state.bump_revision()
     return state, []
 
@@ -403,6 +425,14 @@ def _speak_repair(
     gen_id = state.next_generation_id()
     gen = state.active_playout_generation + 1
     state.active_playout_generation = gen
+    q = Question(
+        question_id=delivered.question_id if delivered else gen_id,
+        slot=slot,
+        text=text,
+        phase=QuestionPhase.PLANNED,
+        intent="repair_repeat",
+    )
+    state.active_playout = q
     return state, [
         SpeakEffect(
             effect_id=_new_effect_id(),
@@ -425,25 +455,13 @@ def _close_partial(state: EngineState) -> tuple[EngineState, list[Effect]]:
     state.closing_reason = "partial_unresolved"
     state.fsm_state = FsmState.FINAL_CLASSIFICATION
     state.bump_revision()
-    gen_id = state.next_generation_id()
-    gen = state.active_playout_generation + 1
-    state.active_playout_generation = gen
-    return state, [
-        SpeakEffect(
-            effect_id=_new_effect_id(),
-            revision=state.revision,
-            generation_id=gen_id,
-            generation=gen,
-            text=questions._PARTIAL_CLOSE,
-            intent="partial_unresolved_close",
-            marks_question=False,
-        ),
-        EndCallEffect(
-            effect_id=_new_effect_id(),
-            revision=state.revision,
-            reason="partial_unresolved",
-        ),
-    ]
+    return _emit_speak(
+        state,
+        text=questions._PARTIAL_CLOSE,
+        intent="partial_unresolved_close",
+        slot=None,
+        marks_question=False,
+    )
 
 
 def _on_delivery_deferred(
