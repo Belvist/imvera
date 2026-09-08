@@ -487,6 +487,64 @@ def test_goodbye_completed_emits_end_call_effect() -> None:
     assert hangup.reason == "goodbye"
 
 
+def test_partial_unresolved_close_emits_end_call_effect() -> None:
+    eng = DialogueEngine(call_id="t", elder_display_name="Даниил")
+    state = eng.state
+    gen = state.active_playout_generation + 1
+    state.active_playout_generation = gen
+    state.active_playout = Question(
+        question_id="g-partial",
+        slot="",
+        text="Сейчас не получилось узнать, как у вас дела. До свидания.",
+        intent="partial_unresolved_close",
+        phase=QuestionPhase.PLAYING,
+    )
+    state.call_closed = True
+    state.closing_reason = "partial_unresolved"
+    eng.on_playout_completed(gen, "")
+    hangup = eng.pop_hangup_effect()
+    assert hangup is not None
+    assert hangup.reason == "partial_unresolved"
+
+
+def test_end_call_deferred_until_playback_idle() -> None:
+    async def scenario() -> None:
+        session = _session()
+        hangup_calls: list[str] = []
+
+        async def hangup() -> None:
+            hangup_calls.append("hangup")
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="audit-family",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, hangup, _noop),
+        )
+        effect = EndCallEffect(effect_id="fx-hang-def", revision=1, reason="partial_unresolved")
+        session._engine.outbox.accept_decision(
+            Decision(revision=1, effects=(effect,))
+        )
+        claimed = session._engine.pop_hangup_effect()
+        assert claimed is not None
+        actor._active_generation = "g-busy"
+        await actor._schedule_end_call_effect(claimed)
+        assert actor._pending_end_call_effect is not None
+        assert hangup_calls == []
+        actor._active_generation = None
+        await actor._flush_pending_end_call_effect()
+        assert hangup_calls == ["hangup"]
+        assert actor._pending_end_call_effect is None
+        record = session._engine.outbox.get_record("fx-hang-def")
+        assert record is not None
+        assert record.status == EffectStatus.COMPLETED
+
+    asyncio.run(scenario())
+
+
 def test_goodbye_cancelled_no_end_call_effect() -> None:
     eng = DialogueEngine(call_id="t", elder_display_name="Даниил")
     state = eng.state

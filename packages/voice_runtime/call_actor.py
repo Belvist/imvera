@@ -47,6 +47,11 @@ from packages.voice_runtime.echo_ref_gate import (
     echo_ref_gate_enabled,
     lab_barge_in_enabled,
 )
+from packages.voice_runtime.forensic import (
+    ForensicTurnSnapshot,
+    text_echo_similarity,
+    utc_now_iso,
+)
 from packages.voice_runtime.playback_reference import PlaybackReference
 from packages.voice_runtime.turn_fsm import ConversationPhase, TurnManager
 from packages.voice_runtime.utterance_builder import UtteranceBuilder
@@ -222,6 +227,7 @@ class CallActor:
     _tts_first_pcm_gens: set[str] = field(default_factory=set)
     _tts_slow_watch: asyncio.Task | None = None
     _hold_turn_finalize: bool = False
+    _pending_end_call_effect: EndCallEffect | None = None
     # Monotonic deadline: discard uplink until this time (post-speech pause).
     _listen_gated_until: float | None = None
     _finalized_playback_gens: set[str] = field(default_factory=set)
@@ -236,6 +242,64 @@ class CallActor:
     _media_health: MediaHealthTracker = field(default_factory=MediaHealthTracker)
     _blocked_preroll_pending: bytes = b""
     _audio_echo_drop_logged: int = 0
+    _forensic_bot_playout_end_ts: str | None = None
+    _forensic_listen_open_ts: str | None = None
+    _forensic_vad_start_ts: str | None = None
+    _forensic_vad_end_ts: str | None = None
+    _forensic_segment_echo_max: float = 0.0
+
+    def _forensic_active(self) -> bool:
+        return os.environ.get("IMVERA_FORENSIC", "0") in {"1", "true", "yes"}
+
+    def _stt_dump_enabled(self) -> bool:
+        if self._forensic_active():
+            return True
+        return os.environ.get("IMVERA_STT_DUMP", "0") in {"1", "true", "yes"}
+
+    def _bump_forensic_echo_score(self, score: float) -> None:
+        if score > self._forensic_segment_echo_max:
+            self._forensic_segment_echo_max = score
+
+    async def _emit_forensic_turn(
+        self,
+        *,
+        utterance_id: str,
+        stt_text: str,
+        stt_rms: float,
+        stt_duration_ms: int,
+        stt_latency_ms: int,
+        dump_path: str,
+        delivered_slot: str,
+        interpret_path: str,
+        interpret_latency_ms: int,
+        stt_request_ts: str,
+        stt_result_ts: str,
+    ) -> None:
+        last_bot = self._delivered_phrases[-1] if self._delivered_phrases else ""
+        snapshot = ForensicTurnSnapshot(
+            utterance_id=utterance_id,
+            bot_playout_end_ts=self._forensic_bot_playout_end_ts,
+            listen_open_ts=self._forensic_listen_open_ts,
+            vad_speech_start_ts=self._forensic_vad_start_ts,
+            vad_speech_end_ts=self._forensic_vad_end_ts,
+            stt_audio_start_ts=stt_request_ts,
+            stt_audio_end_ts=stt_result_ts,
+            stt_rms=stt_rms,
+            stt_duration_ms=stt_duration_ms,
+            stt_latency_ms=stt_latency_ms,
+            last_bot_text=last_bot,
+            stt_text=stt_text,
+            echo_similarity=text_echo_similarity(stt_text, last_bot),
+            echo_score_max=round(self._forensic_segment_echo_max, 3),
+            delivered_slot=delivered_slot,
+            interpret_path=interpret_path,
+            interpret_latency_ms=interpret_latency_ms,
+            dump_path=dump_path,
+        )
+        await self._emit_stage("forensic.turn", **snapshot.as_payload())
+        self._forensic_vad_start_ts = None
+        self._forensic_vad_end_ts = None
+        self._forensic_segment_echo_max = 0.0
 
     def _active_builder(self) -> UtteranceBuilder | None:
         return self._utterance_builder or self._collector
@@ -732,6 +796,8 @@ class CallActor:
                 builder.seed_external_preroll(self._blocked_preroll_pending)
             self._blocked_preroll_pending = b""
         if started:
+            self._forensic_vad_start_ts = utc_now_iso()
+            self._forensic_segment_echo_max = 0.0
             self._turn_manager.on_vad_speech_started(self._monotonic())
             if self.config.lab_barge_in and playback_active:
                 self._turn_manager.note_barge_in_candidate(self._monotonic())
@@ -796,6 +862,7 @@ class CallActor:
                 duration_ms = built.duration_ms
                 segment_rms = built.segment_rms
                 silence_tail_ms = built.silence_tail_ms
+            self._forensic_vad_end_ts = utc_now_iso()
             await self._emit_stage(
                 "audio.speech_ended",
                 pcm_bytes=len(pcm_out),
@@ -863,6 +930,7 @@ class CallActor:
             # ADR-010: retain blocked-period tail for utterance preroll only — never replay into VAD.
             self._blocked_preroll_pending = bytes(self._playback_uplink_buf)
             self._playback_uplink_buf.clear()
+            self._forensic_listen_open_ts = utc_now_iso()
             await self._emit_stage(
                 "listen.enabled",
                 pause_ms=int(self.config.post_speech_pause_ms),
@@ -947,6 +1015,7 @@ class CallActor:
                 )
                 if self._should_drop_echo_for_vad(pcm, playback_active=playback_active):
                     self._audio_echo_drop_logged += 1
+                    self._bump_forensic_echo_score(classification.score)
                     if self._audio_echo_drop_logged <= 30:
                         await self._emit_stage(
                             "audio.echo_classified",
@@ -1332,7 +1401,7 @@ class CallActor:
             and result.speak_effect is None
             and result.timer_effect is None
         ):
-            await self._execute_end_call_effect(result.end_call_effect)
+            await self._schedule_end_call_effect(result.end_call_effect)
             return
         await self._enqueue_turn_delivery(result)
 
@@ -1404,8 +1473,8 @@ class CallActor:
         await self._deliver_session_turn(result)
 
     def _stt_dump_pcm(self, pcm: bytes, utterance_id: str) -> str | None:
-        """Optional WAV dump for offline stt_probe — IMVERA_STT_DUMP=1."""
-        if os.environ.get("IMVERA_STT_DUMP", "0") not in {"1", "true", "yes"}:
+        """Optional WAV dump for offline STT benchmark — IMVERA_STT_DUMP or IMVERA_FORENSIC."""
+        if not self._stt_dump_enabled():
             return None
         dump_dir = Path(__file__).resolve().parents[2] / ".run" / "stt_dumps"
         dump_dir.mkdir(parents=True, exist_ok=True)
@@ -1443,6 +1512,7 @@ class CallActor:
         duration_ms = int(len(pcm) / max(2, sr) * 1000) if pcm else 0
         pcm_rms = round(pcm_rms_s16le(pcm), 1)
         dump_path = self._stt_dump_pcm(pcm, utterance_id)
+        stt_request_ts = utc_now_iso()
         self._media_health.note_stt_input()
         await self._emit_stage(
             "stt.request",
@@ -1498,6 +1568,7 @@ class CallActor:
             raw_text = (
                 getattr(stt_result, "raw_text", None) or stt_result.text or ""
             ).strip()
+            stt_result_ts = utc_now_iso()
             await self._emit_stage(
                 "stt.result",
                 utterance_id=utterance_id,
@@ -1537,6 +1608,19 @@ class CallActor:
                         utterance_id=utterance_id,
                         text_len=len(text),
                     )
+                    await self._emit_forensic_turn(
+                        utterance_id=utterance_id,
+                        stt_text=text,
+                        stt_rms=pcm_rms,
+                        stt_duration_ms=duration_ms,
+                        stt_latency_ms=stt_elapsed_ms,
+                        dump_path=dump_path or "",
+                        delivered_slot=self.session.state.pending_slot or "",
+                        interpret_path="echo_discarded",
+                        interpret_latency_ms=0,
+                        stt_request_ts=stt_request_ts,
+                        stt_result_ts=stt_result_ts,
+                    )
                     self._reset_uplink_endpointing()
                 self._resume_answer_wait_if_paused()
                 self._turn_manager.on_turn_applied()
@@ -1562,15 +1646,24 @@ class CallActor:
 
             semantic = None
             fast_confident = False
+            contextual_confident = False
+            rules_confident = False
+            interpret_path = "unknown"
             if self.session.uses_dialogue_engine():
                 ctx = InterpretContext.from_engine_state(
                     self.session._engine.state, turn_id=utterance_id
                 )
-                sem, fast_confident = contextual_interpret(text, ctx)
+                sem, contextual_confident = contextual_interpret(text, ctx)
+                fast_confident = contextual_confident
+                if contextual_confident:
+                    interpret_path = "fast_contextual"
                 if not fast_confident:
-                    sem, fast_confident = fast_interpret_semantic(
+                    sem, rules_confident = fast_interpret_semantic(
                         text, answer_slot=answer_slot
                     )
+                    fast_confident = rules_confident
+                    if rules_confident:
+                        interpret_path = "fast_rules"
                 if fast_confident:
                     semantic = sem
                     interp = semantic_to_interpretation(sem)
@@ -1613,12 +1706,18 @@ class CallActor:
                 self._inflight_utterances.discard(utterance_seq)
                 return
 
-            await self._emit_stage("interpret.ready", utterance_id=utterance_id)
+            interpret_ready_ms = int((time.monotonic() - budget.started_mono) * 1000)
+            await self._emit_stage(
+                "interpret.ready",
+                utterance_id=utterance_id,
+                elapsed_ms=interpret_ready_ms,
+            )
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.INTERPRETATION_READY, {})
             )
             qkind = active_question_kind(self.session.state)
             if semantic_payload is not None:
+                interpret_path = "llm"
                 interp, _validated = adapt_semantic_turn(
                     text,
                     semantic_payload.payload,
@@ -1629,11 +1728,25 @@ class CallActor:
                 if self.session.uses_dialogue_engine():
                     semantic = semantic_from_legacy(interp, text=text, answer_slot=answer_slot)
             elif not fast_confident:
+                interpret_path = "rules_fallback"
                 from packages.dialogue.interpretation import interpret_user_turn
 
                 interp = interpret_user_turn(self.session.state, text)
                 if self.session.uses_dialogue_engine():
                     semantic = semantic_from_legacy(interp, text=text, answer_slot=answer_slot)
+            await self._emit_forensic_turn(
+                utterance_id=utterance_id,
+                stt_text=text,
+                stt_rms=pcm_rms,
+                stt_duration_ms=duration_ms,
+                stt_latency_ms=stt_elapsed_ms,
+                dump_path=dump_path or "",
+                delivered_slot=answer_slot or self.session.state.pending_slot or "",
+                interpret_path=interpret_path,
+                interpret_latency_ms=interpret_ready_ms,
+                stt_request_ts=stt_request_ts,
+                stt_result_ts=stt_result_ts,
+            )
             if stt_result.asr_quality in (AsrQuality.LOW, AsrQuality.UNUSABLE):
                 await self._emit_stage(
                     "stt.low_quality",
@@ -2289,6 +2402,7 @@ class CallActor:
     async def _finalize_turn_playback(self) -> None:
         assert self._playback
         pending_wait: tuple[str | None, str | None] | None = None
+        playout_followup: SessionTurnResult | None = None
         async with self._finalize_lock:
             gen = self._active_generation
             if not gen or not self._playback.playback_complete():
@@ -2325,13 +2439,11 @@ class CallActor:
                 await asyncio.to_thread(
                     self.session.mark_spoken_action, self._pending_mark_spoken_id
                 )
-                followup = await asyncio.to_thread(
+                playout_followup = await asyncio.to_thread(
                     self.session.pop_engine_playout_followup
                 )
                 self._pending_mark_spoken_id = None
                 self._pending_mark_render_gen = None
-                if followup is not None:
-                    await self._post_apply_turn(followup)
             finish = self.media.finish or self.media.flush
             await finish()
             sent = ledger.sent_samples
@@ -2350,6 +2462,7 @@ class CallActor:
                     },
                 )
             )
+            self._forensic_bot_playout_end_ts = utc_now_iso()
             self._finalized_playback_gens.add(gen)
             # Drop generation mute BEFORE pause await so a cancelled pause
             # cannot leave Vera permanently deaf (sip-97e9d693a5).
@@ -2369,6 +2482,9 @@ class CallActor:
                 goal_id=pending_wait[0],
                 question_id=pending_wait[1],
             )
+        if playout_followup is not None:
+            await self._post_apply_turn(playout_followup)
+        await self._flush_pending_end_call_effect()
 
     async def _fail_pending_speak_playout(self, error: str) -> None:
         effect_id = self._pending_speak_effect_id
@@ -2382,15 +2498,32 @@ class CallActor:
         )
         self._pending_speak_effect_id = None
 
-    async def _execute_end_call_effect(self, effect: EndCallEffect) -> None:
+    async def _schedule_end_call_effect(self, effect: EndCallEffect) -> None:
+        if await self._execute_end_call_effect(effect):
+            return
+        self._pending_end_call_effect = effect
+        await self._emit_stage(
+            "end_call.deferred",
+            effect_id=effect.effect_id,
+            reason=effect.reason,
+        )
+
+    async def _flush_pending_end_call_effect(self) -> None:
+        effect = self._pending_end_call_effect
+        if effect is None:
+            return
+        if await self._execute_end_call_effect(effect):
+            self._pending_end_call_effect = None
+
+    async def _execute_end_call_effect(self, effect: EndCallEffect) -> bool:
         if self._stopped or self._transport_closed:
-            return
+            return False
         if self._active_generation or (self._playback and self._playback.pending_frames):
-            return
+            return False
         if self._inflight_utterances:
-            return
+            return False
         if self._tts_task and not self._tts_task.done():
-            return
+            return False
         engine = self.session._engine
         if engine is not None:
             engine.outbox.mark_started(effect.effect_id)
@@ -2406,7 +2539,13 @@ class CallActor:
         await self.media.hangup()
         if engine is not None:
             engine.outbox.mark_completed(effect.effect_id)
+        await self._emit_stage(
+            "end_call.completed",
+            effect_id=effect.effect_id,
+            reason=effect.reason,
+        )
         await self._verify_call_cleanup()
+        return True
 
     async def _verify_call_cleanup(self) -> None:
         engine = self.session._engine
