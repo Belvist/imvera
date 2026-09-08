@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -96,7 +97,6 @@ def plans_question(state: EngineState | None = None) -> str:
 def wellness_ack(*, polarity: str | None = None, value: str = "") -> str:
     """Short ack after wellness slot fill — polarity-aware."""
     from packages.dialogue_engine.fast_interpreter import _detect_polarity, _normalize_core
-    import re
 
     pol = polarity or _detect_polarity(value)
     core = _normalize_core(value)
@@ -108,7 +108,8 @@ def wellness_ack(*, polarity: str | None = None, value: str = "") -> str:
         return _WELLNESS_ACK_UNCERTAIN
     if re.match(r"^(пойд[её]т|терпимо|более-менее)\.?$", core, re.I):
         return _WELLNESS_ACK_OKAY
-    if re.match(r"^(нормально|обычно|ничего|обычное)\.?$", core, re.I) or "нормально" in value.lower():
+    normal_short = re.match(r"^(нормально|обычно|ничего|обычное)\.?$", core, re.I)
+    if normal_short or "нормально" in value.lower():
         return _WELLNESS_ACK_NORMAL
     if pol == "positive":
         return _WELLNESS_ACK_GOOD
@@ -127,7 +128,12 @@ def opening_speech(elder_display_name: str, prior_context: dict[str, str] | None
     )
 
 
-def slot_question(slot: str, *, clarification: bool = False, state: EngineState | None = None) -> str:
+def slot_question(
+    slot: str,
+    *,
+    clarification: bool = False,
+    state: EngineState | None = None,
+) -> str:
     if slot == "plans":
         if clarification:
             return _SLOT_CLARIFICATIONS["plans"]

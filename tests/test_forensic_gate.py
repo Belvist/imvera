@@ -11,6 +11,11 @@ from packages.voice_runtime.forensic import (
     text_echo_similarity,
 )
 from tools.voice_lab.forensic_gate import analyze_call
+from tools.voice_lab.dialogue_forensic import (
+    check_topic_dialogue_policy,
+    check_trace_file,
+    extract_intent_sequence,
+)
 
 
 def test_text_echo_similarity_detects_vera_question_bleed() -> None:
@@ -168,3 +173,86 @@ def test_forensic_gate_parses_legacy_trace(tmp_path: Path) -> None:
     report = analyze_call(call_id, manifest_path=manifest)
     assert report["turns"][0]["interpret_path"] == "fast_contextual"
     assert report["turns"][0]["verdict"] == "FAST_PATH"
+
+
+def test_dialogue_policy_passes_fs592_style_trace(tmp_path: Path) -> None:
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    call_id = "fs-policy-pass"
+    rows = [
+        {
+            "ts": "t1",
+            "type": "stage.timing",
+            "payload": {"stage": "stt.result", "text": "Плохо спал."},
+        },
+        {
+            "ts": "t2",
+            "type": "stage.timing",
+            "payload": {
+                "stage": "dialogue.engine_decision",
+                "intent": "topic_sleep_pattern",
+            },
+        },
+        {
+            "ts": "t3",
+            "type": "stage.timing",
+            "payload": {
+                "stage": "stt.result",
+                "text": "Проснулся в 4, не мог заснуть, живот болел.",
+            },
+        },
+        {
+            "ts": "t4",
+            "type": "stage.timing",
+            "payload": {
+                "stage": "dialogue.engine_decision",
+                "intent": "topic_sleep_daytime_impact",
+            },
+        },
+        {
+            "ts": "t5",
+            "type": "stage.timing",
+            "payload": {
+                "stage": "stt.result",
+                "text": "Сейчас живот почти не болит.",
+            },
+        },
+        {
+            "ts": "t6",
+            "type": "stage.timing",
+            "payload": {
+                "stage": "dialogue.engine_decision",
+                "intent": "topic_abdominal_pain_current",
+            },
+        },
+    ]
+    path = trace_dir / f"{call_id}.jsonl"
+    path.write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in rows),
+        encoding="utf-8",
+    )
+    violations = check_trace_file(path)
+    assert not violations
+    intents = extract_intent_sequence(rows)
+    assert "probe_concern" not in intents
+    assert "topic_abdominal_pain_onset" not in intents
+
+
+def test_dialogue_policy_fails_probe_after_poor_sleep(tmp_path: Path) -> None:
+    rows = [
+        {
+            "ts": "t1",
+            "type": "stage.timing",
+            "payload": {"stage": "stt.result", "text": "Плохо спал."},
+        },
+        {
+            "ts": "t2",
+            "type": "stage.timing",
+            "payload": {
+                "stage": "dialogue.engine_decision",
+                "intent": "probe_concern",
+            },
+        },
+    ]
+    violations = check_topic_dialogue_policy(rows)
+    assert any(v.rule == "no_probe_after_poor_sleep" for v in violations)

@@ -11,13 +11,35 @@ export PYTHONPATH := .
 .PHONY: voice-open test-contracts test-dialogue-e2e test-persistence-e2e test-voice test-sip
 .PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k dialogue-corpus-gate effect-delivery-chaos-gate stress-gate stress-gate-100
 .PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera live-debug-1 live-daily-check-100
-.PHONY: internal-docker-live-smoke-1 internal-docker-live-smoke-10 pjsua2-transport-gate
+.PHONY: test-dialogue-topic lint-dialogue-topic forensic-gate
 
 install:
 	$(PYTHON) -m pip install -e ".[dev,api,mlx,gigaam-stt]"
 
 test:
 	$(PYTHON) -m pytest tests/ -q
+
+test-dialogue-topic:
+	@echo "GATE: Phase 1 topic correctness (unit + regression + forensic dialogue policy)"
+	$(PYTHON) -m pytest tests/test_topic_tracker.py tests/test_topic_live_regression.py \
+		tests/test_check_path.py tests/test_dialogue_engine_regression.py \
+		tests/test_forensic_gate.py -q
+
+lint-dialogue-topic:
+	$(PYTHON) -m ruff check \
+		packages/dialogue_engine/topic_tracker.py \
+		packages/dialogue_engine/reducer.py \
+		packages/dialogue_engine/state.py \
+		packages/dialogue_engine/questions.py \
+		packages/dialogue_engine/invariants.py \
+		packages/dialogue_engine/scenario_runner.py \
+		tests/test_topic_tracker.py \
+		tests/test_topic_live_regression.py \
+		tools/voice_lab/dialogue_forensic.py
+
+forensic-gate:
+	@test -n "$(CALL_ID)" || (echo "Usage: make forensic-gate CALL_ID=fs-<id>" && exit 1)
+	$(PYTHON) scripts/forensic_gate.py $(CALL_ID)
 
 test-corpus-1k:
 	@echo "LAYER: CallSession dialogue corpus (NOT live SIP×1000)"

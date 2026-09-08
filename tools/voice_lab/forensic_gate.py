@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from packages.voice_runtime.forensic import classify_turn, normalize_speech_text, text_echo_similarity
+from tools.voice_lab.dialogue_forensic import check_trace_file, extract_intent_sequence
 
 ROOT = Path(__file__).resolve().parents[2]
 TRACE_DIR = ROOT / ".run" / "traces"
@@ -322,10 +323,34 @@ def main(argv: list[str] | None = None) -> int:
         help="JSONL with call_id, utterance_id, expected_text",
     )
     parser.add_argument("--json-out", type=Path, help="Write full report JSON")
+    parser.add_argument(
+        "--skip-dialogue-policy",
+        action="store_true",
+        help="Skip Phase 1 topic dialogue policy checks",
+    )
     args = parser.parse_args(argv)
 
     report = analyze_call(args.call_id, manifest_path=args.manifest)
     _print_report(report)
+
+    dialogue_violations: list = []
+    if not args.skip_dialogue_policy:
+        trace_path = TRACE_DIR / f"{args.call_id}.jsonl"
+        dialogue_violations = check_trace_file(trace_path)
+        print("\n--- Dialogue topic policy ---")
+        if dialogue_violations:
+            for v in dialogue_violations:
+                print(f"  FAIL [{v.rule}]: {v.detail}")
+        else:
+            intents = extract_intent_sequence(
+                [
+                    json.loads(line)
+                    for line in trace_path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+            )
+            print(f"  PASS (intents={len(intents)})")
+
     if args.json_out:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(
@@ -333,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
             encoding="utf-8",
         )
         print(f"\nWrote {args.json_out}")
-    return 0
+    return 1 if dialogue_violations else 0
 
 
 if __name__ == "__main__":
