@@ -1,0 +1,114 @@
+"""Tests for topic-based dialogue (MVP adaptive layer port)."""
+
+from __future__ import annotations
+
+import pytest
+
+from packages.contracts.enums import SlotStatus
+from packages.dialogue_engine.events import CallStarted
+from packages.dialogue_engine.scenario_runner import ScenarioRunner
+from packages.dialogue_engine.topic_tracker import (
+    TopicFamily,
+    detect_families,
+    infer_dimensions,
+    prime_topics,
+)
+from packages.dialogue_engine.state import EngineState
+
+
+pytestmark = pytest.mark.dialogue_engine
+
+
+def _runner() -> ScenarioRunner:
+    return ScenarioRunner(call_id="topic-test", elder_display_name="Даниил")
+
+
+def test_detect_sleep_from_poor_sleep_phrase() -> None:
+    assert TopicFamily.SLEEP in detect_families("Плохо спал.")
+
+
+def test_infer_sleep_pattern_from_wake_time() -> None:
+    dims = infer_dimensions(
+        TopicFamily.SLEEP,
+        "Проснулся в четыре, потом долго не мог заснуть.",
+    )
+    assert "pattern" in dims
+
+
+def test_infer_abdominal_current_when_improving() -> None:
+    dims = infer_dimensions(
+        TopicFamily.ABDOMINAL_PAIN,
+        "Сейчас живот уже почти не болит, вроде прошло.",
+    )
+    assert "current" in dims
+
+
+def test_prime_topics_sets_active_and_dimensions() -> None:
+    state = EngineState(call_id="t1", elder_display_name="")
+    prime_topics(state, "Плохо спал.")
+    assert state.active_topic == TopicFamily.SLEEP
+    assert "pattern" in state.topic_dimensions.get(TopicFamily.SLEEP, [])
+
+
+def test_poor_sleep_at_wellness_starts_topic_not_probe() -> None:
+    """Regression fs-592f4ea0: «плохо спал» at wellness → sleep topic, not concern probe."""
+    result = _runner().run(
+        [
+            CallStarted(),
+            "Плохо спал.",
+        ]
+    )
+    intents = [e.intent for e in result.speak_effects]
+    assert "probe_concern" not in intents
+    assert any(i.startswith("topic_sleep_") for i in intents)
+    assert result.state.active_topic == TopicFamily.SLEEP or TopicFamily.SLEEP in result.state.topic_dimensions
+
+
+def test_sleep_topic_then_mood_ladder() -> None:
+    result = _runner().run(
+        [
+            CallStarted(),
+            "Плохо спал.",
+            "Проснулся в четыре, не мог заснуть.",
+            "Усталость есть.",
+            "Хорошее настроение.",
+            "Планов нет.",
+        ]
+    )
+    intents = [e.intent for e in result.speak_effects]
+    assert "summary" in intents
+    assert result.state.slots["sleep"] == SlotStatus.FILLED
+
+
+def test_abdominal_in_probe_answer_switches_topic() -> None:
+    result = _runner().run(
+        [
+            CallStarted(),
+            "Чувствую себя плохо.",
+            "Проснулся в четыре, живот немного побаливал.",
+        ]
+    )
+    intents = [e.intent for e in result.speak_effects]
+    assert any(
+        i.startswith("topic_abdominal_pain_") or i.startswith("topic_sleep_")
+        for i in intents
+    )
+
+
+def test_never_silent_on_sleep_complaint() -> None:
+    """Regression fs-641ab72d: complaint at sleep question must get Vera response."""
+    result = _runner().run(
+        [
+            CallStarted(),
+            "Хорошо себя чувствую.",
+            "Хорошее.",
+            "Нормально спал.",
+            "А-а, плохо болело сердце. Я же говорил же.",
+        ]
+    )
+    last_user_idx = 4
+    speaks_after = result.speak_effects[last_user_idx:] if len(result.speak_effects) > last_user_idx else []
+    assert speaks_after or any(
+        e.intent.startswith("clarify_") or e.intent.startswith("topic_")
+        for e in result.speak_effects[-3:]
+    )

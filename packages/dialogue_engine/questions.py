@@ -20,6 +20,22 @@ _PROBE_QUESTIONS: dict[str, str] = {
     "pain_night": "А ночью не болело?",
 }
 
+_TOPIC_QUESTIONS: dict[str, str] = {
+    "topic_sleep_pattern": "Что ночью мешало спать?",
+    "topic_sleep_daytime_impact": "А днём как — есть усталость?",
+    "topic_abdominal_pain_current": "А сейчас живот ещё беспокоит?",
+    "topic_abdominal_pain_onset": "Как давно это началось?",
+    "topic_headache_onset": "Как давно болит голова?",
+    "topic_headache_severity": "Боль сильная или терпимая?",
+    "topic_limb_pain_onset": "Как давно это беспокоит?",
+    "topic_limb_pain_function": "Мешает ли это ходить или двигаться?",
+    "topic_mood_loneliness_intensity": "Насколько тяжело на душе сегодня?",
+    "topic_mood_loneliness_social": "Было ли с кем поговорить?",
+    "topic_medication_status_today": "Принимали ли сегодня лекарства?",
+    "topic_general_symptom_concern": "Что именно беспокоит?",
+    "topic_general_symptom_duration": "Как давно это продолжается?",
+}
+
 _SLOT_CLARIFICATIONS: dict[str, str] = {
     "wellness": "Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.",
     "mood": "Как у вас настроение — хотя бы коротко?",
@@ -47,6 +63,10 @@ _URGENT_CLOSE = (
     "Спасибо за разговор. До свидания."
 )
 _ANSWER_WAIT_MS = 7000
+
+
+def topic_question(intent: str) -> str:
+    return _TOPIC_QUESTIONS.get(intent, "Расскажите, пожалуйста, чуть подробнее.")
 
 
 def probe_question(phase: str, *, clarification: bool = False) -> str:

@@ -118,9 +118,14 @@ def classify_wellness_path(
     polarity: str | None,
 ) -> WellnessBranch:
     from packages.dialogue_engine.state import CheckPath
+    from packages.dialogue_engine.topic_tracker import TopicFamily, detect_families
 
     text = (wellness_text or "").lower()
     rules: tuple[tuple[Callable[[], bool], WellnessBranch], ...] = (
+        (
+            lambda: TopicFamily.SLEEP in detect_families(text),
+            WellnessBranch(path=CheckPath.STANDARD),
+        ),
         (
             lambda: is_urgent_concern(text),
             WellnessBranch(path=CheckPath.URGENT, urgent=True, store_concern_from_wellness=True),

@@ -110,6 +110,12 @@ class EngineState(BaseModel):
     follow_up_opening: bool = False
     wellness_probes_enabled: bool = True
 
+    active_topic: str | None = None
+    pending_topics: list[str] = Field(default_factory=list)
+    topic_dimensions: dict[str, list[str]] = Field(default_factory=dict)
+    topic_evidence: dict[str, list[str]] = Field(default_factory=dict)
+    topic_asked_dimension: str | None = None
+
     def bump_revision(self) -> None:
         self.revision += 1
 

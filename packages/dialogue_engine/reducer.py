@@ -38,6 +38,17 @@ from packages.dialogue_engine.check_path import (
 from packages.dialogue_engine.state import CheckPath
 from packages.dialogue_engine.response_plan import build_response_plan, compose_speech
 from packages.dialogue_engine.semantic import SemanticAct
+from packages.dialogue_engine.topic_tracker import (
+    TopicPrompt,
+    family_from_slot,
+    is_topic_slot,
+    next_topic_prompt,
+    observe_topic_answer,
+    prime_topics,
+    should_start_topic_flow,
+    topic_ack_for_family,
+    topic_slot,
+)
 from packages.dialogue_engine.state import (
     EngineState,
     OpeningState,
@@ -363,10 +374,37 @@ def _apply_semantic(
 
     if state.probe_phase and semantic.act == SemanticAct.ANSWER:
         text = semantic.value or semantic.source_quote
+        if should_start_topic_flow(
+            state, text, answer_slot=f"probe_{state.probe_phase}"
+        ):
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.waiting_on_slot = None
+            state.probe_phase = None
+            prime_topics(state, text)
+            return _advance_after_topic(state, text, newly_filled=[])
         state.processing_turn_id = None
         state.processing_effect_id = None
         state.waiting_on_slot = None
         return _advance_probe_after_answer(state, text)
+
+    user_text = semantic.source_quote or semantic.value or ""
+
+    if is_topic_slot(answer_slot) and semantic.act == SemanticAct.ANSWER:
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.waiting_on_slot = None
+        observe_topic_answer(state, user_text)
+        return _advance_after_topic(state, user_text)
+
+    if should_start_topic_flow(state, user_text, answer_slot=answer_slot):
+        if semantic.act in (SemanticAct.ANSWER, SemanticAct.UNCLEAR):
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.waiting_on_slot = None
+            state.probe_phase = None
+            prime_topics(state, user_text)
+            return _advance_after_topic(state, user_text, newly_filled=[])
 
     filled = fill_from_semantic(
         state, semantic, turn_id=state.processing_turn_id or ""
@@ -380,7 +418,44 @@ def _apply_semantic(
     state.processing_turn_id = None
     state.processing_effect_id = None
     state.bump_revision()
+    if _is_meaningful_turn(user_text) and answer_slot:
+        return _speak_never_silent(state, answer_slot, user_text)
     return state, []
+
+
+def _is_meaningful_turn(text: str) -> bool:
+    core = text.strip()
+    if len(core) < 2:
+        return False
+    if core.lower() in {"да", "нет", "ага", "угу"}:
+        return True
+    return len(core.split()) >= 1
+
+
+def _speak_never_silent(
+    state: EngineState,
+    answer_slot: str,
+    user_text: str,
+) -> tuple[EngineState, list[Effect]]:
+    """No substantive user turn may end with zero Vera response."""
+    if is_topic_slot(answer_slot):
+        observe_topic_answer(state, user_text)
+        advanced = _advance_after_topic(state, user_text)
+        if advanced[1]:
+            return advanced
+    if state.probe_phase:
+        return _speak_probe(state, state.probe_phase, clarification=True)
+    if can_ask_slot(state, answer_slot):
+        ack = "Понимаю."
+        question = questions.slot_question(answer_slot, clarification=True, state=state)
+        return _emit_speak(
+            state,
+            text=f"{ack} {question}".strip(),
+            intent=f"clarify_{answer_slot}",
+            slot=answer_slot,
+            marks_question=True,
+        )
+    return _close_partial(state)
 
 
 def _advance_after_fills(
@@ -390,6 +465,11 @@ def _advance_after_fills(
     state.delivered_question = None
 
     if "wellness" in filled_slots:
+        wellness_text = state.slot_values.get("wellness", "")
+        if should_start_topic_flow(state, wellness_text, answer_slot="wellness"):
+            state.probe_phase = None
+            prime_topics(state, wellness_text)
+            return _advance_after_topic(state, wellness_text, newly_filled=filled_slots)
         branch = _branch_after_wellness(state)
         if branch is not None:
             return branch
@@ -407,6 +487,71 @@ def _advance_after_fills(
         text=text,
         intent=intent,
         slot=next_slot,
+        marks_question=True,
+    )
+
+
+def _advance_after_topic(
+    state: EngineState,
+    user_text: str,
+    *,
+    newly_filled: list[str] | None = None,
+) -> tuple[EngineState, list[Effect]]:
+    prompt = next_topic_prompt(state)
+    if prompt is not None:
+        return _emit_topic_prompt(state, prompt, newly_filled=newly_filled or [])
+    state.active_topic = None
+    state.topic_asked_dimension = None
+    next_slot = state.next_open_slot()
+    if next_slot is None:
+        return _emit_summary(state)
+    if not can_ask_slot(state, next_slot):
+        return _close_partial(state)
+    ack = ""
+    if newly_filled:
+        ack = build_response_plan(
+            state, newly_filled=newly_filled, next_slot=next_slot
+        ).acknowledge
+    plan = build_response_plan(state, newly_filled=[], next_slot=next_slot)
+    parts = [p for p in (ack, plan.mandatory_question) if p]
+    text = " ".join(parts)
+    return _emit_speak(
+        state,
+        text=text,
+        intent=f"check_{next_slot}",
+        slot=next_slot,
+        marks_question=True,
+    )
+
+
+def _emit_topic_prompt(
+    state: EngineState,
+    prompt: TopicPrompt,
+    *,
+    newly_filled: list[str],
+) -> tuple[EngineState, list[Effect]]:
+    ack_parts: list[str] = []
+    if newly_filled:
+        ack_parts.append(
+            build_response_plan(
+                state,
+                newly_filled=newly_filled,
+                next_slot=state.next_open_slot() or "mood",
+            ).acknowledge
+        )
+    ack_parts.append(topic_ack_for_family(prompt.family))
+    question = questions.topic_question(prompt.intent)
+    text = " ".join(p for p in ack_parts if p).strip()
+    if text and question:
+        text = f"{text} {question}"
+    elif question:
+        text = question
+    slot = topic_slot(prompt.family)
+    return _emit_speak(
+        state,
+        text=text,
+        intent=prompt.intent,
+        slot=slot,
         marks_question=True,
     )
 
