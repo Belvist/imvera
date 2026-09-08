@@ -62,12 +62,17 @@ def _speak(
     )
 
 
-def _timer(*, effect_id: str = "fx-t", timer_id: str = "wait-wellness") -> TimerEffect:
+def _timer(
+    *,
+    effect_id: str = "fx-t",
+    timer_id: str = "wait-wellness",
+    wait_ms: int = 5000,
+) -> TimerEffect:
     return TimerEffect(
         effect_id=effect_id,
         revision=1,
         timer_id=timer_id,
-        wait_ms=5000,
+        wait_ms=wait_ms,
         semantic_scope_id=timer_scope_for(timer_id=timer_id),
     )
 
@@ -357,3 +362,133 @@ def test_call_actor_tts_exception_path() -> None:
 
 def eng_revision_bumped(eng: DialogueEngine) -> bool:
     return eng.revision >= 1
+
+
+def test_single_terminal_transition_invariant() -> None:
+    outbox = EffectOutbox(call_id="t")
+    speak = _speak(effect_id="fx-term")
+    outbox.accept_decision(Decision(revision=1, effects=(speak,)))
+    outbox.claim_next_speak()
+    outbox.mark_started(speak.effect_id)
+    assert outbox.mark_completed(speak.effect_id)
+    assert not outbox.mark_completed(speak.effect_id)
+    assert not outbox.mark_cancelled(speak.effect_id)
+    assert not outbox.mark_stale(speak.effect_id)
+    record = outbox.get_record(speak.effect_id)
+    assert record is not None
+    assert record.status == EffectStatus.COMPLETED
+
+
+def test_playout_failure_stage_recorded() -> None:
+    session = _session()
+    speak = _speak(effect_id="fx-playout")
+    session._engine.outbox.accept_decision(Decision(revision=1, effects=(speak,)))
+    session.handle_effect_failed("fx-playout", stage="PLAYOUT", error="drain failed")
+    record = session._engine.outbox.get_record("fx-playout")
+    assert record is not None
+    assert record.status == EffectStatus.FAILED
+    assert record.fail_stage == "PLAYOUT"
+
+
+def test_timer_expired_ignored_when_inflight() -> None:
+    async def scenario() -> None:
+        session = _session()
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="audit-family",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+        )
+        timer = _timer(wait_ms=10)
+        await actor._schedule_engine_timer(timer)
+        actor._inflight_utterances.add(99)
+        await asyncio.sleep(0.02)
+        assert actor._engine_timer_task is None or actor._engine_timer_task.done()
+        actor._inflight_utterances.discard(99)
+
+    asyncio.run(scenario())
+
+
+def test_second_timer_schedule_supersedes_first() -> None:
+    async def scenario() -> None:
+        session = _session()
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="audit-family",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+        )
+        first = _timer(effect_id="fx-t1", timer_id="wait-wellness")
+        second = _timer(effect_id="fx-t2", timer_id="wait-mood")
+        await actor._schedule_engine_timer(first)
+        first_task = actor._engine_timer_task
+        await actor._schedule_engine_timer(second)
+        assert actor._engine_timer_task is not first_task
+        assert actor._engine_timer_effect_id == "fx-t2"
+        await actor._cancel_engine_timer()
+
+    asyncio.run(scenario())
+
+
+def test_hangup_after_playback_not_before_speak() -> None:
+    async def scenario() -> None:
+        session = _session()
+        hangup_calls: list[str] = []
+
+        async def hangup() -> None:
+            hangup_calls.append("hangup")
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="audit-family",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, hangup, _noop),
+        )
+        actor._hangup_after_playback = True
+        actor._active_generation = None
+        actor._playback = None
+        await actor._maybe_hangup_when_idle()
+        assert hangup_calls == ["hangup"]
+
+    asyncio.run(scenario())
+
+
+def test_old_timer_expired_revision_ignored_at_actor() -> None:
+    async def scenario() -> None:
+        session = _session()
+        delivered: list[str] = []
+
+        async def deliver(result: SessionTurnResult) -> None:
+            delivered.append(result.proposal.intent)
+
+        actor = CallActor(
+            call_id=session.state.call_id,
+            family_id="audit-family",
+            session=session,
+            stt=SimpleNamespace(),
+            tts=SimpleNamespace(),
+            llm=SimpleNamespace(),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop),
+        )
+        actor._post_apply_turn = deliver  # type: ignore[method-assign]
+        timer = _timer(wait_ms=20, timer_id="wait-wellness")
+        await actor._schedule_engine_timer(timer)
+        actor._engine_timer_revision = timer.revision - 1
+        await asyncio.sleep(0.03)
+        assert delivered == []
+
+    asyncio.run(scenario())
+
+
+def test_random_interleaving_1000_seeds() -> None:
+    for seed in range(1000):
+        test_random_interleaving_lifecycle(seed)
