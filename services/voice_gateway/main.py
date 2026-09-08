@@ -15,7 +15,7 @@ from pathlib import Path
 import httpx
 import uvicorn
 import websockets
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -27,6 +27,12 @@ from packages.telephony.ws_protocol import (
     parse_media_start,
 )
 from packages.voice_runtime.agent_debug_log import agent_debug_log
+from packages.telephony.livekit_webhook import verify_and_parse_webhook
+from services.voice_gateway.livekit_supervisor import get_livekit_supervisor
+
+if os.environ.get("IMVERA_ENABLE_EXPERIMENTAL_TELNYX", "0") == "1":
+    from services.voice_gateway.telnyx_media import handle_telnyx_media_websocket
+
 from packages.voice_runtime.audio_audit import apply_audio_audit_env, audio_audit_enabled
 from packages.voice_runtime.audio_channels import extract_client_uplink
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks, build_call_actor
@@ -124,6 +130,8 @@ async def _lifespan(_app: FastAPI):
 
 app = FastAPI(title="IMVERA Voice Gateway", version="0.2.0", lifespan=_lifespan)
 
+get_livekit_supervisor().set_gateway_urls(_urls)
+
 
 @dataclass
 class CallSession:
@@ -185,6 +193,7 @@ def _record_capture_summary(session: CallSession) -> None:
                 "capture_bytes": session.capture_bytes,
                 "capture_rms_peak": round(session.capture_rms_peak, 1),
                 "inject_bytes_sent": session.inject_bytes_sent,
+                "capture_ws_frames": session._debug_capture_ticks,
             },
         ),
     )
@@ -198,6 +207,13 @@ class OpenCallRequest(BaseModel):
 
 class AttachCaptureRequest(BaseModel):
     connection_id: str
+
+
+class RtpStatsRequest(BaseModel):
+    rxcount: int = 0
+    txcount: int = 0
+    rxjitter: float = 0.0
+    rx_packet_loss: float = 0.0
 
 
 def _pcm_frame_bytes(session: CallSession) -> int:
@@ -275,6 +291,20 @@ async def ready() -> JSONResponse | dict:
 @app.get("/internal/calls/active")
 async def list_active_calls() -> dict:
     return {"calls": list(_sessions.keys())}
+
+
+@app.post("/internal/calls/{call_id}/rtp_stats")
+async def ingest_rtp_stats(call_id: str, body: RtpStatsRequest) -> dict:
+    session = _sessions.get(call_id)
+    if not session:
+        raise HTTPException(404, detail="call not found")
+    session.actor.note_rtp_statistics(
+        rxcount=body.rxcount,
+        txcount=body.txcount,
+        rxjitter=body.rxjitter,
+        rx_packet_loss=body.rx_packet_loss,
+    )
+    return {"status": "ok"}
 
 
 @app.get("/internal/calls/{call_id}/status")
@@ -544,6 +574,7 @@ async def _attach_leg(session: CallSession, role: str, websocket: WebSocket) -> 
                 if session._capture_dump is not None:
                     session._capture_dump.write(raw_pcm)
                 rms = _pcm_rms(pcm)
+                session.actor.note_capture_ingress(len(pcm), rms)
                 if rms > session.capture_rms_peak:
                     session.capture_rms_peak = rms
                 session._debug_capture_ticks += 1
@@ -625,6 +656,29 @@ async def asterisk_inject(websocket: WebSocket) -> None:
         await websocket.close(code=1013)
         return
     await _attach_leg(session, "inject", websocket)
+
+
+@app.post("/livekit/webhook")
+async def livekit_webhook(request: Request) -> dict:
+    """Signed LiveKit webhooks — SIP participant → LiveKitCallSession (ADR-012)."""
+    body = await request.body()
+    auth = request.headers.get("Authorization", "")
+    api_key = os.environ.get("LIVEKIT_API_KEY", "devkey")
+    api_secret = os.environ.get("LIVEKIT_API_SECRET", "secret")
+    try:
+        event = verify_and_parse_webhook(body, auth, api_key, api_secret)
+    except Exception as exc:
+        log.warning("LiveKit webhook rejected: %s", exc)
+        raise HTTPException(401, detail="invalid webhook signature") from exc
+    return await get_livekit_supervisor().handle_webhook(event)
+
+
+if os.environ.get("IMVERA_ENABLE_EXPERIMENTAL_TELNYX", "0") == "1":
+
+    @app.websocket("/telnyx/media")
+    async def telnyx_media(websocket: WebSocket) -> None:
+        """EXPERIMENTAL Telnyx path (ADR-011 rejected). Disabled by default."""
+        await handle_telnyx_media_websocket(websocket)
 
 
 @app.websocket("/media/{call_id}")

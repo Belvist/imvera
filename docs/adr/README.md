@@ -15,5 +15,8 @@ Record irreversible technical decisions here.
 | [006](006-tts-benchmark-cosyvoice-qwen.md) | TTS: CosyVoice3 vs Qwen3-TTS | accepted |
 | [007](007-unified-conversation-loop.md) | Unified conversation loop + CallSession | accepted |
 | [008](008-product-milestones-voice-core.md) | Product milestones, Core boundary, semantic contract | accepted |
+| [010](010-directional-media-plane.md) | Directional media plane: spy=in, MediaHealth, 4-layer counters | accepted |
+| [011](011-telephony-adapter-telnyx.md) | Telnyx media stream (managed API) | **rejected** → [012](012-self-hosted-telephony-livekit.md) |
+| [012](012-self-hosted-telephony-livekit.md) | Self-hosted LiveKit + LiveKit SIP; full stack on our servers | accepted |
 
 Master plan: [PLAN.md](../PLAN.md) v1.2

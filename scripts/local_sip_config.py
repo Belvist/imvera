@@ -134,6 +134,7 @@ from_domain=127.0.0.1
 direct_media=no
 rtp_symmetric=yes
 force_rport=yes
+rewrite_contact=yes
 media_use_received_transport=yes
 rtp_keepalive=10
 
@@ -160,6 +161,7 @@ from_domain=127.0.0.1
 direct_media=no
 rtp_symmetric=yes
 force_rport=yes
+rewrite_contact=yes
 media_use_received_transport=yes
 rtp_keepalive=10
 

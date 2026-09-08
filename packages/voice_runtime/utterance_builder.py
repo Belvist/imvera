@@ -48,6 +48,16 @@ class UtteranceBuilder:
         self._post_roll_remaining = 0
         self._post_roll: list[bytes] = []
 
+    def seed_external_preroll(self, pcm: bytes) -> None:
+        """Attach blocked-period tail at speech_start (ADR-010; no VAD replay)."""
+        if not pcm or self._collecting:
+            return
+        frame_bytes = max(2, self.sample_rate * 2 * self.config.frame_ms // 1000)
+        for offset in range(0, len(pcm), frame_bytes):
+            chunk = pcm[offset : offset + frame_bytes]
+            if len(chunk) >= 2:
+                self._pre_roll.append(chunk)
+
     @property
     def collecting(self) -> bool:
         return self._collecting or self._endpoint_pending

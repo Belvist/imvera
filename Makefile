@@ -85,6 +85,25 @@ voice-sip-downlink:
 voice-call-gate:
 	@$(PYTHON) scripts/voice_call_gate.py
 
+telnyx-media-gate:
+	@echo "EXPERIMENTAL (ADR-011 rejected) — reference tests only"
+	@$(PYTHON) scripts/telnyx_media_gate.py
+
+livekit-up:
+	@$(PYTHON) scripts/livekit_up.py
+
+livekit-down:
+	@$(PYTHON) scripts/livekit_down.py
+
+livekit-health:
+	@$(PYTHON) scripts/livekit_health.py
+
+livekit-setup-sip:
+	@$(PYTHON) scripts/livekit_setup_sip.py
+
+livekit-sip-gate:
+	@$(PYTHON) scripts/livekit_sip_gate.py
+
 sip-call-diag:
 	@IMVERA_WS_DIAG=1 $(PYTHON) scripts/sip_call_diag.py
 

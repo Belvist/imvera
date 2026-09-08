@@ -45,6 +45,7 @@ from packages.voice_runtime.lab_half_duplex import (
     post_speech_pause_ms,
     uplink_preroll_ms,
 )
+from packages.voice_runtime.media_health import MediaHealth, MediaHealthTracker
 from packages.voice_runtime.opening_cache import load_opening
 from packages.voice_runtime.playback import PlaybackQueue
 from packages.voice_runtime.profile import audio_settings, dialogue_timing_settings
@@ -137,7 +138,7 @@ class CallActorConfig:
     # always-listen + IMVERA_ECHO_REF_GATE is opt-in until live-stable.
     lab_half_duplex: bool = True
     post_speech_pause_ms: int = 100
-    uplink_preroll_ms: int = 2000
+    uplink_preroll_ms: int = 300
     # Drop uplink frames that match recently injected downlink PCM.
     echo_ref_gate: bool = False
     # Interrupt Vera on clear user speech during playback (lab; default off).
@@ -213,6 +214,8 @@ class CallActor:
     _listen_rms_peak: float = 0.0
     _listen_blocked_bytes: int = 0
     _debug_uplink_tick: int = 0
+    _media_health: MediaHealthTracker = field(default_factory=MediaHealthTracker)
+    _blocked_preroll_pending: bytes = b""
     _audio_echo_drop_logged: int = 0
 
     def _active_builder(self) -> UtteranceBuilder | None:
@@ -704,6 +707,11 @@ class CallActor:
         speech_active = bool(getattr(self._vad, "in_speech", False))
         if started and self._should_suppress_speech_start_during_playback(pcm):
             started = False
+        if started and self._blocked_preroll_pending:
+            builder = self._active_builder()
+            if builder is not None:
+                builder.seed_external_preroll(self._blocked_preroll_pending)
+            self._blocked_preroll_pending = b""
         if started:
             self._turn_manager.on_vad_speech_started(self._monotonic())
             if self.config.lab_barge_in and playback_active:
@@ -826,13 +834,14 @@ class CallActor:
         finally:
             self._force_listen_enabled()
             self._flush_pcm_queue()
-            preroll = bytes(self._playback_uplink_buf)
-            self._playback_uplink_buf.clear()
             had_active = await self._finalize_active_speech_before_listen_reset()
             if not had_active:
                 await self._emit_stage("vad.reset_on_listen", had_active_speech=False)
             self._reset_uplink_endpointing()
             self._reset_listen_uplink_stats()
+            # ADR-010: retain blocked-period tail for utterance preroll only — never replay into VAD.
+            self._blocked_preroll_pending = bytes(self._playback_uplink_buf)
+            self._playback_uplink_buf.clear()
             await self._emit_stage(
                 "listen.enabled",
                 pause_ms=int(self.config.post_speech_pause_ms),
@@ -841,7 +850,7 @@ class CallActor:
                 effective_echo_ref_gate=bool(self._effective_echo_ref_gate()),
                 turn_phase=str(self._turn_manager.phase),
                 turn_policy=str(self._turn_manager.policy.kind),
-                preroll_bytes=len(preroll),
+                preroll_bytes=len(self._blocked_preroll_pending),
             )
             # region agent log
             agent_debug_log(
@@ -851,14 +860,12 @@ class CallActor:
                 {
                     "call_id": self.call_id,
                     "intent": self._last_delivered_intent or "",
-                    "preroll_bytes": len(preroll),
+                    "preroll_bytes": len(self._blocked_preroll_pending),
                     "lab_half_duplex": bool(self.config.lab_half_duplex),
                     "turn_phase": str(self._turn_manager.phase),
                 },
             )
             # endregion
-            if preroll:
-                await self._replay_uplink_preroll(preroll)
             if self._playback_ref is not None:
                 self._playback_ref.clear()
 
@@ -965,7 +972,35 @@ class CallActor:
         pcm = self._input_resampler.process(pcm_s16le)
         if not pcm:
             return
+        self._media_health.note_actor_frame(
+            len(pcm), pcm_rms_s16le(pcm), now=self._monotonic()
+        )
         await self._feed_uplink_pcm(pcm)
+
+    def note_rtp_statistics(
+        self,
+        *,
+        rxcount: int,
+        txcount: int,
+        rxjitter: float = 0.0,
+        rx_packet_loss: float = 0.0,
+    ) -> None:
+        now = self._monotonic()
+        self._media_health.note_rtp_rx(rxcount, now=now)
+        self._media_health.note_rtp_tx(txcount)
+        self._media_health.note_rtp_quality(jitter=rxjitter, loss=rx_packet_loss)
+
+    def note_capture_ingress(self, nbytes: int, rms: float) -> None:
+        self._media_health.note_capture_frame(nbytes, rms, now=self._monotonic())
+
+    async def _emit_media_pipeline_summary(self, reason: str) -> None:
+        health = self._media_health.evaluate(now=self._monotonic())
+        await self._emit_stage(
+            "media.pipeline",
+            reason=reason,
+            health=str(health),
+            **self._media_health.counters.to_trace_dict(),
+        )
 
     async def _submit_utterance_outcome(self, outcome: _UtteranceOutcome) -> None:
         self._utterance_outcomes[outcome.utterance_seq] = outcome
@@ -1045,6 +1080,7 @@ class CallActor:
             profile=self._timing_profile,
             now_mono=self._monotonic(),
         )
+        self._media_health.set_waiting_for_answer(True, now=self._monotonic())
         self._schedule_wait_timer()
 
     def _pause_answer_wait(self) -> None:
@@ -1097,6 +1133,18 @@ class CallActor:
             self._schedule_wait_timer()
             return
         self._wait_state = None
+        health = self._media_health.evaluate(now=self._monotonic())
+        await self._emit_media_pipeline_summary("answer_wait_check")
+        if health != MediaHealth.HEALTHY:
+            self._media_health.set_waiting_for_answer(False, now=self._monotonic())
+            await self._emit_stage(
+                "media.stalled",
+                health=str(health),
+                reason="answer_wait_blocked",
+            )
+            await self._emit_uplink_summary("media_stalled")
+            return
+        self._media_health.set_waiting_for_answer(False, now=self._monotonic())
         await self._emit_uplink_summary("answer_wait_timeout")
         expired = await asyncio.to_thread(self.session.handle_wait_expired, wait_id)
         await self._post_apply_turn(expired)
@@ -1233,6 +1281,7 @@ class CallActor:
         duration_ms = int(len(pcm) / max(2, sr) * 1000) if pcm else 0
         pcm_rms = round(pcm_rms_s16le(pcm), 1)
         dump_path = self._stt_dump_pcm(pcm, utterance_id)
+        self._media_health.note_stt_input()
         await self._emit_stage(
             "stt.request",
             utterance_id=utterance_id,

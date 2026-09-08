@@ -29,6 +29,7 @@ from packages.voice_runtime.lab_half_duplex import (
     uplink_preroll_ms,
 )
 from packages.voice_runtime.playback import PlaybackQueue
+from packages.voice_runtime.utterance_builder import UtteranceBuilder
 from packages.voice_runtime.vad import EnergyVad, VadConfig
 
 
@@ -70,12 +71,12 @@ def test_lab_half_duplex_defaults(monkeypatch) -> None:
     assert lab_half_duplex_enabled() is False
     assert echo_ref_gate_enabled() is False
     assert post_speech_pause_ms() == 100
-    assert uplink_preroll_ms() == 2000
+    assert uplink_preroll_ms() == 300
     env = apply_lab_half_duplex_env({})
     assert env["IMVERA_LAB_HALF_DUPLEX"] == "0"
     assert env["IMVERA_ECHO_REF_GATE"] == "1"
     assert env["IMVERA_POST_SPEECH_PAUSE_MS"] == "100"
-    assert env["IMVERA_UPLINK_PREROLL_MS"] == "2000"
+    assert env["IMVERA_UPLINK_PREROLL_MS"] == "300"
     # Explicit mute must stick.
     muted = apply_lab_half_duplex_env({"IMVERA_LAB_HALF_DUPLEX": "1"})
     assert muted["IMVERA_LAB_HALF_DUPLEX"] == "1"
@@ -762,8 +763,8 @@ def test_non_opening_still_half_duplex_muted() -> None:
     asyncio.run(scenario())
 
 
-def test_half_duplex_preroll_replayed_on_listen() -> None:
-    """Speech during Vera playback must reach VAD after listen.enabled via preroll."""
+def test_half_duplex_preroll_seeded_on_speech_start_not_vad_replay() -> None:
+    """Blocked-period audio is held for utterance preroll, not replayed into VAD (ADR-010)."""
 
     async def scenario() -> None:
         session = CallSession(
@@ -772,10 +773,6 @@ def test_half_duplex_preroll_replayed_on_listen() -> None:
             store=InMemoryCallRecordStore(),
         )
         fed: list[bytes] = []
-        speech_events: list[str] = []
-
-        async def emit(event) -> None:
-            speech_events.append(event.event_type.value)
 
         class _Vad:
             def feed(self, pcm: bytes) -> tuple[bool, bool]:
@@ -796,17 +793,18 @@ def test_half_duplex_preroll_replayed_on_listen() -> None:
             stt=SimpleNamespace(),
             tts=SimpleNamespace(cancel=_noop),
             llm=SimpleNamespace(),
-            media=MediaCallbacks(_noop, _noop, _noop, emit, finish=_noop),
+            media=MediaCallbacks(_noop, _noop, _noop, _noop, finish=_noop),
             config=CallActorConfig(
                 lab_half_duplex=True,
                 echo_ref_gate=False,
                 post_speech_pause_ms=0,
-                uplink_preroll_ms=2000,
+                uplink_preroll_ms=300,
             ),
         )
         actor._media_ready = True
         actor._vad = _Vad()
         actor._collector = _Collector()
+        actor._utterance_builder = UtteranceBuilder(16000)
         actor._active_generation = "g-vera"
         user_while_muted = _pcm_sine(880.0, samples=320, amp=12000)
         await actor._feed_uplink_pcm(user_while_muted)
@@ -815,8 +813,13 @@ def test_half_duplex_preroll_replayed_on_listen() -> None:
 
         actor._active_generation = None
         await actor._enable_listen_after_playback()
-        assert fed, "Preroll must replay buffered speech into VAD"
-        assert speech_events.count("speech.started") == 1
+        assert fed == [], "Preroll must NOT be bulk-replayed into VAD at listen.enabled"
+        assert len(actor._blocked_preroll_pending) == len(user_while_muted)
+
+        live = _pcm_sine(440.0, samples=320, amp=8000)
+        await actor._feed_uplink_pcm(live)
+        assert fed, "Live speech after listen must reach VAD"
+        assert actor._blocked_preroll_pending == b""
 
     asyncio.run(scenario())
 

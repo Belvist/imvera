@@ -40,6 +40,7 @@ class ActiveCall:
 
 
 _active: dict[str, ActiveCall] = {}
+_rtp_poll_task: asyncio.Task | None = None
 
 
 @app.get("/health/live")
@@ -98,9 +99,9 @@ async def _handle_stasis_start(channel: dict) -> None:
     await _ari.answer(channel_id)
     await _ari.create_bridge(bridge_id)
 
-    # spy=out: SIP -> bridge (client mic only). inject is on playback bridge; Vera
-    # downlink enters SIP as spy=in and must NOT pollute uplink capture.
-    snoop = await _ari.snoop_channel(channel_id, STASIS_APP, spy="out", whisper="none")
+    # spy=in: audio FROM caller (mic uplink). spy=out would capture TTS sent TO caller
+    # (proven in sip-93be0754bc: Vera phrases in raw_capture). ADR-010.
+    snoop = await _ari.snoop_channel(channel_id, STASIS_APP, spy="in", whisper="none")
     snoop_id = snoop["id"]
     await _ari.answer(snoop_id)
 
@@ -183,9 +184,40 @@ async def _ari_events_loop() -> None:
             await asyncio.sleep(2.0)
 
 
+async def _rtp_stats_poll_loop() -> None:
+    """Poll ARI RTP statistics for active SIP channels → gateway media counters."""
+    while True:
+        await asyncio.sleep(2.0)
+        if not _active:
+            continue
+        for call_id, ctx in list(_active.items()):
+            try:
+                stats = await _ari.get_rtp_statistics(ctx.sip_channel_id)
+                if not stats:
+                    continue
+                rx = int(stats.get("rxcount", stats.get("rx_count", 0)) or 0)
+                tx = int(stats.get("txcount", stats.get("tx_count", 0)) or 0)
+                jitter = float(stats.get("rxjitter", stats.get("rx_jitter", 0)) or 0)
+                loss = float(stats.get("rxploss", stats.get("rx_packet_loss", 0)) or 0)
+                async with httpx.AsyncClient(timeout=2.0) as client:
+                    await client.post(
+                        f"{GATEWAY_HTTP}/internal/calls/{call_id}/rtp_stats",
+                        json={
+                            "rxcount": rx,
+                            "txcount": tx,
+                            "rxjitter": jitter,
+                            "rx_packet_loss": loss,
+                        },
+                    )
+            except httpx.HTTPError:
+                pass
+
+
 @app.on_event("startup")
 async def startup() -> None:
+    global _rtp_poll_task
     asyncio.create_task(_ari_events_loop())
+    _rtp_poll_task = asyncio.create_task(_rtp_stats_poll_loop())
 
 
 def main() -> None:

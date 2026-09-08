@@ -238,6 +238,6 @@ def test_snoop_capture_layout() -> None:
     from services.asterisk_app import main as asterisk_main
 
     src = inspect.getsource(asterisk_main._handle_stasis_start)
-    assert 'spy="out"' in src
+    assert 'spy="in"' in src
     assert 'direction="both"' in src
     assert "add_to_bridge(capture_bridge_id, capture_id)" in src

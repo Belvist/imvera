@@ -49,6 +49,10 @@ lab-silero = [
     "soundfile>=0.12",
     "numpy>=1.26",
 ]
+livekit = [
+    "livekit>=1.0",
+    "livekit-api>=1.0",
+]
 sip-lab = [
     "pyVoIP==1.6.8",
     "audioop-lts>=0.2.1",
@@ -68,6 +72,9 @@ include = ["packages", "services", "tests", "docs", "docker"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["."]
+markers = [
+    "livekit_live: requires self-hosted LiveKit + SIP stack (Linux host networking)",
+]
 
 [tool.ruff]
 line-length = 100

@@ -71,11 +71,16 @@ class AsteriskARI:
             r.raise_for_status()
             return _json_or_empty(r)
 
-    async def create_bridge(self, bridge_id: str) -> dict[str, Any]:
+    async def create_bridge(
+        self,
+        bridge_id: str,
+        *,
+        bridge_type: str = "mixing",
+    ) -> dict[str, Any]:
         async with httpx.AsyncClient(auth=self._auth, timeout=10.0) as client:
             r = await client.post(
                 f"{self.base_url}/bridges",
-                json={"type": "mixing", "bridgeId": bridge_id},
+                json={"type": bridge_type, "bridgeId": bridge_id},
             )
             if r.status_code == 409:
                 return {"id": bridge_id}
@@ -142,6 +147,16 @@ class AsteriskARI:
                     "transport_data": "f(json)",
                 },
             )
+            r.raise_for_status()
+            return _json_or_empty(r)
+
+    async def get_rtp_statistics(self, channel_id: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(auth=self._auth, timeout=10.0) as client:
+            r = await client.get(
+                f"{self.base_url}/channels/{channel_id}/rtp_statistics",
+            )
+            if r.status_code == 404:
+                return {}
             r.raise_for_status()
             return _json_or_empty(r)
 

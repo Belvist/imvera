@@ -147,6 +147,7 @@ Record irreversible decisions here. Format: `ADR-NNN: title (date) — one line`
 ```text
 ADR-008: Product milestones, Core in monorepo, semantic contract (2026-09-06)
 ADR-009: LLM understanding + code state policy, QuestionLedger (2026-09-07)
+ADR-012: Self-hosted LiveKit + LiveKit SIP; no managed voice APIs (2026-09-08)
 ```
 
 ## Commands (when implemented)
