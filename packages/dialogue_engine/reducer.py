@@ -316,6 +316,8 @@ def _apply_semantic(
 
     answer_slot = state.answer_context_slot()
 
+    user_text = semantic.source_quote or semantic.value or ""
+
     if semantic.act == SemanticAct.REPAIR_REQUEST:
         if state.delivered_question is None:
             state.processing_turn_id = None
@@ -331,6 +333,8 @@ def _apply_semantic(
                         reason="backchannel",
                     )
                 ]
+            if _is_meaningful_turn(user_text):
+                return _speak_never_silent(state, answer_slot or "wellness", user_text)
             return state, []
         state.processing_turn_id = None
         state.processing_effect_id = None
@@ -351,16 +355,24 @@ def _apply_semantic(
                     reason="backchannel",
                 )
             ]
+        if _is_meaningful_turn(user_text):
+            return _speak_never_silent(state, answer_slot or "wellness", user_text)
         return state, []
 
     if semantic.act == SemanticAct.UNCLEAR and answer_slot:
+        if is_topic_slot(answer_slot) and _is_meaningful_turn(user_text):
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.waiting_on_slot = None
+            observe_topic_answer(state, user_text)
+            return _advance_after_topic(state, user_text)
         if state.probe_phase:
             count = state.slot_unclear_counts.get(f"probe_{state.probe_phase}", 0) + 1
             state.slot_unclear_counts[f"probe_{state.probe_phase}"] = count
             state.processing_turn_id = None
             state.processing_effect_id = None
             if count >= 2:
-                return _advance_probe_after_answer(state, semantic.source_quote or "")
+                return _advance_probe_after_answer(state, user_text)
             return _speak_probe(state, state.probe_phase, clarification=True)
         count = state.slot_unclear_counts.get(answer_slot, 0) + 1
         state.slot_unclear_counts[answer_slot] = count
@@ -370,6 +382,8 @@ def _apply_semantic(
             return _close_partial(state)
         if can_ask_slot(state, answer_slot):
             return _speak_slot_question(state, answer_slot, clarification=True)
+        if _is_meaningful_turn(user_text):
+            return _speak_never_silent(state, answer_slot, user_text)
         return state, []
 
     if state.probe_phase and semantic.act == SemanticAct.ANSWER:
@@ -387,8 +401,6 @@ def _apply_semantic(
         state.processing_effect_id = None
         state.waiting_on_slot = None
         return _advance_probe_after_answer(state, text)
-
-    user_text = semantic.source_quote or semantic.value or ""
 
     if is_topic_slot(answer_slot) and semantic.act == SemanticAct.ANSWER:
         state.processing_turn_id = None

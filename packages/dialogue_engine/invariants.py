@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
-from packages.dialogue_engine.state import EngineState, OpeningState, QuestionPhase
+from packages.dialogue_engine.effects import (
+    EndCallEffect,
+    InterpretEffect,
+    SpeakEffect,
+    TimerEffect,
+)
+from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
+from packages.dialogue_engine.state import EngineState, OpeningState
 
 
 class InvariantViolation(AssertionError):
     pass
+
+
+_BACKCHANNEL_ONLY = frozenset({"ага", "угу", "да", "нет", "мм", "м"})
 
 
 def assert_opening_one_shot(state: EngineState) -> None:
@@ -38,6 +48,53 @@ def assert_answer_context_uses_delivered(state: EngineState) -> None:
             pass  # allowed during transition
 
 
+def _is_meaningful_user_text(text: str) -> bool:
+    core = text.strip().lower()
+    if len(core) < 2:
+        return False
+    return core not in _BACKCHANNEL_ONLY or len(core.split()) > 1
+
+
+def _has_terminal_outcome(effects: list) -> bool:
+    for effect in effects:
+        if isinstance(effect, (SpeakEffect, TimerEffect, EndCallEffect)):
+            return True
+    return False
+
+
+def assert_turn_produced_outcome(
+    *,
+    text: str,
+    semantic: SemanticTurn | None,
+    effects: list,
+    answer_slot: str | None,
+    call_closed: bool,
+) -> None:
+    """Every meaningful user turn must produce a terminal conversational outcome."""
+    if call_closed:
+        return
+    if not text.strip():
+        return
+    if semantic is not None and semantic.act == SemanticAct.NO_ANSWER:
+        return
+    if semantic is not None and semantic.act == SemanticAct.BACKCHANNEL:
+        if _has_terminal_outcome(effects):
+            return
+        if not answer_slot:
+            return
+    if not _is_meaningful_user_text(text):
+        return
+
+    direct = [e for e in effects if not isinstance(e, InterpretEffect)]
+    if _has_terminal_outcome(direct):
+        return
+
+    raise InvariantViolation(
+        f"meaningful user turn produced no outcome: text={text!r} "
+        f"effects={[type(e).__name__ for e in effects]}"
+    )
+
+
 def check_all(state: EngineState) -> None:
     assert_opening_one_shot(state)
     for slot in state.goals:
@@ -45,8 +102,6 @@ def check_all(state: EngineState) -> None:
 
 
 def count_opening_generations(effects: list) -> int:
-    from packages.dialogue_engine.effects import SpeakEffect
-
     return sum(
         1
         for e in effects

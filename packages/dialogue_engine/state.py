@@ -55,6 +55,21 @@ class GoalState(BaseModel):
     model_config = {"frozen": False}
 
 
+class TopicEvidence(BaseModel):
+    """Family-specific clause plus full turn for cross-clause temporal context."""
+
+    clause: str
+    turn_text: str
+
+    model_config = {"frozen": True}
+
+
+class TopicResolution(StrEnum):
+    OPEN = "open"
+    IMPROVING = "improving"
+    RESOLVED = "resolved"
+
+
 class EngineState(BaseModel):
     call_id: str
     elder_display_name: str = "Анной Петровной"
@@ -113,7 +128,8 @@ class EngineState(BaseModel):
     active_topic: str | None = None
     pending_topics: list[str] = Field(default_factory=list)
     topic_dimensions: dict[str, list[str]] = Field(default_factory=dict)
-    topic_evidence: dict[str, list[str]] = Field(default_factory=dict)
+    topic_evidence: dict[str, list[TopicEvidence]] = Field(default_factory=dict)
+    topic_resolution: dict[str, str] = Field(default_factory=dict)
     topic_asked_dimension: str | None = None
 
     def bump_revision(self) -> None:

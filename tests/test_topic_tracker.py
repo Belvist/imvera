@@ -7,14 +7,15 @@ import pytest
 from packages.contracts.enums import SlotStatus
 from packages.dialogue_engine.events import CallStarted
 from packages.dialogue_engine.scenario_runner import ScenarioRunner
+from packages.dialogue_engine.state import EngineState
 from packages.dialogue_engine.topic_tracker import (
     TopicFamily,
     detect_families,
+    detect_families_in_clause,
     infer_dimensions,
+    ingest_user_turn_topics,
     prime_topics,
 )
-from packages.dialogue_engine.state import EngineState
-
 
 pytestmark = pytest.mark.dialogue_engine
 
@@ -25,6 +26,24 @@ def _runner() -> ScenarioRunner:
 
 def test_detect_sleep_from_poor_sleep_phrase() -> None:
     assert TopicFamily.SLEEP in detect_families("Плохо спал.")
+
+
+def test_multi_family_per_clause_abdominal_and_sleep() -> None:
+    families = detect_families_in_clause("из-за живота плохо спал")
+    assert TopicFamily.SLEEP in families
+    assert TopicFamily.ABDOMINAL_PAIN in families
+
+
+def test_multi_family_both_clauses() -> None:
+    families = detect_families("Живот болел и плохо спал")
+    assert TopicFamily.SLEEP in families
+    assert TopicFamily.ABDOMINAL_PAIN in families
+
+
+def test_infer_sleep_quality_not_pattern() -> None:
+    dims = infer_dimensions(TopicFamily.SLEEP, "Плохо спал.")
+    assert "quality" in dims
+    assert "pattern" not in dims
 
 
 def test_infer_sleep_pattern_from_wake_time() -> None:
@@ -43,11 +62,31 @@ def test_infer_abdominal_current_when_improving() -> None:
     assert "current" in dims
 
 
-def test_prime_topics_sets_active_and_dimensions() -> None:
+def test_prime_topics_sets_active_and_quality_only() -> None:
     state = EngineState(call_id="t1", elder_display_name="")
     prime_topics(state, "Плохо спал.")
     assert state.active_topic == TopicFamily.SLEEP
+    assert "quality" in state.topic_dimensions.get(TopicFamily.SLEEP, [])
+    assert "pattern" not in state.topic_dimensions.get(TopicFamily.SLEEP, [])
+
+
+def test_ingest_mixed_turn_keeps_sleep_active_queues_abdominal() -> None:
+    state = EngineState(call_id="t1", elder_display_name="")
+    prime_topics(state, "Плохо спал.")
+    ingest_user_turn_topics(state, "Проснулся в 4, не мог заснуть, живот болел")
+    assert TopicFamily.SLEEP in state.topic_evidence
+    assert TopicFamily.ABDOMINAL_PAIN in state.topic_evidence
     assert "pattern" in state.topic_dimensions.get(TopicFamily.SLEEP, [])
+    assert TopicFamily.ABDOMINAL_PAIN in state.pending_topics
+    assert state.active_topic == TopicFamily.SLEEP
+
+
+def test_abdominal_onset_from_turn_context() -> None:
+    state = EngineState(call_id="t1", elder_display_name="")
+    ingest_user_turn_topics(state, "Проснулся в 4, живот болел")
+    from packages.dialogue_engine.topic_tracker import dimensions_satisfied
+
+    assert dimensions_satisfied(state, TopicFamily.ABDOMINAL_PAIN, "onset")
 
 
 def test_poor_sleep_at_wellness_starts_topic_not_probe() -> None:
@@ -61,7 +100,10 @@ def test_poor_sleep_at_wellness_starts_topic_not_probe() -> None:
     intents = [e.intent for e in result.speak_effects]
     assert "probe_concern" not in intents
     assert any(i.startswith("topic_sleep_") for i in intents)
-    assert result.state.active_topic == TopicFamily.SLEEP or TopicFamily.SLEEP in result.state.topic_dimensions
+    assert (
+        result.state.active_topic == TopicFamily.SLEEP
+        or TopicFamily.SLEEP in result.state.topic_dimensions
+    )
 
 
 def test_sleep_topic_then_mood_ladder() -> None:
@@ -106,9 +148,4 @@ def test_never_silent_on_sleep_complaint() -> None:
             "А-а, плохо болело сердце. Я же говорил же.",
         ]
     )
-    last_user_idx = 4
-    speaks_after = result.speak_effects[last_user_idx:] if len(result.speak_effects) > last_user_idx else []
-    assert speaks_after or any(
-        e.intent.startswith("clarify_") or e.intent.startswith("topic_")
-        for e in result.speak_effects[-3:]
-    )
+    assert result.speak_effects, "every meaningful turn must produce Vera speech"

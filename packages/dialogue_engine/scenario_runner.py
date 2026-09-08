@@ -5,9 +5,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from packages.contracts.enums import SlotStatus
 from packages.dialogue.interpretation import interpret_user_turn
 from packages.dialogue.state import DialogueState
+from packages.dialogue_engine.context import InterpretContext
+from packages.dialogue_engine.contextual_interpreter import contextual_interpret
 from packages.dialogue_engine.effects import SpeakEffect
 from packages.dialogue_engine.events import (
     CallStarted,
@@ -17,10 +18,12 @@ from packages.dialogue_engine.events import (
     User,
     UserTurnReceived,
 )
-from packages.dialogue_engine.context import InterpretContext
-from packages.dialogue_engine.contextual_interpreter import contextual_interpret
 from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
-from packages.dialogue_engine.invariants import check_all, count_opening_generations
+from packages.dialogue_engine.invariants import (
+    assert_turn_produced_outcome,
+    check_all,
+    count_opening_generations,
+)
 from packages.dialogue_engine.reducer import reduce
 from packages.dialogue_engine.semantic import semantic_from_legacy
 from packages.dialogue_engine.state import EngineState
@@ -121,6 +124,13 @@ class ScenarioRunner:
                         revision=self.state.revision,
                     ),
                 )
+                assert_turn_produced_outcome(
+                    text=step.text,
+                    semantic=semantic,
+                    effects=effects,
+                    answer_slot=answer_slot,
+                    call_closed=self.state.call_closed,
+                )
             else:
                 self.state, effects = reduce(
                     self.state,
@@ -131,6 +141,13 @@ class ScenarioRunner:
                         revision=self.state.revision,
                     ),
                 )
+            assert_turn_produced_outcome(
+                text=step.text,
+                semantic=semantic,
+                effects=effects,
+                answer_slot=answer_slot,
+                call_closed=self.state.call_closed,
+            )
             self._record(effects)
             return
 
