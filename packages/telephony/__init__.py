@@ -1,4 +1,4 @@
-"""Telephony integrations — Asterisk (lab), Telnyx (production candidate)."""
+"""Telephony integrations — FreeSWITCH production (ADR-013)."""
 
 from packages.telephony.adapter import (
     InboundMediaFrame,

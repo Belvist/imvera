@@ -1,44 +1,36 @@
-# Current task — LiveKit PRE-LIVE ACCEPT (gate split)
+# Current task — FreeSWITCH cleanup + P0 transport gate (ADR-013)
 
-**Outcome:** Freeze transport architecture. Prove caller audio reaches IMVERA PCM **before** AI stack.
+**Outcome:** Single production telephony path. Legacy LiveKit/Telnyx/Asterisk removed from active runtime.
 
-## Architecture freeze
+## Production path (only)
 
-No new telephony architecture changes until Linux media-gate PASS.
-
-## Gates
-
-| Gate | Command | Requires |
-|------|---------|----------|
-| Transport | `make livekit-media-gate` | redis, livekit, SIP, gateway with `IMVERA_LIVEKIT_MEDIA_GATE=1` |
-| AI | `make livekit-sip-gate` | media-gate stamp + Silero/GigaAM/LLM/TTS |
-
-## Linux sequence
-
-```bash
-export LIVEKIT_NODE_IP=<PUBLIC_IP>
-make livekit-up
-make livekit-health          # --mode media (default)
-make livekit-setup-sip
-
-# voice gateway with IMVERA_LIVEKIT_MEDIA_GATE=1
-IMVERA_LIVEKIT_GATE_REQUIRE_STACK=1 make livekit-media-gate
-# STOP if FAIL
-
-# start inference stack, gateway without media_gate-only if needed
-IMVERA_LIVEKIT_GATE_REQUIRE_STACK=1 make livekit-sip-gate
+```text
+SIP → FreeSWITCH (answers) → PCM WS bridge → imvera-media-bridge → (later) CallActor
 ```
 
-## Privacy (production blocker)
+## Cleanup done
 
-`dispatchRuleIndividual` embeds caller digits in LiveKit `room_name` (LiveKit internal logs — no PII redaction). OK for synthetic gate; **must** move to opaque room routing before PSTN.
+- LiveKit → `archive/telephony/livekit/`
+- Telnyx → `archive/telephony/telnyx/`
+- Asterisk → `lab/asterisk/`
+- Generic gate tools → `tools/telephony_gate/`
+- `voice_gateway` — no LiveKit/Telnyx/Asterisk routes
 
-## NOT VERIFIED
+## P0 gate (no GigaAM/STT/LLM/TTS)
 
-- Live media-gate on Linux host (needs `IMVERA_LIVEKIT_GATE_REQUIRE_STACK=1`)
-- 10/100 deterministic call soak
-- Real SIP trunk operator
+```bash
+make freeswitch-media-gate          # unit first
+make freeswitch-up                  # requires mod_audio_stream in FS image
+python3 services/imvera_media_bridge/main.py
+# synthetic SIP 440 Hz → FS → bridge → raw_inbound.wav
+```
+
+Acceptance: 100/100 answer + 880 out + 440 in + directional + cleanup.
+
+## mod_audio_stream
+
+P0 validation OK. Production must choose licensed bidirectional OR `mod_imvera_audio` — see ADR-013 + `infra/freeswitch/MOD_AUDIO_STREAM.md`.
 
 ## NEXT GATE
 
-`IMVERA_LIVEKIT_MEDIA_GATE=1` + `make livekit-media-gate` on Linux → nonzero PCM in `raw_inbound.wav`
+Live Linux: 1 call → 10 → 100 synthetic duplex before AI on phone.

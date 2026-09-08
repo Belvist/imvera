@@ -13,20 +13,9 @@ from packages.contracts.semantic import Evidence, FactCandidate, SemanticPayload
 from packages.dialogue.context_builder import active_question_kind
 from packages.dialogue.semantic_bridge import semantic_to_user_interpretation
 from packages.dialogue.state import DialogueState
-from packages.telephony.asterisk import _json_or_empty, ari_rest_base, normalize_ari_http_root
 from packages.telephony.ws_protocol import flush_media_command, is_media_start, parse_media_start
 from packages.voice_runtime.audio import AudioEnvelope, pcm16_frame_bytes
 from packages.voice_runtime.playback import PlaybackQueue, PlaybackState, split_pcm_frames
-
-
-def test_ari_base_normalization():
-    assert normalize_ari_http_root("http://127.0.0.1:8088/ari") == "http://127.0.0.1:8088"
-    assert ari_rest_base("http://127.0.0.1:8088") == "http://127.0.0.1:8088/ari"
-
-
-def test_json_or_empty_on_204():
-    response = httpx.Response(204, request=httpx.Request("POST", "http://test"))
-    assert _json_or_empty(response) == {}
 
 
 def test_media_start_parse_string_format():
@@ -217,27 +206,3 @@ def test_media_start_parse_slin48():
     assert fmt.frame_size_bytes == 1920
     assert fmt.encoding == "slin48"
 
-
-def test_inject_format_defaults_to_slin48(monkeypatch) -> None:
-    monkeypatch.delenv("IMVERA_INJECT_FORMAT", raising=False)
-    monkeypatch.delenv("IMVERA_CAPTURE_FORMAT", raising=False)
-    from packages.voice_runtime.profile import load_profile
-
-    load_profile.cache_clear()
-    import importlib
-
-    mod = importlib.import_module("services.asterisk_app.main")
-    importlib.reload(mod)
-    assert mod.INJECT_FORMAT == "slin48"
-    assert mod.CAPTURE_FORMAT == "slin16"
-
-
-def test_snoop_capture_layout() -> None:
-    import inspect
-
-    from services.asterisk_app import main as asterisk_main
-
-    src = inspect.getsource(asterisk_main._handle_stasis_start)
-    assert 'spy="in"' in src
-    assert 'direction="both"' in src
-    assert "add_to_bridge(capture_bridge_id, capture_id)" in src

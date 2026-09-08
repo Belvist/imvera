@@ -1,6 +1,6 @@
 # ADR-001: Telephony — Asterisk + ARI + Separated Media Legs
 
-**Status:** accepted (Architecture Freeze v1, amended 2026-09-06)  
+**Status:** accepted (lab/archive; production superseded by ADR-013)  
 **Date:** 2026-09-06
 
 ## Context

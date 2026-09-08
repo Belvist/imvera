@@ -16,7 +16,7 @@ Repository instructions contained contradictions:
 | Topic | Conflict | Resolution |
 |-------|----------|------------|
 | TTS | Silero in PROJECT_CONTEXT vs CosyVoice/Qwen in ADR-006 | **ADR-003/006 govern provider choice.** Silero examples are historical baseline only. |
-| Telephony | FreeSWITCH in skills vs Asterisk in ADR-001 | **Asterisk only** (ARI/PJSIP/chan_websocket). No second telephony stack. |
+| Telephony | FreeSWITCH in skills vs Asterisk in ADR-001 | **FreeSWITCH** (ADR-013). Asterisk/LiveKit lab only. |
 | LLM role | Renderer-only in old context vs ADR-007 | **LLM also powers typed interpretation** (SemanticPayload). Planner/State own policy; LLM proposes, server validates. |
 | PCM16 20 ms @ 16 kHz | 320 bytes stated | **640 bytes** (320 samples × 2). @ 8 kHz: 160 samples, 320 bytes. |
 | Persistence claims | Speech before durable commit | **No save/delivery claims** until `persistence.committed` (or equivalent evidence). |
@@ -97,7 +97,7 @@ Winners recorded in `IMVERA_PROVIDER_PROFILE` with checkpoint revision, runtime,
 - `packages/core/memory_store.py` remains **tests only**; production wiring uses PostgreSQL.
 - `services/core` added to monorepo scope.
 - Family web client: `apps/family-web` when no external client exists.
-- FreeSWITCH references in skills are **non-authoritative** for this repo.
+- FreeSWITCH is production telephony per ADR-013. Asterisk/LiveKit paths are lab/archive.
 - Phase labels in PROJECT_CONTEXT align to milestones 0–5 above.
 
 ## References

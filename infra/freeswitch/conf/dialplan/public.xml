@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<include>
+  <context name="public">
+    <extension name="imvera_inbound">
+      <condition field="destination_number" expression="^\+?15550001000$">
+        <action application="answer"/>
+        <action application="log" data="INFO IMVERA FS answered ${uuid}"/>
+        <!-- mod_audio_stream: mono = caller-only READ leg -->
+        <action application="eval" data="${uuid_audio_stream(${uuid} start ${env(IMVERA_MEDIA_BRIDGE_WS)}/${uuid} mono 16k)}"/>
+        <action application="sleep" data="30000"/>
+        <action application="hangup"/>
+      </condition>
+    </extension>
+    <extension name="unmatched">
+      <condition>
+        <action application="playback" data="tone_stream://%(2000,0,480);loops=1"/>
+        <action application="hangup" data="SERVICE_UNAVAILABLE"/>
+      </condition>
+    </extension>
+  </context>
+</include>

@@ -1,0 +1,21 @@
+services:
+  freeswitch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: imvera-freeswitch
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "127.0.0.1:8021:8021/tcp"
+      - "16384-16484:16384-16484/udp"
+    environment:
+      IMVERA_MEDIA_BRIDGE_WS: "ws://host.docker.internal:9210/stream"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  imvera-media-bridge:
+    image: imvera-media-bridge:local
+    profiles: ["bridge"]
+    # Built separately: python services/imvera_media_bridge/main.py on host for dev

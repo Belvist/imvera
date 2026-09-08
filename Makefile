@@ -85,33 +85,17 @@ voice-sip-downlink:
 voice-call-gate:
 	@$(PYTHON) scripts/voice_call_gate.py
 
-telnyx-media-gate:
-	@echo "EXPERIMENTAL (ADR-011 rejected) — reference tests only"
-	@$(PYTHON) scripts/telnyx_media_gate.py
+freeswitch-up:
+	@$(PYTHON) scripts/freeswitch_up.py
 
-livekit-up:
-	@$(PYTHON) scripts/livekit_up.py
+freeswitch-down:
+	@$(PYTHON) scripts/freeswitch_down.py
 
-livekit-down:
-	@$(PYTHON) scripts/livekit_down.py
+freeswitch-media-gate:
+	@$(PYTHON) scripts/freeswitch_media_gate.py
 
-livekit-health:
-	@$(PYTHON) scripts/livekit_health.py --mode media
-
-livekit-health-ai:
-	@$(PYTHON) scripts/livekit_health.py --mode ai
-
-livekit-health-all:
-	@$(PYTHON) scripts/livekit_health.py --mode all
-
-livekit-setup-sip:
-	@$(PYTHON) scripts/livekit_setup_sip.py
-
-livekit-media-gate:
-	@$(PYTHON) scripts/livekit_media_gate.py
-
-livekit-sip-gate:
-	@$(PYTHON) scripts/livekit_sip_gate.py
+media-bridge-up:
+	@$(PYTHON) services/imvera_media_bridge/main.py
 
 sip-call-diag:
 	@IMVERA_WS_DIAG=1 $(PYTHON) scripts/sip_call_diag.py

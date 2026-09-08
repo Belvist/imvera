@@ -1,0 +1,31 @@
+# LiveKit self-hosted — macOS Docker Desktop (ADR-012 lab)
+# Published ports (host network does not work on Docker Desktop Mac).
+# SIP on host :5065 to avoid FreeSWITCH :5060 conflict.
+
+services:
+  livekit-server:
+    image: livekit/livekit-server:latest
+    command: --config /etc/livekit.yaml
+    ports:
+      - "7880:7880/tcp"
+      - "7881:7881/tcp"
+      - "7882:7882/udp"
+    volumes:
+      - ./.runtime/livekit.server.yaml:/etc/livekit.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  livekit-sip:
+    image: livekit/sip:latest
+    ports:
+      - "5065:5060/udp"
+      - "5065:5060/tcp"
+      - "10000-10100:10000-10100/udp"
+    volumes:
+      - ./.runtime/sip.mac.yaml:/sip/config.yaml:ro
+    depends_on:
+      - livekit-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

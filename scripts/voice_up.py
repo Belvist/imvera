@@ -10,16 +10,20 @@ import time
 
 import httpx
 
-from packages.telephony.asterisk import is_stasis_app_registered, normalize_ari_http_root
+from scripts.voice_process import ROOT, is_running, start
+
+LAB_AST = ROOT / "lab" / "asterisk" / "packages"
+if str(LAB_AST) not in sys.path:
+    sys.path.insert(0, str(LAB_AST))
+from asterisk import is_stasis_app_registered, normalize_ari_http_root  # noqa: E402 lab only
 from packages.voice_runtime.profile import apply_audio_env, audio_settings
 from scripts.local_sip_config import load_or_create
-from scripts.voice_process import ROOT, is_running, start
 from packages.voice_runtime.lab_half_duplex import apply_lab_half_duplex_env
 from packages.voice_runtime.audio_audit import apply_audio_audit_env
 from packages.voice_runtime.audio_audit import apply_audio_audit_env
 from services.tts.lab_fast import apply_lab_fast_env, lab_fast_tts_enabled
 
-VOICE_COMPOSE = ["docker", "compose", "-f", "docker/docker-compose.voice.yml"]
+VOICE_COMPOSE = ["docker", "compose", "-f", "lab/asterisk/docker-compose.voice.yml"]
 WORKERS = ("stt", "tts", "llm")
 
 

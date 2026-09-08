@@ -156,7 +156,8 @@ See [docs/AUDIO_CONTRACT.md](docs/AUDIO_CONTRACT.md) and [docs/adr/008-product-m
 ## Technology Constraints (initial)
 
 - Language: **Python 3.12+** for runtime services (fast iteration, team familiarity)
-- Telephony: **Asterisk ≥22.8** + PJSIP + ARI + chan_websocket — ADR-001 (no FreeSWITCH in production path)
+- Telephony: **FreeSWITCH** + `mod_sofia` + PCM WebSocket bridge — ADR-013 (production)
+- Telephony lab: Asterisk (`lab/asterisk/`), LiveKit (`archive/telephony/livekit/`) — not production
 - STT: **Qwen3-ASR** primary candidate per ADR-003; benchmark before release
 - TTS: **CosyVoice3** primary candidate per ADR-006; benchmark before release
 - LLM: interpretation (SemanticPayload) + Renderer; local inference workers; no verdict authority

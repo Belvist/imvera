@@ -4,13 +4,16 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import httpx
 
-from packages.telephony.asterisk import is_stasis_app_registered, normalize_ari_http_root
-
 ROOT = Path(__file__).resolve().parent.parent
+LAB_AST = ROOT / "lab" / "asterisk" / "packages"
+if str(LAB_AST) not in sys.path:
+    sys.path.insert(0, str(LAB_AST))
+from asterisk import is_stasis_app_registered, normalize_ari_http_root  # noqa: E402 lab only
 
 
 def _git_sha() -> str:

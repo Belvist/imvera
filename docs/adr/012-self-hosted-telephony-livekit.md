@@ -1,7 +1,8 @@
 # ADR-012: Self-Hosted Telephony Media Plane (LiveKit + LiveKit SIP)
 
-**Status:** accepted  
+**Status:** superseded (production)  
 **Date:** 2026-09-08  
+**Superseded by:** [ADR-013](013-production-telephony-freeswitch.md)  
 **Supersedes:** [ADR-011](011-telephony-adapter-telnyx.md) (rejected)
 
 ## Context
@@ -103,6 +104,8 @@ When Vera speaks, her **server-side outbound track** must not appear on the **ca
 | LiveKit Cloud | **Reject** — managed realtime; self-hosted LiveKit only |
 | Asterisk snoop/bridge as production uplink | **Reject** — proven broken in lab |
 | FreeSWITCH as primary AI glue | **Defer** — mature PBX, but same channel/RTP/ESL glue problem; LiveKit track model is cleaner for AI runtime |
+
+> **2026-09-08:** ADR-013 supersedes this ADR for production. LiveKit path retained as lab/spike only. See [ADR-013](013-production-telephony-freeswitch.md).
 
 ### Why LiveKit SIP over FreeSWITCH (for IMVERA)
 

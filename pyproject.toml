@@ -53,6 +53,7 @@ livekit = [
     "livekit>=1.0",
     "livekit-api>=1.0",
 ]
+# livekit optional dep — archive/telephony/livekit only; not production
 sip-lab = [
     "pyVoIP==1.6.8",
     "audioop-lts>=0.2.1",
