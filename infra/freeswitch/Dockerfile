@@ -1,16 +1,47 @@
-# FreeSWITCH production telephony (ADR-013)
+# FreeSWITCH production telephony (ADR-013) — P0-A Docker image
 #
-# P0 uses mod_audio_stream for transport validation only.
-# See docs/adr/013-production-telephony-freeswitch.md for license boundary:
-#   community = uplink; bidirectional playback = commercial OR mod_imvera_audio.
-#
-# Upstream: https://github.com/amigniter/mod_audio_stream
-# Pin commit/tag in infra/freeswitch/MOD_AUDIO_STREAM.md before production.
+# Base: safarov/freeswitch (amd64). mod_audio_stream community READ from release deb.
+# See MOD_AUDIO_STREAM.md for license boundary.
 
-FROM safarov/freeswitch:1.10.11
+FROM debian:bookworm-slim AS modextract
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends wget ca-certificates \
+    && wget -q -O /mod.deb \
+        https://github.com/amigniter/mod_audio_stream/releases/download/v1.0.3/mod-audio-stream_1.0.3_amd64.deb \
+    && apt-get install -y --no-install-recommends dpkg \
+    && dpkg-deb -x /mod.deb /extract \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY conf/ /etc/freeswitch/
+FROM safarov/freeswitch:latest
+
+COPY --from=modextract /extract/usr/lib/freeswitch/mod/mod_audio_stream.so \
+    /usr/lib/freeswitch/mod/mod_audio_stream.so
+
+RUN mkdir -p /etc/freeswitch \
+    && cp -a /usr/share/freeswitch/conf/vanilla/. /etc/freeswitch/ \
+    && sed -i '/<load module="mod_sndfile"\/>/a\    <load module="mod_audio_stream"/>' \
+        /etc/freeswitch/autoload_configs/modules.conf.xml \
+    && sed -i 's|value="\$${internal_auth_calls}"|value="false"|' \
+        /etc/freeswitch/sip_profiles/internal.xml \
+    && sed -i 's|<param name="ext-rtp-ip" value="auto-nat"/>|<param name="ext-rtp-ip" value="auto"/>|g' \
+        /etc/freeswitch/sip_profiles/internal.xml \
+    && sed -i 's|<param name="ext-sip-ip" value="auto-nat"/>|<param name="ext-sip-ip" value="auto"/>|g' \
+        /etc/freeswitch/sip_profiles/internal.xml \
+    && sed -i 's|<param name="manage-presence" value="true"/>|<param name="manage-presence" value="false"/>|' \
+        /etc/freeswitch/sip_profiles/internal.xml \
+    && sed -i 's|<param name="apply-inbound-acl" value="domains"/>|<param name="apply-inbound-acl" value=""/>|' \
+        /etc/freeswitch/sip_profiles/internal.xml
+
+COPY conf/dialplan/public.xml /etc/freeswitch/dialplan/public.xml
+COPY conf/vars_imvera.xml /etc/freeswitch/vars_imvera.xml
+COPY conf/directory/default/fs-gate-caller.xml /etc/freeswitch/directory/default/fs-gate-caller.xml
+COPY conf/directory/default/zoiper.xml /etc/freeswitch/directory/default/zoiper.xml
+COPY conf/autoload_configs/event_socket.conf.xml /etc/freeswitch/autoload_configs/event_socket.conf.xml
+
+RUN grep -q 'vars_imvera.xml' /etc/freeswitch/vars.xml \
+    || echo '<X-PRE-PROCESS cmd="include" data="vars_imvera.xml"/>' >> /etc/freeswitch/vars.xml
 
 EXPOSE 5060/udp 5060/tcp 8021/tcp 16384-32768/udp
 
-CMD ["freeswitch", "-nonat", "-nf"]
+ENV SOUND_TYPES=
+ENV SOUND_RATES=

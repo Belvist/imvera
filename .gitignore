@@ -32,6 +32,7 @@ models/
 .run/
 config/local/
 archive/telephony/livekit/infra/.runtime/
+infra/freeswitch/conf/generated/
 
 # Logs
 *.log

@@ -1,4 +1,4 @@
-"""IMVERA media bridge — FreeSWITCH uplink PCM WebSocket (P0-A: READ only)."""
+"""IMVERA media bridge — FreeSWITCH PCM WebSocket (P0-A uplink / CallActor duplex)."""
 
 from __future__ import annotations
 
@@ -10,37 +10,66 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 
 from packages.telephony.freeswitch_bridge import TARGET_SAMPLE_RATE, FreeSwitchBridgeSession
-from packages.voice_runtime.audio import pcm_rms_s16le
 from tools.telephony_gate.evidence import MediaGateEvidence, write_evidence
 
 log = logging.getLogger("imvera_media_bridge")
-GATE_ROOT = Path(".run/freeswitch-gate")
+ROOT = Path(__file__).resolve().parents[2]
+GATE_ROOT = ROOT / ".run" / "freeswitch-gate"
 INVITE_META = GATE_ROOT / "synthetic_invite.json"
 
-
-app = FastAPI(title="IMVERA Media Bridge", version="0.2.0")
+MODE = os.environ.get("IMVERA_MEDIA_BRIDGE_MODE", "uplink_only").strip().lower()
 _sessions: dict[str, FreeSwitchBridgeSession] = {}
+
+
+def _bridge_mode() -> str:
+    if MODE in {"callactor", "voice", "duplex"}:
+        return "callactor"
+    return "uplink_only"
+
+
+app = FastAPI(title="IMVERA Media Bridge", version="0.3.0")
 
 
 async def _noop_inbound(_frame) -> None:
     return
 
 
-@app.get("/health/ready")
-async def ready() -> dict:
-    return {
+@app.get("/health/ready", response_model=None)
+async def ready() -> JSONResponse | dict:
+    mode = _bridge_mode()
+    payload: dict = {
         "status": "ok",
         "active_sessions": len(_sessions),
-        "mode": "uplink_only",
-        "gate": "p0a",
+        "mode": mode,
+        "gate": "p0b" if mode == "callactor" else "p0a",
     }
+    if mode == "callactor":
+        from services.imvera_media_bridge.callactor import inference_blockers
+
+        blockers = await inference_blockers()
+        if blockers:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "not_ready", "mode": mode, "blockers": blockers},
+            )
+        stt = os.environ.get("IMVERA_STT_URL", "http://127.0.0.1:9101")
+        tts = os.environ.get("IMVERA_TTS_URL", "http://127.0.0.1:9102")
+        llm = os.environ.get("IMVERA_LLM_URL", "http://127.0.0.1:9103")
+        payload.update({"stt": stt, "tts": tts, "llm": llm})
+    return payload
 
 
 @app.websocket("/stream/{fs_uuid}")
 async def fs_pcm_stream(websocket: WebSocket, fs_uuid: str) -> None:
-    """P0-A: receive caller PCM only. Outbound 880 Hz is FreeSWITCH tone_stream."""
+    if _bridge_mode() == "callactor":
+        from services.imvera_media_bridge.callactor import handle_callactor_ws
+
+        await handle_callactor_ws(websocket, fs_uuid)
+        return
+
     call_id = f"fs-{fs_uuid[:8]}"
     session = FreeSwitchBridgeSession(
         call_id=call_id,
@@ -88,6 +117,8 @@ def _write_session_artifacts(session: FreeSwitchBridgeSession) -> None:
     peak = 0
     rms_peak = 0.0
     nonzero = 0
+    from packages.voice_runtime.audio import pcm_rms_s16le
+
     for i in range(0, len(raw) - 1, 640):
         chunk = raw[i : i + 640]
         if len(chunk) < 2:
@@ -101,7 +132,10 @@ def _write_session_artifacts(session: FreeSwitchBridgeSession) -> None:
             max(abs(int.from_bytes(chunk[j : j + 2], "little", signed=True)) for j in range(0, len(chunk) - 1, 2)),
         )
 
-    downlink = invite.get("synthetic_downlink_path", str(GATE_ROOT / "synthetic_downlink.u8"))
+    downlink_raw = invite.get("synthetic_downlink_path", str(GATE_ROOT / "synthetic_downlink.u8"))
+    downlink_path = Path(downlink_raw)
+    if not downlink_path.is_absolute():
+        downlink_path = ROOT / downlink_path
     evidence = MediaGateEvidence(
         call_id=session.call_id,
         invite_sent_at=invite.get("invite_sent_at"),
@@ -115,15 +149,18 @@ def _write_session_artifacts(session: FreeSwitchBridgeSession) -> None:
         nonzero_pcm_frames=nonzero,
         inbound_rms_peak=rms_peak,
         inbound_peak_sample=peak,
-        raw_inbound_wav=str(wav_path) if raw else "",
-        synthetic_downlink_wav=downlink,
+        raw_inbound_wav=str(wav_path.relative_to(ROOT)) if raw else "",
+        synthetic_downlink_wav=str(downlink_path.relative_to(ROOT)),
         gate_phase="p0a",
     )
     write_evidence(artifact_dir / "media_gate_evidence.json", evidence)
 
 
 def main() -> None:
+    GATE_ROOT.mkdir(parents=True, exist_ok=True)
     port = int(os.environ.get("IMVERA_MEDIA_BRIDGE_PORT", "9210"))
+    mode = _bridge_mode()
+    log.info("media_bridge.start mode=%s port=%s", mode, port)
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 

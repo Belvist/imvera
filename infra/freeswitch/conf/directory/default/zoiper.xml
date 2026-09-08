@@ -1,0 +1,12 @@
+<include>
+  <user id="zoiper">
+    <params>
+      <param name="password" value="zoiper-lab"/>
+    </params>
+    <variables>
+      <variable name="user_context" value="public"/>
+      <variable name="effective_caller_id_number" value="1001"/>
+      <variable name="voicemail_enabled" value="false"/>
+    </variables>
+  </user>
+</include>

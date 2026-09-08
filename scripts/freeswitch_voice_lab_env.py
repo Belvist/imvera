@@ -1,0 +1,81 @@
+"""Shared CallActor environment for FreeSWITCH Zoiper lab (= voice_up parity)."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+from pathlib import Path
+
+import httpx
+
+from packages.voice_runtime.audio_audit import apply_audio_audit_env
+from packages.voice_runtime.lab_half_duplex import apply_lab_half_duplex_env
+from packages.voice_runtime.profile import apply_audio_env
+from services.tts.lab_fast import apply_lab_fast_env
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def build_freeswitch_voice_lab_env() -> dict[str, str]:
+    """Same audio/listen/TTS lab flags as `make voice-up` CallActor path."""
+    env = apply_audio_audit_env(
+        apply_lab_half_duplex_env(apply_lab_fast_env(apply_audio_env(os.environ.copy())))
+    )
+    env.setdefault("IMVERA_STT_URL", "http://127.0.0.1:9101")
+    env.setdefault("IMVERA_TTS_URL", "http://127.0.0.1:9102")
+    env.setdefault("IMVERA_LLM_URL", "http://127.0.0.1:9103")
+    env.setdefault(
+        "IMVERA_PG_URL",
+        "postgresql://imvera:imvera_dev_change_me@127.0.0.1:5432/imvera",
+    )
+    env.setdefault("IMVERA_DEV_FAMILY_ID", "fam-voice")
+    env.setdefault("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
+    env.setdefault("IMVERA_MEDIA_BRIDGE_MODE", "callactor")
+    env.setdefault("IMVERA_MEDIA_BRIDGE_PORT", "9210")
+    env.setdefault("IMVERA_TELEPHONY_STREAM", "1")
+    # Live TTS opening on phone — cached 24k→16k via JSON playback can clip «IMVERA».
+    env.setdefault("IMVERA_OPENING_CACHE", "0")
+    # Product opening: «Здравствуйте. Это сервис IMVERA, <name>. Как вы себя чувствуете?»
+    env.setdefault("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1")
+    env.setdefault("PYTHONPATH", str(ROOT))
+    return env
+
+
+def ensure_silero_opening_cache(env: dict[str, str]) -> bool:
+    """Require Silero Xenia TTS and pre-render opening wellness (warm first phrase)."""
+    tts_url = env.get("IMVERA_TTS_URL", "http://127.0.0.1:9102").rstrip("/")
+    try:
+        response = httpx.get(f"{tts_url}/health/ready", timeout=3.0)
+        if response.status_code != 200:
+            print(f"BLOCKED: TTS not ready ({response.status_code})", file=__import__("sys").stderr)
+            return False
+        tts_rev = str(response.json().get("model_revision", ""))
+    except httpx.HTTPError as exc:
+        print(f"BLOCKED: TTS unreachable: {exc}", file=__import__("sys").stderr)
+        return False
+    if (
+        "macos_say" in tts_rev
+        or not tts_rev.startswith("silero_lab:silero:")
+        or "xenia" not in tts_rev
+    ):
+        print(f"BLOCKED: TTS must be silero:xenia, got {tts_rev!r}", file=__import__("sys").stderr)
+        return False
+    env["IMVERA_TTS_MODEL_REVISION"] = tts_rev
+    print(f"  TTS revision: {tts_rev}")
+
+    cache_dir = ROOT / ".run" / "cache"
+    if cache_dir.is_dir():
+        for stale in cache_dir.glob("opening_*.json"):
+            stale.unlink()
+            print(f"  dropped stale opening cache {stale.name}")
+
+    print("Pre-rendering opening phrase cache...")
+    result = subprocess.run(
+        [os.environ.get("PYTHON", "python3"), str(ROOT / "scripts" / "prerender_opening.py")],
+        cwd=ROOT,
+        env=env,
+        check=False,
+    )
+    if result.returncode != 0:
+        print("WARN: opening prerender failed — first call may wait on TTS", file=__import__("sys").stderr)
+    return True

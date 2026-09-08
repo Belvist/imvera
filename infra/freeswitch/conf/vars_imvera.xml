@@ -1,0 +1,4 @@
+<include>
+  <!-- Docker default; override via vars.xml on Linux host (host.docker.internal). -->
+  <X-PRE-PROCESS cmd="set" data="imvera_media_bridge_ws=ws://media-bridge:9210/stream"/>
+</include>

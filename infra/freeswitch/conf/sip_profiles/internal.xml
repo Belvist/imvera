@@ -1,14 +1,16 @@
 <profile name="internal">
+  <!-- Reference overlay for P0-A Docker; image build patches vanilla internal.xml instead. -->
+  <domains>
+    <domain name="all" alias="true" parse="false"/>
+  </domains>
   <settings>
-    <param name="debug" value="0"/>
-    <param name="sip-trace" value="no"/>
-    <param name="sip-port" value="5060"/>
+    <param name="context" value="public"/>
+    <param name="auth-calls" value="false"/>
+    <param name="auth-all-packets" value="false"/>
     <param name="rtp-ip" value="auto"/>
     <param name="sip-ip" value="auto"/>
-    <param name="ext-rtp-ip" value="auto-nat"/>
-    <param name="ext-sip-ip" value="auto-nat"/>
-    <param name="context" value="public"/>
-    <param name="dialplan" value="XML"/>
+    <param name="ext-rtp-ip" value="auto"/>
+    <param name="ext-sip-ip" value="auto"/>
     <param name="inbound-codec-prefs" value="PCMU,PCMA"/>
     <param name="outbound-codec-prefs" value="PCMU,PCMA"/>
   </settings>

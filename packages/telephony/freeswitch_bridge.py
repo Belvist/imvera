@@ -10,6 +10,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any, Awaitable, Callable
 
 from packages.telephony.adapter import (
@@ -18,10 +19,18 @@ from packages.telephony.adapter import (
     TelephonyMediaCounters,
 )
 
+from packages.telephony.freeswitch_outbound import encode_stream_audio_json
+
 log = logging.getLogger(__name__)
 
 TARGET_SAMPLE_RATE = 16000
 FRAME_MS = 20
+
+
+class FreeSwitchOutboundMode(StrEnum):
+    NONE = "none"
+    RAW_BINARY = "raw_binary"
+    STREAM_AUDIO_JSON = "stream_audio_json"
 
 
 PushInboundFn = Callable[[InboundMediaFrame], Awaitable[None]]
@@ -39,17 +48,21 @@ class FreeSwitchBridgeSession:
     _outbound_queue: asyncio.Queue[bytes] = field(default_factory=asyncio.Queue)
     _outbound_task: asyncio.Task | None = None
     uplink_only: bool = True
+    outbound_mode: FreeSwitchOutboundMode = FreeSwitchOutboundMode.NONE
     _closed: bool = False
     ws_connected_at: float | None = None
     first_outbound_pcm_at: float | None = None
     first_inbound_pcm_at: float | None = None
     _raw_inbound: bytearray = field(default_factory=bytearray)
 
+    def _duplex_enabled(self) -> bool:
+        return not self.uplink_only or self.outbound_mode is not FreeSwitchOutboundMode.NONE
+
     async def handle_ws(self, websocket: Any) -> None:
         """Attach mod_audio_stream (or lab client) WebSocket."""
         self.ws_connected_at = time.time()
         outbound_task: asyncio.Task | None = None
-        if not self.uplink_only:
+        if self._duplex_enabled():
             outbound_task = asyncio.create_task(self._pump_outbound_to_ws(websocket))
         try:
             while not self._closed:
@@ -91,9 +104,15 @@ class FreeSwitchBridgeSession:
         try:
             while not self._closed:
                 pcm = await self._outbound_queue.get()
-                await websocket.send_bytes(pcm)
+                if self.outbound_mode is FreeSwitchOutboundMode.STREAM_AUDIO_JSON:
+                    message = encode_stream_audio_json(pcm, self.sample_rate)
+                    await websocket.send_text(message)
+                    tx_bytes = len(message.encode("utf-8"))
+                else:
+                    await websocket.send_bytes(pcm)
+                    tx_bytes = len(pcm)
                 self.counters.carrier_tx_frames += 1
-                self.counters.carrier_tx_bytes += len(pcm)
+                self.counters.carrier_tx_bytes += tx_bytes
                 if self.first_outbound_pcm_at is None:
                     self.first_outbound_pcm_at = time.time()
         except asyncio.CancelledError:

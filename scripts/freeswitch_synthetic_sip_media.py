@@ -38,9 +38,63 @@ def _require_pyvoip() -> None:
             raise SystemExit(1) from None
     try:
         import pyVoIP  # noqa: F401
+        from pyVoIP.VoIP import VoIPPhone  # noqa: F401
     except ImportError:
         print(f"BLOCKED: pyVoIP=={PYVOIP_VERSION} required", file=sys.stderr)
         raise SystemExit(1)
+    _patch_pyvoip_skip_notify()
+
+
+class _NotifyFilteringSocket:
+    """UDP socket wrapper that drops FreeSWITCH SIP NOTIFY before pyVoIP parses it."""
+
+    def __init__(self, sock: socket.socket) -> None:
+        self._sock = sock
+
+    def recv(self, size: int) -> bytes:
+        return _recv_skip_notify(self._sock, size)
+
+    def sendto(self, *args, **kwargs):
+        return self._sock.sendto(*args, **kwargs)
+
+    def bind(self, *args, **kwargs):
+        return self._sock.bind(*args, **kwargs)
+
+    def close(self, *args, **kwargs):
+        return self._sock.close(*args, **kwargs)
+
+    def __getattr__(self, name: str):
+        if name == "_sock":
+            raise AttributeError(name)
+        return getattr(self._sock, name)
+
+
+def _patch_pyvoip_skip_notify() -> None:
+    """FreeSWITCH may send SIP NOTIFY after REGISTER; pyVoIP 1.6.8 cannot parse it."""
+    return
+
+
+def _recv_skip_notify(sock: socket.socket, size: int) -> bytes:
+    while True:
+        data = sock.recv(size)
+        if not data:
+            return data
+        heading = data.split(b"\r\n", 1)[0]
+        if heading.startswith(b"NOTIFY "):
+            continue
+        return data
+
+
+def _resolve_public_ip(sip_host: str, sip_port: int) -> str:
+    env = os.environ.get("FS_NODE_IP", os.environ.get("LIVEKIT_NODE_IP", ""))
+    if env and env.lower() != "auto":
+        return env
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect((sip_host, sip_port))
+        return probe.getsockname()[0]
+    finally:
+        probe.close()
 
 
 def _preflight_udp_port(port: int) -> None:
@@ -134,19 +188,21 @@ def run_synthetic_call(
     _preflight_udp_port(local_sip_port)
     if DOWNLINK_U8.exists():
         DOWNLINK_U8.unlink()
-    public_ip = os.environ.get("FS_NODE_IP", os.environ.get("LIVEKIT_NODE_IP", "127.0.0.1"))
+    public_ip = _resolve_public_ip(sip_host, sip_port)
 
     phone = VoIPPhone(
         sip_host,
         sip_port,
-        "fs-gate-caller",
-        "",
+        os.environ.get("FS_GATE_USER", "fs-gate-caller"),
+        os.environ.get("FS_GATE_PASSWORD", "gate"),
         myIP=public_ip,
         sipPort=local_sip_port,
         rtpPortLow=14000,
         rtpPortHigh=14100,
     )
     phone.start()
+    phone.sip.s = _NotifyFilteringSocket(phone.sip.s)
+    phone.sip.out = phone.sip.s
     time.sleep(1.0)
 
     invite_sent_at = time.time()
@@ -210,7 +266,7 @@ def run_synthetic_call(
         "synthetic_rtp_tx_packets": rtp_packets,
         "synthetic_rtp_tx_bytes": rtp_bytes,
         "synthetic_downlink_bytes": len(downlink),
-        "synthetic_downlink_path": str(DOWNLINK_U8),
+        "synthetic_downlink_path": str(DOWNLINK_U8.relative_to(ROOT)),
     }
     INVITE_META.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     return meta

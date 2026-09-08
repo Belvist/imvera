@@ -100,6 +100,21 @@ freeswitch-soak-gate:
 freeswitch-synthetic-sip:
 	@$(PYTHON) scripts/freeswitch_synthetic_sip_media.py
 
+freeswitch-docker-gate:
+	@$(PYTHON) scripts/freeswitch_docker_gate.py
+
+freeswitch-zoiper-info:
+	@$(PYTHON) scripts/freeswitch_zoiper_info.py
+
+freeswitch-zoiper-fix:
+	@$(PYTHON) scripts/freeswitch_zoiper_apply_mac.py
+
+freeswitch-zoiper-voice-up:
+	@$(PYTHON) scripts/freeswitch_zoiper_voice_up.py
+
+freeswitch-zoiper-voice-down:
+	@$(PYTHON) scripts/freeswitch_zoiper_voice_down.py
+
 media-bridge-up:
 	@$(PYTHON) services/imvera_media_bridge/main.py
 

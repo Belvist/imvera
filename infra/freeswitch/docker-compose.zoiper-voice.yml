@@ -1,0 +1,8 @@
+# Zoiper + CallActor lab overlay — media-bridge on Mac host, RTP on LAN IP.
+services:
+  freeswitch:
+    volumes:
+      - ./conf/generated/vars_imvera.runtime.xml:/etc/freeswitch/vars_imvera.xml:ro
+      - ./conf/generated/internal.zoiper-voice.xml:/etc/freeswitch/sip_profiles/internal.xml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

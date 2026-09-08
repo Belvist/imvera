@@ -67,8 +67,13 @@ def main() -> int:
     if evidence is None:
         return 1
 
+    failure = MediaGateFailure.UNKNOWN
     inbound_wav = Path(evidence.raw_inbound_wav)
     downlink = Path(evidence.synthetic_downlink_wav)
+    if not downlink.is_absolute():
+        downlink = ROOT / downlink
+    if not inbound_wav.is_absolute():
+        inbound_wav = ROOT / inbound_wav
     if inbound_wav.exists() and downlink.exists():
         spectral = analyze_duplex_probe(inbound_wav=inbound_wav, downlink_path=downlink)
         evidence.inbound_has_440_hz = bool(spectral["inbound_has_440_hz"])

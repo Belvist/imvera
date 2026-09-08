@@ -1,0 +1,4 @@
+<include>
+  <!-- Zoiper CallActor lab — bridge on Mac host (MLX workers localhost). -->
+  <X-PRE-PROCESS cmd="set" data="imvera_media_bridge_ws=ws://host.docker.internal:9210/stream"/>
+</include>

@@ -1,0 +1,12 @@
+<include>
+  <user id="fs-gate-caller">
+    <params>
+      <param name="password" value="gate"/>
+    </params>
+    <variables>
+      <variable name="user_context" value="public"/>
+      <variable name="effective_caller_id_number" value="1000"/>
+      <variable name="voicemail_enabled" value="false"/>
+    </variables>
+  </user>
+</include>

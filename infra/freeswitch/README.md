@@ -56,6 +56,44 @@ IMVERA_FS_GATE_REQUIRE_STACK=1 python3 scripts/freeswitch_synthetic_sip_media.py
 IMVERA_FS_GATE_REQUIRE_STACK=1 IMVERA_FS_SOAK_CALLS=100 make freeswitch-soak-gate
 ```
 
+## Run P0-A (Docker — all services)
+
+Full stack in Docker (amd64 emulation on Apple Silicon). Linux gate remains authoritative.
+
+```bash
+make freeswitch-docker-gate
+```
+
+Artifacts: `.run/freeswitch-gate/<call_id>/media_gate_evidence.json`, `raw_inbound.wav`.
+
+Teardown:
+
+```bash
+make freeswitch-down
+```
+
+## Zoiper (macOS lab)
+
+```bash
+make freeswitch-zoiper-voice-up   # MLX + FS + CallActor (Vera on 7000)
+make freeswitch-zoiper-fix        # patches ~/Library/Zoiper5/Config.xml
+make freeswitch-zoiper-info
+make freeswitch-zoiper-voice-down
+```
+
+| Field | Value |
+|-------|-------|
+| Domain | `<LAN-IP>:5060` (not 127.0.0.1) |
+| User | `zoiper` |
+| Password | `zoiper-lab` |
+| Transport | UDP |
+| STUN | off |
+| Codecs | PCMU/PCMA |
+| Dial (Vera) | **`7000`** |
+| P0-A tones | `+15550001000` (synthetic gate only) |
+
+Account must show **Registered**. `7000` needs `freeswitch-zoiper-voice-up` (STT/TTS/LLM on host).
+
 ## Dialplan
 
 `conf/dialplan/public.xml`:

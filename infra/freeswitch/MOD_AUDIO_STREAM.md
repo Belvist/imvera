@@ -1,7 +1,7 @@
 # mod_audio_stream — license boundary (ADR-013)
 
 Repository: https://github.com/amigniter/mod_audio_stream  
-FreeSWITCH image: `safarov/freeswitch:1.10.11` (pin before production build)
+FreeSWITCH image: `safarov/freeswitch:latest` + `mod-audio-stream_1.0.3_amd64.deb` (pin before production build)
 
 ## Edition boundary (upstream README)
 

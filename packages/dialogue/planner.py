@@ -1,5 +1,6 @@
 """Planner — decides what to do next (not how to say it)."""
 
+import os
 import re
 
 from packages.contracts.core import TerminationReason
@@ -19,6 +20,15 @@ from packages.dialogue.state import DialogueState
 _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
 _GOODBYE_FINAL = "До свидания. Хорошего дня."
 _GOODBYE_MARKERS = ("до свидания", "всего доброго")
+
+
+def direct_wellness_opening_enabled() -> bool:
+    """Lab shortcut: skip identity/consent → wellness. Default ON for automated gates."""
+    return os.environ.get("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 _MAX_SLOT_UNCLEAR = 2
 _STT_GARBAGE_PHRASES = frozenset(
     {
@@ -66,7 +76,7 @@ class Planner:
     @staticmethod
     def _opening_wellness_speech(state: DialogueState) -> str:
         name = state.elder_display_name
-        return f"Здравствуйте, это сервис IMVERA, {name}. Как вы себя чувствуете?"
+        return f"Здравствуйте. Это сервис IMVERA, {name}. Как вы себя чувствуете?"
 
     @staticmethod
     def _begin_direct_daily_check(state: DialogueState) -> None:
@@ -106,8 +116,11 @@ class Planner:
     ) -> TurnProposal:
         """Emit Vera's line for the current FSM state (call opening / re-prompt)."""
         if state.fsm_state == FsmState.CALL_START:
-            Planner._begin_direct_daily_check(state)
-            return Planner._plan_opening_wellness(state, turn_id, generation_id)
+            if direct_wellness_opening_enabled():
+                Planner._begin_direct_daily_check(state)
+                return Planner._plan_opening_wellness(state, turn_id, generation_id)
+            state.fsm_state = FsmState.IDENTIFY_PERSON
+            return Planner._prompt_for_state(state, turn_id, generation_id)
         return Planner._prompt_for_state(state, turn_id, generation_id)
 
     @staticmethod

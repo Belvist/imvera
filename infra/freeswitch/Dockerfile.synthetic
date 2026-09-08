@@ -1,0 +1,21 @@
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml README.md ./
+COPY packages ./packages
+COPY scripts/freeswitch_synthetic_sip_media.py ./scripts/freeswitch_synthetic_sip_media.py
+COPY tools ./tools
+
+RUN pip install --no-cache-dir -e . pyVoIP==1.6.8
+
+ENV FS_SIP_HOST=freeswitch
+ENV FS_SIP_PORT=5060
+ENV FS_NODE_IP=auto
+ENV FS_INBOUND_NUMBER=+15550001000
+
+CMD ["python", "scripts/freeswitch_synthetic_sip_media.py"]
