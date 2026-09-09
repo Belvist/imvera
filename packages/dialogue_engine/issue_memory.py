@@ -328,6 +328,12 @@ def _fill_pending_attribute_for_episode(
             ep.known_attributes["severity"] = value
             _maybe_clear_pending_attribute(state, episode_id, attribute)
         return
+    if attribute == "duration":
+        value = extract_grounded_onset_value(turn.raw_text, exclude_clauses=exclude)
+        if value:
+            ep.known_attributes["duration"] = value
+            _maybe_clear_pending_attribute(state, episode_id, attribute)
+        return
     raw = turn.raw_text.strip().lower()
     if attribute == "current" and raw:
         if any(x in raw for x in ("не бол", "прошл", "легче", "лучше", "нет")):

@@ -482,7 +482,9 @@ def test_assistant_echo_discarded() -> None:
         media=MediaCallbacks(_noop, _noop, _noop, _noop),
     )
     actor._delivered_phrases.append("Я разговариваю с Даниил?")
-    assert actor._is_assistant_echo("Я разговариваю с Даниил. Я разговариваю с Даниил.")
+    exact = "Я разговариваю с Даниил?"
+    assert actor._is_assistant_echo(exact)
+    assert not actor._is_assistant_echo("Я разговариваю с Даниил. Я разговариваю с Даниил.")
     assert not actor._is_assistant_echo("Да, это я")
     assert not actor._is_assistant_echo("Да.")
     assert not actor._is_assistant_echo("да")
@@ -509,8 +511,8 @@ def test_assistant_echo_prefix_and_in_progress_phrase() -> None:
         "p-1",
         "Сейчас не получилось узнать, как у вас дела.",
     )
-    assert actor._is_assistant_echo("Сейчас")
-    assert actor._is_assistant_echo("Сейчас не получилось")
+    assert not actor._is_assistant_echo("Сейчас")
+    assert not actor._is_assistant_echo("Сейчас не получилось")
     assert not actor._is_assistant_echo("Нормально")
 
 

@@ -1,9 +1,9 @@
-"""Text-domain echo detection — filter Vera bleed before interpretation."""
+"""Text-domain similarity metrics — signals only, not admission verdicts."""
 
 from __future__ import annotations
 
 import re
-
+from difflib import SequenceMatcher
 
 _REPAIR_SHORT = re.compile(
     r"^(какое|какая|какой|какие|что|как|где|когда|зачем|почему|"
@@ -33,8 +33,45 @@ def normalize_speech_text(text: str) -> str:
     return re.sub(r"\s+", " ", lowered).strip()
 
 
+def _token_sets(user: str, bot: str) -> tuple[list[str], list[str], set[str], set[str]]:
+    user_tokens = user.split()
+    bot_tokens = bot.split()
+    return user_tokens, bot_tokens, set(user_tokens), set(bot_tokens)
+
+
+def compute_text_similarity(user_text: str, bot_text: str) -> dict[str, float | bool]:
+    """Multi-metric text overlap — diagnostic only, never a drop verdict."""
+    user = normalize_speech_text(user_text)
+    bot = normalize_speech_text(bot_text)
+    if not user or not bot:
+        return {
+            "exact_match": False,
+            "user_coverage": 0.0,
+            "bot_coverage": 0.0,
+            "jaccard": 0.0,
+            "ordered_similarity": 0.0,
+            "legacy_similarity": 0.0,
+        }
+    user_tokens, bot_tokens, user_set, bot_set = _token_sets(user, bot)
+    overlap = len(user_set & bot_set)
+    union = len(user_set | bot_set) or 1
+    user_coverage = overlap / max(len(user_set), 1)
+    bot_coverage = overlap / max(len(bot_set), 1)
+    jaccard = overlap / union
+    ordered = SequenceMatcher(None, user, bot).ratio()
+    legacy = text_echo_similarity(user_text, bot_text)
+    return {
+        "exact_match": user == bot,
+        "user_coverage": round(user_coverage, 3),
+        "bot_coverage": round(bot_coverage, 3),
+        "jaccard": round(jaccard, 3),
+        "ordered_similarity": round(ordered, 3),
+        "legacy_similarity": legacy,
+    }
+
+
 def text_echo_similarity(user_text: str, bot_text: str) -> float:
-    """0..1 overlap between user STT and last bot phrase (text-domain echo score)."""
+    """Legacy 0..1 overlap score — forensic / diagnostics only."""
     user = normalize_speech_text(user_text)
     bot = normalize_speech_text(bot_text)
     if not user or not bot:
@@ -69,7 +106,7 @@ def is_text_echo_of_bot(
     *,
     allowlist: frozenset[str] | None = None,
 ) -> bool:
-    """True when STT text is likely Vera's last phrase bleeding into the user segment."""
+    """Weak text-echo hint — never used alone for hard drop (see PostSTTTurnGate)."""
     normalized = normalize_speech_text(user_text)
     if not normalized:
         return True
@@ -79,21 +116,10 @@ def is_text_echo_of_bot(
         return False
     if not (bot_text or "").strip():
         return False
-    sim = text_echo_similarity(user_text, bot_text)
-    if sim >= 0.55:
+    metrics = compute_text_similarity(user_text, bot_text)
+    if metrics.get("exact_match"):
         return True
-    if sim >= 0.40:
-        if is_repair_phrase(normalized):
-            return False
-        if re.match(r"^(как|что|какое|какая|какой|каких)\s", normalized):
-            bot_norm = normalize_speech_text(bot_text)
-            for stem in (
-                "настроени",
-                "самочувств",
-                "чувству",
-                "спал",
-                "план",
-            ):
-                if stem in normalized and stem in bot_norm:
-                    return True
-    return False
+    ordered = float(metrics.get("ordered_similarity", 0))
+    user_cov = float(metrics.get("user_coverage", 0))
+    bot_cov = float(metrics.get("bot_coverage", 0))
+    return ordered >= 0.95 and user_cov >= 0.95 and bot_cov >= 0.95

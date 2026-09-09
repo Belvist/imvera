@@ -44,6 +44,12 @@ from packages.dialogue_engine.turn_understanding import (
     payload_to_rich_turn,
 )
 from packages.voice_perception.config import PerceptionConfig
+from packages.voice_perception.post_stt_gate import (
+    FRAGMENT_HOLD_TIMEOUT_S,
+    PostSTTContext,
+    TurnAdmissionVerdict,
+    evaluate_post_stt_turn,
+)
 from packages.voice_perception.session import PerceptionSession
 from packages.voice_perception.text_echo import text_echo_similarity
 from packages.voice_runtime.agent_debug_log import agent_debug_log
@@ -246,6 +252,11 @@ class CallActor:
     _forensic_vad_start_ts: str | None = None
     _forensic_vad_end_ts: str | None = None
     _forensic_segment_echo_max: float = 0.0
+    _segment_acoustic_echo_verdict: str | None = None
+    _playout_end_mono: float | None = None
+    _pending_fragment_text: str | None = None
+    _pending_fragment_utterance_id: str | None = None
+    _pending_fragment_mono: float | None = None
 
     def _forensic_active(self) -> bool:
         return os.environ.get("IMVERA_FORENSIC", "0") in {"1", "true", "yes"}
@@ -299,6 +310,7 @@ class CallActor:
         self._forensic_vad_start_ts = None
         self._forensic_vad_end_ts = None
         self._forensic_segment_echo_max = 0.0
+        self._segment_acoustic_echo_verdict = None
 
     def _active_builder(self) -> UtteranceBuilder | None:
         return self._utterance_builder or self._collector
@@ -619,14 +631,20 @@ class CallActor:
         return " ".join(cleaned.split())
 
     def _assistant_echo_candidates(self) -> list[str]:
-        """Phrases Vera already said or is saying — used to drop acoustic echo STT."""
-        candidates = list(self._delivered_phrases)
+        """Recent Vera phrases only — limited window for echo comparison."""
+        candidates: list[str] = []
+        if self._delivered_phrases:
+            candidates.append(self._delivered_phrases[-1])
+        if len(self._delivered_phrases) >= 2:
+            prev = self._delivered_phrases[-2]
+            if prev not in candidates:
+                candidates.append(prev)
         if self._playback and self._playback._ledger:
             spoken = self._playback._ledger.canonical_text
-            if spoken and (not candidates or candidates[-1] != spoken):
+            if spoken and spoken not in candidates:
                 candidates.append(spoken)
         pending = self.session.state.pending_question
-        if pending:
+        if pending and pending not in candidates:
             candidates.append(pending)
         return candidates
 
@@ -661,6 +679,67 @@ class CallActor:
             text,
             self._assistant_echo_candidates(),
             allowlist=self._SLOT_ANSWER_ALLOWLIST,
+        )
+
+    def _clear_pending_fragment(self) -> None:
+        self._pending_fragment_text = None
+        self._pending_fragment_utterance_id = None
+        self._pending_fragment_mono = None
+
+    def _merge_pending_fragment(self, text: str) -> tuple[str, bool]:
+        now = self._monotonic()
+        if (
+            self._pending_fragment_mono is not None
+            and (now - self._pending_fragment_mono) > FRAGMENT_HOLD_TIMEOUT_S
+        ):
+            self._clear_pending_fragment()
+        if not self._pending_fragment_text:
+            return text, False
+        merged = f"{self._pending_fragment_text} {text}".strip()
+        self._clear_pending_fragment()
+        return merged, True
+
+    def _hold_pending_fragment(self, text: str, utterance_id: str) -> None:
+        self._pending_fragment_text = text
+        self._pending_fragment_utterance_id = utterance_id
+        self._pending_fragment_mono = self._monotonic()
+
+    def _build_post_stt_context(
+        self,
+        text: str,
+        kernel_result: object | None,
+        *,
+        answer_slot: str | None,
+        pending_episode_attribute: str | None,
+        merged_from_fragment: bool,
+    ) -> PostSTTContext:
+        candidates = tuple(self._assistant_echo_candidates())
+        last_bot = candidates[0] if candidates else ""
+        now = self._monotonic()
+        ms_since: int | None = None
+        if self._playout_end_mono is not None:
+            ms_since = int((now - self._playout_end_mono) * 1000)
+        echo_tail = self._turn_manager.phase == ConversationPhase.ECHO_TAIL
+        acoustic_verdict = self._segment_acoustic_echo_verdict
+        if (
+            acoustic_verdict is None
+            and self._forensic_segment_echo_max >= 0.85
+        ):
+            acoustic_verdict = str(EchoVerdict.ECHO)
+        return PostSTTContext(
+            user_text=text,
+            last_bot_text=last_bot,
+            bot_candidates=candidates,
+            last_playout_generation=self._active_generation,
+            playback_active=bool(self._active_generation),
+            milliseconds_since_playout_end=ms_since,
+            echo_tail_active=echo_tail,
+            acoustic_echo_score=self._forensic_segment_echo_max,
+            acoustic_echo_verdict=acoustic_verdict,
+            answer_slot=answer_slot,
+            pending_episode_attribute=pending_episode_attribute,
+            semantic_result=kernel_result,
+            merged_from_fragment=merged_from_fragment,
         )
 
     def _remember_assistant_phrase(self, text: str) -> None:
@@ -783,6 +862,7 @@ class CallActor:
         if started:
             self._forensic_vad_start_ts = utc_now_iso()
             self._forensic_segment_echo_max = 0.0
+            self._segment_acoustic_echo_verdict = None
             self._turn_manager.on_vad_speech_started(self._monotonic())
             if self.config.lab_barge_in and playback_active:
                 self._turn_manager.note_barge_in_candidate(self._monotonic())
@@ -995,6 +1075,8 @@ class CallActor:
             if decision.echo_verdict is not None:
                 self._audio_echo_drop_logged += 1
                 self._bump_forensic_echo_score(decision.echo_score)
+                if str(decision.echo_verdict) == str(EchoVerdict.ECHO):
+                    self._segment_acoustic_echo_verdict = str(EchoVerdict.ECHO)
                 if self._audio_echo_drop_logged <= 30:
                     await self._emit_stage(
                         "audio.echo_classified",
@@ -1578,27 +1660,7 @@ class CallActor:
                     model_revision=stt_result.model_revision or "",
                     empty_reason="gigaam_blank",
                 )
-            if not text or self._is_assistant_echo(text):
-                if text:
-                    await self._emit_stage(
-                        "stt.echo_discarded",
-                        utterance_id=utterance_id,
-                        text_len=len(text),
-                    )
-                    await self._emit_forensic_turn(
-                        utterance_id=utterance_id,
-                        stt_text=text,
-                        stt_rms=pcm_rms,
-                        stt_duration_ms=duration_ms,
-                        stt_latency_ms=stt_elapsed_ms,
-                        dump_path=dump_path or "",
-                        delivered_slot=self.session.state.pending_slot or "",
-                        interpret_path="echo_discarded",
-                        interpret_latency_ms=0,
-                        stt_request_ts=stt_request_ts,
-                        stt_result_ts=stt_result_ts,
-                    )
-                    self._reset_uplink_endpointing()
+            if not text:
                 self._resume_answer_wait_if_paused()
                 self._turn_manager.on_turn_applied()
                 await self._submit_utterance_outcome(
@@ -1611,6 +1673,14 @@ class CallActor:
                 return
 
             await self._cancel_wait_timer()
+
+            text, merged_from_fragment = self._merge_pending_fragment(text)
+            if merged_from_fragment:
+                await self._emit_stage(
+                    "post_stt.fragment_merged",
+                    utterance_id=utterance_id,
+                    text_len=len(text),
+                )
 
             answer_slot = None
             if self.session.uses_dialogue_engine() and self.session._engine:
@@ -1655,7 +1725,84 @@ class CallActor:
                     engine_state=engine_state,
                     answer_slot=answer_slot,
                 )
-                rich_turn = kernel_to_rich_turn(kernel_result)
+                gate_ctx = self._build_post_stt_context(
+                    text,
+                    kernel_result,
+                    answer_slot=answer_slot,
+                    pending_episode_attribute=pending_episode_attribute,
+                    merged_from_fragment=merged_from_fragment,
+                )
+                admission = evaluate_post_stt_turn(gate_ctx)
+                await self._emit_stage(
+                    "post_stt.verdict",
+                    utterance_id=utterance_id,
+                    verdict=str(admission.verdict),
+                    reason=admission.reason,
+                    confidence=round(admission.confidence, 3),
+                    echo=admission.text_similarity,
+                    acoustic_score=round(admission.acoustic_score, 3),
+                    acoustic_verdict=gate_ctx.acoustic_echo_verdict or "",
+                    playback_active=gate_ctx.playback_active,
+                    ms_since_playout=gate_ctx.milliseconds_since_playout_end,
+                    answer_slot=answer_slot or "",
+                    pending_episode_attribute=pending_episode_attribute or "",
+                    semantic=admission.semantic_novelty,
+                    fragment=admission.fragment,
+                )
+                if admission.verdict == TurnAdmissionVerdict.HOLD_FRAGMENT:
+                    self._hold_pending_fragment(text, utterance_id)
+                    await self._emit_stage(
+                        "post_stt.fragment_held",
+                        utterance_id=utterance_id,
+                        text_len=len(text),
+                    )
+                    self._reset_uplink_endpointing()
+                    self._resume_answer_wait_if_paused()
+                    self._turn_manager.on_turn_applied()
+                    await self._submit_utterance_outcome(
+                        _UtteranceOutcome(
+                            utterance_seq=utterance_seq,
+                            utterance_id=utterance_id,
+                            ok=False,
+                        )
+                    )
+                    return
+                if admission.verdict == TurnAdmissionVerdict.DROP_ECHO:
+                    await self._emit_stage(
+                        "stt.echo_discarded",
+                        utterance_id=utterance_id,
+                        text_len=len(text),
+                        reason=admission.reason,
+                    )
+                    await self._emit_forensic_turn(
+                        utterance_id=utterance_id,
+                        stt_text=text,
+                        stt_rms=pcm_rms,
+                        stt_duration_ms=duration_ms,
+                        stt_latency_ms=stt_elapsed_ms,
+                        dump_path=dump_path or "",
+                        delivered_slot=answer_slot or self.session.state.pending_slot or "",
+                        interpret_path="echo_discarded",
+                        interpret_latency_ms=0,
+                        stt_request_ts=stt_request_ts,
+                        stt_result_ts=stt_result_ts,
+                    )
+                    self._reset_uplink_endpointing()
+                    self._resume_answer_wait_if_paused()
+                    self._turn_manager.on_turn_applied()
+                    await self._submit_utterance_outcome(
+                        _UtteranceOutcome(
+                            utterance_seq=utterance_seq,
+                            utterance_id=utterance_id,
+                            ok=False,
+                        )
+                    )
+                    return
+                rich_turn = kernel_to_rich_turn(
+                    kernel_result,
+                    answer_slot=answer_slot,
+                    engine_state=engine_state,
+                )
                 kernel_path = f"semantic_kernel_{kernel_result.route}"
                 interpret_path = kernel_path
                 span_preview = [
@@ -2547,6 +2694,7 @@ class CallActor:
                 )
             )
             self._forensic_bot_playout_end_ts = utc_now_iso()
+            self._playout_end_mono = self._monotonic()
             self._finalized_playback_gens.add(gen)
             # Drop generation mute BEFORE pause await so a cancelled pause
             # cannot leave Vera permanently deaf (sip-97e9d693a5).

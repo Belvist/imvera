@@ -126,7 +126,11 @@ def build_rich_turn_from_text(
     answer_slot = None
     if engine_state is not None and hasattr(engine_state, "answer_context_slot"):
         answer_slot = engine_state.answer_context_slot()
-    turn = kernel_to_rich_turn(result, answer_slot=answer_slot)
+    turn = kernel_to_rich_turn(
+        result,
+        answer_slot=answer_slot,
+        engine_state=engine_state,
+    )
     if engine_state is not None and hasattr(engine_state, "answer_context_slot"):
         from packages.dialogue_engine.context import InterpretContext
         from packages.dialogue_engine.contextual_interpreter import contextual_interpret

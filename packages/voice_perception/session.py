@@ -182,26 +182,16 @@ class PerceptionSession:
         *,
         allowlist: frozenset[str] | None = None,
     ) -> bool:
+        """Diagnostic-only near-exact match — admission uses PostSTTTurnGate."""
         normalized = normalize_speech_text(text)
         if not normalized:
             return True
         if allowlist and normalized in allowlist:
             return False
-        for phrase in bot_candidates:
+        recent = bot_candidates[-2:] if bot_candidates else []
+        for phrase in recent:
             if is_text_echo_of_bot(text, phrase, allowlist=allowlist):
                 return True
-            spoken = normalize_speech_text(phrase)
-            if not spoken:
-                continue
-            if normalized == spoken:
-                return True
-            if len(normalized) >= 6 and (spoken in normalized or normalized in spoken):
-                return True
-            user_tokens = normalized.split()
-            spoken_tokens = spoken.split()
-            if user_tokens and spoken_tokens[: len(user_tokens)] == user_tokens:
-                if len(user_tokens) >= 2 or len(user_tokens[0]) >= 4:
-                    return True
         return False
 
     def _append_preroll(self, pcm: bytes) -> None:

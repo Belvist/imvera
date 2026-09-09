@@ -21,10 +21,14 @@ def _pcm_sine(freq_hz: float, samples: int = 320, sample_rate: int = 16000, amp:
 
 
 def test_text_echo_detects_vera_question_bleed() -> None:
+    from packages.voice_perception.text_echo import compute_text_similarity
+
     bot = "Как у вас настроение — хотя бы коротко?"
     stt = "Какое настроение, плохо себя чувствуешь?"
     assert text_echo_similarity(stt, bot) >= 0.4
-    assert is_text_echo_of_bot(stt, bot) is True
+    metrics = compute_text_similarity(stt, bot)
+    assert float(metrics["jaccard"]) > 0
+    assert is_text_echo_of_bot(stt, bot) is False
 
 
 def test_text_echo_keeps_real_mood_answer() -> None:

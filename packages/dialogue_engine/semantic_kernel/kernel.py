@@ -153,14 +153,22 @@ def kernel_to_rich_turn(
     result: SemanticKernelResult,
     *,
     answer_slot: str | None = None,
+    engine_state=None,
 ):
     from packages.dialogue_engine.turn_understanding import RichUserTurn
+    from packages.voice_perception.post_stt_gate import filter_phantom_generic_issues
 
     mentions = observations_to_issue_mentions(result.observations, result.raw_text)
     from packages.dialogue_engine.issue_mention_extract import extract_issue_mentions
 
     legacy = extract_issue_mentions(result.raw_text)
     mentions = merge_legacy_mentions(mentions, legacy)
+    if engine_state is not None:
+        mentions = filter_phantom_generic_issues(
+            mentions,
+            active_episode_id=engine_state.active_episode_id,
+            pending_episode_attribute=engine_state.pending_episode_attribute,
+        )
 
     ref_only = bool(result.relations) and not mentions and any(
         r.type.value == "REFERS_TO" for r in result.relations

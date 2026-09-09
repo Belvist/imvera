@@ -81,7 +81,7 @@ def classify_turn(
     """Classify a user turn for forensic gate reporting."""
     if interpret_path == "echo_discarded":
         return "CAPTURE_ECHO"
-    if echo_similarity >= 0.55 or echo_score_max >= 0.85:
+    if echo_score_max >= 0.85:
         return "CAPTURE_ECHO"
     if expected_text:
         exp = normalize_speech_text(expected_text)

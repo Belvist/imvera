@@ -9,13 +9,20 @@ from packages.voice_perception.echo_ref_gate import (
     DownlinkEchoRef,
     EchoRefConfig,
     EchoVerdict,
+    apply_echo_ref_env,
     echo_ref_gate_enabled,
     lab_barge_in_enabled,
-    apply_echo_ref_env,
 )
 from packages.voice_perception.playback_reference import EchoClassification, PlaybackReference
+from packages.voice_perception.post_stt_gate import (
+    PostSTTContext,
+    TurnAdmissionDecision,
+    TurnAdmissionVerdict,
+    evaluate_post_stt_turn,
+)
 from packages.voice_perception.session import PerceptionSession, UplinkDecision
 from packages.voice_perception.text_echo import (
+    compute_text_similarity,
     is_text_echo_of_bot,
     normalize_speech_text,
     text_echo_similarity,
@@ -40,9 +47,14 @@ __all__ = [
     "TurnManager",
     "TurnPolicy",
     "TurnPolicyKind",
+    "TurnAdmissionDecision",
+    "TurnAdmissionVerdict",
     "UplinkDecision",
+    "PostSTTContext",
     "apply_echo_ref_env",
+    "compute_text_similarity",
     "echo_ref_gate_enabled",
+    "evaluate_post_stt_turn",
     "is_text_echo_of_bot",
     "lab_barge_in_enabled",
     "normalize_speech_text",

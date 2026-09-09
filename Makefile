@@ -12,7 +12,7 @@ export PYTHONPATH := .
 .PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k dialogue-corpus-gate effect-delivery-chaos-gate stress-gate stress-gate-100
 .PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera live-debug-1 live-daily-check-100
 .PHONY: test-dialogue-topic lint-dialogue-topic forensic-gate test-dialogue-rich
-.PHONY: test-dialogue-runtime lint-dialogue lint-touched test-semantic-kernel benchmark-semantic-kernel
+.PHONY: test-dialogue-runtime lint-dialogue lint-touched test-semantic-kernel benchmark-semantic-kernel test-voice-perception
 
 install:
 	$(PYTHON) -m pip install -e ".[dev,api,mlx,gigaam-stt]"
@@ -42,19 +42,27 @@ test-semantic-kernel:
 	@echo "GATE: Semantic Kernel adversarial corpus + invariants"
 	$(PYTHON) -m pytest tests/test_semantic_kernel.py -q
 
+test-voice-perception:
+	@echo "GATE: Post-STT admission, text echo metrics, fragment hold/merge"
+	$(PYTHON) -m pytest tests/test_post_stt_gate.py tests/test_voice_perception.py \
+		tests/test_uplink_preroll.py::test_assistant_echo_discarded \
+		tests/test_uplink_preroll.py::test_wellness_answers_never_echo_discarded \
+		tests/test_call_actor_post_stt.py -q
+
 benchmark-semantic-kernel:
 	$(PYTHON) scripts/benchmark_semantic_kernel.py
 
 lint-dialogue:
 	$(PYTHON) -m ruff check packages/dialogue_engine packages/dialogue/session.py \
-		packages/voice_runtime/call_actor.py packages/contracts/semantic.py \
+		packages/voice_runtime/call_actor.py packages/voice_perception packages/contracts/semantic.py \
 		services/llm/worker.py services/llm/prompts.py services/llm/http_provider.py \
 		tests/test_rich_turn_understanding.py tests/test_issue_memory.py \
 		tests/test_conversation_policy.py tests/test_dialogue_free_speech_regression.py \
 		tests/test_evidence_invariant.py tests/test_rich_controls.py \
 		tests/test_issue_episode_resume.py tests/test_call_actor_rich_path.py \
 		tests/test_llm_worker_contract.py tests/test_free_speech_corpus.py \
-		tests/test_semantic_kernel.py scripts/benchmark_semantic_kernel.py
+		tests/test_semantic_kernel.py tests/test_post_stt_gate.py \
+		tests/test_call_actor_post_stt.py scripts/benchmark_semantic_kernel.py
 
 lint-touched:
 	@files=$$(git diff --name-only origin/main...HEAD 2>/dev/null | grep '\.py$$' || true); \
