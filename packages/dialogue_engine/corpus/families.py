@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from packages.dialogue_engine.corpus.schema import (
     CorpusStep,
+    DeferLastSpeak,
     DeliverPlayout,
     DeliverPlayoutDuplicate,
-    DeferLastSpeak,
     ExpectSlot,
     ExpectSpeakIntent,
     ExpectTerminal,
@@ -283,7 +283,7 @@ def build_family_steps(
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
             ExpectSpeakIntent(intent="check_mood"),
-            # Question emitted but playout not delivered yet — answer still accepted via playing_question.
+            # Playout pending — answer still accepted via playing_question.
             UserStep(text=a.mood),
             ExpectSlot(slot="mood"),
             ExpectSpeakIntent(intent="check_sleep"),

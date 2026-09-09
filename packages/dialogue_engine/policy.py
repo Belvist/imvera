@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from packages.contracts.enums import SlotStatus
-from packages.dialogue_engine.context import SlotCandidate, SlotValue
+from packages.dialogue_engine.context import SlotValue
 from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
-from packages.dialogue_engine.state import EngineState, MAX_SLOT_ATTEMPTS
+from packages.dialogue_engine.state import EngineState
 
 _MAX_UNCLEAR = 2
 

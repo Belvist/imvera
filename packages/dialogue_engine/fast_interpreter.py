@@ -151,7 +151,10 @@ def fast_interpret_semantic(
     if answer_slot and answer_slot.startswith("probe_"):
         probe = answer_slot.removeprefix("probe_")
         if probe == "duration":
-            from packages.dialogue_engine.check_path import is_urgent_concern, looks_like_duration_answer
+            from packages.dialogue_engine.check_path import (
+                is_urgent_concern,
+                looks_like_duration_answer,
+            )
 
             if looks_like_duration_answer(raw) or is_urgent_concern(raw):
                 return (

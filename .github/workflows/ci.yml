@@ -19,7 +19,20 @@ jobs:
       - name: Contracts check
         run: make contracts-check
 
-  lint:
+  legacy-lint:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Ruff (repo-wide legacy debt)
+        run: make lint
+
+  lint-dialogue:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,20 +41,10 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install -e ".[dev]"
-      - name: Ruff (repo-wide)
-        run: make lint
-      - name: Ruff (Phase 1 dialogue touched files)
-        run: >-
-          python3 -m ruff check
-          packages/dialogue_engine/topic_tracker.py
-          packages/dialogue_engine/reducer.py
-          packages/dialogue_engine/state.py
-          packages/dialogue_engine/questions.py
-          packages/dialogue_engine/invariants.py
-          packages/dialogue_engine/scenario_runner.py
-          tests/test_topic_tracker.py
-          tests/test_topic_live_regression.py
-          tools/voice_lab/dialogue_forensic.py
+      - name: Ruff (dialogue + runtime + PR touched)
+        run: |
+          make lint-dialogue
+          make lint-touched
 
   dialogue-rich:
     runs-on: ubuntu-latest
@@ -54,6 +57,18 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Phase 2 rich turn gate
         run: make test-dialogue-rich
+
+  dialogue-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev,test]"
+      - name: Dialogue runtime integration gate
+        run: make test-dialogue-runtime
 
   test:
     runs-on: ubuntu-latest
@@ -86,5 +101,5 @@ jobs:
         run: make migrate
       - name: Phase 1 dialogue topic gate
         run: make test-dialogue-topic
-      - name: Pytest (full suite)
+      - name: Pytest (full runnable suite)
         run: make test

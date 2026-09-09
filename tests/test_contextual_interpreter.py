@@ -111,7 +111,9 @@ def test_bad_wellness_empathetic_ack() -> None:
     r = ScenarioRunner(call_id="bad", elder_display_name="Даниил")
     from packages.dialogue_engine.events import CallStarted
 
-    result = r.run([CallStarted(), "мне плохо"])
+    r.run([CallStarted()])
+    r.state.wellness_probes_enabled = False
+    result = r.run(["мне плохо"])
     mood = [e for e in result.speak_effects if e.intent == "check_mood"]
     assert mood[0].text.startswith("Мне жаль это слышать.")
 
@@ -120,9 +122,10 @@ def test_multi_slot_bad_skips_sleep_and_plans_questions() -> None:
     from packages.dialogue_engine.events import CallStarted
 
     r = ScenarioRunner(call_id="bad-multi", elder_display_name="Даниил")
+    r.run([CallStarted()])
+    r.state.wellness_probes_enabled = False
     result = r.run(
         [
-            CallStarted(),
             "Плохо сегодня, почти не спал, планов никаких.",
         ]
     )

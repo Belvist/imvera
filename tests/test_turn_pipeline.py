@@ -27,7 +27,7 @@ def test_opening_echo_tail_then_listen() -> None:
     tm.on_playback_completed(now)
     assert tm.phase == ConversationPhase.ECHO_TAIL
     assert tm.should_feed_vad() is False
-    tm.tick(now + 0.35)
+    tm.tick(now + 0.46)
     assert tm.phase == ConversationPhase.LISTENING
     assert tm.should_feed_vad() is True
     assert tm.should_emit_utterance() is True

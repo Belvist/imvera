@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from packages.contracts.enums import FsmState
+from packages.dialogue_engine import questions
 from packages.dialogue_engine.context import InterpretContext, SlotCandidate, StructuredMeaning
 from packages.dialogue_engine.fast_interpreter import (
     _BACKCHANNEL,
@@ -12,10 +13,8 @@ from packages.dialogue_engine.fast_interpreter import (
     _MOOD_NEGATIVE,
     _MOOD_NEGATIVE_PHRASE,
     _MOOD_POSITIVE,
-    _NEGATIVE,
     _NORMAL,
     _PLANS_ANSWER,
-    _POSITIVE,
     _REPAIR,
     _SLEEP_ANSWER,
     _SO_SO,
@@ -25,9 +24,7 @@ from packages.dialogue_engine.fast_interpreter import (
     _detect_polarity,
     _normalize_core,
 )
-from packages.dialogue_engine import questions
 from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
-
 
 _SHORT_ACK = frozenset(
     {
@@ -49,7 +46,10 @@ _SHORT_ACK = frozenset(
 )
 
 _PLANS_INVALID_SHORT = frozenset(
-    {"хорошо", "нормально", "отлично", "пойдёт", "пойдет", "сойдёт", "сойдет", "так себе", "терпимо", "ага", "угу"}
+    {
+        "хорошо", "нормально", "отлично", "пойдёт", "пойдет",
+        "сойдёт", "сойдет", "так себе", "терпимо", "ага", "угу",
+    }
 )
 
 _MOOD_IN_TEXT = re.compile(
@@ -110,7 +110,10 @@ def interpret_structured(text: str, ctx: InterpretContext) -> StructuredMeaning:
     if ctx.answer_slot and ctx.answer_slot.startswith("probe_"):
         probe = ctx.answer_slot.removeprefix("probe_")
         if probe == "duration":
-            from packages.dialogue_engine.check_path import is_urgent_concern, looks_like_duration_answer
+            from packages.dialogue_engine.check_path import (
+                is_urgent_concern,
+                looks_like_duration_answer,
+            )
 
             if looks_like_duration_answer(raw) or is_urgent_concern(raw):
                 return StructuredMeaning(
@@ -438,7 +441,11 @@ def _extract_mixed_sentiment(text: str, ctx: InterpretContext) -> StructuredMean
     if _detect_polarity(first) or "нормально" in first.lower():
         slots["wellness"] = SlotCandidate(
             value=first,
-            polarity="positive" if "нормально" in first.lower() else (_detect_polarity(first) or "positive"),
+            polarity=(
+                "positive"
+                if "нормально" in first.lower()
+                else (_detect_polarity(first) or "positive")
+            ),
             confidence=0.9,
         )
     if _MOOD_IN_TEXT.search(second) or re.search(r"настроени\w*", second, re.I):

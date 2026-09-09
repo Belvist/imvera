@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from packages.dialogue_engine.context import ResponsePlan, SlotCandidate
 from packages.dialogue_engine import questions
+from packages.dialogue_engine.context import ResponsePlan, SlotCandidate
 from packages.dialogue_engine.state import EngineState
 
 

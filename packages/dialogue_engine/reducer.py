@@ -69,6 +69,8 @@ from packages.dialogue_engine.topic_tracker import (
 )
 from packages.dialogue_engine.turn_understanding import RichUserTurn
 
+_STANDARD_CHECK_SLOTS = frozenset({"wellness", "mood", "sleep", "plans"})
+
 _CONTROL_HANGUP_INTENTS = frozenset(
     {
         "goodbye_final",
@@ -381,6 +383,11 @@ def _apply_rich_turn(
         state.processing_turn_id = None
         state.processing_effect_id = None
         state.bump_revision()
+        if (
+            state.fsm_state in (FsmState.SUMMARY, FsmState.GOODBYE)
+            and not state.awaiting_goodbye_confirm
+        ):
+            return state, []
         if answer_slot:
             state.waiting_on_slot = answer_slot
             return state, [
@@ -479,6 +486,12 @@ def _apply_rich_turn(
                 marks_question=decision.marks_question,
             )
 
+    if newly_filled:
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.waiting_on_slot = None
+        return _advance_after_fills(state, newly_filled)
+
     if any(m.kind == "sleep_problem" for m in turn.issue_mentions):
         if should_start_topic_flow(state, user_text, answer_slot=answer_slot):
             state.processing_turn_id = None
@@ -486,13 +499,7 @@ def _apply_rich_turn(
             state.waiting_on_slot = None
             state.probe_phase = None
             prime_topics(state, user_text)
-            return _advance_after_topic(state, user_text, newly_filled=newly_filled)
-
-    if newly_filled:
-        state.processing_turn_id = None
-        state.processing_effect_id = None
-        state.waiting_on_slot = None
-        return _advance_after_fills(state, newly_filled)
+            return _advance_after_topic(state, user_text, newly_filled=[])
 
     state.processing_turn_id = None
     state.processing_effect_id = None
@@ -650,6 +657,11 @@ def _apply_semantic(
         state.processing_turn_id = None
         state.processing_effect_id = None
         state.bump_revision()
+        if (
+            state.fsm_state in (FsmState.SUMMARY, FsmState.GOODBYE)
+            and not state.awaiting_goodbye_confirm
+        ):
+            return state, []
         if answer_slot:
             state.waiting_on_slot = answer_slot
             return state, [
@@ -714,6 +726,20 @@ def _apply_semantic(
         state.waiting_on_slot = None
         observe_topic_answer(state, user_text)
         return _advance_after_topic(state, user_text)
+
+    if (
+        semantic.act == SemanticAct.ANSWER
+        and semantic.slots
+        and len(_STANDARD_CHECK_SLOTS.intersection(semantic.slots)) >= 2
+    ):
+        filled = fill_from_semantic(
+            state, semantic, turn_id=state.processing_turn_id or ""
+        )
+        if filled:
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.waiting_on_slot = None
+            return _advance_after_fills(state, filled)
 
     if should_start_topic_flow(state, user_text, answer_slot=answer_slot):
         if semantic.act in (SemanticAct.ANSWER, SemanticAct.UNCLEAR):

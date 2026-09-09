@@ -12,6 +12,7 @@ export PYTHONPATH := .
 .PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k dialogue-corpus-gate effect-delivery-chaos-gate stress-gate stress-gate-100
 .PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera live-debug-1 live-daily-check-100
 .PHONY: test-dialogue-topic lint-dialogue-topic forensic-gate test-dialogue-rich
+.PHONY: test-dialogue-runtime lint-dialogue lint-touched
 
 install:
 	$(PYTHON) -m pip install -e ".[dev,api,mlx,gigaam-stt]"
@@ -31,6 +32,30 @@ test-dialogue-rich:
 		tests/test_conversation_policy.py tests/test_dialogue_free_speech_regression.py \
 		tests/test_evidence_invariant.py tests/test_rich_controls.py \
 		tests/test_issue_episode_resume.py tests/test_topic_live_regression.py -q
+
+test-dialogue-runtime:
+	@echo "GATE: CallActor rich path + LLM worker contract"
+	$(PYTHON) -m pytest tests/test_call_actor_rich_path.py tests/test_llm_worker_contract.py \
+		tests/test_call_actor_deferred_delivery.py tests/test_call_actor_llm_fallback.py -q
+
+lint-dialogue:
+	$(PYTHON) -m ruff check packages/dialogue_engine packages/dialogue/session.py \
+		packages/voice_runtime/call_actor.py packages/contracts/semantic.py \
+		services/llm/worker.py services/llm/prompts.py services/llm/http_provider.py \
+		tests/test_rich_turn_understanding.py tests/test_issue_memory.py \
+		tests/test_conversation_policy.py tests/test_dialogue_free_speech_regression.py \
+		tests/test_evidence_invariant.py tests/test_rich_controls.py \
+		tests/test_issue_episode_resume.py tests/test_call_actor_rich_path.py \
+		tests/test_llm_worker_contract.py tests/test_free_speech_corpus.py
+
+lint-touched:
+	@files=$$(git diff --name-only origin/main...HEAD 2>/dev/null | grep '\.py$$' || true); \
+	if [ -z "$$files" ]; then \
+	  files=$$(git diff --name-only HEAD 2>/dev/null | grep '\.py$$' || true); \
+	fi; \
+	if [ -z "$$files" ]; then echo "lint-touched: no Python files changed"; exit 0; fi; \
+	echo "lint-touched: $$files"; \
+	$(PYTHON) -m ruff check $$files
 
 lint-dialogue-topic:
 	$(PYTHON) -m ruff check \
