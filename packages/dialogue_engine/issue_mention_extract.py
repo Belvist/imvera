@@ -103,24 +103,6 @@ def _clause_mentions(raw: str, clause: str, *, first_symptom: bool) -> list[Issu
             quote=clause,
         )
         first_symptom = False
-    if re.search(r"\bух\w*\b", n) and re.search(r"\bзалож\w*\b", n):
-        add(
-            label="заложило ухо",
-            kind="symptom",
-            body_site="ухо",
-            role="primary" if first_symptom else "independent",
-            quote=clause,
-        )
-        first_symptom = False
-    if re.search(r"\bсердц\w*\b", n) and _PAIN_VERB.search(n):
-        add(
-            label="боль в сердце",
-            kind="symptom",
-            body_site="сердце",
-            role="primary" if first_symptom else "independent",
-            quote=clause,
-        )
-        first_symptom = False
     if re.search(r"\bплохо\s+спал\w*\b|\bне\s+спал\w*\b|\bбессон\w*\b", n):
         add(
             label="плохой сон",
@@ -212,6 +194,16 @@ def detect_user_question(text: str) -> str | None:
     return text.strip()
 
 
+_SYMPTOM_SIGNAL = re.compile(
+    r"\b(бол\w*|давит\w*|тяжел\w*|тошн\w*|одыш\w*|затрудн\w*|не\s+мог\w*)\b",
+    re.I,
+)
+
+
+def _looks_symptomatic(clause: str) -> bool:
+    return bool(_SYMPTOM_SIGNAL.search(clause.lower()))
+
+
 def requires_rich_interpretation(text: str) -> bool:
     """Fast bypass forbidden for multi-symptom / correction / user-question turns."""
     raw = text.strip()
@@ -223,7 +215,7 @@ def requires_rich_interpretation(text: str) -> bool:
     if len(mentions) >= 2:
         return True
     parts = _split_symptom_parts(raw)
-    symptomatic_parts = [p for p in parts if extract_issue_mentions(p)]
+    symptomatic_parts = [p for p in parts if _looks_symptomatic(p) or extract_issue_mentions(p)]
     if len(symptomatic_parts) >= 2:
         return True
     if re.search(r"голов\w*.*тошн|тошн.*голов", raw, re.I):
@@ -231,13 +223,17 @@ def requires_rich_interpretation(text: str) -> bool:
     return False
 
 
-def should_use_rich_turn(text: str, answer_slot: str | None, *, is_topic_slot_fn) -> bool:
+def should_use_rich_turn(
+    text: str,
+    answer_slot: str | None,
+    *,
+    is_topic_slot_fn,
+    pending_episode_attribute: str | None = None,
+) -> bool:
+    if answer_slot and answer_slot.startswith("episode_"):
+        return True
+    if pending_episode_attribute:
+        return True
     if detect_correction(text) or detect_user_question(text):
         return True
-    if not requires_rich_interpretation(text):
-        return False
-    if is_topic_slot_fn(answer_slot) or (
-        answer_slot is not None and answer_slot.startswith("probe_")
-    ):
-        return False
-    return True
+    return requires_rich_interpretation(text)

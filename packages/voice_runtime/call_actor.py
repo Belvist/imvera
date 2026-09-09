@@ -1623,8 +1623,16 @@ class CallActor:
             contextual_confident = False
             rules_confident = False
             interpret_path = "unknown"
+            pending_episode_attribute = None
+            if self.session.uses_dialogue_engine() and self.session._engine:
+                pending_episode_attribute = (
+                    self.session._engine.state.pending_episode_attribute
+                )
             force_rich = should_use_rich_turn(
-                text, answer_slot, is_topic_slot_fn=is_topic_slot
+                text,
+                answer_slot,
+                is_topic_slot_fn=is_topic_slot,
+                pending_episode_attribute=pending_episode_attribute,
             )
             if self.session.uses_dialogue_engine():
                 ctx = InterpretContext.from_engine_state(

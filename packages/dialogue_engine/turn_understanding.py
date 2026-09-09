@@ -9,8 +9,8 @@ from packages.contracts.semantic import (
     IssueMention,
     RiskCandidate,
     SemanticPayload,
-    evidence_matches,
 )
+from packages.dialogue_engine.evidence_invariant import sanitize_issue_mention
 from packages.dialogue_engine.issue_mention_extract import (
     detect_correction,
     detect_user_question,
@@ -45,13 +45,17 @@ def enrich_payload_issue_mentions(
     payload: SemanticPayload,
     raw_text: str,
 ) -> SemanticPayload:
-    """Fill issue_mentions from literal extraction when LLM omitted them."""
+    """Validate LLM mentions; emergency regex fallback only when field is empty."""
     if payload.issue_mentions:
         validated = tuple(
-            m for m in payload.issue_mentions if evidence_matches(raw_text, m.evidence)
+            m
+            for m in (
+                sanitize_issue_mention(mention, raw_text)
+                for mention in payload.issue_mentions
+            )
+            if m is not None
         )
-        if validated:
-            return payload.model_copy(update={"issue_mentions": validated})
+        return payload.model_copy(update={"issue_mentions": validated})
     extracted = extract_issue_mentions(raw_text)
     if not extracted:
         return payload
@@ -82,6 +86,15 @@ def payload_to_rich_turn(
         risk_candidates=tuple(enriched.risk_candidates),
         correction=correction,
     )
+
+
+def build_rich_turn_from_payload(
+    payload: SemanticPayload,
+    *,
+    utterance_id: str,
+    raw_text: str,
+) -> RichUserTurn:
+    return payload_to_rich_turn(payload, utterance_id=utterance_id, raw_text=raw_text)
 
 
 def build_rich_turn_from_text(text: str, *, utterance_id: str) -> RichUserTurn:

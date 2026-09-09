@@ -12,7 +12,10 @@ from packages.dialogue_engine.check_path import (
     apply_wellness_branch,
     classify_wellness_path,
 )
-from packages.dialogue_engine.conversation_policy import decide_conversation_policy
+from packages.dialogue_engine.conversation_policy import (
+    ConversationObligation,
+    decide_conversation_policy,
+)
 from packages.dialogue_engine.effects import (
     Effect,
     EndCallEffect,
@@ -345,6 +348,10 @@ def _apply_rich_turn(
     user_text = turn.raw_text
     answer_slot = state.answer_context_slot()
 
+    if turn.answers_pending_question and state.pending_episode_attribute:
+        state.delivered_question = None
+        state.planned_question = None
+
     if state.fsm_state in (FsmState.SUMMARY, FsmState.GOODBYE) or state.awaiting_goodbye_confirm:
         semantic_bridge = _rich_to_semantic(turn)
         closing = _handle_closing_turn(state, semantic_bridge)
@@ -372,23 +379,78 @@ def _apply_rich_turn(
             return _speak_never_silent(state, answer_slot or "wellness", user_text)
         return state, []
 
+    control_outcome = _apply_rich_control(state, turn)
+    if control_outcome is not None:
+        return control_outcome
+
+    if turn.user_question and not turn.answers_pending_question:
+        decision = decide_conversation_policy(state, turn)
+        if decision is not None and decision.text:
+            if decision.suspend is not None:
+                state.suspended_obligation = decision.suspend
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.bump_revision()
+            return _emit_speak(
+                state,
+                text=decision.text,
+                intent=decision.intent or "rich_policy",
+                slot=decision.slot or answer_slot or "wellness",
+                marks_question=decision.marks_question,
+            )
+
     ingest_rich_turn(state, turn)
+
+    if turn.correction:
+        decision = decide_conversation_policy(state, turn)
+        if decision is not None and decision.text:
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.bump_revision()
+            return _emit_speak(
+                state,
+                text=decision.text,
+                intent=decision.intent or "rich_policy",
+                slot=decision.slot or answer_slot or "wellness",
+                marks_question=decision.marks_question,
+            )
+
+    if is_topic_slot(answer_slot):
+        from packages.dialogue_engine.topic_tracker import (
+            observe_topic_answer,
+            sync_topic_hints_from_answer,
+        )
+
+        sync_topic_hints_from_answer(state, user_text, answer_slot=answer_slot)
+        newly_filled = _apply_goal_facts(state, turn)
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.waiting_on_slot = None
+        state.bump_revision()
+        observe_topic_answer(state, user_text)
+        return _advance_after_topic(state, user_text, newly_filled=newly_filled)
+
     newly_filled = _apply_goal_facts(state, turn)
 
     decision = decide_conversation_policy(state, turn)
-    if decision is not None and decision.text:
-        if decision.suspend is not None:
-            state.suspended_obligation = decision.suspend
-        state.processing_turn_id = None
-        state.processing_effect_id = None
-        state.bump_revision()
-        return _emit_speak(
-            state,
-            text=decision.text,
-            intent=decision.intent or "rich_policy",
-            slot=decision.slot or answer_slot or "wellness",
-            marks_question=decision.marks_question,
-        )
+    if decision is not None:
+        if decision.obligation == ConversationObligation.CONTROL and decision.control:
+            control_outcome = _apply_rich_control(state, turn)
+            if control_outcome is not None:
+                return control_outcome
+        if decision.text:
+            if decision.suspend is not None:
+                state.suspended_obligation = decision.suspend
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.bump_revision()
+            return _emit_speak(
+                state,
+                text=decision.text,
+                intent=decision.intent or "rich_policy",
+                slot=decision.slot or answer_slot or "wellness",
+                marks_question=decision.marks_question,
+            )
 
     if any(m.kind == "sleep_problem" for m in turn.issue_mentions):
         if should_start_topic_flow(state, user_text, answer_slot=answer_slot):
@@ -426,6 +488,12 @@ def _apply_rich_turn(
 def _rich_to_semantic(turn: RichUserTurn):
     from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
 
+    if turn.control == "stop_call":
+        return SemanticTurn(
+            act=SemanticAct.GOODBYE_REQUEST,
+            source_quote=turn.raw_text,
+            confidence=0.95,
+        )
     if turn.dialogue_act == "backchannel":
         return SemanticTurn(act=SemanticAct.BACKCHANNEL, source_quote=turn.raw_text)
     if turn.dialogue_act == "correction":
@@ -441,6 +509,77 @@ def _rich_to_semantic(turn: RichUserTurn):
         value=turn.raw_text,
         confidence=0.85,
     )
+
+
+def _apply_rich_control(
+    state: EngineState,
+    turn: RichUserTurn,
+) -> tuple[EngineState, list[Effect]] | None:
+    control = turn.control
+    if control in ("none", ""):
+        return None
+
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.bump_revision()
+
+    if control == "stop_call":
+        closing = _handle_closing_turn(state, _rich_to_semantic(turn))
+        if closing is not None:
+            return closing
+
+    if control == "wrong_person":
+        state.call_closed = True
+        state.closing_reason = "wrong_person"
+        state.fsm_state = FsmState.FINAL_CLASSIFICATION
+        return _emit_speak(
+            state,
+            text=questions._WRONG_PERSON_FINAL,
+            intent="wrong_person_final",
+            slot=None,
+            marks_question=False,
+        )
+
+    if control in ("defer", "revoke_consent"):
+        state.call_closed = True
+        state.closing_reason = control
+        state.fsm_state = FsmState.FINAL_CLASSIFICATION
+        text = (
+            questions._REVOKE_FINAL
+            if control == "revoke_consent"
+            else questions._DEFER_FINAL
+        )
+        intent = "revoke_consent_final" if control == "revoke_consent" else "defer_final"
+        return _emit_speak(
+            state,
+            text=text,
+            intent=intent,
+            slot=None,
+            marks_question=False,
+        )
+
+    if control == "pause":
+        slot = state.answer_context_slot() or "wellness"
+        state.waiting_on_slot = slot
+        state, effects = _emit_speak(
+            state,
+            text=questions._PAUSE_ACK,
+            intent="pause_ack",
+            slot=slot,
+            marks_question=False,
+        )
+        effects.append(
+            TimerEffect(
+                effect_id=_new_effect_id(),
+                revision=state.revision,
+                timer_id=f"wait-{slot}",
+                wait_ms=7000,
+                reason="pause",
+            )
+        )
+        return state, effects
+
+    return None
 
 
 def _apply_semantic(
@@ -649,6 +788,8 @@ def _advance_after_topic(
     *,
     newly_filled: list[str] | None = None,
 ) -> tuple[EngineState, list[Effect]]:
+    state.delivered_question = None
+    state.planned_question = None
     prompt = next_topic_prompt(state)
     if prompt is not None:
         return _emit_topic_prompt(state, prompt, newly_filled=newly_filled or [])

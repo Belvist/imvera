@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from packages.contracts.semantic import IssueMention
 from packages.dialogue_engine.state import EngineState, IssueEpisode
+from packages.dialogue_engine.topic_tracker import is_topic_slot
 from packages.dialogue_engine.turn_understanding import RichUserTurn
 
 
@@ -48,7 +49,7 @@ def _merge_mention(episode: IssueEpisode, mention: IssueMention, turn_id: str) -
         episode.known_attributes["onset"] = mention.onset
     if mention.severity:
         episode.known_attributes["severity"] = mention.severity
-    if mention.status in ("improving", "resolved", "active"):
+    if mention.status in ("improving", "resolved"):
         episode.known_attributes["current"] = mention.status
 
 
@@ -110,15 +111,25 @@ def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
             created.append(ep.episode_id)
 
     if created:
-        if state.active_episode_id and state.active_episode_id not in created:
-            if state.active_episode_id not in state.pending_episode_ids:
-                state.pending_episode_ids.append(state.active_episode_id)
-        state.active_episode_id = created[0]
-        for ep_id in created[1:]:
-            if ep_id != state.active_episode_id and ep_id not in state.pending_episode_ids:
-                state.pending_episode_ids.append(ep_id)
-        result.activated = state.active_episode_id
+        defer_focus = bool(
+            is_topic_slot(state.answer_context_slot()) and state.active_topic is not None
+        )
+        if defer_focus:
+            for ep_id in created:
+                if ep_id not in state.pending_episode_ids:
+                    state.pending_episode_ids.append(ep_id)
+        else:
+            if state.active_episode_id and state.active_episode_id not in created:
+                if state.active_episode_id not in state.pending_episode_ids:
+                    state.pending_episode_ids.append(state.active_episode_id)
+            state.active_episode_id = created[0]
+            for ep_id in created[1:]:
+                if ep_id != state.active_episode_id and ep_id not in state.pending_episode_ids:
+                    state.pending_episode_ids.append(ep_id)
+            result.activated = state.active_episode_id
         result.episodes_touched = created
+    if turn.answers_pending_question:
+        _fill_pending_attribute_from_answer(state, turn)
     return result
 
 
@@ -138,7 +149,9 @@ def _apply_correction(state: EngineState, turn: RichUserTurn) -> None:
 
 
 def _fill_pending_attribute_from_answer(state: EngineState, turn: RichUserTurn) -> None:
-    if not state.active_episode_id or turn.answers_pending_question:
+    if not state.active_episode_id or not turn.answers_pending_question:
+        return
+    if not state.pending_episode_attribute:
         return
     ep = state.issue_episodes.get(state.active_episode_id)
     if ep is None:

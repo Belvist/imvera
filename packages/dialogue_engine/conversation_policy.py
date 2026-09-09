@@ -36,6 +36,7 @@ class PolicyDecision:
     slot: str | None = None
     marks_question: bool = False
     suspend: SuspendedObligation | None = None
+    control: str | None = None
 
 
 _IDENTITY_ANSWER = (
@@ -50,7 +51,7 @@ def capture_suspended_obligation(state: EngineState) -> SuspendedObligation | No
             kind="episode_question",
             episode_id=ep.episode_id,
             attribute=state.pending_episode_attribute,
-            slot=f"episode_{ep.episode_id}",
+            slot=f"episode_{ep.episode_id}_{state.pending_episode_attribute}",
             intent=f"episode_{ep.episode_id}_{state.pending_episode_attribute}",
         )
     if state.delivered_question:
@@ -62,26 +63,60 @@ def capture_suspended_obligation(state: EngineState) -> SuspendedObligation | No
     return None
 
 
+def _missing_attribute(ep) -> str | None:
+    label = ep.primary_label.lower()
+    if "onset" not in ep.known_attributes:
+        return "onset"
+    if ("голов" in label or "боль" in label) and "severity" not in ep.known_attributes:
+        return "severity"
+    if ep.body_site == "живот" and "current" not in ep.known_attributes:
+        return "current"
+    return None
+
+
+def _attribute_question(ep, attribute: str) -> tuple[str, str]:
+    label = ep.primary_label.lower()
+    if attribute == "onset":
+        if "голов" in label:
+            return "Как давно болит голова?", "episode_headache_onset"
+        return f"Как давно {ep.primary_label}?", f"episode_{ep.episode_id}_onset"
+    if attribute == "severity":
+        return "Боль сильная или терпимая?", "episode_headache_severity"
+    if attribute == "current":
+        return (
+            f"Я уточняю про сейчас: {ep.primary_label} ещё беспокоит или уже прошло?",
+            "episode_current_status",
+        )
+    return "Расскажите, пожалуйста, чуть подробнее.", "episode_followup"
+
+
 def _correction_response(state: EngineState, turn: RichUserTurn) -> PolicyDecision:
     ep = get_active_episode(state)
+    if ep is None and turn.issue_mentions:
+        from packages.dialogue_engine.issue_memory import _find_episode_for_mention
+
+        ep_id = _find_episode_for_mention(state, turn.issue_mentions[0])
+        if ep_id:
+            state.active_episode_id = ep_id
+            ep = state.issue_episodes[ep_id]
     label = ep.primary_label if ep else "это"
-    if ep and ep.body_site == "живот":
-        text = (
-            f"Да, вы говорили, что {label}. "
-            "Я уточняю про сейчас: сейчас ещё болит или уже прошло?"
-        )
-        state.pending_episode_attribute = "current"
+    ack = f"Да, вы говорили, что {label}." if ep else "Понимаю."
+    attribute = state.pending_episode_attribute or (ep and _missing_attribute(ep))
+    if ep and attribute:
+        state.pending_episode_attribute = attribute
+        q_text, intent = _attribute_question(ep, attribute)
+        if question_references_forbidden_site(state, q_text):
+            q_text = f"Расскажите про {ep.primary_label} чуть подробнее, пожалуйста."
         return PolicyDecision(
             obligation=ConversationObligation.HANDLE_CORRECTION,
-            text=text,
-            intent="episode_correction_current",
-            slot=f"episode_{ep.episode_id}",
+            text=f"{ack} {q_text}",
+            intent=intent,
+            slot=intent,
             marks_question=True,
         )
-    text = f"Да, вы говорили про {label}. Расскажите, пожалуйста, чуть подробнее."
     return PolicyDecision(
         obligation=ConversationObligation.HANDLE_CORRECTION,
-        text=text,
+        text=f"{ack} Расскажите, пожалуйста, чуть подробнее.",
         intent="episode_correction_ack",
         marks_question=True,
     )
@@ -114,7 +149,7 @@ def _next_episode_question(state: EngineState) -> PolicyDecision | None:
             obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
             text=text,
             intent=intent,
-            slot=f"episode_{ep.episode_id}",
+            slot=intent,
             marks_question=True,
         )
 
@@ -124,7 +159,7 @@ def _next_episode_question(state: EngineState) -> PolicyDecision | None:
             obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
             text="Боль сильная или терпимая?",
             intent="episode_headache_severity",
-            slot=f"episode_{ep.episode_id}",
+            slot="episode_headache_severity",
             marks_question=True,
         )
 
@@ -135,7 +170,7 @@ def _next_episode_question(state: EngineState) -> PolicyDecision | None:
             obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
             text=text,
             intent="episode_abdominal_current",
-            slot=f"episode_{ep.episode_id}",
+            slot="episode_abdominal_current",
             marks_question=True,
         )
 
@@ -149,7 +184,10 @@ def decide_conversation_policy(
     turn: RichUserTurn,
 ) -> PolicyDecision | None:
     if turn.control not in ("none", ""):
-        return PolicyDecision(obligation=ConversationObligation.CONTROL)
+        return PolicyDecision(
+            obligation=ConversationObligation.CONTROL,
+            control=turn.control,
+        )
 
     if turn.user_question and not turn.answers_pending_question:
         suspend = capture_suspended_obligation(state)
@@ -165,17 +203,20 @@ def decide_conversation_policy(
         return _correction_response(state, turn)
 
     if state.suspended_obligation and not turn.user_question:
+        suspended = state.suspended_obligation
         state.suspended_obligation = None
+        if suspended.kind == "episode_question" and suspended.episode_id:
+            state.active_episode_id = suspended.episode_id
+            state.pending_episode_attribute = suspended.attribute
         resumed = _next_episode_question(state)
         if resumed:
-            resumed = PolicyDecision(
+            return PolicyDecision(
                 obligation=ConversationObligation.RESUME_SUSPENDED,
                 text=resumed.text,
                 intent=resumed.intent,
                 slot=resumed.slot,
                 marks_question=resumed.marks_question,
             )
-            return resumed
 
     if turn.issue_mentions:
         ack = _ack_for_mentions(turn)

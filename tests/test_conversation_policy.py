@@ -26,11 +26,13 @@ def test_correction_acknowledges_history() -> None:
         state,
         build_rich_turn_from_text("Живот болит.", utterance_id="u-0"),
     )
+    state.pending_episode_attribute = "current"
     turn = build_rich_turn_from_text("Я же говорил, живот болит.", utterance_id="u-1")
     decision = decide_conversation_policy(state, turn)
     assert decision is not None
     assert decision.obligation == ConversationObligation.HANDLE_CORRECTION
     assert "говорили" in decision.text.lower()
+    assert "сейчас" in decision.text.lower() or "прошло" in decision.text.lower()
 
 
 def test_headache_first_question_not_abdominal() -> None:

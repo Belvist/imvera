@@ -379,6 +379,7 @@ def _apply_focus_policy(state: EngineState, detected: list[str]) -> None:
         return
 
     if active and _topic_complete(state, active):
+        _complete_topic(state, active)
         state.active_topic = None
         active = None
 
@@ -457,9 +458,42 @@ def _ingest_sleep_hints_only(
         _mark_dimensions(state, TopicFamily.SLEEP, dims)
     if fallback == TopicFamily.SLEEP and TopicFamily.SLEEP not in detected:
         detected.insert(0, TopicFamily.SLEEP)
+    if state.active_topic and turn_text:
+        fam = state.active_topic
+        if fam not in detected:
+            detected.append(fam)
+        _append_topic_evidence(state, fam, turn_text, turn_text)
+        dims = infer_dimensions(fam, turn_text, turn_context=turn_text)
+        _mark_dimensions(state, fam, dims)
+        _update_resolution(state, fam, turn_text)
     if detected:
         _apply_focus_policy(state, _sort_by_priority(detected))
     return TopicIngestResult(families=_sort_by_priority(detected))
+
+
+def sync_topic_hints_from_answer(state: EngineState, text: str, *, answer_slot: str | None) -> None:
+    """Keep Phase 1 sleep/abdominal topic hints when rich episodes are canonical."""
+    if not is_topic_slot(answer_slot) and not (
+        answer_slot and answer_slot.startswith("topic_")
+    ):
+        return
+    n = _norm(text)
+    turn_text = text.strip()
+    if _clause_has_sleep(n) or state.active_topic == TopicFamily.SLEEP:
+        _append_topic_evidence(state, TopicFamily.SLEEP, turn_text, turn_text)
+        dims = infer_dimensions(TopicFamily.SLEEP, turn_text, turn_context=turn_text)
+        _mark_dimensions(state, TopicFamily.SLEEP, dims)
+    if re.search(r"\bживот\w*\b", n) and re.search(r"\b(бол|ноет)\w*", n):
+        _append_topic_evidence(state, TopicFamily.ABDOMINAL_PAIN, turn_text, turn_text)
+        dims = infer_dimensions(
+            TopicFamily.ABDOMINAL_PAIN, turn_text, turn_context=turn_text
+        )
+        _mark_dimensions(state, TopicFamily.ABDOMINAL_PAIN, dims)
+        if (
+            state.active_topic != TopicFamily.ABDOMINAL_PAIN
+            and TopicFamily.ABDOMINAL_PAIN not in state.pending_topics
+        ):
+            state.pending_topics.append(TopicFamily.ABDOMINAL_PAIN)
 
 
 def prime_topics(state: EngineState, text: str, *, fallback: str | None = None) -> str | None:

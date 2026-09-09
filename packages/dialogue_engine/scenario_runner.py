@@ -55,17 +55,22 @@ class ScenarioRunner:
         self._turn = 0
 
     def run(self, steps: list[DialogueEvent | User | str]) -> ScenarioResult:
+        effect_start = len(self.effects)
         for step in steps:
             if isinstance(step, str):
                 step = User(text=step)
             self._apply(step)
             check_all(self.state)
-        speaks = [e for e in self.effects if isinstance(e, SpeakEffect)]
+        speaks = [
+            e
+            for e in self.effects[effect_start:]
+            if isinstance(e, SpeakEffect)
+        ]
         return ScenarioResult(
             state=self.state,
-            effects=list(self.effects),
+            effects=list(self.effects[effect_start:]),
             speak_effects=speaks,
-            opening_count=count_opening_generations(self.effects),
+            opening_count=count_opening_generations(self.effects[effect_start:]),
             partial_close=any(
                 e.intent == "partial_unresolved_close" for e in speaks
             ),
@@ -79,7 +84,10 @@ class ScenarioRunner:
             rich_turn = step.rich_turn
             semantic = step.semantic
             if rich_turn is None and should_use_rich_turn(
-                step.text, answer_slot, is_topic_slot_fn=is_topic_slot
+                step.text,
+                answer_slot,
+                is_topic_slot_fn=is_topic_slot,
+                pending_episode_attribute=self.state.pending_episode_attribute,
             ):
                 rich_turn = build_rich_turn_from_text(step.text, utterance_id=turn_id)
             if rich_turn is None and semantic is None:
