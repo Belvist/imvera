@@ -212,16 +212,62 @@ def build_reference_observations(
     if ep is None:
         return ()
 
-    refers = [r for r in result.relations if r.type == RelationType.REFERS_TO]
-    if not refers:
-        return ()
-
     body_site = ep.body_site
     issue_norm = ep.primary_label.lower()
     observations: list[Observation] = []
 
     time_spans = [s for s in result.spans if s.type in (SpanType.TIME, SpanType.DURATION)]
     status_spans = [s for s in result.spans if s.type == SpanType.STATUS]
+    severity_spans = [s for s in result.spans if s.type == SpanType.SEVERITY]
+    pending = state.pending_episode_attribute
+
+    if pending and not any(r.type == RelationType.REFERS_TO for r in result.relations):
+        raw = result.raw_text.strip()
+        if pending in ("onset", "duration") and (time_spans or raw):
+            attr = pending
+            value = raw or (time_spans[0].text if time_spans else "")
+            if value:
+                observations.append(
+                    Observation(
+                        observation_id=_oid(),
+                        episode_id=ep_id,
+                        attribute=attr,
+                        value=value,
+                        normalized_value=value.lower(),
+                        body_site=body_site,
+                        issue_normalized=issue_norm,
+                        source_turn_id=result.utterance_id,
+                        evidence=value,
+                        status="confirmed",
+                        temporal=TemporalFrame(
+                            onset=value if attr == "onset" else None,
+                            duration=value if attr == "duration" else None,
+                            raw_evidence=value,
+                        ),
+                    )
+                )
+                return tuple(observations)
+        if pending == "severity" and severity_spans:
+            span = severity_spans[0]
+            observations.append(
+                Observation(
+                    observation_id=_oid(),
+                    episode_id=ep_id,
+                    attribute="severity",
+                    value=span.text,
+                    normalized_value=span.normalized,
+                    body_site=body_site,
+                    issue_normalized=issue_norm,
+                    source_turn_id=result.utterance_id,
+                    evidence=span.text,
+                    status="confirmed",
+                )
+            )
+            return tuple(observations)
+
+    refers = [r for r in result.relations if r.type == RelationType.REFERS_TO]
+    if not refers:
+        return ()
 
     for span in time_spans:
         attr = "duration" if span.type == SpanType.DURATION else "onset"

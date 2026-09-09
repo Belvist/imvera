@@ -13,6 +13,8 @@ def attribute_information_gain(
     """Higher = more useful to ask. Deterministic heuristic."""
     if attribute in ep.known_attributes:
         return -1.0
+    if attribute == "onset" and ep.known_attributes.get("duration"):
+        return -1.0
     if ep.status == "resolved":
         return -0.5
     score = 1.0
