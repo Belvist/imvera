@@ -9,10 +9,10 @@ import re
 import time
 import uuid
 import wave
-from pathlib import Path
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 
 from packages.contracts.core import TerminationReason
 from packages.contracts.enums import AsrQuality
@@ -22,36 +22,37 @@ from packages.contracts.providers import TTSProvider
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.context_builder import active_question_kind, build_turn_context
+from packages.dialogue.interpretation import to_turn_interpretation
 from packages.dialogue.planner import Planner
 from packages.dialogue.semantic_adapter import adapt_semantic_turn
-from packages.dialogue.interpretation import to_turn_interpretation
+from packages.dialogue.session import CallSession, SessionTurnResult
+from packages.dialogue.validator import Validator
+from packages.dialogue_engine.context import InterpretContext
+from packages.dialogue_engine.contextual_interpreter import contextual_interpret
 from packages.dialogue_engine.effects import (
     ENGINE_SPEAK_INTENTS,
     EndCallEffect,
     SpeakEffect,
     TimerEffect,
 )
-from packages.dialogue_engine.context import InterpretContext
-from packages.dialogue_engine.contextual_interpreter import contextual_interpret
 from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
-from packages.dialogue_engine.semantic import semantic_from_legacy, semantic_to_interpretation
-from packages.dialogue.session import CallSession, SessionTurnResult
-from packages.dialogue.validator import Validator
-from packages.voice_runtime.agent_debug_log import agent_debug_log
-from packages.voice_runtime.audio_audit import audio_audit_enabled
-from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler, pcm_rms_s16le
-from packages.voice_runtime.audio_ring import AudioRingBuffer
+from packages.dialogue_engine.issue_mention_extract import should_use_rich_turn
+from packages.dialogue_engine.semantic import semantic_to_interpretation
+from packages.dialogue_engine.topic_tracker import is_topic_slot
+from packages.dialogue_engine.turn_understanding import payload_to_rich_turn
 from packages.voice_perception.config import PerceptionConfig
-from packages.voice_perception.session import PerceptionSession, UplinkDecision
+from packages.voice_perception.session import PerceptionSession
 from packages.voice_perception.text_echo import text_echo_similarity
+from packages.voice_runtime.agent_debug_log import agent_debug_log
+from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler, pcm_rms_s16le
+from packages.voice_runtime.audio_audit import audio_audit_enabled
+from packages.voice_runtime.audio_ring import AudioRingBuffer
 from packages.voice_runtime.echo_ref_gate import (
     EchoVerdict,
     echo_ref_gate_enabled,
     lab_barge_in_enabled,
 )
 from packages.voice_runtime.forensic import ForensicTurnSnapshot, utc_now_iso
-from packages.voice_runtime.turn_fsm import ConversationPhase, TurnManager
-from packages.voice_runtime.utterance_builder import UtteranceBuilder
 from packages.voice_runtime.lab_half_duplex import (
     lab_half_duplex_enabled,
     post_speech_pause_ms,
@@ -62,6 +63,8 @@ from packages.voice_runtime.opening_cache import load_opening
 from packages.voice_runtime.playback import PlaybackQueue
 from packages.voice_runtime.profile import audio_settings, dialogue_timing_settings
 from packages.voice_runtime.silero_vad import create_vad
+from packages.voice_runtime.turn_fsm import ConversationPhase, TurnManager
+from packages.voice_runtime.utterance_builder import UtteranceBuilder
 from packages.voice_runtime.wait_state import DialogueTimingProfile, WaitState
 from services.llm.http_provider import HttpLLMProvider
 from services.providers.http_clients import get_shared_async_client
@@ -137,6 +140,7 @@ class _UtteranceOutcome:
     text: str = ""
     interp: object | None = None
     legacy_contract: object | None = None
+    rich_turn: object | None = None
     asr_quality: AsrQuality = AsrQuality.GOOD
     error_stage: str | None = None
     error: str | None = None
@@ -1101,6 +1105,7 @@ class CallActor:
                     contract=outcome.legacy_contract,
                     utterance_id=outcome.utterance_id,
                     asr_quality=outcome.asr_quality,
+                    rich_turn=outcome.rich_turn,
                 )
                 deliver_results.append(result)
                 self._turn_manager.on_turn_applied()
@@ -1613,34 +1618,39 @@ class CallActor:
                     or self.session.state.pending_slot
                 )
 
-            semantic = None
+            rich_turn = None
             fast_confident = False
             contextual_confident = False
             rules_confident = False
             interpret_path = "unknown"
+            force_rich = should_use_rich_turn(
+                text, answer_slot, is_topic_slot_fn=is_topic_slot
+            )
             if self.session.uses_dialogue_engine():
                 ctx = InterpretContext.from_engine_state(
                     self.session._engine.state, turn_id=utterance_id
                 )
-                sem, contextual_confident = contextual_interpret(text, ctx)
-                fast_confident = contextual_confident
-                if contextual_confident:
-                    interpret_path = "fast_contextual"
-                if not fast_confident:
-                    sem, rules_confident = fast_interpret_semantic(
-                        text, answer_slot=answer_slot
-                    )
-                    fast_confident = rules_confident
-                    if rules_confident:
-                        interpret_path = "fast_rules"
-                if fast_confident:
-                    semantic = sem
-                    interp = semantic_to_interpretation(sem)
-                    await self._emit_stage(
-                        "interpret.fast_path",
-                        utterance_id=utterance_id,
-                        answer_slot=answer_slot or "",
-                    )
+                if not force_rich:
+                    sem, contextual_confident = contextual_interpret(text, ctx)
+                    fast_confident = contextual_confident
+                    if contextual_confident:
+                        interpret_path = "fast_contextual"
+                    if not fast_confident:
+                        sem, rules_confident = fast_interpret_semantic(
+                            text, answer_slot=answer_slot
+                        )
+                        fast_confident = rules_confident
+                        if rules_confident:
+                            interpret_path = "fast_rules"
+                    if fast_confident:
+                        interp = semantic_to_interpretation(sem)
+                        await self._emit_stage(
+                            "interpret.fast_path",
+                            utterance_id=utterance_id,
+                            answer_slot=answer_slot or "",
+                        )
+                else:
+                    interpret_path = "rich_required"
             llm_request_id = f"llm-{uuid.uuid4().hex[:8]}"
             self._active_llm_request_id = llm_request_id
             semantic_payload = None
@@ -1695,14 +1705,24 @@ class CallActor:
                     pending_slot=answer_slot,
                 )
                 if self.session.uses_dialogue_engine():
-                    semantic = semantic_from_legacy(interp, text=text, answer_slot=answer_slot)
+                    rich_turn = payload_to_rich_turn(
+                        _validated.payload,
+                        utterance_id=utterance_id,
+                        raw_text=text,
+                    )
             elif not fast_confident:
                 interpret_path = "rules_fallback"
                 from packages.dialogue.interpretation import interpret_user_turn
 
                 interp = interpret_user_turn(self.session.state, text)
-                if self.session.uses_dialogue_engine():
-                    semantic = semantic_from_legacy(interp, text=text, answer_slot=answer_slot)
+                if self.session.uses_dialogue_engine() and force_rich:
+                    from packages.dialogue_engine.turn_understanding import (
+                        build_rich_turn_from_text,
+                    )
+
+                    rich_turn = build_rich_turn_from_text(
+                        text, utterance_id=utterance_id
+                    )
             await self._emit_forensic_turn(
                 utterance_id=utterance_id,
                 stt_text=text,
@@ -1738,6 +1758,7 @@ class CallActor:
                     text=text,
                     interp=interp,
                     legacy_contract=legacy_contract,
+                    rich_turn=rich_turn,
                     asr_quality=stt_result.asr_quality,
                 )
             )

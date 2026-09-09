@@ -10,7 +10,13 @@ from packages.contracts.turn import TurnProposal
 from packages.dialogue.state import DialogueState
 from packages.dialogue_engine.delivery import Decision, EffectDispatcher, EffectOutbox
 from packages.dialogue_engine.delivery.scope import speak_scope_for, timer_scope_for
-from packages.dialogue_engine.effects import Effect, EndCallEffect, InterpretEffect, SpeakEffect, TimerEffect
+from packages.dialogue_engine.effects import (
+    Effect,
+    EndCallEffect,
+    InterpretEffect,
+    SpeakEffect,
+    TimerEffect,
+)
 from packages.dialogue_engine.events import (
     CallStarted,
     DeliveryDeferred,
@@ -26,6 +32,7 @@ from packages.dialogue_engine.events import (
 from packages.dialogue_engine.reducer import reduce
 from packages.dialogue_engine.semantic import SemanticTurn
 from packages.dialogue_engine.state import EngineState, OpeningState
+from packages.dialogue_engine.turn_understanding import RichUserTurn
 
 
 class DialogueEngine:
@@ -78,15 +85,28 @@ class DialogueEngine:
         text: str,
         semantic: SemanticTurn | None = None,
         *,
+        rich_turn: RichUserTurn | None = None,
         effect_id: str = "",
         defer: bool = False,
     ) -> list[Effect]:
-        if defer or (effect_id and semantic is None):
+        if defer or (effect_id and semantic is None and rich_turn is None):
             return self._apply(
                 UserTurnReceived(
                     turn_id=turn_id,
                     text=text,
                     semantic=None,
+                    rich_turn=None,
+                    effect_id=effect_id,
+                    revision=self.state.revision,
+                )
+            )
+        if rich_turn is not None:
+            return self._apply(
+                UserTurnReceived(
+                    turn_id=turn_id,
+                    text=text,
+                    semantic=None,
+                    rich_turn=rich_turn,
                     effect_id=effect_id,
                     revision=self.state.revision,
                 )
@@ -98,6 +118,7 @@ class DialogueEngine:
                 turn_id=turn_id,
                 text=text,
                 semantic=semantic,
+                rich_turn=None,
                 effect_id=effect_id,
                 revision=self.state.revision,
             )
@@ -231,7 +252,9 @@ class DialogueEngine:
             and eng.slots.get(slot) != SlotStatus.FILLED
         ]
 
-    def effect_to_proposal(self, effect: SpeakEffect, turn_id: int, legacy: DialogueState) -> TurnProposal:
+    def effect_to_proposal(
+        self, effect: SpeakEffect, turn_id: int, legacy: DialogueState
+    ) -> TurnProposal:
         goal_id = None
         if effect.slot:
             goal_id = legacy.ensure_goal(effect.slot).goal_id

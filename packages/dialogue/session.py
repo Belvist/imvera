@@ -19,8 +19,8 @@ from packages.dialogue.planner import Planner
 from packages.dialogue.state import DialogueState
 from packages.dialogue.transition_store import DialogueTransitionStore
 from packages.dialogue.validator import Validator
-from packages.dialogue_engine.engine import DialogueEngine
 from packages.dialogue_engine.effects import EndCallEffect, SpeakEffect, TimerEffect
+from packages.dialogue_engine.engine import DialogueEngine
 from packages.dialogue_engine.runtime import dialogue_engine_active, log_runtime_truth
 from packages.dialogue_engine.semantic import semantic_from_legacy
 from packages.safety import SafetyEngine
@@ -490,6 +490,7 @@ class CallSession:
         contract: TurnInterpretation | None = None,
         utterance_id: str | None = None,
         asr_quality: AsrQuality = AsrQuality.GOOD,
+        rich_turn: object | None = None,
     ) -> SessionTurnResult:
         if self.state.call_finalized:
             gen = self._next_generation_id()
@@ -535,6 +536,7 @@ class CallSession:
             contract,
             utterance_id=utterance_id,
             asr_quality=asr_quality,
+            rich_turn=rich_turn,
         )
 
     def _apply_user_turn(
@@ -546,6 +548,7 @@ class CallSession:
         *,
         utterance_id: str | None = None,
         asr_quality: AsrQuality = AsrQuality.GOOD,
+        rich_turn: object | None = None,
     ) -> SessionTurnResult:
         allow_new = not (
             self.state.risk_handling and self.state.fsm_state == FsmState.CONFIRM_SITUATION
@@ -580,27 +583,35 @@ class CallSession:
         self.state.first_user_turn_received = True
         if self._engine is not None:
             answer_slot = self._engine.answer_context_slot()
-            semantic = semantic_from_legacy(
-                interp, text=user_text, answer_slot=answer_slot
-            )
-            self._engine.on_user_turn(uid, user_text, semantic)
+            if rich_turn is not None:
+                self._engine.on_user_turn(uid, user_text, rich_turn=rich_turn)
+                intent_label = getattr(rich_turn, "dialogue_act", "rich_turn")
+            else:
+                semantic = semantic_from_legacy(
+                    interp, text=user_text, answer_slot=answer_slot
+                )
+                self._engine.on_user_turn(uid, user_text, semantic)
+                intent_label = semantic.act.value
             self._append_event(
                 "ENGINE_DECISION",
                 {
                     "turn_id": self.turn_id,
                     "utterance_id": uid,
-                    "intent": semantic.act.value,
+                    "intent": intent_label,
                     "revision": self._engine.revision,
                     "answer_slot": answer_slot,
                     "skip_planner": True,
+                    "rich_turn": rich_turn is not None,
                 },
                 idempotency_key=f"{self.state.call_id}:engine:{uid}",
             )
             _log.info(
-                "ENGINE_DECISION call_id=%s turn=%s intent=%s skip_planner=true revision=%s",
+                "ENGINE_DECISION call_id=%s turn=%s intent=%s rich_turn=%s "
+                "skip_planner=true revision=%s",
                 self.state.call_id,
                 self.turn_id,
-                semantic.act.value,
+                intent_label,
+                rich_turn is not None,
                 self._engine.revision,
             )
             obs_ids, ok, err = self._persist_new_facts(self.turn_id)
@@ -742,7 +753,9 @@ class CallSession:
                 persist_error=fin_err,
             )
         if dialogue_engine_active():
-            raise RuntimeError("handle_wait_expired: planner path blocked while DialogueEngine is active")
+            raise RuntimeError(
+                "handle_wait_expired: planner path blocked while DialogueEngine is active"
+            )
         gen = self._next_generation_id()
         proposal = Planner.plan_wait_expired(self.state, self.turn_id, gen)
         validated = Validator.validate(proposal)

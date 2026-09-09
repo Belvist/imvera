@@ -19,6 +19,7 @@ __all__ = [
     "Evidence",
     "FactCandidate",
     "InterpretationProvider",
+    "IssueMention",
     "LegacyFactCandidate",
     "LegacyTurnInterpretation",
     "RiskCandidate",
@@ -73,6 +74,29 @@ class RiskEpisodeContext(StrictModel):
     resolution: Literal["unresolved", "confirmed", "dismissed"]
 
 
+class IssueMention(StrictModel):
+    """Open symptom/issue mention — what the speaker said, not a diagnosis."""
+
+    mention_id: str
+    kind: Literal[
+        "symptom",
+        "sleep_problem",
+        "mood_problem",
+        "medication_issue",
+        "function_issue",
+        "nutrition_issue",
+        "other",
+    ]
+    label: str
+    role: Literal["primary", "associated", "independent", "unknown"]
+    body_site: str | None = None
+    temporal_scope: Literal["now", "today", "past", "unknown"]
+    status: Literal["active", "improving", "resolved", "unknown"]
+    onset: str | None = None
+    severity: str | None = None
+    evidence: Evidence
+
+
 class SemanticPayload(StrictModel):
     dialogue_act: Literal[
         "answer",
@@ -87,6 +111,7 @@ class SemanticPayload(StrictModel):
     consent_evidence: Evidence | None = None
     control_evidence: Evidence | None = None
     facts: tuple[FactCandidate, ...] = ()
+    issue_mentions: tuple[IssueMention, ...] = ()
     risk_candidates: tuple[RiskCandidate, ...] = ()
     answers_pending_question: bool
     needs_clarification: bool

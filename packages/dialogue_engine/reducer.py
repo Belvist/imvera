@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from packages.contracts.enums import FsmState
+from packages.contracts.enums import FsmState, SlotStatus
 from packages.dialogue_engine import questions
 from packages.dialogue_engine.check_path import (
     ProbeAction,
@@ -12,6 +12,7 @@ from packages.dialogue_engine.check_path import (
     apply_wellness_branch,
     classify_wellness_path,
 )
+from packages.dialogue_engine.conversation_policy import decide_conversation_policy
 from packages.dialogue_engine.effects import (
     Effect,
     EndCallEffect,
@@ -32,7 +33,9 @@ from packages.dialogue_engine.events import (
     TimerExpired,
     UserTurnReceived,
 )
+from packages.dialogue_engine.issue_memory import ingest_rich_turn
 from packages.dialogue_engine.policy import (
+    apply_slot_answer,
     can_ask_slot,
     fill_from_semantic,
     mark_question_delivered,
@@ -59,6 +62,7 @@ from packages.dialogue_engine.topic_tracker import (
     topic_ack_for_family,
     topic_slot,
 )
+from packages.dialogue_engine.turn_understanding import RichUserTurn
 
 _STALE = "STALE_EFFECT_IGNORED"
 
@@ -278,7 +282,7 @@ def _on_user_turn(
         return state, []
     state.first_user_turn_received = True
     state.turn_seq += 1
-    if event.effect_id and event.semantic is None:
+    if event.effect_id and event.semantic is None and event.rich_turn is None:
         state.processing_turn_id = event.turn_id
         state.processing_effect_id = event.effect_id
         state.bump_revision()
@@ -290,6 +294,10 @@ def _on_user_turn(
                 text=event.text,
             )
         ]
+    if event.rich_turn is not None:
+        state.processing_turn_id = event.turn_id
+        state.processing_effect_id = event.effect_id or None
+        return _apply_rich_turn(state, event.rich_turn)
     if event.semantic is None:
         return state, []
     state.processing_turn_id = event.turn_id
@@ -310,6 +318,129 @@ def _on_interpretation_completed(
     if _stale(state, event.revision):
         return state, []
     return _apply_semantic(state, event.semantic)
+
+
+def _apply_goal_facts(state: EngineState, turn: RichUserTurn) -> list[str]:
+    filled: list[str] = []
+    for fact in turn.goal_facts:
+        if state.slots.get(fact.field) != SlotStatus.OPEN:
+            continue
+        apply_slot_answer(
+            state,
+            fact.field,
+            fact.value,
+            turn_id=turn.utterance_id,
+            polarity="negative" if fact.value == "negative" else "positive",
+            confidence=0.9,
+            correction=turn.correction,
+        )
+        filled.append(fact.field)
+    return filled
+
+
+def _apply_rich_turn(
+    state: EngineState,
+    turn: RichUserTurn,
+) -> tuple[EngineState, list[Effect]]:
+    user_text = turn.raw_text
+    answer_slot = state.answer_context_slot()
+
+    if state.fsm_state in (FsmState.SUMMARY, FsmState.GOODBYE) or state.awaiting_goodbye_confirm:
+        semantic_bridge = _rich_to_semantic(turn)
+        closing = _handle_closing_turn(state, semantic_bridge)
+        if closing is not None:
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            return closing
+
+    if turn.dialogue_act == "backchannel":
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.bump_revision()
+        if answer_slot:
+            state.waiting_on_slot = answer_slot
+            return state, [
+                TimerEffect(
+                    effect_id=_new_effect_id(),
+                    revision=state.revision,
+                    timer_id=f"wait-{answer_slot}",
+                    wait_ms=7000,
+                    reason="backchannel",
+                )
+            ]
+        if _is_meaningful_turn(user_text):
+            return _speak_never_silent(state, answer_slot or "wellness", user_text)
+        return state, []
+
+    ingest_rich_turn(state, turn)
+    newly_filled = _apply_goal_facts(state, turn)
+
+    decision = decide_conversation_policy(state, turn)
+    if decision is not None and decision.text:
+        if decision.suspend is not None:
+            state.suspended_obligation = decision.suspend
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.bump_revision()
+        return _emit_speak(
+            state,
+            text=decision.text,
+            intent=decision.intent or "rich_policy",
+            slot=decision.slot or answer_slot or "wellness",
+            marks_question=decision.marks_question,
+        )
+
+    if any(m.kind == "sleep_problem" for m in turn.issue_mentions):
+        if should_start_topic_flow(state, user_text, answer_slot=answer_slot):
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.waiting_on_slot = None
+            state.probe_phase = None
+            prime_topics(state, user_text)
+            return _advance_after_topic(state, user_text, newly_filled=newly_filled)
+
+    if newly_filled:
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.waiting_on_slot = None
+        return _advance_after_fills(state, newly_filled)
+
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.bump_revision()
+    if state.active_episode_id or state.pending_episode_ids:
+        resumed = decide_conversation_policy(state, turn)
+        if resumed and resumed.text:
+            return _emit_speak(
+                state,
+                text=resumed.text,
+                intent=resumed.intent,
+                slot=resumed.slot or "wellness",
+                marks_question=resumed.marks_question,
+            )
+    if _is_meaningful_turn(user_text) and answer_slot:
+        return _speak_never_silent(state, answer_slot, user_text)
+    return state, []
+
+
+def _rich_to_semantic(turn: RichUserTurn):
+    from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
+
+    if turn.dialogue_act == "backchannel":
+        return SemanticTurn(act=SemanticAct.BACKCHANNEL, source_quote=turn.raw_text)
+    if turn.dialogue_act == "correction":
+        return SemanticTurn(
+            act=SemanticAct.ANSWER,
+            correction=True,
+            source_quote=turn.raw_text,
+            value=turn.raw_text,
+        )
+    return SemanticTurn(
+        act=SemanticAct.ANSWER,
+        source_quote=turn.raw_text,
+        value=turn.raw_text,
+        confidence=0.85,
+    )
 
 
 def _apply_semantic(

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from packages.contracts.enums import FsmState, SlotStatus
+from packages.contracts.semantic import IssueMention
 from packages.dialogue_engine.context import SlotValue
 from packages.dialogue_engine.effects import SpeakEffect
 
@@ -70,6 +72,32 @@ class TopicResolution(StrEnum):
     RESOLVED = "resolved"
 
 
+class IssueEpisode(BaseModel):
+    episode_id: str
+    primary_label: str
+    kind: str
+    body_site: str | None = None
+
+    mentions: list[IssueMention] = Field(default_factory=list)
+    evidence_turn_ids: list[str] = Field(default_factory=list)
+
+    known_attributes: dict[str, str] = Field(default_factory=dict)
+
+    status: Literal["open", "suspended", "resolved"] = "open"
+
+    model_config = {"frozen": False}
+
+
+class SuspendedObligation(BaseModel):
+    kind: str
+    episode_id: str | None = None
+    attribute: str | None = None
+    slot: str | None = None
+    intent: str | None = None
+
+    model_config = {"frozen": True}
+
+
 class EngineState(BaseModel):
     call_id: str
     elder_display_name: str = "Анной Петровной"
@@ -131,6 +159,15 @@ class EngineState(BaseModel):
     topic_evidence: dict[str, list[TopicEvidence]] = Field(default_factory=dict)
     topic_resolution: dict[str, str] = Field(default_factory=dict)
     topic_asked_dimension: str | None = None
+
+    active_episode_id: str | None = None
+    pending_episode_ids: list[str] = Field(default_factory=list)
+    issue_episodes: dict[str, IssueEpisode] = Field(default_factory=dict)
+    suspended_obligation: SuspendedObligation | None = None
+    pending_episode_attribute: str | None = None
+
+    def uses_issue_episodes(self) -> bool:
+        return bool(self.issue_episodes or self.active_episode_id)
 
     def bump_revision(self) -> None:
         self.revision += 1

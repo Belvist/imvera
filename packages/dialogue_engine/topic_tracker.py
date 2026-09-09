@@ -403,6 +403,8 @@ def ingest_user_turn_topics(
     fallback: str | None = None,
 ) -> TopicIngestResult:
     """Ingest every family from every clause; update evidence, dimensions, focus."""
+    if state.uses_issue_episodes():
+        return _ingest_sleep_hints_only(state, text, fallback=fallback)
     turn_text = text.strip()
     if not turn_text:
         return TopicIngestResult()
@@ -433,6 +435,30 @@ def ingest_user_turn_topics(
 
     _apply_focus_policy(state, _sort_by_priority(detected))
 
+    return TopicIngestResult(families=_sort_by_priority(detected))
+
+
+def _ingest_sleep_hints_only(
+    state: EngineState,
+    text: str,
+    *,
+    fallback: str | None = None,
+) -> TopicIngestResult:
+    """When IssueEpisode memory is canonical, only sleep fast-hints remain."""
+    turn_text = text.strip()
+    if not turn_text:
+        return TopicIngestResult()
+    detected: list[str] = []
+    n = _norm(turn_text)
+    if _clause_has_sleep(n):
+        detected.append(TopicFamily.SLEEP)
+        _append_topic_evidence(state, TopicFamily.SLEEP, turn_text, turn_text)
+        dims = infer_dimensions(TopicFamily.SLEEP, turn_text, turn_context=turn_text)
+        _mark_dimensions(state, TopicFamily.SLEEP, dims)
+    if fallback == TopicFamily.SLEEP and TopicFamily.SLEEP not in detected:
+        detected.insert(0, TopicFamily.SLEEP)
+    if detected:
+        _apply_focus_policy(state, _sort_by_priority(detected))
     return TopicIngestResult(families=_sort_by_priority(detected))
 
 
@@ -536,6 +562,13 @@ _CONCRETE_SYMPTOM_FAMILIES = frozenset(
 
 
 def should_start_topic_flow(state: EngineState, text: str, *, answer_slot: str | None) -> bool:
+    if state.uses_issue_episodes():
+        if is_topic_slot(answer_slot):
+            return True
+        n = _norm(text)
+        if answer_slot in _BACKGROUND_CHECK_SLOTS or answer_slot == "wellness":
+            return _clause_has_sleep(n)
+        return False
     if is_topic_slot(answer_slot):
         return True
     families = detect_families(text)

@@ -24,9 +24,12 @@ from packages.dialogue_engine.invariants import (
     check_all,
     count_opening_generations,
 )
+from packages.dialogue_engine.issue_mention_extract import should_use_rich_turn
 from packages.dialogue_engine.reducer import reduce
 from packages.dialogue_engine.semantic import semantic_from_legacy
 from packages.dialogue_engine.state import EngineState
+from packages.dialogue_engine.topic_tracker import is_topic_slot
+from packages.dialogue_engine.turn_understanding import build_rich_turn_from_text
 
 
 @dataclass
@@ -73,10 +76,14 @@ class ScenarioRunner:
             self._turn += 1
             turn_id = f"u-{self._turn}"
             answer_slot = self.state.answer_context_slot()
-            ctx = InterpretContext.from_engine_state(self.state, turn_id=turn_id)
-            if step.semantic is not None:
-                semantic = step.semantic
-            else:
+            rich_turn = step.rich_turn
+            semantic = step.semantic
+            if rich_turn is None and should_use_rich_turn(
+                step.text, answer_slot, is_topic_slot_fn=is_topic_slot
+            ):
+                rich_turn = build_rich_turn_from_text(step.text, utterance_id=turn_id)
+            if rich_turn is None and semantic is None:
+                ctx = InterpretContext.from_engine_state(self.state, turn_id=turn_id)
                 sem, confident = contextual_interpret(step.text, ctx)
                 if confident:
                     semantic = sem
@@ -101,7 +108,7 @@ class ScenarioRunner:
                             interp, text=step.text, answer_slot=answer_slot
                         )
 
-            if self.interpret_delay_s > 0:
+            if self.interpret_delay_s > 0 and rich_turn is None:
                 effect_id = f"ix-{self._turn}"
                 self.state, pending = reduce(
                     self.state,
@@ -138,6 +145,7 @@ class ScenarioRunner:
                         turn_id=turn_id,
                         text=step.text,
                         semantic=semantic,
+                        rich_turn=rich_turn,
                         revision=self.state.revision,
                     ),
                 )

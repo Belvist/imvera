@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from packages.dialogue_engine.semantic import SemanticTurn
+from packages.dialogue_engine.turn_understanding import RichUserTurn
 
 
 class DialogueEvent(BaseModel):
@@ -24,6 +25,7 @@ class UserTurnReceived(DialogueEvent):
     turn_id: str
     text: str
     semantic: SemanticTurn | None = None
+    rich_turn: RichUserTurn | None = None
     effect_id: str = ""
     revision: int = 0
 
@@ -97,3 +99,4 @@ class User(DialogueEvent):
     kind: Literal["user"] = "user"
     text: str
     semantic: SemanticTurn | None = None
+    rich_turn: RichUserTurn | None = None
