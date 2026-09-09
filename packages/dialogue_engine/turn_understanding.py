@@ -17,6 +17,11 @@ from packages.dialogue_engine.issue_mention_extract import (
     extract_goal_facts,
     extract_issue_mentions,
 )
+from packages.dialogue_engine.semantic_kernel.types import (
+    Observation,
+    SemanticRelation,
+    SemanticSpan,
+)
 
 
 class RichUserTurn(BaseModel):
@@ -37,6 +42,16 @@ class RichUserTurn(BaseModel):
     risk_candidates: tuple[RiskCandidate, ...] = ()
 
     correction: bool = False
+
+    semantic_spans: tuple[SemanticSpan, ...] = ()
+    semantic_relations: tuple[SemanticRelation, ...] = ()
+    observations: tuple[Observation, ...] = ()
+    kernel_confidence: float = 1.0
+    kernel_ambiguities: tuple[str, ...] = ()
+    kernel_level: int = 1
+    kernel_route: str = ""
+    kernel_elapsed_ms: float = 0.0
+    kernel_corrections: tuple = ()
 
     model_config = {"frozen": True}
 
@@ -98,7 +113,15 @@ def build_rich_turn_from_payload(
 
 
 def build_rich_turn_from_text(text: str, *, utterance_id: str) -> RichUserTurn:
-    """Deterministic rich turn for tests and LLM-off replay."""
+    """Semantic Kernel → RichUserTurn (canonical NLU path)."""
+    from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
+
+    result = interpret(text, utterance_id=utterance_id)
+    return kernel_to_rich_turn(result)
+
+
+def build_rich_turn_from_text_legacy(text: str, *, utterance_id: str) -> RichUserTurn:
+    """LEVEL0 compatibility helper — issue_mention_extract only."""
     raw = text.strip()
     dialogue_act = "answer"
     if detect_correction(raw):

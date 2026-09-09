@@ -1,0 +1,51 @@
+"""Information gain scoring for attribute questions."""
+
+from __future__ import annotations
+
+from packages.dialogue_engine.state import EngineState, IssueEpisode
+
+
+def attribute_information_gain(
+    state: EngineState,
+    ep: IssueEpisode,
+    attribute: str,
+) -> float:
+    """Higher = more useful to ask. Deterministic heuristic."""
+    if attribute in ep.known_attributes:
+        return -1.0
+    if ep.status == "resolved":
+        return -0.5
+    score = 1.0
+    if attribute == "onset":
+        score += 0.4
+    if attribute == "severity":
+        if "голов" in ep.primary_label.lower():
+            score += 0.3
+        else:
+            score += 0.1
+    if attribute == "current":
+        if ep.known_attributes.get("onset") and "вчера" in ep.known_attributes["onset"].lower():
+            score += 0.5
+    improving = ep.known_attributes.get("status", "")
+    if improving and any(w in improving.lower() for w in ("лучше", "прошл", "почти")):
+        score -= 0.6
+    asked = state.pending_episode_attribute == attribute
+    if asked:
+        score -= 0.3
+    return score
+
+
+def best_attribute_to_ask(state: EngineState, ep: IssueEpisode) -> str | None:
+    label = ep.primary_label.lower()
+    ordered: tuple[str, ...]
+    if ep.body_site == "живот" or "живот" in label:
+        ordered = ("onset", "current", "severity")
+    elif "голов" in label:
+        ordered = ("onset", "severity", "current")
+    else:
+        ordered = ("onset", "severity", "current")
+    scored = [(a, attribute_information_gain(state, ep, a)) for a in ordered]
+    scored = [(a, s) for a, s in scored if s > 0]
+    if not scored:
+        return None
+    return max(scored, key=lambda x: x[1])[0]

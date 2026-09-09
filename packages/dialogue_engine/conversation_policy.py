@@ -63,15 +63,10 @@ def capture_suspended_obligation(state: EngineState) -> SuspendedObligation | No
     return None
 
 
-def _missing_attribute(ep) -> str | None:
-    label = ep.primary_label.lower()
-    if "onset" not in ep.known_attributes:
-        return "onset"
-    if ("голов" in label or "боль" in label) and "severity" not in ep.known_attributes:
-        return "severity"
-    if ep.body_site == "живот" and "current" not in ep.known_attributes:
-        return "current"
-    return None
+def _missing_attribute(state: EngineState, ep) -> str | None:
+    from packages.dialogue_engine.semantic_kernel.information_gain import best_attribute_to_ask
+
+    return best_attribute_to_ask(state, ep)
 
 
 def _attribute_question(ep, attribute: str) -> tuple[str, str]:
@@ -101,12 +96,16 @@ def _correction_response(state: EngineState, turn: RichUserTurn) -> PolicyDecisi
             ep = state.issue_episodes[ep_id]
     label = ep.primary_label if ep else "это"
     ack = f"Да, вы говорили, что {label}." if ep else "Понимаю."
-    attribute = state.pending_episode_attribute or (ep and _missing_attribute(ep))
+    attribute = state.pending_episode_attribute or (ep and _missing_attribute(state, ep))
     if ep and attribute:
         state.pending_episode_attribute = attribute
         q_text, intent = _attribute_question(ep, attribute)
         if question_references_forbidden_site(state, q_text):
-            q_text = f"Расскажите про {ep.primary_label} чуть подробнее, пожалуйста."
+            q_text = (
+                f"Я уточняю про сейчас: {ep.primary_label} ещё беспокоит или уже прошло?"
+                if attribute == "current"
+                else f"Расскажите про {ep.primary_label} чуть подробнее, пожалуйста."
+            )
         return PolicyDecision(
             obligation=ConversationObligation.HANDLE_CORRECTION,
             text=f"{ack} {q_text}",
@@ -134,49 +133,23 @@ def _next_episode_question(state: EngineState) -> PolicyDecision | None:
         if ep is None:
             return None
 
-    label = ep.primary_label.lower()
-    if "onset" not in ep.known_attributes:
-        state.pending_episode_attribute = "onset"
-        if "голов" in label:
-            text = "Как давно болит голова?"
-            intent = "episode_headache_onset"
-        else:
-            text = f"Как давно {ep.primary_label}?"
-            intent = f"episode_{ep.episode_id}_onset"
-        if question_references_forbidden_site(state, text):
-            return None
-        return PolicyDecision(
-            obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
-            text=text,
-            intent=intent,
-            slot=intent,
-            marks_question=True,
-        )
+    attribute = _missing_attribute(state, ep)
+    if attribute is None:
+        ep.status = "resolved"
+        activate_next_pending_episode(state)
+        return _next_episode_question(state)
 
-    if "severity" not in ep.known_attributes and "голов" in label:
-        state.pending_episode_attribute = "severity"
-        return PolicyDecision(
-            obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
-            text="Боль сильная или терпимая?",
-            intent="episode_headache_severity",
-            slot="episode_headache_severity",
-            marks_question=True,
-        )
-
-    if ep.body_site == "живот" and "current" not in ep.known_attributes:
-        state.pending_episode_attribute = "current"
-        text = "А сейчас живот ещё беспокоит?"
-        return PolicyDecision(
-            obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
-            text=text,
-            intent="episode_abdominal_current",
-            slot="episode_abdominal_current",
-            marks_question=True,
-        )
-
-    ep.status = "resolved"
-    activate_next_pending_episode(state)
-    return _next_episode_question(state)
+    state.pending_episode_attribute = attribute
+    text, intent = _attribute_question(ep, attribute)
+    if question_references_forbidden_site(state, text):
+        return None
+    return PolicyDecision(
+        obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
+        text=text,
+        intent=intent,
+        slot=intent,
+        marks_question=True,
+    )
 
 
 def resume_episode_obligation(state: EngineState) -> PolicyDecision | None:

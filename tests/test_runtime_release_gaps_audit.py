@@ -51,7 +51,10 @@ def fact_meaning(text, field):
     )
 
 
-def test_out_of_order_inference_does_not_deadlock_actor():
+def test_out_of_order_inference_does_not_deadlock_actor(monkeypatch):
+    monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "0")
+    monkeypatch.setenv("IMVERA_LLM_INTERPRET", "1")
+
     async def scenario():
         session = session_at_wellness()
         first_entered, second_entered, release_first = (

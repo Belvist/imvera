@@ -36,15 +36,11 @@ from packages.dialogue_engine.effects import (
     TimerEffect,
 )
 from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
-from packages.dialogue_engine.issue_mention_extract import (
-    extract_issue_mentions,
-    should_use_rich_turn,
-)
+from packages.dialogue_engine.issue_mention_extract import should_use_rich_turn
 from packages.dialogue_engine.runtime import llm_interpret_enabled
 from packages.dialogue_engine.semantic import semantic_to_interpretation
 from packages.dialogue_engine.topic_tracker import is_topic_slot
 from packages.dialogue_engine.turn_understanding import (
-    build_rich_turn_from_text,
     payload_to_rich_turn,
 )
 from packages.voice_perception.config import PerceptionConfig
@@ -1641,11 +1637,40 @@ class CallActor:
                 is_topic_slot_fn=is_topic_slot,
                 pending_episode_attribute=pending_episode_attribute,
             )
-            issue_mentions = ()
+            kernel_result = None
             if self.session.uses_dialogue_engine():
-                issue_mentions = extract_issue_mentions(text)
-            use_rich_deterministic = self.session.uses_dialogue_engine() and (
-                force_rich or bool(issue_mentions)
+                from packages.dialogue_engine.semantic_kernel.kernel import (
+                    interpret as kernel_interpret,
+                )
+                from packages.dialogue_engine.semantic_kernel.kernel import (
+                    kernel_to_rich_turn,
+                )
+
+                engine_state = (
+                    self.session._engine.state if self.session._engine else None
+                )
+                kernel_result = kernel_interpret(
+                    text,
+                    utterance_id=utterance_id,
+                    engine_state=engine_state,
+                    answer_slot=answer_slot,
+                )
+                rich_turn = kernel_to_rich_turn(kernel_result)
+                interpret_path = f"semantic_kernel_{kernel_result.route}"
+                await self._emit_stage(
+                    "semantic.kernel",
+                    utterance_id=utterance_id,
+                    level=kernel_result.level,
+                    confidence=round(kernel_result.confidence, 3),
+                    route=kernel_result.route,
+                    elapsed_ms=round(kernel_result.elapsed_ms, 2),
+                    span_count=len(kernel_result.spans),
+                    relation_count=len(kernel_result.relations),
+                    observation_count=len(kernel_result.observations),
+                    fallback_used=kernel_result.fallback_used,
+                )
+            use_rich_deterministic = (
+                self.session.uses_dialogue_engine() and rich_turn is not None
             )
             if self.session.uses_dialogue_engine():
                 ctx = InterpretContext.from_engine_state(
@@ -1733,11 +1758,10 @@ class CallActor:
                         utterance_id=utterance_id,
                         raw_text=text,
                     )
-            elif use_rich_deterministic:
+            elif use_rich_deterministic and rich_turn is not None:
                 from packages.dialogue.interpretation import interpret_user_turn
 
-                rich_turn = build_rich_turn_from_text(text, utterance_id=utterance_id)
-                if fast_confident:
+                if fast_confident and not rich_turn.issue_mentions:
                     interp = semantic_to_interpretation(sem)
                 else:
                     interp = interpret_user_turn(self.session.state, text)

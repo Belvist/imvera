@@ -450,6 +450,27 @@ def _apply_rich_turn(
 
     ingest_rich_turn(state, turn)
 
+    if turn.needs_clarification:
+        from packages.dialogue_engine.semantic_kernel.kernel import clarify_text
+        from packages.dialogue_engine.semantic_kernel.types import SemanticKernelResult
+
+        stub = SemanticKernelResult(
+            raw_text=user_text,
+            utterance_id=turn.utterance_id,
+            ambiguity=turn.kernel_ambiguities,
+            level=turn.kernel_level,
+        )
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.bump_revision()
+        return _emit_speak(
+            state,
+            text=clarify_text(stub),
+            intent="semantic_clarify",
+            slot=answer_slot or "wellness",
+            marks_question=True,
+        )
+
     if turn.correction:
         decision = decide_conversation_policy(state, turn)
         if decision is not None and decision.text:

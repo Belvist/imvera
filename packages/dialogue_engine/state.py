@@ -166,6 +166,8 @@ class EngineState(BaseModel):
     suspended_obligation: SuspendedObligation | None = None
     pending_episode_attribute: str | None = None
 
+    observations: dict[str, object] = Field(default_factory=dict)
+
     def uses_issue_episodes(self) -> bool:
         return bool(self.issue_episodes or self.active_episode_id)
 

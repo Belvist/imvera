@@ -143,7 +143,10 @@ def test_risk_question_context_does_not_reuse_pending_wellness_question():
     assert ctx.pending_question != "Расскажите, как вы себя чувствуете сейчас?"
 
 
-def test_real_second_utterance_is_not_lost_on_state_version_change():
+def test_real_second_utterance_is_not_lost_on_state_version_change(monkeypatch):
+    monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "0")
+    monkeypatch.setenv("IMVERA_LLM_INTERPRET", "1")
+
     from packages.voice_runtime.call_actor import CallActor, MediaCallbacks
 
     async def scenario():
