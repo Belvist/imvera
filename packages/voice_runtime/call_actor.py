@@ -44,8 +44,8 @@ from packages.dialogue_engine.turn_understanding import (
     payload_to_rich_turn,
 )
 from packages.voice_perception.config import PerceptionConfig
+from packages.voice_perception.fragment_fsm import FRAGMENT_HOLD_TIMEOUT_MS, FragmentState
 from packages.voice_perception.post_stt_gate import (
-    FRAGMENT_HOLD_TIMEOUT_S,
     PostSTTContext,
     TurnAdmissionVerdict,
     evaluate_post_stt_turn,
@@ -254,9 +254,8 @@ class CallActor:
     _forensic_segment_echo_max: float = 0.0
     _segment_acoustic_echo_verdict: str | None = None
     _playout_end_mono: float | None = None
-    _pending_fragment_text: str | None = None
-    _pending_fragment_utterance_id: str | None = None
-    _pending_fragment_mono: float | None = None
+    _fragment_state: FragmentState = field(default_factory=FragmentState)
+    _fragment_timer_task: object | None = None
 
     def _forensic_active(self) -> bool:
         return os.environ.get("IMVERA_FORENSIC", "0") in {"1", "true", "yes"}
@@ -682,21 +681,43 @@ class CallActor:
         )
 
     def _clear_pending_fragment(self) -> None:
-        self._pending_fragment_text = None
-        self._pending_fragment_utterance_id = None
-        self._pending_fragment_mono = None
+        self._fragment_state.clear()
+        task = self._fragment_timer_task
+        self._fragment_timer_task = None
+        if task is not None and hasattr(task, "cancel"):
+            task.cancel()
 
     def _merge_pending_fragment(self, text: str) -> tuple[str, bool]:
-        if not self._pending_fragment_text:
+        if not self._fragment_state.is_held():
+            if self._fragment_state.phase.name == "EXPIRED":
+                self._fragment_state.clear()
             return text, False
-        merged = f"{self._pending_fragment_text} {text}".strip()
+        merged = self._fragment_state.merge_with(text)
         self._clear_pending_fragment()
         return merged, True
 
     def _hold_pending_fragment(self, text: str, utterance_id: str) -> None:
-        self._pending_fragment_text = text
-        self._pending_fragment_utterance_id = utterance_id
-        self._pending_fragment_mono = self._monotonic()
+        self._clear_pending_fragment()
+        self._fragment_state.hold(
+            text,
+            utterance_id=utterance_id,
+            mono=self._monotonic(),
+        )
+        timeout_s = FRAGMENT_HOLD_TIMEOUT_MS / 1000.0
+        try:
+            loop = asyncio.get_running_loop()
+            self._fragment_timer_task = loop.call_later(
+                timeout_s,
+                self._on_fragment_timeout,
+            )
+        except RuntimeError:
+            self._fragment_timer_task = None
+
+    def _on_fragment_timeout(self) -> None:
+        if not self._fragment_state.is_held():
+            return
+        self._fragment_state.expire()
+        self._fragment_timer_task = None
 
     def _build_post_stt_context(
         self,

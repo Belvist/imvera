@@ -180,7 +180,11 @@ def classify_wellness_path(
 def apply_wellness_branch(state: EngineState, branch: WellnessBranch) -> None:
     state.check_path = branch.path
     if branch.store_concern_from_wellness:
-        state.wellness_concern = state.slot_values.get("wellness", "")
+        rec = state.slot_records.get("wellness")
+        state.wellness_concern = (
+            (rec.source_text if rec else "")
+            or state.slot_values.get("wellness", "")
+        )
     if branch.skip_mood_sleep:
         state.skipped_slots.update({"mood", "sleep"})
     state.probe_phase = branch.probe_phase
@@ -220,7 +224,6 @@ def _probe_duration(state: EngineState, text: str) -> ProbeStep:
             duration = extract_grounded_onset_value(text)
             if duration:
                 ep.known_attributes["duration"] = duration
-                ep.known_attributes.setdefault("onset", duration)
             return ProbeStep(action=ProbeAction.CONTINUE_LADDER)
     next_slot = state.next_open_slot()
     return ProbeStep(

@@ -1,0 +1,26 @@
+{
+  "call_id": "fs-f0daadb9",
+  "elder_display_name": "Даниил",
+  "turns": [
+    {
+      "bot_text": "Как вы себя чувствуете?",
+      "stt_final": "Хорошо себя чувствую.",
+      "answer_slot": "wellness",
+      "expected_admission": "ACCEPT"
+    },
+    {
+      "bot_text": "А какое у вас сегодня настроение?",
+      "stt_final": "Алло, слышишь?",
+      "answer_slot": "mood",
+      "expected_admission": "ACCEPT",
+      "expected_intent_prefix": "repair_repeat"
+    },
+    {
+      "bot_text": "Да, слышу. А какое у вас сегодня настроение?",
+      "stt_final": "Хорошее.",
+      "answer_slot": "mood",
+      "expected_admission": "ACCEPT",
+      "expected_no_intents": ["partial_unresolved_close"]
+    }
+  ]
+}

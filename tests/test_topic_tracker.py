@@ -104,7 +104,10 @@ def test_off_topic_answer_does_not_fill_asked_dimension() -> None:
 
 
 def test_headache_at_sleep_slot_starts_topic_not_clarify() -> None:
-    """Background sleep slot + headache complaint → topic flow, not sleep clarify loop."""
+    """Background sleep slot + headache complaint → episode focus, not sleep clarify loop.
+
+    Legacy transport expected topic_headache_*; canonical IssueEpisode flow replaces it.
+    """
     result = _runner().run(
         [
             CallStarted(),
@@ -114,12 +117,22 @@ def test_headache_at_sleep_slot_starts_topic_not_clarify() -> None:
         ]
     )
     intents = [e.intent for e in result.speak_effects]
-    assert any(i.startswith("topic_headache_") for i in intents)
     assert "clarify_sleep" not in intents
+    headache_ep = next(
+        (
+            ep
+            for ep in result.state.issue_episodes.values()
+            if "голов" in ep.primary_label.lower()
+        ),
+        None,
+    )
+    assert headache_ep is not None, "headache IssueEpisode must capture focus"
+    assert result.state.active_episode_id == headache_ep.episode_id
+    assert any(i.startswith("episode_") for i in intents)
 
 
 def test_poor_sleep_at_wellness_starts_topic_not_probe() -> None:
-    """Regression fs-592f4ea0: «плохо спал» at wellness → sleep topic, not concern probe."""
+    """Regression fs-592f4ea0: «плохо спал» at wellness → sleep addressed, not concern probe."""
     result = _runner().run(
         [
             CallStarted(),
@@ -128,20 +141,17 @@ def test_poor_sleep_at_wellness_starts_topic_not_probe() -> None:
     )
     intents = [e.intent for e in result.speak_effects]
     assert "probe_concern" not in intents
-    assert any(i.startswith("topic_sleep_") for i in intents)
-    assert (
-        result.state.active_topic == TopicFamily.SLEEP
-        or TopicFamily.SLEEP in result.state.topic_dimensions
-    )
+    # old transport: topic_sleep_* → canonical: background sleep slot fill + ladder advance
+    assert result.state.slots["sleep"] == SlotStatus.FILLED
+    assert any(ep.kind == "sleep_problem" for ep in result.state.issue_episodes.values())
 
 
 def test_sleep_topic_then_mood_ladder() -> None:
+    # old transport: multi-turn topic_sleep_* ladder → canonical: multi-slot + background ladder
     result = _runner().run(
         [
             CallStarted(),
             "Плохо спал.",
-            "Проснулся в четыре, не мог заснуть.",
-            "Усталость есть.",
             "Хорошее настроение.",
             "Планов нет.",
         ]
@@ -149,6 +159,8 @@ def test_sleep_topic_then_mood_ladder() -> None:
     intents = [e.intent for e in result.speak_effects]
     assert "summary" in intents
     assert result.state.slots["sleep"] == SlotStatus.FILLED
+    assert result.state.slots["mood"] == SlotStatus.FILLED
+    assert result.state.slots["plans"] == SlotStatus.FILLED
 
 
 def test_abdominal_in_probe_answer_switches_topic() -> None:

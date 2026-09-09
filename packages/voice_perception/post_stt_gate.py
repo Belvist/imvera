@@ -1,7 +1,7 @@
 """Post-STT turn admission — echo vs fragment vs accept.
 
+Semantic/context relevance blocks text overlap drops.
 Text similarity alone never hard-drops user speech.
-Echo requires acoustic evidence + near-exact reproduction + no semantic novelty.
 """
 
 from __future__ import annotations
@@ -11,17 +11,15 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from packages.voice_perception.echo_match import EchoTextMatch, best_echo_text_match
 from packages.voice_perception.echo_ref_gate import EchoVerdict
-from packages.voice_perception.text_echo import (
-    compute_text_similarity,
-    is_repair_phrase,
-    normalize_speech_text,
-)
+from packages.voice_perception.fragment_fsm import FRAGMENT_HOLD_TIMEOUT_MS
+from packages.voice_perception.text_echo import is_repair_phrase, normalize_speech_text
 
 if TYPE_CHECKING:
     from packages.dialogue_engine.semantic_kernel.types import SemanticKernelResult
 
-FRAGMENT_HOLD_TIMEOUT_S = 2.5
+FRAGMENT_HOLD_TIMEOUT_S = FRAGMENT_HOLD_TIMEOUT_MS / 1000.0
 
 _VALID_SHORT_ANSWERS = frozenset(
     {
@@ -79,6 +77,8 @@ class PostSTTContext:
     user_text: str
     last_bot_text: str
     bot_candidates: tuple[str, ...] = ()
+    candidate_generation_ids: tuple[str, ...] = ()
+    candidate_intents: tuple[str, ...] = ()
     last_playout_generation: str | None = None
     playback_active: bool = False
     milliseconds_since_playout_end: int | None = None
@@ -96,6 +96,7 @@ class SemanticNoveltySignals:
     has_control: bool
     has_question: bool
     has_correction: bool
+    has_repair: bool
     issue_count: int
     body_site_count: int
     duration: bool
@@ -111,43 +112,11 @@ class TurnAdmissionDecision:
     verdict: TurnAdmissionVerdict
     confidence: float
     reason: str
-    text_similarity: dict[str, float | bool] = field(default_factory=dict)
+    echo_match: EchoTextMatch | None = None
+    text_similarity: dict[str, float | bool | str] = field(default_factory=dict)
     acoustic_score: float = 0.0
     semantic_novelty: dict[str, object] = field(default_factory=dict)
     fragment: dict[str, object] = field(default_factory=dict)
-
-
-def best_text_similarity(
-    user_text: str,
-    bot_candidates: tuple[str, ...],
-    *,
-    primary_bot: str = "",
-) -> dict[str, float | bool]:
-    """Pick strongest similarity metrics against recent bot phrases."""
-    refs = [primary_bot] if primary_bot else []
-    for phrase in bot_candidates:
-        if phrase and phrase not in refs:
-            refs.append(phrase)
-    if not refs:
-        return {}
-    best: dict[str, float | bool] = {}
-    for phrase in refs:
-        metrics = compute_text_similarity(user_text, phrase)
-        if not best:
-            best = metrics
-            continue
-        for key in (
-            "user_coverage",
-            "bot_coverage",
-            "jaccard",
-            "ordered_similarity",
-            "legacy_similarity",
-        ):
-            if float(metrics.get(key, 0)) > float(best.get(key, 0)):
-                best[key] = metrics[key]
-        if metrics.get("exact_match"):
-            best["exact_match"] = True
-    return best
 
 
 def analyze_semantic_novelty(
@@ -161,6 +130,7 @@ def analyze_semantic_novelty(
             has_control=False,
             has_question=False,
             has_correction=False,
+            has_repair=False,
             issue_count=0,
             body_site_count=0,
             duration=False,
@@ -171,12 +141,14 @@ def analyze_semantic_novelty(
             answer_relevance=False,
         )
 
+    from packages.dialogue_engine.question_context import QuestionNeed
     from packages.dialogue_engine.semantic_kernel.types import SpanType
 
     spans = result.spans
     has_control = result.control not in ("none", "", None)
     has_question = bool(result.user_question)
     has_correction = bool(result.corrections) or result.dialogue_act == "correction"
+    has_repair = result.dialogue_act == "repair"
 
     issue_count = sum(1 for s in spans if s.type == SpanType.ISSUE)
     body_site_count = sum(1 for s in spans if s.type == SpanType.BODY_SITE)
@@ -190,6 +162,7 @@ def analyze_semantic_novelty(
         has_control
         or has_question
         or has_correction
+        or has_repair
         or duration
         or severity
         or temporal
@@ -201,12 +174,16 @@ def analyze_semantic_novelty(
 
     answer_relevance = False
     if pending_episode_attribute:
-        attr = pending_episode_attribute.lower()
-        if attr in ("onset", "duration") and (temporal or duration):
-            answer_relevance = True
-        elif attr == "severity" and severity:
-            answer_relevance = True
-        elif attr == "current" and (status or obs_attrs):
+        need = QuestionNeed.for_attribute(pending_episode_attribute.lower())
+        if any(
+            name in need.accepted_semantics
+            and (
+                (name in ("duration", "onset") and (temporal or duration))
+                or (name == "severity" and severity)
+                or (name in ("current", "status") and (status or obs_attrs))
+            )
+            for name in need.accepted_semantics
+        ):
             answer_relevance = True
     if answer_slot and (semantic_novelty or result.observations):
         answer_relevance = True
@@ -218,6 +195,7 @@ def analyze_semantic_novelty(
         has_control=has_control,
         has_question=has_question,
         has_correction=has_correction,
+        has_repair=has_repair,
         issue_count=issue_count,
         body_site_count=body_site_count,
         duration=duration,
@@ -238,7 +216,7 @@ def is_incomplete_fragment(
         return False
     if novelty.semantic_novelty or novelty.answer_relevance:
         return False
-    if novelty.has_control or novelty.has_question or novelty.has_correction:
+    if novelty.has_control or novelty.has_question or novelty.has_correction or novelty.has_repair:
         return False
     if normalized in _VALID_SHORT_ANSWERS:
         return False
@@ -272,50 +250,50 @@ def _acoustic_echo_strong(ctx: PostSTTContext) -> bool:
     return False
 
 
-def _user_added_tokens_beyond_bot(user_text: str, bot_text: str) -> bool:
-    user = normalize_speech_text(user_text).split()
-    bot = set(normalize_speech_text(bot_text).split())
-    if not user:
+def _is_probable_playback_echo(match: EchoTextMatch, ctx: PostSTTContext) -> bool:
+    if not _near_exact_reproduction(match):
         return False
-    return any(token not in bot for token in user)
-
-
-def _is_probable_playback_echo(ctx: PostSTTContext, metrics: dict[str, float | bool]) -> bool:
-    if not _near_exact_reproduction(metrics) or not _acoustic_echo_strong(ctx):
-        return False
-    if _user_added_tokens_beyond_bot(ctx.user_text, ctx.last_bot_text):
+    if not _acoustic_echo_strong(ctx):
         return False
     return True
 
 
-def _near_exact_reproduction(metrics: dict[str, float | bool]) -> bool:
-    if not metrics:
-        return False
-    if metrics.get("exact_match"):
+def _short_valid_pending_answer(user_text: str) -> bool:
+    tokens = normalize_speech_text(user_text).split()
+    return 0 < len(tokens) <= 3
+
+
+def _near_exact_reproduction(match: EchoTextMatch) -> bool:
+    if match.exact_match:
         return True
-    user_cov = float(metrics.get("user_coverage", 0))
-    bot_cov = float(metrics.get("bot_coverage", 0))
-    ordered = float(metrics.get("ordered_similarity", 0))
-    return user_cov >= 0.95 and bot_cov >= 0.9 and ordered >= 0.9
+    return (
+        match.user_coverage >= 0.95
+        and match.bot_coverage >= 0.9
+        and match.ordered_similarity >= 0.9
+    )
 
 
 def evaluate_post_stt_turn(ctx: PostSTTContext) -> TurnAdmissionDecision:
-    """Decide whether an STT final should reach DialogueEngine."""
+    """Admission order: empty → fragment → semantic relevance → acoustic echo → accept."""
     novelty = analyze_semantic_novelty(
         ctx.semantic_result,
         answer_slot=ctx.answer_slot,
         pending_episode_attribute=ctx.pending_episode_attribute,
     )
-    metrics = best_text_similarity(
+    echo_match = best_echo_text_match(
         ctx.user_text,
         ctx.bot_candidates,
         primary_bot=ctx.last_bot_text,
+        generation_ids=ctx.candidate_generation_ids,
+        intents=ctx.candidate_intents,
     )
+    metrics = echo_match.as_dict() if echo_match else {}
 
     fragment_info: dict[str, object] = {
         "incomplete": False,
         "held": False,
         "merged_with_next": ctx.merged_from_fragment,
+        "timeout_ms": FRAGMENT_HOLD_TIMEOUT_MS,
     }
 
     if is_incomplete_fragment(ctx.user_text, novelty) and not ctx.merged_from_fragment:
@@ -325,28 +303,49 @@ def evaluate_post_stt_turn(ctx: PostSTTContext) -> TurnAdmissionDecision:
             verdict=TurnAdmissionVerdict.HOLD_FRAGMENT,
             confidence=0.85,
             reason="incomplete_fragment",
+            echo_match=echo_match,
             text_similarity=metrics,
             acoustic_score=ctx.acoustic_echo_score,
             semantic_novelty=_novelty_payload(novelty),
             fragment=fragment_info,
         )
 
-    if _is_probable_playback_echo(ctx, metrics):
+    if novelty.answer_relevance and echo_match and _is_probable_playback_echo(echo_match, ctx):
+        if not _short_valid_pending_answer(ctx.user_text):
+            novelty = SemanticNoveltySignals(
+                **{**novelty.__dict__, "answer_relevance": False}
+            )
+
+    if novelty.answer_relevance or novelty.has_repair:
+        return TurnAdmissionDecision(
+            verdict=TurnAdmissionVerdict.ACCEPT,
+            confidence=0.98,
+            reason="semantic_answer_relevance",
+            echo_match=echo_match,
+            text_similarity=metrics,
+            acoustic_score=ctx.acoustic_echo_score,
+            semantic_novelty=_novelty_payload(novelty),
+            fragment=fragment_info,
+        )
+
+    if echo_match is not None and _is_probable_playback_echo(echo_match, ctx):
         return TurnAdmissionDecision(
             verdict=TurnAdmissionVerdict.DROP_ECHO,
             confidence=0.92,
             reason="exact_echo_with_acoustic",
+            echo_match=echo_match,
             text_similarity=metrics,
             acoustic_score=ctx.acoustic_echo_score,
             semantic_novelty=_novelty_payload(novelty),
             fragment=fragment_info,
         )
 
-    if novelty.semantic_novelty or novelty.answer_relevance:
+    if novelty.semantic_novelty:
         return TurnAdmissionDecision(
             verdict=TurnAdmissionVerdict.ACCEPT,
             confidence=0.95,
             reason="semantic_novelty",
+            echo_match=echo_match,
             text_similarity=metrics,
             acoustic_score=ctx.acoustic_echo_score,
             semantic_novelty=_novelty_payload(novelty),
@@ -358,6 +357,7 @@ def evaluate_post_stt_turn(ctx: PostSTTContext) -> TurnAdmissionDecision:
             verdict=TurnAdmissionVerdict.ACCEPT,
             confidence=0.9,
             reason="meaningful_speech",
+            echo_match=echo_match,
             text_similarity=metrics,
             acoustic_score=ctx.acoustic_echo_score,
             semantic_novelty=_novelty_payload(novelty),
@@ -369,6 +369,7 @@ def evaluate_post_stt_turn(ctx: PostSTTContext) -> TurnAdmissionDecision:
             verdict=TurnAdmissionVerdict.ACCEPT,
             confidence=0.8,
             reason="repair_phrase",
+            echo_match=echo_match,
             text_similarity=metrics,
             acoustic_score=ctx.acoustic_echo_score,
             semantic_novelty=_novelty_payload(novelty),
@@ -379,6 +380,7 @@ def evaluate_post_stt_turn(ctx: PostSTTContext) -> TurnAdmissionDecision:
         verdict=TurnAdmissionVerdict.ACCEPT,
         confidence=0.75,
         reason="default_accept",
+        echo_match=echo_match,
         text_similarity=metrics,
         acoustic_score=ctx.acoustic_echo_score,
         semantic_novelty=_novelty_payload(novelty),
@@ -391,6 +393,7 @@ def _novelty_payload(novelty: SemanticNoveltySignals) -> dict[str, object]:
         "has_control": novelty.has_control,
         "has_question": novelty.has_question,
         "has_correction": novelty.has_correction,
+        "has_repair": novelty.has_repair,
         "issue_count": novelty.issue_count,
         "body_site_count": novelty.body_site_count,
         "duration": novelty.duration,

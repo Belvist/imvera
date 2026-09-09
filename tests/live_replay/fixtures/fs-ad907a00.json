@@ -1,0 +1,31 @@
+{
+  "call_id": "fs-ad907a00",
+  "elder_display_name": "Даниил",
+  "opening": false,
+  "bootstrap": {
+    "episode": {
+      "episode_id": "ep-ad907a00",
+      "primary_label": "голова болит",
+      "kind": "symptom",
+      "body_site": "голова",
+      "known_attributes": {}
+    },
+    "pending_episode_attribute": "duration"
+  },
+  "turns": [
+    {
+      "bot_text": "Как давно болит голова?",
+      "stt_final": "Уже четыре часа.",
+      "pending_episode_attribute": "duration",
+      "acoustic_verdict": "ECHO",
+      "acoustic_score": 0.8,
+      "expected_admission": "ACCEPT"
+    },
+    {
+      "bot_text": "Боль сильная или терпимая?",
+      "stt_final": "Терпимая.",
+      "pending_episode_attribute": "severity",
+      "expected_admission": "ACCEPT"
+    }
+  ]
+}

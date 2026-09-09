@@ -1,0 +1,29 @@
+{
+  "call_id": "fs-77afbbf1",
+  "elder_display_name": "Даниил",
+  "turns": [
+    {
+      "bot_text": "Как вы себя чувствуете?",
+      "stt_final": "Привет, чувствую себя не очень. Голова болит, чё-то плохо чувствую себя.",
+      "answer_slot": "wellness",
+      "expected_admission": "ACCEPT",
+      "expected_intent_prefix": "episode_"
+    },
+    {
+      "bot_text": "Как давно это продолжается?",
+      "stt_final": "Достаточно давно.",
+      "pending_episode_attribute": "duration",
+      "expected_admission": "ACCEPT",
+      "expected_intent_prefix": "episode_",
+      "expected_no_intents": ["episode_headache_onset"]
+    },
+    {
+      "bot_text": "Как давно болит голова?",
+      "stt_final": "Голова болит уже давно.",
+      "pending_episode_attribute": "onset",
+      "acoustic_verdict": "ECHO",
+      "acoustic_score": 0.75,
+      "expected_admission": "ACCEPT"
+    }
+  ]
+}

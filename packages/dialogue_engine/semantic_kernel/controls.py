@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 CANONICAL_CONTROLS = frozenset(
@@ -16,6 +17,25 @@ CANONICAL_CONTROLS = frozenset(
 )
 
 # Exact phrase → (dialogue_act, control). yes/no/repeat/unknown are NOT controls.
+_REPAIR_PREFIXES: tuple[str, ...] = (
+    "алло",
+    "повторите",
+    "повтори",
+    "ещё раз",
+    "еще раз",
+    "не понял",
+    "не поняла",
+    "не расслышал",
+    "не расслышала",
+    "что вы сказали",
+    "слышите",
+    "слышишь",
+    "ты меня",
+    "вы меня",
+    "что?",
+    "что",
+)
+
 _LEVEL0_EXACT: dict[str, tuple[str, str]] = {
     "угу": ("backchannel", "none"),
     "ага": ("backchannel", "none"),
@@ -38,7 +58,24 @@ class Level0Match:
     control: str
 
 
+def match_repair(text: str) -> Level0Match | None:
+    norm = text.strip().lower()
+    if not norm:
+        return None
+    if re.match(r"^что\??$", norm):
+        return Level0Match(dialogue_act="repair", control="none")
+    for prefix in sorted(_REPAIR_PREFIXES, key=len, reverse=True):
+        if norm == prefix or norm.startswith(prefix + " ") or norm.startswith(prefix + ","):
+            return Level0Match(dialogue_act="repair", control="none")
+    if re.search(r"(слыш\w*|повтор\w*)", norm):
+        return Level0Match(dialogue_act="repair", control="none")
+    return None
+
+
 def match_level0(text: str) -> Level0Match | None:
+    repair = match_repair(text)
+    if repair is not None:
+        return repair
     norm = text.strip().lower()
     if not norm:
         return None

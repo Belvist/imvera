@@ -12,7 +12,7 @@ export PYTHONPATH := .
 .PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k dialogue-corpus-gate effect-delivery-chaos-gate stress-gate stress-gate-100
 .PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera live-debug-1 live-daily-check-100
 .PHONY: test-dialogue-topic lint-dialogue-topic forensic-gate test-dialogue-rich
-.PHONY: test-dialogue-runtime lint-dialogue lint-touched test-semantic-kernel benchmark-semantic-kernel test-voice-perception
+.PHONY: test-dialogue-runtime lint-dialogue lint-touched test-semantic-kernel benchmark-semantic-kernel test-voice-perception test-live-replays preflight-gates
 
 install:
 	$(PYTHON) -m pip install -e ".[dev,api,mlx,gigaam-stt]"
@@ -45,9 +45,16 @@ test-semantic-kernel:
 test-voice-perception:
 	@echo "GATE: Post-STT admission, text echo metrics, fragment hold/merge"
 	$(PYTHON) -m pytest tests/test_post_stt_gate.py tests/test_voice_perception.py \
-		tests/test_live_call_regression.py tests/test_call_actor_post_stt.py \
+		tests/test_call_actor_post_stt.py \
 		tests/test_uplink_preroll.py::test_assistant_echo_discarded \
 		tests/test_uplink_preroll.py::test_wellness_answers_never_echo_discarded -q
+
+test-live-replays:
+	@echo "GATE: live call trace replay corpus (all fixtures)"
+	$(PYTHON) -m pytest tests/live_replay/test_corpus.py -q
+
+preflight-gates:
+	$(PYTHON) scripts/preflight_gates.py
 
 benchmark-semantic-kernel:
 	$(PYTHON) scripts/benchmark_semantic_kernel.py

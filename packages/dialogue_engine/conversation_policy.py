@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from packages.dialogue_engine import questions
 from packages.dialogue_engine.evidence_invariant import question_references_forbidden_site
 from packages.dialogue_engine.issue_memory import (
     activate_next_pending_episode,
@@ -71,6 +72,10 @@ def _missing_attribute(state: EngineState, ep) -> str | None:
 
 def _attribute_question(ep, attribute: str) -> tuple[str, str]:
     label = ep.primary_label.lower()
+    if attribute == "duration":
+        if "голов" in label:
+            return "Как давно это продолжается?", "episode_headache_duration"
+        return "Как давно это продолжается?", f"episode_{ep.episode_id}_duration"
     if attribute == "onset":
         if "голов" in label:
             return "Как давно болит голова?", "episode_headache_onset"
@@ -165,6 +170,19 @@ def decide_conversation_policy(
     state: EngineState,
     turn: RichUserTurn,
 ) -> PolicyDecision | None:
+    if turn.dialogue_act == "repair":
+        from packages.dialogue_engine.question_context import repair_question_text
+
+        slot = state.answer_context_slot() or "wellness"
+        repair_text = repair_question_text(state, slot)
+        return PolicyDecision(
+            obligation=ConversationObligation.NEVER_SILENT,
+            text=questions.repair_response(repair_text),
+            intent="repair_repeat",
+            slot=slot,
+            marks_question=False,
+        )
+
     if turn.control not in ("none", ""):
         return PolicyDecision(
             obligation=ConversationObligation.CONTROL,

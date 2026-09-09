@@ -160,7 +160,8 @@ def test_resume_generic_throat_episode_after_sleep_topic() -> None:
         ]
     )
     assert any("горл" in ep.primary_label.lower() for ep in result.state.issue_episodes.values())
-    assert result.state.pending_episode_ids
+    throat_id = result.state.active_episode_id
+    assert throat_id is not None
 
     result = runner.run(["Усталость есть."])
     intents = [e.intent for e in result.speak_effects]
@@ -168,6 +169,6 @@ def test_resume_generic_throat_episode_after_sleep_topic() -> None:
     assert result.state.slots["sleep"] == SlotStatus.FILLED
     assert "check_mood" not in intents
     assert "настроен" not in texts
-    assert any(
-        i.startswith("episode_") and "onset" in i for i in intents
-    ) or "горл" in texts
+    # dimension answer must not steal focus — throat episode stays active
+    assert result.state.active_episode_id == throat_id
+    assert any(i.startswith("episode_") and "onset" in i for i in intents) or "горл" in texts

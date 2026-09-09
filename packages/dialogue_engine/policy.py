@@ -16,6 +16,7 @@ def apply_slot_answer(
     value: str,
     *,
     turn_id: str = "",
+    source_text: str | None = None,
     polarity: str | None = None,
     confidence: float = 0.9,
     correction: bool = False,
@@ -32,11 +33,12 @@ def apply_slot_answer(
         )
     state.slots[slot] = SlotStatus.FILLED
     state.slot_values[slot] = value
+    grounded = source_text or value
     state.slot_records[slot] = SlotValue(
         value=value,
         confidence=confidence,
         source_turn_id=turn_id,
-        source_text=value,
+        source_text=grounded,
         polarity=polarity,
         confirmed=False,
     )
@@ -62,6 +64,7 @@ def fill_from_semantic(
                 slot,
                 cand.value,
                 turn_id=turn_id,
+                source_text=semantic.source_quote,
                 polarity=cand.polarity,
                 confidence=cand.confidence,
                 correction=semantic.correction,
@@ -76,6 +79,7 @@ def fill_from_semantic(
         slot,
         semantic.value or semantic.source_quote,
         turn_id=turn_id,
+        source_text=semantic.source_quote,
         polarity=semantic.polarity,
         confidence=semantic.confidence,
         correction=semantic.correction,

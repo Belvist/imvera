@@ -147,13 +147,15 @@ CORPUS: tuple[CorpusCase, ...] = (
         "abdominal-explicit",
         "topic_switch",
         ("Болит живот",),
-        require_any_intent_prefix=("topic_abdominal_pain",),
+        # old transport: topic_abdominal_pain_* → canonical: IssueEpisode + onset probe
+        require_any_intent_prefix=("episode_",),
     ),
     CorpusCase(
         "sleep-topic",
         "topic_switch",
         ("Плохо спал",),
-        require_any_intent_prefix=("topic_sleep_",),
+        # old transport: topic_sleep_* → canonical: sleep slot + sleep_problem episode
+        require_any_intent_prefix=("check_mood", "episode_"),
     ),
     CorpusCase("repair-hearing", "user_question", ("Повторите, пожалуйста",), ()),
     CorpusCase(

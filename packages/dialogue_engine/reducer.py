@@ -343,21 +343,22 @@ def _apply_goal_facts(state: EngineState, turn: RichUserTurn) -> list[str]:
     for fact in turn.goal_facts:
         if state.slots.get(fact.field) != SlotStatus.OPEN:
             continue
+        quote = fact.evidence.quote if fact.evidence else turn.raw_text
+        polarity = None
+        if fact.field in ("wellness", "mood"):
+            from packages.dialogue_engine.fast_interpreter import _detect_polarity
+
+            polarity = _detect_polarity(quote)
         apply_slot_answer(
             state,
             fact.field,
             fact.value,
             turn_id=turn.utterance_id,
-            polarity="negative" if fact.value == "negative" else "positive",
+            source_text=quote,
+            polarity=polarity,
             confidence=0.9,
             correction=turn.correction,
         )
-        if fact.evidence and fact.evidence.quote:
-            rec = state.slot_records.get(fact.field)
-            if rec is not None:
-                state.slot_records[fact.field] = rec.model_copy(
-                    update={"source_text": fact.evidence.quote}
-                )
         filled.append(fact.field)
     return filled
 
@@ -384,6 +385,15 @@ def _apply_rich_turn(
     control_outcome = _apply_rich_control(state, turn)
     if control_outcome is not None:
         return control_outcome
+
+    if turn.dialogue_act == "repair" or _is_repair_text(user_text):
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        return _speak_repair(state, answer_slot or "wellness")
+
+    off_slot = _apply_off_context_slot_answer(state, turn, answer_slot=answer_slot)
+    if off_slot is not None:
+        return off_slot
 
     if turn.dialogue_act == "backchannel":
         state.processing_turn_id = None
@@ -471,6 +481,9 @@ def _apply_rich_turn(
         state.bump_revision()
         return _advance_probe_after_answer(state, user_text)
 
+    from packages.dialogue_engine.issue_memory import filter_rich_turn_mentions
+
+    turn = filter_rich_turn_mentions(state, turn)
     atomic_semantic_apply(state, turn)
 
     if turn.user_question and not turn.answers_pending_question:
@@ -524,6 +537,54 @@ def _apply_rich_turn(
                 marks_question=decision.marks_question,
             )
 
+    if turn.issue_mentions and answer_slot in ("wellness", "mood", "sleep", "plans"):
+        if answer_slot == "wellness" and not state.wellness_concern:
+            state.wellness_concern = user_text
+            rec = state.slot_records.get("wellness")
+            if rec is None or rec.value in ("", "negative", "positive", "neutral"):
+                from packages.dialogue_engine.fast_interpreter import _detect_polarity
+
+                apply_slot_answer(
+                    state,
+                    "wellness",
+                    user_text,
+                    turn_id=turn.utterance_id,
+                    source_text=user_text,
+                    polarity=_detect_polarity(user_text),
+                )
+        slot_filled = _apply_goal_facts(state, turn)
+        decision = decide_conversation_policy(state, turn)
+        if decision is not None and decision.text:
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.bump_revision()
+            spoken = _emit_speak(
+                state,
+                text=decision.text,
+                intent=decision.intent or "rich_policy",
+                slot=decision.slot or answer_slot,
+                marks_question=decision.marks_question,
+            )
+            if spoken[1]:
+                return spoken
+        if slot_filled:
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.waiting_on_slot = None
+            state.bump_revision()
+            return _advance_after_fills(state, slot_filled)
+
+    if not turn.goal_facts and not answer_slot:
+        from packages.dialogue_engine.issue_mention_extract import extract_goal_facts
+
+        for slot in ("wellness", "mood", "sleep", "plans"):
+            if state.slots.get(slot) != SlotStatus.OPEN:
+                continue
+            facts = extract_goal_facts(user_text, answer_slot=slot)
+            if facts and facts[0].field == slot:
+                turn = turn.model_copy(update={"goal_facts": facts})
+                break
+
     newly_filled = _apply_goal_facts(state, turn)
     if newly_filled:
         state.processing_turn_id = None
@@ -564,6 +625,10 @@ def _apply_rich_turn(
     state.processing_turn_id = None
     state.processing_effect_id = None
     state.bump_revision()
+    episode_outcome = _advance_after_episode_answer(state, turn, answer_slot)
+    if episode_outcome is not None:
+        return episode_outcome
+
     if state.active_episode_id or state.pending_episode_ids:
         resumed = decide_conversation_policy(state, turn)
         if resumed and resumed.text:
@@ -574,6 +639,10 @@ def _apply_rich_turn(
                 slot=resumed.slot or "wellness",
                 marks_question=resumed.marks_question,
             )
+    if state.summary_spoken and state.fsm_state in (FsmState.SUMMARY, FsmState.GOODBYE):
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        return state, []
     if _is_meaningful_turn(user_text) and answer_slot:
         return _speak_never_silent(state, answer_slot, user_text)
     return state, []
@@ -898,6 +967,28 @@ def _advance_after_fills(
     )
 
 
+def _resolve_sleep_problem_episodes_after_topic(state: EngineState) -> None:
+    """Sleep topic flow satisfies sleep_problem episodes — do not re-ask onset."""
+    from packages.dialogue_engine.topic_tracker import TopicFamily
+
+    if TopicFamily.SLEEP not in state.topic_evidence:
+        return
+    for ep in state.issue_episodes.values():
+        if ep.kind == "sleep_problem":
+            ep.status = "resolved"
+    state.pending_episode_ids = [
+        eid
+        for eid in state.pending_episode_ids
+        if state.issue_episodes.get(eid, None) is None
+        or state.issue_episodes[eid].kind != "sleep_problem"
+    ]
+    if state.active_episode_id:
+        active = state.issue_episodes.get(state.active_episode_id)
+        if active and active.kind == "sleep_problem":
+            state.active_episode_id = None
+            state.pending_episode_attribute = None
+
+
 def _topics_need_attention(state: EngineState) -> bool:
     if state.active_topic and not _topic_complete(state, state.active_topic):
         return True
@@ -917,6 +1008,7 @@ def _advance_after_topic(
         return _emit_topic_prompt(state, prompt, newly_filled=newly_filled or [])
     state.active_topic = None
     state.topic_asked_dimension = None
+    _resolve_sleep_problem_episodes_after_topic(state)
     if not _topics_need_attention(state):
         episode_resume = resume_episode_obligation(state)
         if episode_resume is not None and episode_resume.text:
@@ -990,6 +1082,10 @@ def _branch_after_wellness(state: EngineState) -> tuple[EngineState, list[Effect
     rec = state.slot_records.get("wellness")
     text = (rec.source_text if rec else "") or state.slot_values.get("wellness", "")
     polarity = rec.polarity if rec else None
+    if polarity is None and text:
+        from packages.dialogue_engine.fast_interpreter import _detect_polarity
+
+        polarity = _detect_polarity(text)
     branch = classify_wellness_path(wellness_text=text, polarity=polarity)
     if branch.path == CheckPath.STANDARD:
         return None
@@ -1122,20 +1218,107 @@ def _speak_slot_question(
     )
 
 
+def _apply_off_context_slot_answer(
+    state: EngineState,
+    turn,
+    *,
+    answer_slot: str | None = None,
+) -> tuple[EngineState, list[Effect]] | None:
+    """Accept explicit background-slot answers even when another question is active."""
+    if not turn.raw_text.strip():
+        return None
+    slot_ctx = answer_slot or state.answer_context_slot()
+    if not slot_ctx or not slot_ctx.startswith("episode_"):
+        return None
+    from packages.dialogue_engine.issue_mention_extract import extract_goal_facts
+
+    for slot in ("plans", "mood", "sleep"):
+        if state.slots.get(slot) != SlotStatus.OPEN:
+            continue
+        facts = extract_goal_facts(turn.raw_text, answer_slot=slot)
+        if not facts or facts[0].field != slot:
+            continue
+        fact = facts[0]
+        quote = fact.evidence.quote if fact.evidence else turn.raw_text
+        apply_slot_answer(
+            state,
+            slot,
+            fact.value if fact.value not in ("positive", "negative", "neutral") else quote,
+            turn_id=turn.utterance_id,
+            source_text=quote,
+        )
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.pending_episode_attribute = None
+        state.bump_revision()
+        return _advance_after_fills(state, [slot])
+    return None
+
+
+def _is_repair_text(text: str) -> bool:
+    from packages.dialogue_engine.semantic_kernel.controls import match_repair
+
+    return match_repair(text) is not None
+
+
+def _advance_after_episode_answer(
+    state: EngineState,
+    turn,
+    answer_slot: str | None,
+) -> tuple[EngineState, list[Effect]] | None:
+    from packages.dialogue_engine.issue_memory import get_active_episode
+    from packages.dialogue_engine.question_context import attribute_need_satisfied
+
+    if not turn.answers_pending_question:
+        return None
+    if not (
+        (answer_slot and answer_slot.startswith("episode_"))
+        or state.pending_episode_attribute
+    ):
+        return None
+    pending = state.pending_episode_attribute
+    if pending:
+        ep = get_active_episode(state)
+        if ep is not None and attribute_need_satisfied(ep, pending):
+            state.pending_episode_attribute = None
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.waiting_on_slot = None
+    state.bump_revision()
+    resumed = resume_episode_obligation(state)
+    if resumed and resumed.text:
+        return _emit_speak(
+            state,
+            text=resumed.text,
+            intent=resumed.intent or "episode_resume",
+            slot=resumed.slot,
+            marks_question=resumed.marks_question,
+        )
+    if state.pending_episode_attribute and state.active_episode_id:
+        return state, []
+    return _advance_after_fills(state, [])
+
+
 def _speak_repair(
     state: EngineState,
     slot: str,
 ) -> tuple[EngineState, list[Effect]]:
+    from packages.dialogue_engine.question_context import question_context_from_state
+
     delivered = state.delivered_question
-    question_text = delivered.text if delivered else questions.slot_question(slot)
+    ctx = question_context_from_state(state)
+    from packages.dialogue_engine.question_context import repair_question_text
+
+    question_text = delivered.text if delivered else repair_question_text(state, slot)
     text = questions.repair_response(question_text)
     state.bump_revision()
     gen_id = state.next_generation_id()
     gen = state.active_playout_generation + 1
     state.active_playout_generation = gen
+    repair_slot = ctx.slot if ctx and ctx.slot else slot
     q = Question(
         question_id=delivered.question_id if delivered else gen_id,
-        slot=slot,
+        slot=repair_slot,
         text=text,
         phase=QuestionPhase.PLANNED,
         intent="repair_repeat",
@@ -1150,7 +1333,7 @@ def _speak_repair(
             text=text,
             intent="repair_repeat",
             question_id=delivered.question_id if delivered else gen_id,
-            slot=slot,
+            slot=repair_slot,
             marks_question=False,
         )
     ]

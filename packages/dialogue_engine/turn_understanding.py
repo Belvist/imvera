@@ -140,12 +140,13 @@ def build_rich_turn_from_text(
         if confident and sem.slots:
             facts: list[FactCandidate] = []
             raw = text.strip()
+            multi_slot = len(sem.slots) >= 2
             for slot_name, cand in sem.slots.items():
                 if slot_name not in ("wellness", "mood", "sleep", "plans"):
                     continue
+                if not multi_slot and answer_slot and slot_name != answer_slot:
+                    continue
                 value = cand.value or raw
-                if slot_name in ("wellness", "mood") and cand.polarity:
-                    value = cand.polarity
                 facts.append(
                     FactCandidate(
                         field=slot_name,
@@ -170,8 +171,6 @@ def build_rich_turn_from_text(
     ):
         return turn
     value = sem.value or text.strip()
-    if sem.target_slot in ("wellness", "mood") and sem.polarity:
-        value = sem.polarity
     fact = FactCandidate(
         field=sem.target_slot,
         value=value,

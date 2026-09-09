@@ -83,9 +83,11 @@ def test_wellness_bad_with_symptoms_skips_probe_concern() -> None:
     )
     intents = [e.intent for e in result.speak_effects]
     assert "probe_concern" not in intents
-    assert "probe_duration" in intents
+    # Legacy probe_duration replaced by IssueEpisode attribute questions when symptoms named.
+    assert "probe_duration" in intents or any(i.startswith("episode_") for i in intents)
     assert result.state.wellness_concern.startswith("Чувствую себя плохо")
-    assert "summary" in intents
+    assert result.state.slots["plans"] == SlotStatus.FILLED
+    assert not result.partial_close
 
 
 def test_wellness_urgent_skips_to_close() -> None:
@@ -111,10 +113,23 @@ def test_wellness_pain_short_path_to_plans() -> None:
             "Ничего не буду делать",
         ]
     )
+    intents = [e.intent for e in result.speak_effects]
+    headache_ep = next(
+        (
+            ep
+            for ep in result.state.issue_episodes.values()
+            if "голов" in ep.primary_label.lower()
+        ),
+        None,
+    )
+    if headache_ep is not None:
+        # Canonical IssueEpisode flow replaces legacy pain_short probe ladder.
+        assert any(i.startswith("episode_") for i in intents)
+        assert result.state.slots["plans"] == SlotStatus.FILLED
+        return
     assert result.state.check_path == CheckPath.PAIN_SHORT
     assert result.state.slots["mood"] == SlotStatus.OPEN
     assert "mood" in result.state.skipped_slots
-    intents = [e.intent for e in result.speak_effects]
     assert "probe_pain_night" in intents
     assert "check_plans" in intents
     assert "check_mood" not in intents

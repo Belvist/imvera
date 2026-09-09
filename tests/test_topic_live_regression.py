@@ -1,4 +1,4 @@
-"""Live-call regression fs-592f4ea0 — topic correctness (state + intents)."""
+"""Live-call regression fs-592f4ea0 — IssueEpisode + background ladder (canonical)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,6 @@ import pytest
 from packages.contracts.enums import SlotStatus
 from packages.dialogue_engine.events import CallStarted
 from packages.dialogue_engine.scenario_runner import ScenarioRunner
-from packages.dialogue_engine.state import TopicResolution
-from packages.dialogue_engine.topic_tracker import TopicFamily, dimensions_satisfied
 
 pytestmark = pytest.mark.dialogue_engine
 
@@ -18,33 +16,34 @@ def _runner() -> ScenarioRunner:
 
 
 def test_fs_592f4ea0_sleep_then_mixed_turn_then_improving_abdominal() -> None:
+    """fs-592f4ea0: poor sleep + abdominal mention → IssueEpisode focus, then ladder."""
     runner = _runner()
     result = runner.run([CallStarted(), "Плохо спал."])
     intents = [e.intent for e in result.speak_effects]
     assert "probe_concern" not in intents
-    assert "topic_sleep_pattern" in intents
+    # old transport: topic_sleep_pattern → canonical: sleep slot fill + mood ladder
+    assert result.state.slots["sleep"] == SlotStatus.FILLED
 
     result = runner.run(["Проснулся в 4, не мог заснуть, живот болел."])
     state = result.state
-    assert state.active_topic == TopicFamily.SLEEP
-    assert "quality" in state.topic_dimensions.get(TopicFamily.SLEEP, [])
-    assert "pattern" in state.topic_dimensions.get(TopicFamily.SLEEP, [])
-    assert TopicFamily.ABDOMINAL_PAIN in state.topic_evidence
-    assert TopicFamily.ABDOMINAL_PAIN in state.pending_topics
+    abdominal = next(
+        (ep for ep in state.issue_episodes.values() if "живот" in ep.primary_label.lower()),
+        None,
+    )
+    assert abdominal is not None
+    assert state.active_episode_id == abdominal.episode_id
+    assert any(i.startswith("episode_") for i in [e.intent for e in result.speak_effects])
 
     result = runner.run(["Усталость есть."])
     state = result.state
     assert state.slots["sleep"] == SlotStatus.FILLED
-    assert state.active_topic == TopicFamily.ABDOMINAL_PAIN
-    assert TopicFamily.ABDOMINAL_PAIN not in state.pending_topics
+    assert state.active_episode_id == abdominal.episode_id
 
     result = runner.run(["Сейчас живот почти не болит."])
     state = result.state
-    intents = [e.intent for e in result.speak_effects]
-    assert state.topic_resolution.get(TopicFamily.ABDOMINAL_PAIN) == TopicResolution.IMPROVING
-    assert dimensions_satisfied(state, TopicFamily.ABDOMINAL_PAIN, "current")
-    assert dimensions_satisfied(state, TopicFamily.ABDOMINAL_PAIN, "onset")
-    assert "topic_abdominal_pain_onset" not in intents
+    abdominal = state.issue_episodes[abdominal.episode_id]
+    assert abdominal.known_attributes.get("current") is not None
+    assert state.slots["mood"] == SlotStatus.OPEN
 
     result = runner.run(["Хорошее настроение.", "Планов нет."])
     intents = [e.intent for e in result.speak_effects]

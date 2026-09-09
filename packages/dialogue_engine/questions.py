@@ -144,11 +144,17 @@ def slot_question(
         return plans_question(state)
     if clarification:
         return _SLOT_CLARIFICATIONS.get(slot, "Повторите, пожалуйста, коротко.")
-    return _SLOT_QUESTIONS[slot]
+    if slot.startswith("probe_"):
+        return probe_question(slot.removeprefix("probe_"))
+    if slot.startswith("episode_") or slot.startswith("topic_"):
+        return "Расскажите, пожалуйста, чуть подробнее."
+    return _SLOT_QUESTIONS.get(slot, "Повторите, пожалуйста, коротко.")
 
 
 def repair_response(delivered_text: str) -> str:
     return f"{_REPAIR_ACK} {_repeat_question(delivered_text)}"
+
+
 
 
 def _repeat_question(text: str) -> str:

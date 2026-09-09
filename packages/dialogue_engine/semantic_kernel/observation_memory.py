@@ -223,10 +223,12 @@ def build_reference_observations(
 
     if pending and not any(r.type == RelationType.REFERS_TO for r in result.relations):
         raw = result.raw_text.strip()
-        if pending in ("onset", "duration") and (time_spans or raw):
-            attr = pending
-            value = raw or (time_spans[0].text if time_spans else "")
+        if pending in ("onset", "duration"):
+            from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
+
+            value = time_spans[0].text if time_spans else extract_grounded_onset_value(raw)
             if value:
+                attr = pending
                 observations.append(
                     Observation(
                         observation_id=_oid(),

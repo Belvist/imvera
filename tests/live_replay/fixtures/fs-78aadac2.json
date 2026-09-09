@@ -1,0 +1,19 @@
+{
+  "call_id": "fs-78aadac2",
+  "elder_display_name": "Даниил",
+  "turns": [
+    {
+      "bot_text": "Как вы себя чувствуете?",
+      "stt_final": "Четыреста",
+      "answer_slot": "wellness",
+      "expected_admission": "ACCEPT"
+    },
+    {
+      "bot_text": "Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.",
+      "stt_final": "Смотри.",
+      "answer_slot": "wellness",
+      "expected_admission": "ACCEPT",
+      "expected_no_intents": ["partial_unresolved_close"]
+    }
+  ]
+}

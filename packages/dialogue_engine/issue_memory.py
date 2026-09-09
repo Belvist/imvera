@@ -189,6 +189,67 @@ def _group_episode_mentions(
     return groups
 
 
+def _background_slot_issue_override(turn: RichUserTurn, answer_slot: str) -> bool:
+    """Keep issue mentions that should redirect focus (e.g. headache at sleep slot)."""
+    if not turn.issue_mentions:
+        return False
+    for mention in turn.issue_mentions:
+        label = (mention.label or "").lower()
+        if mention.kind == "symptom" and (
+            "голов" in label
+            or mention.body_site in ("голова", "живот", "горло")
+        ):
+            return True
+        if answer_slot == "sleep" and mention.kind == "sleep_problem":
+            return False
+    return False
+
+
+_FATIGUE_DIMENSION = re.compile(r"усталост\w*\s+есть", re.I)
+
+
+def _mention_is_unrelated_dimension_answer(
+    state: EngineState,
+    mention: IssueMention,
+    raw_text: str,
+) -> bool:
+    """Sleep/fatigue dimension phrases are not new episodes during unrelated episode probe."""
+    if not state.pending_episode_attribute or not state.active_episode_id:
+        return False
+    active = state.issue_episodes.get(state.active_episode_id)
+    if active is None:
+        return False
+    n = raw_text.strip()
+    label = (mention.label or "").lower()
+    if _FATIGUE_DIMENSION.fullmatch(n.rstrip(".!?")):
+        return True
+    if mention.kind == "sleep_problem" and active.kind != "sleep_problem":
+        return True
+    if active.body_site and mention.body_site != active.body_site:
+        if any(token in label for token in ("устал", "сон", "спал", "бодр")):
+            return True
+    return False
+
+
+def _mention_is_topic_dimension_answer(
+    state: EngineState,
+    mention: IssueMention,
+) -> bool:
+    """Fatigue/sleep answers during topic Q&A are not parallel IssueEpisodes."""
+    if not state.active_topic or not is_topic_slot(state.answer_context_slot() or ""):
+        return False
+    label = (mention.label or "").lower()
+    if state.active_topic == TopicFamily.SLEEP:
+        if mention.kind == "sleep_problem":
+            return True
+        if any(token in label for token in ("устал", "сон", "спал", "бодр")):
+            return True
+    if state.active_topic == TopicFamily.ABDOMINAL_PAIN:
+        if mention.body_site == "живот" or "живот" in label:
+            return True
+    return False
+
+
 def _episode_handled_by_topic_flow(state: EngineState, ep: IssueEpisode) -> bool:
     """Topic-tracked families stay on Phase 1 topic flow — not pending episodes."""
     label = ep.primary_label.lower()
@@ -201,8 +262,30 @@ def _episode_handled_by_topic_flow(state: EngineState, ep: IssueEpisode) -> bool
     return False
 
 
+def filter_rich_turn_mentions(state: EngineState, turn: RichUserTurn) -> RichUserTurn:
+    """Drop dimension-only mentions that must not become parallel episodes."""
+    if not turn.issue_mentions:
+        return turn
+    if state.pending_episode_attribute and state.active_episode_id:
+        filtered = [
+            m
+            for m in turn.issue_mentions
+            if not _mention_is_unrelated_dimension_answer(state, m, turn.raw_text)
+        ]
+        if len(filtered) != len(turn.issue_mentions):
+            return turn.model_copy(update={"issue_mentions": tuple(filtered)})
+    return turn
+
+
 def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
     result = IngestResult()
+    answer_slot = state.answer_context_slot()
+    if (
+        answer_slot in ("mood", "sleep", "plans")
+        and turn.answers_pending_question
+        and not _background_slot_issue_override(turn, answer_slot)
+    ):
+        turn = turn.model_copy(update={"issue_mentions": ()})
     answered_episode_id = (
         state.active_episode_id
         if turn.answers_pending_question and state.pending_episode_attribute
@@ -222,6 +305,42 @@ def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
                 answered_attribute,
             )
         return result
+
+    answer_slot = state.answer_context_slot()
+    if is_topic_slot(answer_slot) and state.active_topic:
+        if answered_episode_id and answered_attribute:
+            _fill_pending_attribute_for_episode(
+                state,
+                turn,
+                answered_episode_id,
+                answered_attribute,
+            )
+        elif turn.answers_pending_question:
+            _fill_pending_attribute_from_answer(state, turn)
+        if turn.issue_mentions:
+            filtered: list[IssueMention] = []
+            for mention in turn.issue_mentions:
+                if _mention_is_topic_dimension_answer(state, mention):
+                    continue
+                probe = _episode_from_mention(mention, turn.utterance_id)
+                if _episode_handled_by_topic_flow(state, probe):
+                    continue
+                filtered.append(mention)
+            if filtered:
+                turn = turn.model_copy(update={"issue_mentions": tuple(filtered)})
+            else:
+                return result
+        else:
+            return result
+
+    if turn.issue_mentions and state.pending_episode_attribute and state.active_episode_id:
+        filtered_dim = [
+            m
+            for m in turn.issue_mentions
+            if not _mention_is_unrelated_dimension_answer(state, m, turn.raw_text)
+        ]
+        if len(filtered_dim) != len(turn.issue_mentions):
+            turn = turn.model_copy(update={"issue_mentions": tuple(filtered_dim)})
 
     if not turn.issue_mentions:
         if answered_episode_id and answered_attribute:
@@ -377,17 +496,9 @@ def activate_next_pending_episode(state: EngineState) -> IssueEpisode | None:
 
 
 def episode_complete(ep: IssueEpisode) -> bool:
-    if ep.status == "resolved":
-        return True
-    if ep.kind == "symptom":
-        if "onset" not in ep.known_attributes:
-            return False
-        if _needs_severity(ep) and "severity" not in ep.known_attributes:
-            return False
-        if ep.body_site == "живот" and "current" not in ep.known_attributes:
-            return False
-        return True
-    return "onset" in ep.known_attributes or ep.kind == "sleep_problem"
+    from packages.dialogue_engine.question_context import episode_obligations_satisfied
+
+    return episode_obligations_satisfied(ep)
 
 
 def _needs_severity(ep: IssueEpisode) -> bool:

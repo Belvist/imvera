@@ -141,6 +141,14 @@ def main() -> int:
         return 1
 
     expected_sha = _git_image_tag()
+    preflight_marker = ROOT / ".run" / "preflight" / f"{expected_sha}.ok"
+    if not preflight_marker.is_file():
+        print(
+            f"BLOCKED: no preflight marker for {expected_sha}. "
+            "Run: make preflight-gates",
+            file=sys.stderr,
+        )
+        return 1
     try:
         bridge_health = httpx.get(BRIDGE_URL, timeout=3.0).json()
         runtime_sha = str((bridge_health.get("dialogue") or {}).get("dialogue.engine.version", ""))
