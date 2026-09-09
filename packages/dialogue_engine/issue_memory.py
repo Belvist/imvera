@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 from packages.contracts.semantic import IssueMention
 from packages.dialogue_engine.state import EngineState, IssueEpisode
-from packages.dialogue_engine.topic_tracker import is_topic_slot
+from packages.dialogue_engine.topic_tracker import TopicFamily, is_topic_slot
 from packages.dialogue_engine.turn_understanding import RichUserTurn
 
 
@@ -84,13 +84,50 @@ def _group_episode_mentions(
     return groups
 
 
+def _episode_handled_by_topic_flow(state: EngineState, ep: IssueEpisode) -> bool:
+    """Topic-tracked families stay on Phase 1 topic flow — not pending episodes."""
+    label = ep.primary_label.lower()
+    if ep.body_site == "живот" or "живот" in label:
+        return (
+            TopicFamily.ABDOMINAL_PAIN in state.pending_topics
+            or state.active_topic == TopicFamily.ABDOMINAL_PAIN
+            or TopicFamily.ABDOMINAL_PAIN in state.topic_evidence
+        )
+    return False
+
+
 def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
     result = IngestResult()
+    answered_episode_id = (
+        state.active_episode_id
+        if turn.answers_pending_question and state.pending_episode_attribute
+        else None
+    )
+    answered_attribute = (
+        state.pending_episode_attribute if answered_episode_id else None
+    )
+
     if turn.correction:
         _apply_correction(state, turn)
+        if answered_episode_id and answered_attribute:
+            _fill_pending_attribute_for_episode(
+                state,
+                turn,
+                answered_episode_id,
+                answered_attribute,
+            )
+        return result
 
     if not turn.issue_mentions:
-        _fill_pending_attribute_from_answer(state, turn)
+        if answered_episode_id and answered_attribute:
+            _fill_pending_attribute_for_episode(
+                state,
+                turn,
+                answered_episode_id,
+                answered_attribute,
+            )
+        else:
+            _fill_pending_attribute_from_answer(state, turn)
         return result
 
     groups = _group_episode_mentions(turn.issue_mentions)
@@ -116,19 +153,33 @@ def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
         )
         if defer_focus:
             for ep_id in created:
+                ep = state.issue_episodes[ep_id]
+                if _episode_handled_by_topic_flow(state, ep):
+                    continue
                 if ep_id not in state.pending_episode_ids:
                     state.pending_episode_ids.append(ep_id)
         else:
-            if state.active_episode_id and state.active_episode_id not in created:
-                if state.active_episode_id not in state.pending_episode_ids:
-                    state.pending_episode_ids.append(state.active_episode_id)
+            if (
+                answered_episode_id
+                and state.active_episode_id
+                and state.active_episode_id not in created
+                and state.active_episode_id not in state.pending_episode_ids
+            ):
+                state.pending_episode_ids.append(state.active_episode_id)
             state.active_episode_id = created[0]
             for ep_id in created[1:]:
                 if ep_id != state.active_episode_id and ep_id not in state.pending_episode_ids:
                     state.pending_episode_ids.append(ep_id)
             result.activated = state.active_episode_id
         result.episodes_touched = created
-    if turn.answers_pending_question:
+    if answered_episode_id and answered_attribute:
+        _fill_pending_attribute_for_episode(
+            state,
+            turn,
+            answered_episode_id,
+            answered_attribute,
+        )
+    elif turn.answers_pending_question:
         _fill_pending_attribute_from_answer(state, turn)
     return result
 
@@ -148,32 +199,59 @@ def _apply_correction(state: EngineState, turn: RichUserTurn) -> None:
         state.active_episode_id = ep.episode_id
 
 
-def _fill_pending_attribute_from_answer(state: EngineState, turn: RichUserTurn) -> None:
-    if not state.active_episode_id or not turn.answers_pending_question:
+def _fill_pending_attribute_for_episode(
+    state: EngineState,
+    turn: RichUserTurn,
+    episode_id: str,
+    attribute: str,
+) -> None:
+    if not turn.answers_pending_question:
         return
-    if not state.pending_episode_attribute:
-        return
-    ep = state.issue_episodes.get(state.active_episode_id)
+    ep = state.issue_episodes.get(episode_id)
     if ep is None:
         return
     raw = turn.raw_text.strip().lower()
-    pending = state.pending_episode_attribute
-    if pending == "onset" and raw:
+    if attribute == "onset" and raw:
         ep.known_attributes["onset"] = turn.raw_text.strip()
-        state.pending_episode_attribute = None
+        if (
+            state.pending_episode_attribute == attribute
+            and state.active_episode_id == episode_id
+        ):
+            state.pending_episode_attribute = None
         return
-    if pending == "severity" and raw:
+    if attribute == "severity" and raw:
         ep.known_attributes["severity"] = turn.raw_text.strip()
-        state.pending_episode_attribute = None
+        if (
+            state.pending_episode_attribute == attribute
+            and state.active_episode_id == episode_id
+        ):
+            state.pending_episode_attribute = None
         return
-    if pending == "current" and raw:
+    if attribute == "current" and raw:
         if any(x in raw for x in ("не бол", "прошл", "легче", "лучше", "нет")):
             ep.known_attributes["current"] = "resolved"
         elif any(x in raw for x in ("бол", "да", "ещё", "еще")):
             ep.known_attributes["current"] = "active"
         else:
             ep.known_attributes["current"] = turn.raw_text.strip()
-        state.pending_episode_attribute = None
+        if (
+            state.pending_episode_attribute == attribute
+            and state.active_episode_id == episode_id
+        ):
+            state.pending_episode_attribute = None
+
+
+def _fill_pending_attribute_from_answer(state: EngineState, turn: RichUserTurn) -> None:
+    if not state.active_episode_id or not turn.answers_pending_question:
+        return
+    if not state.pending_episode_attribute:
+        return
+    _fill_pending_attribute_for_episode(
+        state,
+        turn,
+        state.active_episode_id,
+        state.pending_episode_attribute,
+    )
 
 
 def get_active_episode(state: EngineState) -> IssueEpisode | None:

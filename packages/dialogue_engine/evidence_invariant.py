@@ -94,6 +94,11 @@ def question_references_forbidden_site(state: EngineState, question_text: str) -
         root = match.group(0).lower()
         if root in known_quotes:
             continue
+        if any(
+            body_site_grounded(site, root) or body_site_grounded(root, site)
+            for site in known
+        ):
+            continue
         if any(root in site or site in root for site in known):
             continue
         return True

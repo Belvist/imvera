@@ -179,6 +179,15 @@ def _next_episode_question(state: EngineState) -> PolicyDecision | None:
     return _next_episode_question(state)
 
 
+def resume_episode_obligation(state: EngineState) -> PolicyDecision | None:
+    """Resume generic IssueEpisode flow after topic slots complete."""
+    if not state.active_episode_id and state.pending_episode_ids:
+        activate_next_pending_episode(state)
+    if not state.active_episode_id and not state.pending_episode_ids:
+        return None
+    return _next_episode_question(state)
+
+
 def decide_conversation_policy(
     state: EngineState,
     turn: RichUserTurn,

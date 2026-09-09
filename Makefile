@@ -11,7 +11,7 @@ export PYTHONPATH := .
 .PHONY: voice-open test-contracts test-dialogue-e2e test-persistence-e2e test-voice test-sip
 .PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k dialogue-corpus-gate effect-delivery-chaos-gate stress-gate stress-gate-100
 .PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera live-debug-1 live-daily-check-100
-.PHONY: test-dialogue-topic lint-dialogue-topic forensic-gate
+.PHONY: test-dialogue-topic lint-dialogue-topic forensic-gate test-dialogue-rich
 
 install:
 	$(PYTHON) -m pip install -e ".[dev,api,mlx,gigaam-stt]"
@@ -24,6 +24,13 @@ test-dialogue-topic:
 	$(PYTHON) -m pytest tests/test_topic_tracker.py tests/test_topic_live_regression.py \
 		tests/test_check_path.py tests/test_dialogue_engine_regression.py \
 		tests/test_forensic_gate.py -q
+
+test-dialogue-rich:
+	@echo "GATE: Phase 2 rich turn + IssueEpisode correctness"
+	$(PYTHON) -m pytest tests/test_rich_turn_understanding.py tests/test_issue_memory.py \
+		tests/test_conversation_policy.py tests/test_dialogue_free_speech_regression.py \
+		tests/test_evidence_invariant.py tests/test_rich_controls.py \
+		tests/test_issue_episode_resume.py tests/test_topic_live_regression.py -q
 
 lint-dialogue-topic:
 	$(PYTHON) -m ruff check \

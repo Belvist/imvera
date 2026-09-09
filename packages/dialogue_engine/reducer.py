@@ -15,6 +15,7 @@ from packages.dialogue_engine.check_path import (
 from packages.dialogue_engine.conversation_policy import (
     ConversationObligation,
     decide_conversation_policy,
+    resume_episode_obligation,
 )
 from packages.dialogue_engine.effects import (
     Effect,
@@ -57,6 +58,7 @@ from packages.dialogue_engine.state import (
 )
 from packages.dialogue_engine.topic_tracker import (
     TopicPrompt,
+    _topic_complete,
     is_topic_slot,
     next_topic_prompt,
     observe_topic_answer,
@@ -66,6 +68,17 @@ from packages.dialogue_engine.topic_tracker import (
     topic_slot,
 )
 from packages.dialogue_engine.turn_understanding import RichUserTurn
+
+_CONTROL_HANGUP_INTENTS = frozenset(
+    {
+        "goodbye_final",
+        "partial_unresolved_close",
+        "urgent_close",
+        "wrong_person_final",
+        "defer_final",
+        "revoke_consent_final",
+    }
+)
 
 _STALE = "STALE_EFFECT_IGNORED"
 
@@ -243,7 +256,7 @@ def _on_playout_completed(
         return state, []
     state.active_playout = None
     state.bump_revision()
-    if ap.intent in ("goodbye_final", "partial_unresolved_close", "urgent_close"):
+    if ap.intent in _CONTROL_HANGUP_INTENTS:
         return state, [
             EndCallEffect(
                 effect_id=_new_effect_id(),
@@ -360,6 +373,10 @@ def _apply_rich_turn(
             state.processing_effect_id = None
             return closing
 
+    control_outcome = _apply_rich_control(state, turn)
+    if control_outcome is not None:
+        return control_outcome
+
     if turn.dialogue_act == "backchannel":
         state.processing_turn_id = None
         state.processing_effect_id = None
@@ -379,31 +396,11 @@ def _apply_rich_turn(
             return _speak_never_silent(state, answer_slot or "wellness", user_text)
         return state, []
 
-    control_outcome = _apply_rich_control(state, turn)
-    if control_outcome is not None:
-        return control_outcome
-
     if turn.user_question and not turn.answers_pending_question:
         decision = decide_conversation_policy(state, turn)
         if decision is not None and decision.text:
             if decision.suspend is not None:
                 state.suspended_obligation = decision.suspend
-            state.processing_turn_id = None
-            state.processing_effect_id = None
-            state.bump_revision()
-            return _emit_speak(
-                state,
-                text=decision.text,
-                intent=decision.intent or "rich_policy",
-                slot=decision.slot or answer_slot or "wellness",
-                marks_question=decision.marks_question,
-            )
-
-    ingest_rich_turn(state, turn)
-
-    if turn.correction:
-        decision = decide_conversation_policy(state, turn)
-        if decision is not None and decision.text:
             state.processing_turn_id = None
             state.processing_effect_id = None
             state.bump_revision()
@@ -422,6 +419,20 @@ def _apply_rich_turn(
         )
 
         sync_topic_hints_from_answer(state, user_text, answer_slot=answer_slot)
+        ingest_rich_turn(state, turn)
+        if turn.correction:
+            decision = decide_conversation_policy(state, turn)
+            if decision is not None and decision.text:
+                state.processing_turn_id = None
+                state.processing_effect_id = None
+                state.bump_revision()
+                return _emit_speak(
+                    state,
+                    text=decision.text,
+                    intent=decision.intent or "rich_policy",
+                    slot=decision.slot or answer_slot or "wellness",
+                    marks_question=decision.marks_question,
+                )
         newly_filled = _apply_goal_facts(state, turn)
         state.processing_turn_id = None
         state.processing_effect_id = None
@@ -429,6 +440,22 @@ def _apply_rich_turn(
         state.bump_revision()
         observe_topic_answer(state, user_text)
         return _advance_after_topic(state, user_text, newly_filled=newly_filled)
+
+    ingest_rich_turn(state, turn)
+
+    if turn.correction:
+        decision = decide_conversation_policy(state, turn)
+        if decision is not None and decision.text:
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.bump_revision()
+            return _emit_speak(
+                state,
+                text=decision.text,
+                intent=decision.intent or "rich_policy",
+                slot=decision.slot or answer_slot or "wellness",
+                marks_question=decision.marks_question,
+            )
 
     newly_filled = _apply_goal_facts(state, turn)
 
@@ -782,6 +809,12 @@ def _advance_after_fills(
     )
 
 
+def _topics_need_attention(state: EngineState) -> bool:
+    if state.active_topic and not _topic_complete(state, state.active_topic):
+        return True
+    return any(not _topic_complete(state, family) for family in state.pending_topics)
+
+
 def _advance_after_topic(
     state: EngineState,
     user_text: str,
@@ -795,6 +828,19 @@ def _advance_after_topic(
         return _emit_topic_prompt(state, prompt, newly_filled=newly_filled or [])
     state.active_topic = None
     state.topic_asked_dimension = None
+    if not _topics_need_attention(state):
+        episode_resume = resume_episode_obligation(state)
+        if episode_resume is not None and episode_resume.text:
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.bump_revision()
+            return _emit_speak(
+                state,
+                text=episode_resume.text,
+                intent=episode_resume.intent or "episode_resume",
+                slot=episode_resume.slot,
+                marks_question=episode_resume.marks_question,
+            )
     next_slot = state.next_open_slot()
     if next_slot is None:
         return _emit_summary(state)

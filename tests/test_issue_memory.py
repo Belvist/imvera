@@ -111,3 +111,66 @@ def test_open_issue_from_llm_payload() -> None:
     ep = get_active_episode(state)
     assert ep is not None
     assert "горл" in ep.primary_label.lower()
+
+
+def test_correction_does_not_duplicate_mention() -> None:
+    state = EngineState(call_id="t", elder_display_name="Тест")
+    quote = "живот болит"
+    mention = IssueMention(
+        mention_id="im-1",
+        kind="symptom",
+        label="боль в животе",
+        role="primary",
+        body_site="живот",
+        temporal_scope="now",
+        status="active",
+        evidence=Evidence(start=0, end=len(quote), quote=quote),
+    )
+    ingest_rich_turn(
+        state,
+        build_rich_turn_from_payload(
+            SemanticPayload(
+                dialogue_act="answer",
+                control="none",
+                consent_answer="not_applicable",
+                answers_pending_question=False,
+                needs_clarification=False,
+                issue_mentions=(mention,),
+            ),
+            utterance_id="u-1",
+            raw_text=quote,
+        ),
+    )
+    ep_id = state.active_episode_id
+    assert ep_id is not None
+    before = len(state.issue_episodes[ep_id].mentions)
+
+    correction_quote = "я же говорил, живот болит"
+    ingest_rich_turn(
+        state,
+        build_rich_turn_from_payload(
+            SemanticPayload(
+                dialogue_act="correction",
+                control="none",
+                consent_answer="not_applicable",
+                answers_pending_question=False,
+                needs_clarification=False,
+                issue_mentions=(
+                    mention.model_copy(
+                        update={
+                            "mention_id": "im-2",
+                            "evidence": Evidence(
+                                start=correction_quote.find("живот"),
+                                end=correction_quote.find("живот") + len("живот болит"),
+                                quote="живот болит",
+                            ),
+                        }
+                    ),
+                ),
+            ),
+            utterance_id="u-2",
+            raw_text=correction_quote,
+        ),
+    )
+    after = len(state.issue_episodes[ep_id].mentions)
+    assert after == before + 1
