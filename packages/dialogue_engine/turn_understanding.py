@@ -112,11 +112,16 @@ def build_rich_turn_from_payload(
     return payload_to_rich_turn(payload, utterance_id=utterance_id, raw_text=raw_text)
 
 
-def build_rich_turn_from_text(text: str, *, utterance_id: str) -> RichUserTurn:
+def build_rich_turn_from_text(
+    text: str,
+    *,
+    utterance_id: str,
+    engine_state: object | None = None,
+) -> RichUserTurn:
     """Semantic Kernel → RichUserTurn (canonical NLU path)."""
     from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
 
-    result = interpret(text, utterance_id=utterance_id)
+    result = interpret(text, utterance_id=utterance_id, engine_state=engine_state)
     return kernel_to_rich_turn(result)
 
 

@@ -210,6 +210,11 @@ def _probe_duration(state: EngineState, text: str) -> ProbeStep:
 
     state.wellness_duration = text
     state.probe_phase = None
+    if state.active_episode_id:
+        ep = state.issue_episodes.get(state.active_episode_id)
+        if ep is not None:
+            ep.known_attributes["duration"] = text
+            return ProbeStep(action=ProbeAction.CONTINUE_LADDER)
     if is_urgent_concern(text) or is_urgent_concern(state.wellness_concern):
         state.check_path = CheckPath.URGENT
         return ProbeStep(action=ProbeAction.URGENT_CLOSE)

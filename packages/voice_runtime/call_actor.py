@@ -1656,7 +1656,33 @@ class CallActor:
                     answer_slot=answer_slot,
                 )
                 rich_turn = kernel_to_rich_turn(kernel_result)
-                interpret_path = f"semantic_kernel_{kernel_result.route}"
+                kernel_path = f"semantic_kernel_{kernel_result.route}"
+                interpret_path = kernel_path
+                span_preview = [
+                    {
+                        "type": str(s.type),
+                        "text": s.text[:40],
+                        "norm": s.normalized[:40],
+                    }
+                    for s in kernel_result.spans[:12]
+                ]
+                relation_preview = [
+                    {
+                        "type": str(r.type),
+                        "src": r.source_span_id,
+                        "tgt": r.target_span_id,
+                    }
+                    for r in kernel_result.relations[:12]
+                ]
+                observation_preview = [
+                    {
+                        "attr": o.attribute,
+                        "body_site": o.body_site,
+                        "subject": str(o.subject),
+                        "status": o.status,
+                    }
+                    for o in kernel_result.observations[:12]
+                ]
                 await self._emit_stage(
                     "semantic.kernel",
                     utterance_id=utterance_id,
@@ -1668,9 +1694,21 @@ class CallActor:
                     relation_count=len(kernel_result.relations),
                     observation_count=len(kernel_result.observations),
                     fallback_used=kernel_result.fallback_used,
+                    spans=span_preview,
+                    relations=relation_preview,
+                    observations=observation_preview,
                 )
             use_rich_deterministic = (
                 self.session.uses_dialogue_engine() and rich_turn is not None
+            )
+            kernel_has_meaning = bool(
+                kernel_result
+                and (
+                    kernel_result.observations
+                    or kernel_result.spans
+                    or kernel_result.user_question
+                    or kernel_result.corrections
+                )
             )
             if self.session.uses_dialogue_engine():
                 ctx = InterpretContext.from_engine_state(
@@ -1678,14 +1716,14 @@ class CallActor:
                 )
                 sem, contextual_confident = contextual_interpret(text, ctx)
                 fast_confident = contextual_confident
-                if contextual_confident:
+                if contextual_confident and not kernel_has_meaning:
                     interpret_path = "fast_contextual"
                 if not fast_confident:
                     sem, rules_confident = fast_interpret_semantic(
                         text, answer_slot=answer_slot
                     )
                     fast_confident = rules_confident
-                    if rules_confident:
+                    if rules_confident and not kernel_has_meaning:
                         interpret_path = "fast_rules"
                 if fast_confident and not use_rich_deterministic:
                     interp = semantic_to_interpretation(sem)
@@ -1696,7 +1734,10 @@ class CallActor:
                         force_rich=force_rich,
                     )
                 elif use_rich_deterministic:
-                    interpret_path = "rich_deterministic"
+                    if kernel_has_meaning:
+                        interpret_path = kernel_path or "rich_deterministic"
+                    else:
+                        interpret_path = "rich_deterministic"
                 elif force_rich:
                     interpret_path = "rich_required"
             llm_request_id = f"llm-{uuid.uuid4().hex[:8]}"
@@ -1761,7 +1802,11 @@ class CallActor:
             elif use_rich_deterministic and rich_turn is not None:
                 from packages.dialogue.interpretation import interpret_user_turn
 
-                if fast_confident and not rich_turn.issue_mentions:
+                if (
+                    fast_confident
+                    and not rich_turn.issue_mentions
+                    and not kernel_has_meaning
+                ):
                     interp = semantic_to_interpretation(sem)
                 else:
                     interp = interpret_user_turn(self.session.state, text)

@@ -13,7 +13,10 @@ from packages.dialogue_engine.semantic_kernel.lexicon import (
 from packages.dialogue_engine.semantic_kernel.morphology import normalize_token
 from packages.dialogue_engine.semantic_kernel.types import SemanticSpan, SpanType
 
-_CLAUSE_SPLIT = re.compile(r"\s*(?:[,;]|\s+и\s+|\s+а\s+также\s+|\s+ещё\s+|\s+еще\s+)\s*", re.I)
+_CLAUSE_SPLIT = re.compile(
+    r"\s*(?:[,;]|\s+и\s+|\s+а\s+(?!также)|\s+а\s+также\s+|\s+ещё\s+|\s+еще\s+)\s*",
+    re.I,
+)
 _TOKEN = re.compile(r"[а-яёa-z]+(?:-[а-яёa-z]+)?", re.I)
 
 _TEMPORAL = re.compile(
@@ -37,14 +40,14 @@ _STATUS = re.compile(
 _NEGATION = re.compile(r"\b(не|ни)\b", re.I)
 _UNCERTAINTY = re.compile(r"\b(наверное|вроде|кажется|может\s+быть)\b", re.I)
 _ISSUE_PHRASE = re.compile(
-    r"([а-яё\-]+(?:\s+[а-яё\-]+){0,3})\s+"
+    r"([а-яё\-]+(?:\s+[а-яё\-]+){0,2})\s+"
     r"(бол\w*|ноет\w*|беспоко\w*|давит\w*|ломит\w*|тян\w*|перш\w*|"
     r"залож\w*|онем\w*|тошн\w*|кашл\w*|урч\w*|стрел\w*)",
     re.I,
 )
 _ISSUE_BEFORE_BODY = re.compile(
     r"(бол\w*|ноет\w*|онем\w*|перш\w*|залож\w*|тян\w*|ломит\w*|давит\w*)\s+"
-    r"([а-яё\-]+)",
+    r"(?:в|на|у)\s+([а-яё\-]+)",
     re.I,
 )
 _BODY_PREP = re.compile(
@@ -62,7 +65,12 @@ class _ParseAcc:
     spans: list[SemanticSpan] = field(default_factory=list)
 
     def add(self, stype: SpanType, text: str, start: int, end: int, conf: float = 0.9) -> str:
-        norm = " ".join(normalize_token(t) for t in _TOKEN.findall(text.lower()))
+        if stype == SpanType.BODY_SITE:
+            lemma = _body_site_from_token(text) or " ".join(
+                normalize_token(t) for t in _TOKEN.findall(text.lower())
+            )
+        else:
+            lemma = " ".join(normalize_token(t) for t in _TOKEN.findall(text.lower()))
         sid = _sid()
         self.spans.append(
             SemanticSpan(
@@ -71,7 +79,7 @@ class _ParseAcc:
                 text=text,
                 start=start,
                 end=end,
-                normalized=norm,
+                normalized=lemma,
                 confidence=conf,
             )
         )
@@ -80,10 +88,16 @@ class _ParseAcc:
 
 def _body_site_from_token(token: str) -> str | None:
     lemma = normalize_token(token)
+    if len(lemma) < 3 and lemma not in BODY_SITE_LEMMAS:
+        return None
     if lemma in BODY_SITE_LEMMAS:
         return lemma
     raw = token.lower()
+    if len(raw) < 4:
+        return None
     for site in BODY_SITE_LEMMAS:
+        if len(site) < 4:
+            continue
         if raw.startswith(site[:4]) or site.startswith(lemma[:4]) or lemma.startswith(site[:4]):
             return site
     return None
@@ -95,9 +109,33 @@ def _issue_from_token(token: str) -> bool:
         return True
     raw = token.lower()
     for verb in ISSUE_VERB_LEMMAS:
-        if raw.startswith(verb[:4]) or lemma.startswith(verb[:4]):
+        stem = verb[:3]
+        if len(stem) >= 3 and (raw.startswith(stem) or lemma.startswith(stem)):
             return True
     return False
+
+
+def _pair_clause_body_issues(
+    acc: _ParseAcc,
+    clause: str,
+    cstart: int,
+) -> None:
+    """Pair ISSUE verbs with nearest BODY_SITE lemma in the same clause."""
+    tokens = [(m.group(0), cstart + m.start(), cstart + m.end()) for m in _TOKEN.finditer(clause)]
+    issue_spans = [
+        (tok, s, e) for tok, s, e in tokens if _issue_from_token(tok)
+    ]
+    body_spans = [
+        (tok, s, e, _body_site_from_token(tok))
+        for tok, s, e in tokens
+        if _body_site_from_token(tok)
+    ]
+    for issue_t, is_, ie in issue_spans:
+        acc.add(SpanType.ISSUE, issue_t, is_, ie, 0.9)
+        if not body_spans:
+            continue
+        nearest = min(body_spans, key=lambda b: min(abs(b[1] - is_), abs(b[2] - ie)))
+        acc.add(SpanType.BODY_SITE, nearest[0], nearest[1], nearest[2], 0.88)
 
 
 def parse_spans(text: str) -> tuple[SemanticSpan, ...]:
@@ -142,31 +180,35 @@ def parse_spans(text: str) -> tuple[SemanticSpan, ...]:
             issue_text = m.group(2)
             istart = cstart + m.start(2)
             iend = cstart + m.end(2)
-            acc.add(SpanType.ISSUE, issue_text, istart, iend, 0.92)
-            body_tok = m.group(1).strip()
-            site = _body_site_from_token(body_tok.split()[-1])
+            body_tok = m.group(1).strip().split()[-1]
+            site = _body_site_from_token(body_tok)
             if site:
-                bstart = cstart + m.start(1)
-                bend = cstart + m.end(1)
+                acc.add(SpanType.ISSUE, issue_text, istart, iend, 0.92)
+                bstart = cstart + m.start(1) + m.group(1).rfind(body_tok)
+                bend = bstart + len(body_tok)
                 acc.add(SpanType.BODY_SITE, body_tok, bstart, bend, 0.9)
 
         for m in _BODY_PREP.finditer(clause):
             fragment = m.group(1)
-            for tok in _TOKEN.findall(fragment):
+            for tok in reversed(_TOKEN.findall(fragment)):
                 site = _body_site_from_token(tok)
                 if site:
-                    tstart = cstart + m.start(1) + fragment.lower().find(tok.lower())
+                    tstart = cstart + m.start(1) + fragment.lower().rfind(tok.lower())
                     tend = tstart + len(tok)
                     acc.add(SpanType.BODY_SITE, tok, tstart, tend, 0.87)
+                    break
+
+        _pair_clause_body_issues(acc, clause, cstart)
 
         tokens = list(_TOKEN.finditer(clause))
         for tm in tokens:
             tok = tm.group(0)
-            site = _body_site_from_token(tok)
-            if site:
-                acc.add(SpanType.BODY_SITE, tok, cstart + tm.start(), cstart + tm.end(), 0.82)
             if _issue_from_token(tok):
-                acc.add(SpanType.ISSUE, tok, cstart + tm.start(), cstart + tm.end(), 0.84)
+                if not any(
+                    s.type == SpanType.ISSUE and s.start == cstart + tm.start()
+                    for s in acc.spans
+                ):
+                    acc.add(SpanType.ISSUE, tok, cstart + tm.start(), cstart + tm.end(), 0.84)
 
         offset = cend
 

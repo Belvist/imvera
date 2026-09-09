@@ -14,6 +14,8 @@ from packages.dialogue_engine.issue_mention_extract import (
 from packages.dialogue_engine.semantic_kernel.ml_fallback import ml_enhance_spans
 from packages.dialogue_engine.semantic_kernel.observation_memory import (
     build_observations,
+    build_reference_observations,
+    merge_legacy_mentions,
     observations_to_issue_mentions,
 )
 from packages.dialogue_engine.semantic_kernel.reference_resolver import resolve_references
@@ -33,7 +35,6 @@ _USER_QUESTION = re.compile(
     r"(кто\s+вы|зачем\s+звон|почему\s+звон|а\s+вы\s+кто|что\s+вы\s+хотите)",
     re.I,
 )
-_CORRECTION = re.compile(r"\b(нет,?\s+не|я\s+же\s+говорил\w*|говорил\w*\s+же)\b", re.I)
 _VAGUE_ISSUE = re.compile(r"\bчто-то\s+там\b|\bопять\s+прихватил\w*\b", re.I)
 
 
@@ -102,12 +103,15 @@ def interpret(
             elapsed_ms=elapsed,
         )
 
-    spans = parse_spans(raw)
-    spans = ml_enhance_spans(raw, spans)
-    relations = list(parse_relations(spans))
-    subject, subj_rels = resolve_subject(raw, spans)
+    spans = list(parse_spans(raw))
+    spans = list(ml_enhance_spans(raw, tuple(spans)))
+    relations = list(parse_relations(tuple(spans)))
+    _subject, subj_rels = resolve_subject(raw, tuple(spans))
     relations.extend(subj_rels)
-    relations.extend(resolve_references(raw, spans, engine_state))
+    ref_spans, ref_rels = resolve_references(raw, tuple(spans), engine_state)
+    if ref_spans:
+        spans.extend(ref_spans)
+    relations.extend(ref_rels)
     span_tuple = tuple(spans)
     rel_tuple = tuple(relations)
 
@@ -146,10 +150,12 @@ def interpret(
         level=1 if confidence >= 0.5 else 3,
         route="kernel_l1" if confidence >= 0.5 else "kernel_l3_clarify",
     )
-    observations = build_observations(partial)
+    observations = list(build_observations(partial))
+    if engine_state is not None:
+        observations.extend(build_reference_observations(partial, engine_state))
     elapsed = (time.perf_counter() - started) * 1000
     return partial.model_copy(
-        update={"observations": observations, "elapsed_ms": elapsed}
+        update={"observations": tuple(observations), "elapsed_ms": elapsed}
     )
 
 
@@ -160,16 +166,12 @@ def kernel_to_rich_turn(result: SemanticKernelResult):
     from packages.dialogue_engine.issue_mention_extract import extract_issue_mentions
 
     legacy = extract_issue_mentions(result.raw_text)
-    if legacy and (not mentions or len(legacy) >= 2):
-        mentions = legacy
-    elif legacy and not mentions:
-        mentions = legacy
-    if not mentions and result.spans:
-        from packages.dialogue_engine.issue_mention_extract import extract_issue_mentions
+    mentions = merge_legacy_mentions(mentions, legacy)
 
-        mentions = extract_issue_mentions(result.raw_text)
-
-    needs_clarify = result.level >= 3 or "vague_issue" in result.ambiguity
+    ref_only = bool(result.relations) and not mentions and any(
+        r.type.value == "REFERS_TO" for r in result.relations
+    )
+    needs_clarify = (result.level >= 3 or "vague_issue" in result.ambiguity) and not ref_only
     goal_facts = extract_goal_facts(result.raw_text)
     return RichUserTurn(
         utterance_id=result.utterance_id,

@@ -49,6 +49,7 @@ from packages.dialogue_engine.policy import (
 )
 from packages.dialogue_engine.response_plan import build_response_plan, compose_speech
 from packages.dialogue_engine.semantic import SemanticAct
+from packages.dialogue_engine.semantic_kernel.observation_memory import persist_turn_observations
 from packages.dialogue_engine.state import (
     CheckPath,
     EngineState,
@@ -426,6 +427,7 @@ def _apply_rich_turn(
         )
 
         sync_topic_hints_from_answer(state, user_text, answer_slot=answer_slot)
+        persist_turn_observations(state, turn)
         ingest_rich_turn(state, turn)
         if turn.correction:
             decision = decide_conversation_policy(state, turn)
@@ -448,6 +450,7 @@ def _apply_rich_turn(
         observe_topic_answer(state, user_text)
         return _advance_after_topic(state, user_text, newly_filled=newly_filled)
 
+    persist_turn_observations(state, turn)
     ingest_rich_turn(state, turn)
 
     if turn.needs_clarification:
@@ -965,6 +968,15 @@ def _advance_probe_after_answer(
 ) -> tuple[EngineState, list[Effect]]:
     step = advance_probe_phase(state, text)
     if step.action == ProbeAction.CONTINUE_LADDER:
+        episode_resume = resume_episode_obligation(state)
+        if episode_resume is not None and episode_resume.text:
+            return _emit_speak(
+                state,
+                text=episode_resume.text,
+                intent=episode_resume.intent or "episode_resume",
+                slot=episode_resume.slot,
+                marks_question=episode_resume.marks_question,
+            )
         return _advance_after_fills(state, [])
     if step.action == ProbeAction.URGENT_CLOSE:
         return _emit_urgent_close(state)

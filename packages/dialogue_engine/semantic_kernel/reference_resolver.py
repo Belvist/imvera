@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 
 from packages.dialogue_engine.semantic_kernel.types import (
     RelationType,
@@ -19,27 +20,35 @@ _REF = re.compile(
 )
 
 
+def _sid() -> str:
+    return f"ref-{uuid.uuid4().hex[:8]}"
+
+
 def resolve_references(
     text: str,
     spans: tuple[SemanticSpan, ...],
     state: EngineState | None,
-) -> tuple[SemanticRelation, ...]:
+) -> tuple[tuple[SemanticSpan, ...], tuple[SemanticRelation, ...]]:
     if state is None or not state.active_episode_id:
-        return ()
+        return (), ()
     ep = state.issue_episodes.get(state.active_episode_id)
     if ep is None:
-        return ()
+        return (), ()
+
+    ref_spans: list[SemanticSpan] = []
     relations: list[SemanticRelation] = []
     for m in _REF.finditer(text):
+        is_status = "лучше" in m.group(0).lower() or "получше" in m.group(0).lower()
         ref_span = SemanticSpan(
-            span_id=f"ref-{m.start()}",
-            type=SpanType.TIME if "лучше" in m.group(0).lower() else SpanType.ISSUE,
+            span_id=_sid(),
+            type=SpanType.STATUS if is_status else SpanType.TIME,
             text=m.group(0),
             start=m.start(),
             end=m.end(),
             normalized=m.group(0).lower(),
             confidence=0.8,
         )
+        ref_spans.append(ref_span)
         relations.append(
             SemanticRelation(
                 type=RelationType.REFERS_TO,
@@ -48,4 +57,4 @@ def resolve_references(
                 confidence=0.78,
             )
         )
-    return tuple(relations)
+    return tuple(ref_spans), tuple(relations)

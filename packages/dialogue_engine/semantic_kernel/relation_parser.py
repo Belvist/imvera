@@ -86,8 +86,8 @@ def parse_relations(spans: tuple[SemanticSpan, ...]) -> tuple[SemanticRelation, 
                     )
                 )
         elif sp.type == SpanType.NEGATION:
-            target = _nearest_issue(sp, issues, max_distance=40)
-            if target:
+            target = _nearest_issue(sp, issues, max_distance=8)
+            if target and target.start > sp.start:
                 relations.append(
                     SemanticRelation(
                         type=RelationType.NEGATES,
