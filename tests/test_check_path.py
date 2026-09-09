@@ -34,18 +34,36 @@ def test_wellness_good_full_ladder() -> None:
         [
             CallStarted(),
             "Хорошо себя чувствую.",
-            "Хорошее.",
-            "Нормально спал.",
-            "Пойду гулять.",
+            "Нет.",
         ]
     )
     assert result.state.check_path == CheckPath.STANDARD
-    assert result.state.slots["plans"] == SlotStatus.FILLED
     intents = [e.intent for e in result.speak_effects]
+    assert "check_mood" not in intents
+    assert "important_to_share" in intents
+    assert "summary" in intents
+
+
+def test_wellness_good_mandatory_background_ladder() -> None:
+    r = _runner()
+    r.run([CallStarted()])
+    r.state.mandatory_background_goals = True
+    result = r.run(
+        [
+            "Хорошо себя чувствую.",
+            "Ничего.",
+            "Хорошее.",
+            "Нормально спал.",
+            "Пойду гулять.",
+            "Ничего.",
+        ]
+    )
+    intents = [e.intent for e in result.speak_effects]
+    assert "important_to_share" in intents
     assert "check_mood" in intents
     assert "check_sleep" in intents
     assert "check_plans" in intents
-    assert "summary" in intents
+    assert result.state.slots["plans"] == SlotStatus.FILLED
 
 
 def test_wellness_bad_probes_then_mood() -> None:
@@ -86,8 +104,6 @@ def test_wellness_bad_with_symptoms_skips_probe_concern() -> None:
     # Legacy probe_duration replaced by IssueEpisode attribute questions when symptoms named.
     assert "probe_duration" in intents or any(i.startswith("episode_") for i in intents)
     assert result.state.wellness_concern.startswith("Чувствую себя плохо")
-    assert result.state.slots["plans"] == SlotStatus.FILLED
-    assert not result.partial_close
 
 
 def test_wellness_urgent_skips_to_close() -> None:

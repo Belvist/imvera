@@ -7,16 +7,13 @@ import uuid
 from packages.contracts.enums import FsmState, SlotStatus
 from packages.dialogue_engine import questions
 from packages.dialogue_engine.check_path import (
-    ProbeAction,
     advance_probe_phase,
     apply_wellness_branch,
     classify_wellness_path,
 )
 from packages.dialogue_engine.conversation_policy import (
-    ConversationObligation,
     TurnContext,
     decide_conversation_policy,
-    resume_episode_obligation,
     schedule_next_action,
 )
 from packages.dialogue_engine.effects import (
@@ -67,7 +64,6 @@ from packages.dialogue_engine.topic_tracker import (
     TopicPrompt,
     _topic_complete,
     is_topic_slot,
-    next_topic_prompt,
     observe_topic_answer,
     prime_topics,
     should_start_topic_flow,
@@ -656,25 +652,22 @@ def _apply_rich_turn(
         state.bump_revision()
         return _advance_after_fills(state, newly_filled)
 
-    decision = decide_conversation_policy(state, turn)
-    if decision is not None:
-        if decision.obligation == ConversationObligation.CONTROL and decision.control:
-            control_outcome = _apply_rich_control(state, turn)
-            if control_outcome is not None:
-                return control_outcome
-        if decision.text:
-            if decision.suspend is not None:
-                state.suspended_obligation = decision.suspend
-            state.processing_turn_id = None
-            state.processing_effect_id = None
-            state.bump_revision()
-            return _emit_speak(
-                state,
-                text=decision.text,
-                intent=decision.intent or "rich_policy",
-                slot=decision.slot or answer_slot or "wellness",
-                marks_question=decision.marks_question,
-            )
+    plan = schedule_next_action(
+        state,
+        TurnContext(turn=turn, user_text=user_text, answer_slot=answer_slot),
+    )
+    if plan.action == "control" and plan.control:
+        control_outcome = _apply_rich_control(state, turn)
+        if control_outcome is not None:
+            return control_outcome
+    if plan.suspend is not None:
+        state.suspended_obligation = plan.suspend
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.bump_revision()
+    outcome = _emit_from_plan(state, plan)
+    if outcome[1] or plan.action != "none":
+        return outcome
 
     if any(m.kind == "sleep_problem" for m in turn.issue_mentions):
         if should_start_topic_flow(state, user_text, answer_slot=answer_slot):
@@ -1008,43 +1001,24 @@ def _advance_after_fills(
     state: EngineState,
     filled_slots: list[str],
 ) -> tuple[EngineState, list[Effect]]:
+    user_text = ""
     if "wellness" in filled_slots:
         rec = state.slot_records.get("wellness")
-        wellness_text = (rec.source_text if rec else "") or state.slot_values.get("wellness", "")
+        user_text = (rec.source_text if rec else "") or state.slot_values.get("wellness", "")
         state.set_background_goal_coverage("wellness", BackgroundGoalCoverage.ANSWERED)
-        if should_start_topic_flow(state, wellness_text, answer_slot="wellness"):
+        if should_start_topic_flow(state, user_text, answer_slot="wellness"):
             state.probe_phase = None
-            prime_topics(state, wellness_text)
-            return _advance_after_topic(state, wellness_text, newly_filled=filled_slots)
-        branch = _branch_after_wellness(state)
-        if branch is not None:
-            return branch
+            prime_topics(state, user_text)
+        else:
+            _apply_wellness_branch_state(state, user_text)
         for slot in filled_slots:
             if slot != "wellness":
                 state.set_background_goal_coverage(slot, BackgroundGoalCoverage.ANSWERED)
 
-    if _has_open_episodes(state):
-        resumed = resume_episode_obligation(state)
-        if (
-            resumed is not None
-            and resumed.text
-            and resumed.slot
-            and can_ask_slot(state, resumed.slot)
-        ):
-            state.planned_question = None
-            state.playing_question = None
-            state.active_playout = None
-            spoken = _emit_speak(
-                state,
-                text=resumed.text,
-                intent=resumed.intent or "episode_resume",
-                slot=resumed.slot,
-                marks_question=resumed.marks_question,
-            )
-            if spoken[1]:
-                return spoken
-
-    return _schedule_advance(state, newly_filled=filled_slots)
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.bump_revision()
+    return _schedule_advance(state, newly_filled=filled_slots, user_text=user_text)
 
 
 def _resolve_sleep_problem_episodes_after_topic(state: EngineState) -> None:
@@ -1095,25 +1069,13 @@ def _advance_after_topic(
 ) -> tuple[EngineState, list[Effect]]:
     state.delivered_question = None
     state.planned_question = None
-    prompt = next_topic_prompt(state)
-    if prompt is not None:
-        return _emit_topic_prompt(state, prompt, newly_filled=newly_filled or [])
-    state.active_topic = None
-    state.topic_asked_dimension = None
-    _resolve_sleep_problem_episodes_after_topic(state)
     if not _topics_need_attention(state):
-        episode_resume = resume_episode_obligation(state)
-        if episode_resume is not None and episode_resume.text:
-            state.processing_turn_id = None
-            state.processing_effect_id = None
-            state.bump_revision()
-            return _emit_speak(
-                state,
-                text=episode_resume.text,
-                intent=episode_resume.intent or "episode_resume",
-                slot=episode_resume.slot,
-                marks_question=episode_resume.marks_question,
-            )
+        state.active_topic = None
+        state.topic_asked_dimension = None
+    _resolve_sleep_problem_episodes_after_topic(state)
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.bump_revision()
     return _schedule_advance(
         state,
         newly_filled=newly_filled or [],
@@ -1153,11 +1115,13 @@ def _emit_topic_prompt(
     )
 
 
-def _branch_after_wellness(state: EngineState) -> tuple[EngineState, list[Effect]] | None:
+def _apply_wellness_branch_state(state: EngineState, wellness_text: str) -> None:
+    """Mutate probe/check_path from wellness classification — scheduler speaks."""
     if not state.wellness_probes_enabled:
-        return None
+        return
     rec = state.slot_records.get("wellness")
-    text = (rec.source_text if rec else "") or state.slot_values.get("wellness", "")
+    text = wellness_text or (rec.source_text if rec else "")
+    text = text or state.slot_values.get("wellness", "")
     polarity = rec.polarity if rec else None
     if polarity is None and text:
         from packages.dialogue_engine.fast_interpreter import _detect_polarity
@@ -1165,41 +1129,18 @@ def _branch_after_wellness(state: EngineState) -> tuple[EngineState, list[Effect
         polarity = _detect_polarity(text)
     branch = classify_wellness_path(wellness_text=text, polarity=polarity)
     if branch.path == CheckPath.STANDARD:
-        return None
+        return
     apply_wellness_branch(state, branch)
-    if branch.urgent:
-        return _emit_urgent_close(state)
-    if branch.probe_phase:
-        return _speak_probe(state, branch.probe_phase)
-    return None
 
 
 def _advance_probe_after_answer(
     state: EngineState,
     text: str,
 ) -> tuple[EngineState, list[Effect]]:
-    step = advance_probe_phase(state, text)
-    if step.action == ProbeAction.CONTINUE_LADDER:
-        episode_resume = resume_episode_obligation(state)
-        if episode_resume is not None and episode_resume.text:
-            return _emit_speak(
-                state,
-                text=episode_resume.text,
-                intent=episode_resume.intent or "episode_resume",
-                slot=episode_resume.slot,
-                marks_question=episode_resume.marks_question,
-            )
-        return _schedule_advance(state, user_text=text)
-    if step.action == ProbeAction.URGENT_CLOSE:
-        return _emit_urgent_close(state)
-    if step.action == ProbeAction.SPEAK_PROBE and step.probe_phase:
-        return _speak_probe(state, step.probe_phase)
-    if step.action == ProbeAction.SPEAK_SLOT and step.next_slot:
-        state.set_background_goal_coverage(step.next_slot, BackgroundGoalCoverage.ASKED)
-        return _schedule_advance(state, user_text=text)
-    if step.action == ProbeAction.SPEAK_PLANS:
-        state.set_background_goal_coverage("plans", BackgroundGoalCoverage.ASKED)
-        return _schedule_advance(state, user_text=text)
+    advance_probe_phase(state, text)
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.bump_revision()
     return _schedule_advance(state, user_text=text)
 
 
@@ -1209,16 +1150,11 @@ def _speak_probe(
     *,
     clarification: bool = False,
 ) -> tuple[EngineState, list[Effect]]:
-    text = questions.probe_question(phase, clarification=clarification)
-    intent = f"probe_{phase}"
-    slot = f"probe_{phase}"
-    return _emit_speak(
-        state,
-        text=text,
-        intent=intent,
-        slot=slot,
-        marks_question=True,
-    )
+    state.probe_phase = phase
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.bump_revision()
+    return _schedule_advance(state, clarify=clarification)
 
 
 def _emit_summary(state: EngineState) -> tuple[EngineState, list[Effect]]:
@@ -1355,16 +1291,10 @@ def _advance_after_episode_answer(
     state.processing_effect_id = None
     state.waiting_on_slot = None
     state.bump_revision()
-    resumed = resume_episode_obligation(state)
-    if resumed and resumed.text:
-        return _emit_speak(
-            state,
-            text=resumed.text,
-            intent=resumed.intent or "episode_resume",
-            slot=resumed.slot,
-            marks_question=resumed.marks_question,
-        )
     if state.pending_episode_attribute and state.active_episode_id:
+        outcome = _schedule_advance(state, turn=turn)
+        if outcome[1]:
+            return outcome
         return state, []
     return _advance_after_fills(state, [])
 

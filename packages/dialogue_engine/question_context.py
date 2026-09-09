@@ -41,13 +41,35 @@ class QuestionKind(StrEnum):
 
 @dataclass(frozen=True)
 class QuestionNeed:
-    attribute: str
+    attributes: tuple[str, ...]
     accepted_semantics: tuple[str, ...]
+
+    @property
+    def attribute(self) -> str:
+        return self.attributes[0]
+
+    @property
+    def is_compound(self) -> bool:
+        return len(self.attributes) > 1
 
     @classmethod
     def for_attribute(cls, attribute: str) -> QuestionNeed:
         accepted = _QUESTION_NEEDS.get(attribute, (attribute,))
-        return cls(attribute=attribute, accepted_semantics=accepted)
+        return cls(attributes=(attribute,), accepted_semantics=accepted)
+
+    @classmethod
+    def compound(cls, *attributes: str) -> QuestionNeed:
+        seen: set[str] = set()
+        for attr in attributes:
+            seen.update(_QUESTION_NEEDS.get(attr, (attr,)))
+        return cls(attributes=attributes, accepted_semantics=tuple(seen))
+
+
+def question_need_satisfied(ep: IssueEpisode, need: QuestionNeed) -> bool:
+    """True when every attribute group in the need is satisfied."""
+    if need.is_compound:
+        return all(attribute_need_satisfied(ep, attr) for attr in need.attributes)
+    return attribute_need_satisfied(ep, need.attribute)
 
 
 @dataclass(frozen=True)

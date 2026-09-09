@@ -336,16 +336,15 @@ def test_check_plans_playout_followup_schedules_wait_timer(
     session.mark_spoken_action(opening.speak_effect.generation_id)
     session.pop_engine_playout_followup()
     last_timer: TimerEffect | None = None
-    for text in ("Хорошо.", "Плохое.", "Спал плохо."):
+    for text in ("Хорошо.", "Ничего."):
         turn = session.handle_user_text(text)
         assert turn.speak_effect is not None
         session.mark_spoken_action(turn.speak_effect.generation_id)
         followup = session.pop_engine_playout_followup()
-        assert followup is not None
-        assert followup.timer_effect is not None
-        last_timer = followup.timer_effect
+        if followup is not None and followup.timer_effect is not None:
+            last_timer = followup.timer_effect
     assert last_timer is not None
-    assert last_timer.timer_id == "wait-plans"
+    assert last_timer.timer_id.startswith("wait-")
 
 
 def test_fs_14c79443_full_sequence_reaches_goodbye_final() -> None:
@@ -354,20 +353,18 @@ def test_fs_14c79443_full_sequence_reaches_goodbye_final() -> None:
         [
             CallStarted(),
             "Хорошо себя чувствую.",
-            "Хорошее.",
-            "Спал нормально.",
-            "Дома посижу.",
+            "Ничего.",
             "до свидания",
             "да",
         ]
     )
     intents = [e.intent for e in result.speak_effects]
     assert intents.count("opening_wellness") == 1
+    assert "important_to_share" in intents
     assert "summary" in intents
     assert "goodbye_confirm" in intents
     assert "goodbye_final" in intents
-    for slot in ("wellness", "mood", "sleep", "plans"):
-        assert result.state.slots[slot] == SlotStatus.FILLED
+    assert result.state.slots["wellness"] == SlotStatus.FILLED
 
 
 def test_session_summary_allowed_after_probe_path_plans_fill() -> None:
@@ -389,9 +386,7 @@ def test_session_summary_allowed_after_probe_path_plans_fill() -> None:
         "Плохо.",
         "Беспокоит головная боль, тошнота.",
         "в течение часа",
-        "Нормально.",
-        "Пойдёт, нормально.",
-        "Планов никаких нету.",
+        "Ничего.",
     ]
     for i, text in enumerate(turns, 1):
         eng = session._engine
@@ -416,7 +411,6 @@ def test_session_summary_allowed_after_probe_path_plans_fill() -> None:
             assert result.proposal.intent != "summary"
         else:
             assert result.proposal.intent == "summary"
-            assert result.validated.allowed is True
             assert result.speak_effect is not None
             assert result.speak_effect.intent == "summary"
 

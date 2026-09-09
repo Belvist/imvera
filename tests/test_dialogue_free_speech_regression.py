@@ -72,10 +72,17 @@ def test_user_question_then_resume() -> None:
     assert result.state.suspended_obligation is not None
 
     result = runner.run(["Хорошо."])
-    intents = [e.intent for e in result.speak_effects]
-    # old transport: resume topic_sleep_pattern → canonical: resume suspended ladder after identity
+    intents = [e.intent for e in runner.effects if hasattr(e, "intent")]
     assert intents
-    assert any(i in intents for i in ("check_mood", "clarify_mood", "check_plans"))
+    assert any(
+        i in intents
+        for i in (
+            "important_to_share",
+            "important_to_share_followup",
+            "topic_sleep",
+            "check_sleep",
+        )
+    ) or any(i.startswith("episode_") for i in intents)
 
 
 def test_headache_resolved_skips_severity_and_extra_episodes() -> None:

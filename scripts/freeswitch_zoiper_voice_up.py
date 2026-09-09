@@ -32,6 +32,28 @@ def _git_image_tag() -> str:
     return proc.stdout.strip() if proc.returncode == 0 else "local"
 
 
+def _find_preflight_marker(short_sha: str) -> Path | None:
+    """Accept short-SHA marker (canonical) or legacy full-SHA marker."""
+    marker_dir = ROOT / ".run" / "preflight"
+    full_proc = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=ROOT,
+    )
+    candidates = [short_sha]
+    if full_proc.returncode == 0:
+        full_sha = full_proc.stdout.strip()
+        if full_sha and full_sha not in candidates:
+            candidates.append(full_sha)
+    for name in candidates:
+        path = marker_dir / f"{name}.ok"
+        if path.is_file():
+            return path
+    return None
+
+
 def _compose_cmd(*args: str) -> list[str]:
     return [
         "docker",
@@ -141,8 +163,8 @@ def main() -> int:
         return 1
 
     expected_sha = _git_image_tag()
-    preflight_marker = ROOT / ".run" / "preflight" / f"{expected_sha}.ok"
-    if not preflight_marker.is_file():
+    preflight_marker = _find_preflight_marker(expected_sha)
+    if preflight_marker is None:
         print(
             f"BLOCKED: no preflight marker for {expected_sha}. "
             "Run: make preflight-gates",
@@ -170,7 +192,7 @@ def main() -> int:
     print(f"  SIP:    {data['sip_host']}:{data['sip_port']}")
     print(f"  Elder:  {elder}")
     print(f'  Opening: «Здравствуйте. Это сервис IMVERA, {elder}. Как вы себя чувствуете?»')
-    print("  Then: dialogue by FSM state (wellness → mood → …)")
+    print("  Then: issue-first scheduler (wellness → issues → important_to_share → close)")
     print("\n  Logs:   .run/freeswitch_media_bridge.log")
     print("  Forensic after call: make freeswitch-forensic-collect UUID=<fs_uuid> CALL_ID=fs-xxxxxxxx")
     print("  Stop:   make freeswitch-zoiper-voice-down")

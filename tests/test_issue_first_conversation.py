@@ -64,9 +64,9 @@ def test_background_goal_coverage_unseen_initially(slot: str) -> None:
 
 
 def test_background_goal_marked_answered_after_fill() -> None:
-    r = _run("Нормально.", "Хорошее.", "Спал нормально.", "Дома посижу.")
+    r = _run("Нормально.")
     assert r.state.background_goal_status["wellness"] == BackgroundGoalCoverage.ANSWERED
-    assert r.state.background_goal_status["mood"] == BackgroundGoalCoverage.ANSWERED
+    assert r.state.background_goal_status["mood"] == BackgroundGoalCoverage.UNSEEN
 
 
 def test_plans_not_required_before_close() -> None:
@@ -121,19 +121,20 @@ def test_important_to_share_after_issues() -> None:
         "Голова болит и тошнит.",
         "С 10 утра.",
         "Терпимая.",
-        "Хорошее.",
-        "Нормально спал.",
-        "Дома.",
         "Нет.",
     )
     intents = [e.intent for e in r.effects if hasattr(e, "intent")]
     assert "important_to_share" in intents
     assert r.state.important_to_share_asked
+    assert "check_mood" not in intents
+    assert "check_sleep" not in intents
+    assert "check_plans" not in intents
 
 
 def test_important_to_share_no_blocks_summary() -> None:
-    r = _run("Нормально.", "Хорошее.", "Нормально спал.", "Ничего.", "Нет.")
+    r = _run("Нормально.", "Нет.")
     intents = [e.intent for e in r.effects if hasattr(e, "intent")]
+    assert "important_to_share" in intents
     assert "summary" in intents
 
 
@@ -158,9 +159,10 @@ def test_scheduler_repair_obligation() -> None:
 def test_scheduler_background_goal_when_no_episodes() -> None:
     state = EngineState(call_id="t")
     state.slots["wellness"] = SlotStatus.FILLED
+    state.set_background_goal_coverage("wellness", BackgroundGoalCoverage.ANSWERED)
     plan = schedule_next_action(state, TurnContext())
-    assert plan.obligation == ConversationObligation.BACKGROUND_GOAL
-    assert plan.slot == "mood"
+    assert plan.obligation == ConversationObligation.IMPORTANT_TO_SHARE
+    assert plan.slot == "important_to_share"
 
 
 def test_scheduler_continue_episode_when_active() -> None:
@@ -296,7 +298,6 @@ def test_sleep_issue_from_wellness_not_probe() -> None:
 
 def test_background_goal_asked_status() -> None:
     r = _run("Хорошо.")
-    assert r.state.background_goal_status["mood"] in (
-        BackgroundGoalCoverage.ASKED,
-        BackgroundGoalCoverage.ANSWERED,
-    )
+    assert r.state.background_goal_status["mood"] == BackgroundGoalCoverage.UNSEEN
+    intents = [e.intent for e in r.effects if hasattr(e, "intent")]
+    assert "important_to_share" in intents

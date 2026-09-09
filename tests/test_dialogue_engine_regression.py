@@ -91,11 +91,13 @@ def test_wellness_then_mood_transition() -> None:
         [
             CallStarted(),
             "Хорошо себя чувствую.",
-            "Хорошее.",
+            "Нет.",
         ]
     )
     assert result.state.slots["wellness"] == SlotStatus.FILLED
-    assert result.state.slots["mood"] == SlotStatus.FILLED
+    assert result.state.slots["mood"] == SlotStatus.OPEN
+    intents = [e.intent for e in result.speak_effects]
+    assert "important_to_share" in intents
     assert not result.partial_close
 
 
@@ -128,10 +130,9 @@ def test_fs_f0daadb9_trace_sequence() -> None:
     )
     assert not result.partial_close
     assert result.state.slots["wellness"] == SlotStatus.FILLED
-    assert result.state.slots["mood"] == SlotStatus.FILLED
     intents = [e.intent for e in result.speak_effects]
     assert "repair_repeat" in intents
-    assert "check_mood" in intents
+    assert "check_mood" not in intents
     assert intents.count("opening_wellness") == 1
 
 
@@ -152,7 +153,7 @@ def test_fs_f0daadb9_delayed_interpret_stays_stable() -> None:
     )
     assert result.opening_count == 1
     assert not result.partial_close
-    assert result.state.slots["mood"] == SlotStatus.FILLED
+    assert result.state.slots["mood"] == SlotStatus.OPEN
     assert "repair_repeat" in [e.intent for e in result.speak_effects]
 
 
@@ -221,14 +222,11 @@ def test_plans_none_fast_path_to_summary() -> None:
         [
             CallStarted(),
             "Хорошо.",
-            "Нормально.",
-            "Спал нормально.",
-            "Никаких планов нет.",
+            "Нет.",
         ]
     )
-    assert result.state.slots["plans"] == SlotStatus.FILLED
     summary = [e for e in result.speak_effects if e.intent == "summary"]
-    assert summary, "expected summary after all slots filled"
+    assert summary, "expected summary after important_to_share"
     assert summary[-1].text == "Спасибо за разговор."
 
 
@@ -264,14 +262,13 @@ def test_full_daily_check_to_goodbye() -> None:
         [
             CallStarted(),
             "Хорошо.",
-            "Нормально.",
-            "Спал нормально.",
-            "Дома.",
+            "Нет.",
             "до свидания",
             "да",
         ]
     )
     intents = [e.intent for e in result.speak_effects]
+    assert "important_to_share" in intents
     assert "summary" in intents
     assert "goodbye_confirm" in intents
     assert "goodbye_final" in intents

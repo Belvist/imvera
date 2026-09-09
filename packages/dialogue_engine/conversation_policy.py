@@ -15,7 +15,12 @@ from packages.dialogue_engine.issue_memory import (
 )
 from packages.dialogue_engine.question_context import QuestionNeed
 from packages.dialogue_engine.response_plan import ResponsePlan
-from packages.dialogue_engine.state import BackgroundGoalCoverage, EngineState, SuspendedObligation
+from packages.dialogue_engine.state import (
+    BackgroundGoalCoverage,
+    CheckPath,
+    EngineState,
+    SuspendedObligation,
+)
 from packages.dialogue_engine.turn_understanding import RichUserTurn
 
 
@@ -111,10 +116,15 @@ def episode_question_for_attribute(ep, attribute: str) -> tuple[str, str]:
     return "Расскажите, пожалуйста, чуть подробнее.", "episode_followup"
 
 
-def _missing_attribute(state: EngineState, ep) -> str | None:
-    from packages.dialogue_engine.semantic_kernel.information_gain import best_attribute_to_ask
+def _missing_question_need(state: EngineState, ep) -> QuestionNeed | None:
+    from packages.dialogue_engine.semantic_kernel.information_gain import best_question_need
 
-    return best_attribute_to_ask(state, ep)
+    return best_question_need(state, ep)
+
+
+def _missing_attribute(state: EngineState, ep) -> str | None:
+    need = _missing_question_need(state, ep)
+    return need.attribute if need else None
 
 
 def _all_episodes_resolved(state: EngineState) -> bool:
@@ -169,19 +179,19 @@ def _next_background_goal(state: EngineState) -> str | None:
     return None
 
 
-def _episode_plan(state: EngineState, ep, attribute: str) -> ResponsePlan | None:
-    state.pending_episode_attribute = attribute
-    text, intent = episode_question_for_attribute(ep, attribute)
+def _episode_plan(state: EngineState, ep, need: QuestionNeed) -> ResponsePlan | None:
+    state.pending_episode_attribute = need.attribute
+    text, intent = episode_question_for_attribute(ep, need.attribute)
     if question_references_forbidden_site(state, text):
         return None
     return ResponsePlan(
         obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
         action="speak",
         episode_id=ep.episode_id,
-        question_needs=[QuestionNeed.for_attribute(attribute)],
+        question_needs=[need],
         intent=intent,
         slot=intent,
-        mandatory_question=text,
+        mandatory_question=text if not need.is_compound else "",
         marks_question=True,
     )
 
@@ -201,25 +211,64 @@ def _next_episode_plan(state: EngineState) -> ResponsePlan | None:
         if ep is None:
             return None
 
-    attribute = _missing_attribute(state, ep)
-    if attribute is None:
+    need = _missing_question_need(state, ep)
+    if need is None:
         from packages.dialogue_engine.issue_memory import finalize_episode_if_complete
 
         finalize_episode_if_complete(ep)
         activate_next_pending_episode(state)
         return _next_episode_plan(state)
 
-    return _episode_plan(state, ep, attribute)
+    return _episode_plan(state, ep, need)
+
+
+def _wellness_entry_covered(state: EngineState) -> bool:
+    if state.slots.get("wellness") != SlotStatus.OPEN:
+        return True
+    status = state.background_goal_status.get("wellness", BackgroundGoalCoverage.UNSEEN)
+    return status in (
+        BackgroundGoalCoverage.ANSWERED,
+        BackgroundGoalCoverage.COVERED_FROM_SPEECH,
+    )
+
+
+def _probe_plan(state: EngineState, *, clarify: bool = False) -> ResponsePlan | None:
+    if not state.probe_phase:
+        return None
+    phase = state.probe_phase
+    return ResponsePlan(
+        obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
+        action="speak",
+        question_needs=[QuestionNeed.for_attribute(phase)],
+        slot=f"probe_{phase}",
+        intent=f"probe_{phase}",
+        marks_question=True,
+        clarification=clarify,
+    )
+
+
+def _topic_plan(state: EngineState) -> ResponsePlan | None:
+    from packages.dialogue_engine.topic_tracker import next_topic_prompt, topic_slot
+
+    prompt = next_topic_prompt(state)
+    if prompt is None:
+        return None
+    return ResponsePlan(
+        obligation=ConversationObligation.ACKNOWLEDGE_IMPORTANT_FACT,
+        action="speak",
+        intent=prompt.intent,
+        slot=topic_slot(prompt.family),
+        mandatory_question=questions.topic_question(prompt.intent),
+        marks_question=True,
+    )
 
 
 def _important_to_share_plan(state: EngineState) -> ResponsePlan | None:
     if state.important_to_share_asked or state.important_to_share_resolved:
         return None
-    if not state.issue_episodes:
+    if _has_open_episodes(state):
         return None
-    if not _all_episodes_resolved(state):
-        return None
-    if _next_background_goal(state) is not None:
+    if not _wellness_entry_covered(state):
         return None
     state.important_to_share_asked = True
     return ResponsePlan(
@@ -272,9 +321,16 @@ def _correction_plan(state: EngineState, turn: RichUserTurn) -> ResponsePlan:
             ep = state.issue_episodes[ep_id]
     label = ep.primary_label if ep else ""
     ack = f"Да, вы говорили, что {label}." if ep else "Понимаю."
-    attribute = state.pending_episode_attribute or (ep and _missing_attribute(state, ep))
-    if ep and attribute:
-        q_plan = _episode_plan(state, ep, attribute)
+    need = None
+    if ep:
+        pending = state.pending_episode_attribute
+        need = (
+            QuestionNeed.for_attribute(pending)
+            if pending
+            else _missing_question_need(state, ep)
+        )
+    if ep and need:
+        q_plan = _episode_plan(state, ep, need)
         if q_plan:
             q_plan.obligation = ConversationObligation.HANDLE_CORRECTION
             q_plan.acknowledge = ack
@@ -306,6 +362,7 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
     """Canonical scheduler — all next-turn decisions flow through here."""
     turn = turn_context.turn
     filled = turn_context.newly_filled_slots
+    clarify = turn_context.clarify
     _sync_background_coverage_from_fills(state, filled)
 
     if turn and turn.dialogue_act == "repair":
@@ -380,6 +437,20 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
     if turn and turn.dialogue_act == "backchannel":
         return ResponsePlan(action="none")
 
+    if state.check_path == CheckPath.URGENT:
+        return ResponsePlan(
+            obligation=ConversationObligation.SAFETY,
+            action="close_urgent",
+        )
+
+    probe = _probe_plan(state, clarify=clarify)
+    if probe:
+        return probe
+
+    topic = _topic_plan(state)
+    if topic:
+        return topic
+
     if state.important_to_share_asked and not state.important_to_share_resolved:
         if turn and turn.raw_text.strip():
             state.important_to_share_resolved = True
@@ -389,6 +460,10 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
                 or "больше ничего" in low
                 or low.startswith("нет")
             ):
+                if state.mandatory_background_goals:
+                    bg = _background_goal_plan(state, filled=filled)
+                    if bg:
+                        return bg
                 return _summary_plan(state)
             return ResponsePlan(
                 obligation=ConversationObligation.IMPORTANT_TO_SHARE,

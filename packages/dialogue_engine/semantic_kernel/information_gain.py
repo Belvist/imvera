@@ -46,6 +46,46 @@ def attribute_information_gain(
     return score
 
 
+def best_question_need(state: EngineState, ep: IssueEpisode):
+    """Return single or compound QuestionNeed for the highest-gain gap."""
+    from packages.dialogue_engine.issue_memory import _needs_severity
+    from packages.dialogue_engine.question_context import (
+        QuestionNeed,
+        attribute_need_satisfied,
+        episode_is_resolved,
+        question_need_satisfied,
+    )
+
+    if episode_is_resolved(ep):
+        return None
+    pending = state.pending_episode_attribute
+    if pending:
+        need = QuestionNeed.for_attribute(pending)
+        if not question_need_satisfied(ep, need):
+            return need
+
+    onset_ok = (
+        attribute_need_satisfied(ep, "onset") or attribute_need_satisfied(ep, "duration")
+    )
+    current_ok = attribute_need_satisfied(ep, "current")
+    label = ep.primary_label.lower()
+    is_abdominal = ep.body_site == "живот" or "живот" in label
+
+    if not onset_ok and not current_ok and is_abdominal:
+        return QuestionNeed.compound("onset", "current")
+    if not onset_ok and not current_ok and "голов" in label:
+        return QuestionNeed.compound("duration", "current")
+
+    attr = best_attribute_to_ask(state, ep)
+    if attr:
+        return QuestionNeed.for_attribute(attr)
+    if not current_ok and is_abdominal:
+        return QuestionNeed.for_attribute("current")
+    if _needs_severity(ep) and "severity" not in ep.known_attributes:
+        return QuestionNeed.for_attribute("severity")
+    return None
+
+
 def best_attribute_to_ask(state: EngineState, ep: IssueEpisode) -> str | None:
     from packages.dialogue_engine.question_context import (
         attribute_need_satisfied,

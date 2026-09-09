@@ -38,6 +38,7 @@ class ResponsePlan:
     next_slot: str | None = None
     mandatory_question: str = ""
     tone: str = "warm"
+    clarification: bool = False
 
 
 def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan:
@@ -76,8 +77,8 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
     elif plan.slot and not question:
         if plan.slot.startswith("probe_"):
             phase = plan.slot.removeprefix("probe_")
-            question = questions.probe_question(phase)
-            plan.intent = plan.intent or plan.slot.replace("probe_", "probe_")
+            question = questions.probe_question(phase, clarification=plan.clarification)
+            plan.intent = plan.intent or plan.slot
         elif plan.slot in ("wellness", "mood", "sleep", "plans"):
             question = questions.slot_question(plan.slot, state=state)
             plan.intent = plan.intent or f"check_{plan.slot}"
@@ -123,17 +124,34 @@ def _dummy_state() -> EngineState:
     return EngineState(call_id="render")
 
 
+def _compound_question_text(ep, need: QuestionNeed) -> str:
+    label = ep.primary_label.lower() if ep else ""
+    attrs = set(need.attributes)
+    if attrs >= {"duration", "current"} or attrs >= {"onset", "current"}:
+        if "голов" in label:
+            return (
+                "Когда началась головная боль и сейчас ещё беспокоит или уже стало лучше?"
+            )
+        return "Когда это началось и сейчас всё ещё беспокоит или уже стало лучше?"
+    return "Расскажите, пожалуйста, чуть подробнее."
+
+
 def _question_for_need(state: EngineState, plan: ResponsePlan, need: QuestionNeed) -> str:
     from packages.dialogue_engine.conversation_policy import episode_question_for_attribute
 
-    if plan.episode_id:
-        ep = state.issue_episodes.get(plan.episode_id)
-        if ep is not None:
-            text, intent = episode_question_for_attribute(ep, need.attribute)
-            plan.intent = intent
-            plan.slot = intent
-            plan.marks_question = True
-            return text
+    ep = state.issue_episodes.get(plan.episode_id) if plan.episode_id else None
+    if need.is_compound:
+        text = _compound_question_text(ep, need)
+        plan.intent = "episode_compound_temporal_current"
+        plan.slot = plan.intent
+        plan.marks_question = True
+        return text
+    if ep is not None:
+        text, intent = episode_question_for_attribute(ep, need.attribute)
+        plan.intent = intent
+        plan.slot = intent
+        plan.marks_question = True
+        return text
     if need.attribute in ("concern", "pain_night", "duration"):
         return questions.probe_question(need.attribute)
     return questions.slot_question(need.attribute, state=state)

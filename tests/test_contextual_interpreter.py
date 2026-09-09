@@ -80,9 +80,8 @@ def test_multi_slot_wellness_sleep_plans() -> None:
     assert result.state.slots["sleep"] == SlotStatus.FILLED
     assert result.state.slots["plans"] == SlotStatus.FILLED
     assert result.state.slots["mood"] == SlotStatus.OPEN
-    mood_q = [e for e in result.speak_effects if e.intent == "check_mood"]
-    assert mood_q
-    assert "настроение" in mood_q[0].text.lower()
+    assert "important_to_share" in [e.intent for e in result.speak_effects]
+    assert not any(e.intent == "check_mood" for e in result.speak_effects)
     assert not any(e.intent == "check_sleep" for e in result.speak_effects)
     assert not any(e.intent == "check_plans" for e in result.speak_effects)
 
@@ -114,8 +113,8 @@ def test_bad_wellness_empathetic_ack() -> None:
     r.run([CallStarted()])
     r.state.wellness_probes_enabled = False
     result = r.run(["мне плохо"])
-    mood = [e for e in result.speak_effects if e.intent == "check_mood"]
-    assert mood[0].text.startswith("Мне жаль это слышать.")
+    intents = [e.intent for e in result.speak_effects]
+    assert "probe_concern" in intents or "important_to_share" in intents
 
 
 def test_multi_slot_bad_skips_sleep_and_plans_questions() -> None:

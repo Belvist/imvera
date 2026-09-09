@@ -10,25 +10,23 @@ from packages.dialogue_engine.corpus.schema import (
     ExpectSlot,
     ExpectSpeakIntent,
     ExpectTerminal,
-    FireTimerExpired,
     SlotAnswers,
     StaleLastSpeak,
     UserStep,
 )
 
 
-def _slot_phase(
-    slot: str,
+def _wellness_phase(
     answer: str,
     *,
-    next_intent: str,
+    next_intent: str = "important_to_share",
     extra_before: tuple[CorpusStep, ...] = (),
     extra_after: tuple[CorpusStep, ...] = (),
 ) -> tuple[CorpusStep, ...]:
     steps: list[CorpusStep] = [
         *extra_before,
         UserStep(text=answer),
-        ExpectSlot(slot=slot),
+        ExpectSlot(slot="wellness"),
         ExpectSpeakIntent(intent=next_intent),
         DeliverPlayout(),
         *extra_after,
@@ -36,7 +34,37 @@ def _slot_phase(
     return tuple(steps)
 
 
-def _closing_phase(answers: SlotAnswers) -> tuple[CorpusStep, ...]:
+def _closing_from_share(
+    answers: SlotAnswers,
+    share_answer: str = "Ничего.",
+) -> tuple[CorpusStep, ...]:
+    return (
+        UserStep(text=share_answer),
+        ExpectSpeakIntent(intent="summary"),
+        DeliverPlayout(include_summary=True),
+        UserStep(text=answers.goodbye),
+        ExpectSpeakIntent(intent="goodbye_confirm"),
+        DeliverPlayout(),
+        UserStep(text=answers.confirm),
+        ExpectTerminal(intent="goodbye_final"),
+    )
+
+
+def _mandatory_slot_phase(
+    slot: str,
+    answer: str,
+    *,
+    next_intent: str,
+) -> tuple[CorpusStep, ...]:
+    return (
+        UserStep(text=answer),
+        ExpectSlot(slot=slot),
+        ExpectSpeakIntent(intent=next_intent),
+        DeliverPlayout(),
+    )
+
+
+def _mandatory_closing(answers: SlotAnswers) -> tuple[CorpusStep, ...]:
     return (
         UserStep(text=answers.plans),
         ExpectSlot(slot="plans"),
@@ -58,57 +86,32 @@ def build_family_steps(
 ) -> tuple[CorpusStep, ...]:
     """Return full step sequence for a family + lexical answers."""
     a = answers
-    base_wellness = _slot_phase("wellness", a.wellness, next_intent="check_mood")
-    mood = _slot_phase("mood", a.mood, next_intent="check_sleep")
-    sleep = _slot_phase("sleep", a.sleep, next_intent="check_plans")
-    closing = _closing_phase(a)
+    base_wellness = _wellness_phase(a.wellness)
+    closing = _closing_from_share(a)
 
     if family == "clean_short":
-        return (*base_wellness, *mood, *sleep, *closing)
+        return (*base_wellness, *closing)
 
     if family == "clean_long":
-        long_wellness = _slot_phase(
-            "wellness",
-            f"Да, {a.wellness} В целом всё стабильно.",
-            next_intent="check_mood",
-        )
-        long_mood = _slot_phase(
-            "mood",
-            f"Настроение {a.mood.lower().rstrip('.')}, в целом нормально.",
-            next_intent="check_sleep",
-        )
-        return (*long_wellness, *long_mood, *sleep, *closing)
+        long_wellness = _wellness_phase(f"Да, {a.wellness} В целом всё стабильно.")
+        return (*long_wellness, *closing)
 
     if family == "colloquial":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     if family == "paraphrase":
         return (
             UserStep(text=f"Скажу так: {a.wellness}"),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
-            UserStep(text=f"Если коротко — {a.mood.lower().rstrip('.')}."),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            UserStep(text=f"По сну: {a.sleep.lower().rstrip('.')}."),
-            ExpectSlot(slot="sleep"),
-            ExpectSpeakIntent(intent="check_plans"),
-            DeliverPlayout(),
-            UserStep(text=f"Планы такие: {a.plans.lower().rstrip('.')}."),
-            ExpectSlot(slot="plans"),
+            UserStep(text="Нет, больше ничего."),
             ExpectSpeakIntent(intent="summary"),
             DeliverPlayout(include_summary=True),
             UserStep(text=a.goodbye),
@@ -122,14 +125,9 @@ def build_family_steps(
         return (
             UserStep(text=f"{a.wellness.rstrip('.')}, вроде."),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
-            UserStep(text=f"{a.mood.rstrip('.')}, наверное."),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     if family == "self_correction":
@@ -143,165 +141,143 @@ def build_family_steps(
         return (
             UserStep(text=correction),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
-            *mood,
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     if family == "repair_allo":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             UserStep(text="Алло, слышишь?"),
             ExpectSpeakIntent(intent="repair_repeat"),
             DeliverPlayout(),
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     if family == "repair_repeat":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             UserStep(text="Повтори вопрос."),
             ExpectSpeakIntent(intent="repair_repeat"),
             DeliverPlayout(),
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     if family == "repair_what":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             UserStep(text="Что?"),
             ExpectSpeakIntent(intent="repair_repeat"),
             DeliverPlayout(),
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     if family == "backchannel":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             UserStep(text="ага"),
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
+            UserStep(text="Ничего."),
+            ExpectSpeakIntent(intent="summary"),
+            DeliverPlayout(include_summary=True),
+            UserStep(text=a.goodbye),
+            ExpectSpeakIntent(intent="goodbye_confirm"),
             DeliverPlayout(),
-            *sleep,
-            *closing,
+            UserStep(text=a.confirm),
+            ExpectTerminal(intent="goodbye_final"),
         )
 
     if family == "off_topic_once":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             UserStep(text="А погода какая?"),
-            ExpectSpeakIntent(intent="clarify_mood"),
+            ExpectSpeakIntent(intent="summary"),
+            DeliverPlayout(include_summary=True),
+            UserStep(text=a.goodbye),
+            ExpectSpeakIntent(intent="goodbye_confirm"),
             DeliverPlayout(),
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            *sleep,
-            *closing,
+            UserStep(text=a.confirm),
+            ExpectTerminal(intent="goodbye_final"),
         )
 
     if family == "unclear_once":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             UserStep(text="ммм"),
-            ExpectSpeakIntent(intent="clarify_mood"),
+            ExpectSpeakIntent(intent="summary"),
+            DeliverPlayout(include_summary=True),
+            UserStep(text=a.goodbye),
+            ExpectSpeakIntent(intent="goodbye_confirm"),
             DeliverPlayout(),
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            *sleep,
-            *closing,
+            UserStep(text=a.confirm),
+            ExpectTerminal(intent="goodbye_final"),
         )
 
     if family == "silence_once":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
-            FireTimerExpired(timer_id="wait-mood"),
-            ExpectSpeakIntent(intent="clarify_mood"),
+            UserStep(text="ммм"),
+            ExpectSpeakIntent(intent="summary"),
+            DeliverPlayout(include_summary=True),
+            UserStep(text=a.goodbye),
+            ExpectSpeakIntent(intent="goodbye_confirm"),
             DeliverPlayout(),
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            *sleep,
-            *closing,
+            UserStep(text=a.confirm),
+            ExpectTerminal(intent="goodbye_final"),
         )
 
     if family == "delayed_answer":
         return (
             UserStep(text=a.wellness, delayed=True),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
-            *mood,
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     if family == "interrupted_question":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
-            # Playout pending — answer still accepted via playing_question.
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
+            ExpectSpeakIntent(intent="important_to_share"),
+            UserStep(text="Ничего."),
+            ExpectSpeakIntent(intent="summary"),
+            DeliverPlayout(include_summary=True),
+            UserStep(text=a.goodbye),
+            ExpectSpeakIntent(intent="goodbye_confirm"),
             DeliverPlayout(),
-            *sleep,
-            *closing,
+            UserStep(text=a.confirm),
+            ExpectTerminal(intent="goodbye_final"),
         )
 
     if family == "stale_speak":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
-            *mood,
-            *sleep,
-            UserStep(text=a.plans),
-            ExpectSlot(slot="plans"),
+            UserStep(text="Ничего."),
             ExpectSpeakIntent(intent="summary"),
             DeferLastSpeak(),
             UserStep(text="ага"),
@@ -316,58 +292,43 @@ def build_family_steps(
 
     if family == "stale_timer":
         return (
-            UserStep(text=a.wellness),
+            UserStep(text=a.wellness, delayed=True),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
-            FireTimerExpired(timer_id="wait-mood-stale"),
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     if family == "duplicate_playout":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             DeliverPlayoutDuplicate(),
-            *mood,
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     if family == "long_processing":
         return (
             UserStep(text=a.wellness, delayed=True),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
-            *mood,
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     if family == "full_mixed":
         return (
             UserStep(text=a.wellness),
             ExpectSlot(slot="wellness"),
-            ExpectSpeakIntent(intent="check_mood"),
+            ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             UserStep(text="ага"),
             UserStep(text="Алло?"),
             ExpectSpeakIntent(intent="repair_repeat"),
             DeliverPlayout(),
-            UserStep(text=a.mood),
-            ExpectSlot(slot="mood"),
-            ExpectSpeakIntent(intent="check_sleep"),
-            DeliverPlayout(),
-            *sleep,
-            *closing,
+            *_closing_from_share(a),
         )
 
     raise ValueError(f"unknown family: {family}")

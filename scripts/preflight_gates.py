@@ -21,11 +21,15 @@ GATES: tuple[tuple[str, list[str]], ...] = (
 )
 
 
-def main() -> int:
-    sha = (
-        subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True)
+def _git_sha_short() -> str:
+    return (
+        subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True)
         .strip()
     )
+
+
+def main() -> int:
+    sha = _git_sha_short()
     failed: list[str] = []
     for name, cmd in GATES:
         print(f"preflight: {name} …", flush=True)

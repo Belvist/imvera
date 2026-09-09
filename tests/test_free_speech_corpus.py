@@ -155,7 +155,7 @@ CORPUS: tuple[CorpusCase, ...] = (
         "topic_switch",
         ("Плохо спал",),
         # old transport: topic_sleep_* → canonical: sleep slot + sleep_problem episode
-        require_any_intent_prefix=("check_mood", "episode_"),
+        require_any_intent_prefix=("important_to_share", "episode_"),
     ),
     CorpusCase("repair-hearing", "user_question", ("Повторите, пожалуйста",), ()),
     CorpusCase(

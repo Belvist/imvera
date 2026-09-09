@@ -190,6 +190,10 @@ class EngineState(BaseModel):
     important_to_share_asked: bool = False
     important_to_share_resolved: bool = False
 
+    # Background goals are optional unless explicitly required (UNSEEN ≠ MUST ASK).
+    required_background_goals: set[str] = Field(default_factory=set)
+    mandatory_background_goals: bool = False
+
     def uses_issue_episodes(self) -> bool:
         return bool(self.issue_episodes or self.active_episode_id)
 
@@ -238,7 +242,10 @@ class EngineState(BaseModel):
         if self.slots.get(slot) != SlotStatus.OPEN:
             return False
         status = self.background_goal_status.get(slot, BackgroundGoalCoverage.UNSEEN)
-        return status in (
-            BackgroundGoalCoverage.UNSEEN,
-            BackgroundGoalCoverage.ASKED,
-        )
+        if status == BackgroundGoalCoverage.ASKED:
+            return True
+        if status != BackgroundGoalCoverage.UNSEEN:
+            return False
+        if self.mandatory_background_goals:
+            return True
+        return slot in self.required_background_goals

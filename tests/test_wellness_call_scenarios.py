@@ -150,7 +150,7 @@ def test_wellness_mood_variant_fills_slot_and_advances(wellness_answer: str) -> 
     if wellness_answer in ("плохо", "не очень"):
         assert result.proposal.intent == "reflect_report"
     else:
-        assert result.proposal.intent == "check_mood"
+        assert result.proposal.intent == "important_to_share"
     assert wellness_answer in session.state.facts["wellness"].value.lower()
 
 
@@ -162,8 +162,6 @@ def test_full_daily_check_to_goodbye(wellness_answer: str) -> None:
         if wellness_answer in ("хорошо", "нормально")
         else _planner_session()
     )
-    mood_answer, sleep_answer, plans_answer = FOLLOW_UP_BY_WELLNESS[wellness_answer]
-
     _apply_semantic(
         session,
         wellness_answer,
@@ -171,21 +169,23 @@ def test_full_daily_check_to_goodbye(wellness_answer: str) -> None:
     )
     _mark_spoken(session)
 
-    mood_intent = _advance_slot(session, mood_answer)
-    assert mood_intent == "check_sleep"
-
-    sleep_intent = _advance_slot(session, sleep_answer)
-    if wellness_answer in ("плохо", "не очень"):
+    if wellness_answer in ("хорошо", "нормально"):
+        share_intent = _advance_slot(session, "Ничего.")
+        assert share_intent == "summary"
+        assert session.state.fsm_state == FsmState.SUMMARY
+        assert session.state.slots["wellness"] == SlotStatus.FILLED
+    else:
+        mood_answer, sleep_answer, plans_answer = FOLLOW_UP_BY_WELLNESS[wellness_answer]
+        mood_intent = _advance_slot(session, mood_answer)
+        assert mood_intent == "check_sleep"
+        sleep_intent = _advance_slot(session, sleep_answer)
         assert sleep_intent == "reflect_report"
         _advance_slot(session, "угу")
-    else:
-        assert sleep_intent == "check_plans"
-
-    plans_intent = _advance_slot(session, plans_answer)
-    assert plans_intent == "summary"
-    assert session.state.fsm_state == FsmState.SUMMARY
-    assert all(session.state.slots[s] == SlotStatus.FILLED for s in ("wellness", "mood", "sleep", "plans"))
-    assert session.state.mandatory_remaining() == []
+        plans_intent = _advance_slot(session, plans_answer)
+        assert plans_intent == "summary"
+        assert session.state.fsm_state == FsmState.SUMMARY
+        assert all(session.state.slots[s] == SlotStatus.FILLED for s in ("wellness", "mood", "sleep", "plans"))
+        assert session.state.mandatory_remaining() == []
 
     goodbye = session.handle_user_text("до свидания")
     assert goodbye.proposal.intent == "goodbye_confirm"
@@ -273,17 +273,17 @@ def test_complaint_mid_call_after_wellness_reflects_without_praise() -> None:
 
 def test_rule_baseline_wellness_short_answers_still_work() -> None:
     """Baseline interpreter path (no semantic payload) for common grandmother phrases."""
-    for phrase, expected_intent in (
-        ("хорошо", "check_mood"),
-        ("нормально", "check_mood"),
-        ("плохо", "reflect_report"),
-        ("не очень", "reflect_report"),
-    ):
-        session = (
-            _daily_session()
-            if expected_intent == "check_mood"
-            else _planner_session()
-        )
+    engine_cases = (
+        ("хорошо", "important_to_share"),
+        ("нормально", "important_to_share"),
+    )
+    for phrase, expected_intent in engine_cases:
+        session = _daily_session()
         result = session.handle_user_text(phrase)
         assert session.state.slots["wellness"] == SlotStatus.FILLED
         assert result.proposal.intent == expected_intent
+    for phrase in ("плохо", "не очень"):
+        session = _planner_session()
+        result = session.handle_user_text(phrase)
+        assert session.state.slots["wellness"] == SlotStatus.FILLED
+        assert result.proposal.intent == "reflect_report"
