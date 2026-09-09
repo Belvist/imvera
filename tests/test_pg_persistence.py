@@ -30,6 +30,13 @@ def _pg_available() -> bool:
 pytestmark = pytest.mark.skipif(not _pg_available(), reason="PostgreSQL not available")
 
 
+@pytest.fixture(autouse=True)
+def classic_identity_consent_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PG persistence tests assume identity → consent → decline, not direct wellness."""
+    monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "0")
+    monkeypatch.setenv("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "0")
+
+
 @pytest.fixture
 def pg_store():
     store = create_call_record_store(PG_URL)
