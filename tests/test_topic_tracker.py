@@ -147,16 +147,18 @@ def test_poor_sleep_at_wellness_starts_topic_not_probe() -> None:
 
 
 def test_sleep_topic_then_mood_ladder() -> None:
-    # old transport: multi-turn topic_sleep_* ladder → canonical: multi-slot + background ladder
+    # old transport: topic_sleep_* ladder → canonical: background goals + important_to_share → summary
     result = _runner().run(
         [
             CallStarted(),
             "Плохо спал.",
             "Хорошее настроение.",
             "Планов нет.",
+            "Нет, больше ничего.",
         ]
     )
     intents = [e.intent for e in result.speak_effects]
+    assert "important_to_share" in intents
     assert "summary" in intents
     assert result.state.slots["sleep"] == SlotStatus.FILLED
     assert result.state.slots["mood"] == SlotStatus.FILLED

@@ -508,6 +508,8 @@ def _fill_pending_attribute_for_episode(
     if utterance_indicates_resolved(turn.raw_text):
         mark_episode_resolved(ep)
         state.pending_episode_attribute = None
+        if state.active_episode_id == episode_id:
+            activate_next_pending_episode(state)
         return
     exclude = _mention_exclusion_clauses(turn)
     if attribute == "onset":
@@ -535,6 +537,8 @@ def _fill_pending_attribute_for_episode(
     if attribute == "current" and raw:
         if utterance_indicates_resolved(turn.raw_text):
             mark_episode_resolved(ep)
+            if state.active_episode_id == episode_id:
+                activate_next_pending_episode(state)
         elif any(x in raw for x in ("бол", "да", "ещё", "еще")):
             ep.known_attributes["current"] = "active"
         else:

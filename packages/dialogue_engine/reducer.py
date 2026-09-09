@@ -14,8 +14,10 @@ from packages.dialogue_engine.check_path import (
 )
 from packages.dialogue_engine.conversation_policy import (
     ConversationObligation,
+    TurnContext,
     decide_conversation_policy,
     resume_episode_obligation,
+    schedule_next_action,
 )
 from packages.dialogue_engine.effects import (
     Effect,
@@ -46,10 +48,15 @@ from packages.dialogue_engine.policy import (
     release_reservation,
     reserve_question,
 )
-from packages.dialogue_engine.response_plan import build_response_plan, compose_speech
+from packages.dialogue_engine.response_plan import (
+    build_response_plan,
+    composed_text,
+    render_response_plan,
+)
 from packages.dialogue_engine.semantic import SemanticAct
 from packages.dialogue_engine.semantic_kernel.observation_memory import atomic_semantic_apply
 from packages.dialogue_engine.state import (
+    BackgroundGoalCoverage,
     CheckPath,
     EngineState,
     OpeningState,
@@ -168,6 +175,8 @@ def _emit_speak(
     gen_id = state.next_generation_id()
     gen = state.active_playout_generation + 1
     state.active_playout_generation = gen
+    if marks_question and slot and not reserve_question(state, slot, gen_id):
+        return _close_partial(state)
     q = Question(
         question_id=gen_id,
         slot=slot or "",
@@ -178,9 +187,6 @@ def _emit_speak(
     state.planned_question = q if marks_question else None
     state.playing_question = q if marks_question else None
     state.active_playout = q
-    if marks_question and slot:
-        if not reserve_question(state, slot, gen_id):
-            return _close_partial(state)
     state.bump_revision()
     effect = SpeakEffect(
         effect_id=_new_effect_id(),
@@ -359,8 +365,59 @@ def _apply_goal_facts(state: EngineState, turn: RichUserTurn) -> list[str]:
             confidence=0.9,
             correction=turn.correction,
         )
+        state.set_background_goal_coverage(fact.field, BackgroundGoalCoverage.COVERED_FROM_SPEECH)
         filled.append(fact.field)
     return filled
+
+
+def _emit_from_plan(
+    state: EngineState,
+    plan,
+) -> tuple[EngineState, list[Effect]]:
+    if plan.action == "none":
+        return state, []
+    if plan.action == "close_urgent":
+        return _emit_urgent_close(state)
+    if plan.action == "close_summary":
+        return _emit_summary(state)
+    if plan.action == "close_partial":
+        return _close_partial(state)
+    if plan.action == "control":
+        return state, []
+    rendered = render_response_plan(plan, state)
+    text = composed_text(rendered)
+    if not text.strip():
+        return state, []
+    return _emit_speak(
+        state,
+        text=text,
+        intent=rendered.intent or "rich_policy",
+        slot=rendered.slot,
+        marks_question=rendered.marks_question,
+    )
+
+
+def _schedule_advance(
+    state: EngineState,
+    *,
+    newly_filled: list[str] | None = None,
+    turn: RichUserTurn | None = None,
+    user_text: str = "",
+    answer_slot: str | None = None,
+    clarify: bool = False,
+) -> tuple[EngineState, list[Effect]]:
+    """Canonical post-mutation advance — scheduler only, not slot ladder."""
+    state.delivered_question = None
+    state.planned_question = None
+    ctx = TurnContext(
+        turn=turn,
+        newly_filled_slots=tuple(newly_filled or ()),
+        user_text=user_text,
+        answer_slot=answer_slot,
+        clarify=clarify,
+    )
+    plan = schedule_next_action(state, ctx)
+    return _emit_from_plan(state, plan)
 
 
 def _apply_rich_turn(
@@ -553,6 +610,12 @@ def _apply_rich_turn(
                     polarity=_detect_polarity(user_text),
                 )
         slot_filled = _apply_goal_facts(state, turn)
+        if slot_filled and turn.answers_pending_question:
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.waiting_on_slot = None
+            state.bump_revision()
+            return _advance_after_fills(state, slot_filled)
         decision = decide_conversation_policy(state, turn)
         if decision is not None and decision.text:
             state.processing_turn_id = None
@@ -918,6 +981,16 @@ def _speak_never_silent(
             return advanced
     if state.probe_phase:
         return _speak_probe(state, state.probe_phase, clarification=True)
+    if may_close_partial(state, answer_slot):
+        return _close_partial(state)
+    outcome = _schedule_advance(
+        state,
+        user_text=user_text,
+        answer_slot=answer_slot,
+        clarify=True,
+    )
+    if outcome[1]:
+        return outcome
     if can_ask_slot(state, answer_slot):
         ack = "Понимаю."
         question = questions.slot_question(answer_slot, clarification=True, state=state)
@@ -928,8 +1001,6 @@ def _speak_never_silent(
             slot=answer_slot,
             marks_question=True,
         )
-    if may_close_partial(state, answer_slot):
-        return _close_partial(state)
     return _speak_repair(state, answer_slot)
 
 
@@ -937,11 +1008,10 @@ def _advance_after_fills(
     state: EngineState,
     filled_slots: list[str],
 ) -> tuple[EngineState, list[Effect]]:
-    state.delivered_question = None
-
     if "wellness" in filled_slots:
         rec = state.slot_records.get("wellness")
         wellness_text = (rec.source_text if rec else "") or state.slot_values.get("wellness", "")
+        state.set_background_goal_coverage("wellness", BackgroundGoalCoverage.ANSWERED)
         if should_start_topic_flow(state, wellness_text, answer_slot="wellness"):
             state.probe_phase = None
             prime_topics(state, wellness_text)
@@ -949,22 +1019,32 @@ def _advance_after_fills(
         branch = _branch_after_wellness(state)
         if branch is not None:
             return branch
+        for slot in filled_slots:
+            if slot != "wellness":
+                state.set_background_goal_coverage(slot, BackgroundGoalCoverage.ANSWERED)
 
-    next_slot = state.next_open_slot()
-    if next_slot is None:
-        return _emit_summary(state)
-    if not can_ask_slot(state, next_slot):
-        return _close_partial(state)
-    plan = build_response_plan(state, newly_filled=filled_slots, next_slot=next_slot)
-    text = compose_speech(plan)
-    intent = f"check_{next_slot}"
-    return _emit_speak(
-        state,
-        text=text,
-        intent=intent,
-        slot=next_slot,
-        marks_question=True,
-    )
+    if _has_open_episodes(state):
+        resumed = resume_episode_obligation(state)
+        if (
+            resumed is not None
+            and resumed.text
+            and resumed.slot
+            and can_ask_slot(state, resumed.slot)
+        ):
+            state.planned_question = None
+            state.playing_question = None
+            state.active_playout = None
+            spoken = _emit_speak(
+                state,
+                text=resumed.text,
+                intent=resumed.intent or "episode_resume",
+                slot=resumed.slot,
+                marks_question=resumed.marks_question,
+            )
+            if spoken[1]:
+                return spoken
+
+    return _schedule_advance(state, newly_filled=filled_slots)
 
 
 def _resolve_sleep_problem_episodes_after_topic(state: EngineState) -> None:
@@ -995,6 +1075,18 @@ def _topics_need_attention(state: EngineState) -> bool:
     return any(not _topic_complete(state, family) for family in state.pending_topics)
 
 
+def _has_open_episodes(state: EngineState) -> bool:
+    if state.active_episode_id:
+        ep = state.issue_episodes.get(state.active_episode_id)
+        if ep and ep.status != "resolved":
+            return True
+    for eid in state.pending_episode_ids:
+        ep = state.issue_episodes.get(eid)
+        if ep and ep.status != "resolved":
+            return True
+    return False
+
+
 def _advance_after_topic(
     state: EngineState,
     user_text: str,
@@ -1022,25 +1114,10 @@ def _advance_after_topic(
                 slot=episode_resume.slot,
                 marks_question=episode_resume.marks_question,
             )
-    next_slot = state.next_open_slot()
-    if next_slot is None:
-        return _emit_summary(state)
-    if not can_ask_slot(state, next_slot):
-        return _close_partial(state)
-    ack = ""
-    if newly_filled:
-        ack = build_response_plan(
-            state, newly_filled=newly_filled, next_slot=next_slot
-        ).acknowledge
-    plan = build_response_plan(state, newly_filled=[], next_slot=next_slot)
-    parts = [p for p in (ack, plan.mandatory_question) if p]
-    text = " ".join(parts)
-    return _emit_speak(
+    return _schedule_advance(
         state,
-        text=text,
-        intent=f"check_{next_slot}",
-        slot=next_slot,
-        marks_question=True,
+        newly_filled=newly_filled or [],
+        user_text=user_text,
     )
 
 
@@ -1112,38 +1189,18 @@ def _advance_probe_after_answer(
                 slot=episode_resume.slot,
                 marks_question=episode_resume.marks_question,
             )
-        return _advance_after_fills(state, [])
+        return _schedule_advance(state, user_text=text)
     if step.action == ProbeAction.URGENT_CLOSE:
         return _emit_urgent_close(state)
     if step.action == ProbeAction.SPEAK_PROBE and step.probe_phase:
         return _speak_probe(state, step.probe_phase)
     if step.action == ProbeAction.SPEAK_SLOT and step.next_slot:
-        if not can_ask_slot(state, step.next_slot):
-            return _close_partial(state)
-        ack = questions.wellness_ack(
-            polarity=step.ack_polarity,
-            value=state.wellness_concern or text,
-        )
-        question = questions.slot_question(step.next_slot, state=state)
-        return _emit_speak(
-            state,
-            text=f"{ack} {question}".strip(),
-            intent=f"check_{step.next_slot}",
-            slot=step.next_slot,
-            marks_question=True,
-        )
+        state.set_background_goal_coverage(step.next_slot, BackgroundGoalCoverage.ASKED)
+        return _schedule_advance(state, user_text=text)
     if step.action == ProbeAction.SPEAK_PLANS:
-        if not can_ask_slot(state, "plans"):
-            return _close_partial(state)
-        question = questions.plans_question(state)
-        return _emit_speak(
-            state,
-            text=f"Понимаю. {question}".strip(),
-            intent="check_plans",
-            slot="plans",
-            marks_question=True,
-        )
-    return _advance_after_fills(state, [])
+        state.set_background_goal_coverage("plans", BackgroundGoalCoverage.ASKED)
+        return _schedule_advance(state, user_text=text)
+    return _schedule_advance(state, user_text=text)
 
 
 def _speak_probe(
@@ -1250,6 +1307,9 @@ def _apply_off_context_slot_answer(
         state.processing_turn_id = None
         state.processing_effect_id = None
         state.pending_episode_attribute = None
+        state.planned_question = None
+        state.playing_question = None
+        state.active_playout = None
         state.bump_revision()
         return _advance_after_fills(state, [slot])
     return None

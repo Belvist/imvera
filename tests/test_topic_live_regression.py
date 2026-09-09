@@ -45,6 +45,7 @@ def test_fs_592f4ea0_sleep_then_mixed_turn_then_improving_abdominal() -> None:
     assert abdominal.known_attributes.get("current") is not None
     assert state.slots["mood"] == SlotStatus.OPEN
 
-    result = runner.run(["Хорошее настроение.", "Планов нет."])
+    result = runner.run(["Хорошее настроение.", "Планов нет.", "Нет."])
     intents = [e.intent for e in result.speak_effects]
+    assert "important_to_share" in intents
     assert "summary" in intents

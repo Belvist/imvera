@@ -154,10 +154,10 @@ def question_context_from_state(state: EngineState) -> QuestionContext | None:
     if state.pending_episode_attribute and state.active_episode_id:
         ep = state.issue_episodes.get(state.active_episode_id)
         if ep is not None:
-            from packages.dialogue_engine.conversation_policy import _attribute_question
+            from packages.dialogue_engine.conversation_policy import episode_question_for_attribute
 
             attr = state.pending_episode_attribute
-            text, intent = _attribute_question(ep, attr)
+            text, intent = episode_question_for_attribute(ep, attr)
             return QuestionContext(
                 question_id=f"pending-{state.active_episode_id}-{attr}",
                 kind=QuestionKind.EPISODE_ATTRIBUTE,

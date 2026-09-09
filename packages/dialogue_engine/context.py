@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 from packages.contracts.enums import FsmState, SlotStatus
+from packages.dialogue_engine.response_plan import ResponsePlan as ResponsePlan  # noqa: F401
 
 if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState, Question
@@ -72,15 +73,6 @@ class InterpretContext:
             awaiting_goodbye_confirm=state.awaiting_goodbye_confirm,
             turn_id=turn_id,
         )
-
-
-@dataclass
-class ResponsePlan:
-    acknowledge: str = ""
-    facts_to_reference: list[str] = field(default_factory=list)
-    next_slot: str | None = None
-    mandatory_question: str = ""
-    tone: str = "warm"
 
 
 class StructuredMeaning(BaseModel):

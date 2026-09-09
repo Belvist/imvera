@@ -19,6 +19,17 @@ class CheckPath(StrEnum):
     PAIN_SHORT = "pain_short"
     URGENT = "urgent"
 
+
+class BackgroundGoalCoverage(StrEnum):
+    UNSEEN = "unseen"
+    COVERED_FROM_SPEECH = "covered_from_speech"
+    ASKED = "asked"
+    ANSWERED = "answered"
+    SKIPPED = "skipped"
+
+
+_BACKGROUND_SLOTS = ("wellness", "mood", "sleep", "plans")
+
 MAX_SLOT_ATTEMPTS = 2
 
 
@@ -168,6 +179,17 @@ class EngineState(BaseModel):
 
     observations: dict[str, object] = Field(default_factory=dict)
 
+    background_goal_status: dict[str, str] = Field(
+        default_factory=lambda: {
+            "wellness": BackgroundGoalCoverage.UNSEEN,
+            "mood": BackgroundGoalCoverage.UNSEEN,
+            "sleep": BackgroundGoalCoverage.UNSEEN,
+            "plans": BackgroundGoalCoverage.UNSEEN,
+        }
+    )
+    important_to_share_asked: bool = False
+    important_to_share_resolved: bool = False
+
     def uses_issue_episodes(self) -> bool:
         return bool(self.issue_episodes or self.active_episode_id)
 
@@ -196,11 +218,27 @@ class EngineState(BaseModel):
         return None
 
     def next_open_slot(self) -> str | None:
+        """Compatibility helper — scheduler owns next-turn decisions."""
         if self.check_path == CheckPath.URGENT:
             return None
-        for slot in ("wellness", "mood", "sleep", "plans"):
+        for slot in _BACKGROUND_SLOTS:
             if slot in self.skipped_slots:
                 continue
             if self.slots.get(slot) == SlotStatus.OPEN:
                 return slot
         return None
+
+    def set_background_goal_coverage(self, slot: str, coverage: BackgroundGoalCoverage) -> None:
+        if slot in self.background_goal_status:
+            self.background_goal_status[slot] = coverage.value
+
+    def background_goal_needs_attention(self, slot: str) -> bool:
+        if slot in self.skipped_slots:
+            return False
+        if self.slots.get(slot) != SlotStatus.OPEN:
+            return False
+        status = self.background_goal_status.get(slot, BackgroundGoalCoverage.UNSEEN)
+        return status in (
+            BackgroundGoalCoverage.UNSEEN,
+            BackgroundGoalCoverage.ASKED,
+        )
