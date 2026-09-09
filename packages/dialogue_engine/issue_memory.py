@@ -168,6 +168,66 @@ def _find_episode_for_mention(state: EngineState, mention: IssueMention) -> str 
     return None
 
 
+_ASSOCIATED_SECONDARY_LABELS = frozenset(
+    {"тошнота", "тошнит", "головокружение", "слабость", "усталость"}
+)
+
+
+def _dedupe_primary_mentions(mentions: tuple[IssueMention, ...]) -> tuple[IssueMention, ...]:
+    """Kernel often emits two primaries for one body site (живот болит + боль в животе)."""
+    seen_sites: set[str] = set()
+    seen_primaries: set[str] = set()
+    out: list[IssueMention] = []
+    for mention in mentions:
+        if mention.body_site and mention.role in ("primary", "independent"):
+            if mention.body_site in seen_sites:
+                continue
+            seen_sites.add(mention.body_site)
+        elif mention.role in ("primary", "independent"):
+            label = (mention.label or "").lower()
+            if label in seen_primaries:
+                continue
+            seen_primaries.add(label)
+        out.append(mention)
+    return tuple(out)
+
+
+def finalize_episode_if_complete(ep: IssueEpisode) -> None:
+    """Close episode when obligations are met so it cannot be re-activated."""
+    from packages.dialogue_engine.question_context import (
+        episode_is_resolved,
+        episode_obligations_satisfied,
+    )
+
+    if episode_obligations_satisfied(ep) and not episode_is_resolved(ep):
+        ep.status = "resolved"
+
+
+def _merge_associated_episode_groups(
+    groups: list[tuple[IssueMention, list[IssueMention]]],
+) -> list[tuple[IssueMention, list[IssueMention]]]:
+    """One primary episode per turn — nausea/dizziness stay associated with headache."""
+    if len(groups) <= 1:
+        return groups
+    primary, associated = groups[0]
+    primary_label = (primary.label or "").lower()
+    merged = list(associated)
+    rest: list[tuple[IssueMention, list[IssueMention]]] = []
+    for sec_primary, sec_assoc in groups[1:]:
+        sec_label = (sec_primary.label or "").lower()
+        headache_primary = "голов" in primary_label or primary.body_site == "голова"
+        secondary_associated = (
+            sec_primary.role in ("associated", "independent")
+            and sec_label in _ASSOCIATED_SECONDARY_LABELS
+        )
+        if headache_primary and secondary_associated:
+            merged.append(sec_primary)
+            merged.extend(sec_assoc)
+        else:
+            rest.append((sec_primary, sec_assoc))
+    return [(primary, merged)] + rest
+
+
 def _group_episode_mentions(
     mentions: tuple[IssueMention, ...],
 ) -> list[tuple[IssueMention, list[IssueMention]]]:
@@ -264,6 +324,11 @@ def _episode_handled_by_topic_flow(state: EngineState, ep: IssueEpisode) -> bool
 
 def filter_rich_turn_mentions(state: EngineState, turn: RichUserTurn) -> RichUserTurn:
     """Drop dimension-only mentions that must not become parallel episodes."""
+    from packages.dialogue_engine.question_context import utterance_indicates_resolved
+
+    if state.pending_episode_attribute and state.active_episode_id:
+        if utterance_indicates_resolved(turn.raw_text):
+            return turn.model_copy(update={"issue_mentions": ()})
     if not turn.issue_mentions:
         return turn
     if state.pending_episode_attribute and state.active_episode_id:
@@ -354,7 +419,8 @@ def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
             _fill_pending_attribute_from_answer(state, turn)
         return result
 
-    groups = _group_episode_mentions(turn.issue_mentions)
+    mentions = _dedupe_primary_mentions(turn.issue_mentions)
+    groups = _merge_associated_episode_groups(_group_episode_mentions(mentions))
     created: list[str] = []
     for primary, associated in groups:
         existing = _find_episode_for_mention(state, primary)
@@ -434,29 +500,41 @@ def _fill_pending_attribute_for_episode(
     ep = state.issue_episodes.get(episode_id)
     if ep is None:
         return
+    from packages.dialogue_engine.question_context import (
+        mark_episode_resolved,
+        utterance_indicates_resolved,
+    )
+
+    if utterance_indicates_resolved(turn.raw_text):
+        mark_episode_resolved(ep)
+        state.pending_episode_attribute = None
+        return
     exclude = _mention_exclusion_clauses(turn)
     if attribute == "onset":
         value = extract_grounded_onset_value(turn.raw_text, exclude_clauses=exclude)
         if value:
             ep.known_attributes["onset"] = value
             _maybe_clear_pending_attribute(state, episode_id, attribute)
+            finalize_episode_if_complete(ep)
         return
     if attribute == "severity":
         value = extract_grounded_severity_value(turn.raw_text, exclude_clauses=exclude)
         if value:
             ep.known_attributes["severity"] = value
             _maybe_clear_pending_attribute(state, episode_id, attribute)
+            finalize_episode_if_complete(ep)
         return
     if attribute == "duration":
         value = extract_grounded_onset_value(turn.raw_text, exclude_clauses=exclude)
         if value:
             ep.known_attributes["duration"] = value
             _maybe_clear_pending_attribute(state, episode_id, attribute)
+            finalize_episode_if_complete(ep)
         return
     raw = turn.raw_text.strip().lower()
     if attribute == "current" and raw:
-        if any(x in raw for x in ("не бол", "прошл", "легче", "лучше", "нет")):
-            ep.known_attributes["current"] = "resolved"
+        if utterance_indicates_resolved(turn.raw_text):
+            mark_episode_resolved(ep)
         elif any(x in raw for x in ("бол", "да", "ещё", "еще")):
             ep.known_attributes["current"] = "active"
         else:

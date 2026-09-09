@@ -1,0 +1,27 @@
+{
+  "call_id": "fs-headache-resolved",
+  "elder_display_name": "Даниил",
+  "opening": true,
+  "turns": [
+    {
+      "bot_text": "Как вы себя чувствуете?",
+      "stt_final": "Голова болит и тошнит.",
+      "answer_slot": "wellness",
+      "expected_admission": "ACCEPT"
+    },
+    {
+      "bot_text": "Как давно это продолжается?",
+      "stt_final": "Со вчерашнего дня.",
+      "pending_episode_attribute": "duration",
+      "expected_admission": "ACCEPT",
+      "expected_episode_attribute": "duration"
+    },
+    {
+      "bot_text": "Боль сильная или терпимая?",
+      "stt_final": "Всё, боль прошла.",
+      "pending_episode_attribute": "severity",
+      "expected_admission": "ACCEPT",
+      "expected_no_intents": ["episode_headache_severity"]
+    }
+  ]
+}

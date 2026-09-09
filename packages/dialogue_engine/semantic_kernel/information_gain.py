@@ -11,8 +11,13 @@ def attribute_information_gain(
     attribute: str,
 ) -> float:
     """Higher = more useful to ask. Deterministic heuristic."""
-    from packages.dialogue_engine.question_context import attribute_need_satisfied
+    from packages.dialogue_engine.question_context import (
+        attribute_need_satisfied,
+        episode_is_resolved,
+    )
 
+    if episode_is_resolved(ep):
+        return -1.0
     if attribute_need_satisfied(ep, attribute):
         return -1.0
     if ep.status == "resolved":
@@ -42,8 +47,13 @@ def attribute_information_gain(
 
 
 def best_attribute_to_ask(state: EngineState, ep: IssueEpisode) -> str | None:
-    from packages.dialogue_engine.question_context import attribute_need_satisfied
+    from packages.dialogue_engine.question_context import (
+        attribute_need_satisfied,
+        episode_is_resolved,
+    )
 
+    if episode_is_resolved(ep):
+        return None
     pending = state.pending_episode_attribute
     if pending and not attribute_need_satisfied(ep, pending):
         return pending

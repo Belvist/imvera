@@ -78,6 +78,50 @@ def test_user_question_then_resume() -> None:
     assert any(i in intents for i in ("check_mood", "clarify_mood", "check_plans"))
 
 
+def test_headache_resolved_skips_severity_and_extra_episodes() -> None:
+    """Live regression: «боль прошла» must close episode, not re-ask severity."""
+    runner = _runner()
+    runner.run([CallStarted(), "Голова болит и тошнит."])
+    result = runner.run(["Со вчерашнего дня."])
+    intents = [e.intent for e in result.speak_effects]
+    assert "episode_headache_duration" not in intents
+    assert len(result.state.issue_episodes) == 1
+
+    result = runner.run(["Всё, боль прошла."])
+    intents = [e.intent for e in result.speak_effects]
+    texts = " ".join(e.text.lower() for e in result.speak_effects)
+    assert "episode_headache_severity" not in intents
+    assert "сильная" not in texts and "терпимая" not in texts
+    ep = _headache_episode(result.state)
+    assert ep is not None
+    assert ep.status == "resolved"
+    assert result.state.active_episode_id is None
+
+
+def test_abdominal_resolved_single_episode_preserves_onset() -> None:
+    runner = _runner()
+    runner.run([CallStarted(), "Болит живот.", "С утра."])
+    assert len(runner.state.issue_episodes) == 1
+    ep_id = next(iter(runner.state.issue_episodes))
+    result = runner.run(["Сейчас уже не болит."])
+    ep = result.state.issue_episodes[ep_id]
+    assert ep.status == "resolved"
+    assert (ep.known_attributes.get("onset") or "").startswith("С утра")
+    assert ep.known_attributes.get("current") == "resolved"
+    intents = [e.intent for e in result.speak_effects]
+    assert "episode_headache_severity" not in intents
+
+
+def test_headache_severity_completes_episode() -> None:
+    runner = _runner()
+    runner.run([CallStarted(), "Голова болит.", "С утра."])
+    result = runner.run(["Терпимая."])
+    ep = _headache_episode(result.state)
+    assert ep is not None
+    assert ep.status == "resolved"
+    assert ep.known_attributes.get("severity", "").startswith("Терпимая")
+
+
 def test_correction_not_dumb_repeat() -> None:
     runner = _runner()
     runner.run([CallStarted(), "Живот болит."])

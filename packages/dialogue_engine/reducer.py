@@ -1267,7 +1267,10 @@ def _advance_after_episode_answer(
     answer_slot: str | None,
 ) -> tuple[EngineState, list[Effect]] | None:
     from packages.dialogue_engine.issue_memory import get_active_episode
-    from packages.dialogue_engine.question_context import attribute_need_satisfied
+    from packages.dialogue_engine.question_context import (
+        attribute_need_satisfied,
+        episode_is_resolved,
+    )
 
     if not turn.answers_pending_question:
         return None
@@ -1279,8 +1282,15 @@ def _advance_after_episode_answer(
     pending = state.pending_episode_attribute
     if pending:
         ep = get_active_episode(state)
-        if ep is not None and attribute_need_satisfied(ep, pending):
-            state.pending_episode_attribute = None
+        if ep is not None:
+            if episode_is_resolved(ep):
+                state.pending_episode_attribute = None
+                state.active_episode_id = None
+            elif attribute_need_satisfied(ep, pending):
+                state.pending_episode_attribute = None
+                from packages.dialogue_engine.issue_memory import finalize_episode_if_complete
+
+                finalize_episode_if_complete(ep)
     state.processing_turn_id = None
     state.processing_effect_id = None
     state.waiting_on_slot = None

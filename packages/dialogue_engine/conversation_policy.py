@@ -81,7 +81,12 @@ def _attribute_question(ep, attribute: str) -> tuple[str, str]:
             return "Как давно болит голова?", "episode_headache_onset"
         return f"Как давно {ep.primary_label}?", f"episode_{ep.episode_id}_onset"
     if attribute == "severity":
-        return "Боль сильная или терпимая?", "episode_headache_severity"
+        if "голов" in label:
+            return "Боль сильная или терпимая?", "episode_headache_severity"
+        return (
+            f"Насколько сильно {ep.primary_label}?",
+            f"episode_{ep.episode_id}_severity",
+        )
     if attribute == "current":
         return (
             f"Я уточняю про сейчас: {ep.primary_label} ещё беспокоит или уже прошло?",
@@ -133,6 +138,9 @@ def _next_episode_question(state: EngineState) -> PolicyDecision | None:
     if ep is None:
         return None
     if episode_complete(ep):
+        from packages.dialogue_engine.issue_memory import finalize_episode_if_complete
+
+        finalize_episode_if_complete(ep)
         activate_next_pending_episode(state)
         ep = get_active_episode(state)
         if ep is None:
@@ -140,7 +148,9 @@ def _next_episode_question(state: EngineState) -> PolicyDecision | None:
 
     attribute = _missing_attribute(state, ep)
     if attribute is None:
-        ep.status = "resolved"
+        from packages.dialogue_engine.issue_memory import finalize_episode_if_complete
+
+        finalize_episode_if_complete(ep)
         activate_next_pending_episode(state)
         return _next_episode_question(state)
 

@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
+
+_RESOLVED_UTTERANCE = re.compile(
+    r"\b("
+    r"не\s+болит|уже\s+не\s+бол|боль\s+прошл\w*|всё\s+прошл\w*|все\s+прошл\w*|"
+    r"прошл\w*|легче|лучше|получше|уже\s+почти\s+не"
+    r")\b",
+    re.I,
+)
 
 if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState, IssueEpisode
@@ -54,6 +63,32 @@ class QuestionContext:
     retry_count: int = 0
 
 
+def utterance_indicates_resolved(text: str) -> bool:
+    """User text means the symptom is no longer active."""
+    return bool(_RESOLVED_UTTERANCE.search(text.strip()))
+
+
+def current_value_indicates_resolved(value: str) -> bool:
+    raw = (value or "").strip().lower()
+    if raw in ("resolved", "improving"):
+        return True
+    return utterance_indicates_resolved(raw)
+
+
+def episode_is_resolved(ep: IssueEpisode) -> bool:
+    if ep.status == "resolved":
+        return True
+    current = ep.known_attributes.get("current")
+    if current and current_value_indicates_resolved(str(current)):
+        return True
+    return False
+
+
+def mark_episode_resolved(ep: IssueEpisode) -> None:
+    ep.known_attributes["current"] = "resolved"
+    ep.status = "resolved"
+
+
 def attribute_need_satisfied(ep: IssueEpisode, attribute: str) -> bool:
     """True when any accepted semantic type is present on the episode."""
     need = QuestionNeed.for_attribute(attribute)
@@ -64,7 +99,7 @@ def episode_obligations_satisfied(ep: IssueEpisode) -> bool:
     """Episode has enough grounded facts to leave active questioning."""
     from packages.dialogue_engine.issue_memory import _needs_severity
 
-    if ep.status == "resolved":
+    if episode_is_resolved(ep):
         return True
     if ep.kind == "symptom":
         temporal_ok = (

@@ -215,6 +215,26 @@ def build_reference_observations(
     body_site = ep.body_site
     issue_norm = ep.primary_label.lower()
     observations: list[Observation] = []
+    raw = result.raw_text.strip()
+    from packages.dialogue_engine.question_context import utterance_indicates_resolved
+
+    if utterance_indicates_resolved(raw):
+        observations.append(
+            Observation(
+                observation_id=_oid(),
+                episode_id=ep_id,
+                attribute="current",
+                value="resolved",
+                normalized_value="resolved",
+                body_site=body_site,
+                issue_normalized=issue_norm,
+                source_turn_id=result.utterance_id,
+                evidence=raw,
+                status="confirmed",
+                temporal=TemporalFrame(current=False, raw_evidence=raw),
+            )
+        )
+        return tuple(observations)
 
     time_spans = [s for s in result.spans if s.type in (SpanType.TIME, SpanType.DURATION)]
     status_spans = [s for s in result.spans if s.type == SpanType.STATUS]
@@ -222,11 +242,12 @@ def build_reference_observations(
     pending = state.pending_episode_attribute
 
     if pending and not any(r.type == RelationType.REFERS_TO for r in result.relations):
-        raw = result.raw_text.strip()
         if pending in ("onset", "duration"):
             from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
 
-            value = time_spans[0].text if time_spans else extract_grounded_onset_value(raw)
+            value = extract_grounded_onset_value(raw)
+            if not value and time_spans:
+                value = time_spans[0].text
             if value:
                 attr = pending
                 observations.append(
@@ -421,7 +442,31 @@ def _apply_bound_observations_to_episodes(
         if ep is None:
             continue
         if obs.attribute in ("onset", "duration", "severity", "current"):
+            from packages.dialogue_engine.question_context import (
+                current_value_indicates_resolved,
+                episode_is_resolved,
+                utterance_indicates_resolved,
+            )
+
+            if episode_is_resolved(ep):
+                continue
+            if obs.attribute in ("onset", "duration") and utterance_indicates_resolved(
+                obs.evidence
+            ):
+                continue
+            if obs.attribute in ("onset", "duration") and ep.known_attributes.get(
+                obs.attribute
+            ) and obs.value.strip().lower() in ("сейчас", "now"):
+                continue
             ep.known_attributes[obs.attribute] = obs.value
+            if obs.attribute == "current":
+                from packages.dialogue_engine.question_context import (
+                    current_value_indicates_resolved,
+                    mark_episode_resolved,
+                )
+
+                if current_value_indicates_resolved(obs.value):
+                    mark_episode_resolved(ep)
         if obs.body_site and not ep.body_site:
             ep.body_site = obs.body_site
 
