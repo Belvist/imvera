@@ -20,6 +20,17 @@ def engine_enabled() -> bool:
     }
 
 
+def llm_interpret_enabled() -> bool:
+    """Hot-path /v1/interpret. Disabled for DialogueEngine — deterministic NLU only."""
+    if engine_enabled():
+        return False
+    return os.environ.get("IMVERA_LLM_INTERPRET", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
 @lru_cache(maxsize=1)
 def git_sha_short() -> str:
     root = Path(__file__).resolve().parents[2]
@@ -54,6 +65,8 @@ def runtime_truth() -> dict[str, Any]:
         "IMVERA_VOICE_DIRECT_WELLNESS_OPENING": os.environ.get(
             "IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1"
         ),
+        "IMVERA_LLM_INTERPRET": os.environ.get("IMVERA_LLM_INTERPRET", "0"),
+        "dialogue.llm_interpret.enabled": llm_interpret_enabled(),
     }
 
 
@@ -63,11 +76,13 @@ def log_runtime_truth(logger: logging.Logger | None = None) -> dict[str, Any]:
     out = logger or _LOG
     out.info(
         "dialogue.engine.enabled=%s dialogue.engine.mode=%s dialogue.engine.version=%s "
-        "IMVERA_DIALOGUE_ENGINE=%s IMVERA_VOICE_DIRECT_WELLNESS_OPENING=%s",
+        "IMVERA_DIALOGUE_ENGINE=%s IMVERA_VOICE_DIRECT_WELLNESS_OPENING=%s "
+        "dialogue.llm_interpret.enabled=%s",
         truth["dialogue.engine.enabled"],
         truth["dialogue.engine.mode"],
         truth["dialogue.engine.version"],
         truth["IMVERA_DIALOGUE_ENGINE"],
         truth["IMVERA_VOICE_DIRECT_WELLNESS_OPENING"],
+        truth["dialogue.llm_interpret.enabled"],
     )
     return truth

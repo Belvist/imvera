@@ -1,0 +1,20 @@
+"""LLM interpret hot-path policy — DialogueEngine uses deterministic NLU only."""
+
+from __future__ import annotations
+
+import pytest
+
+from packages.dialogue_engine.runtime import llm_interpret_enabled
+
+
+@pytest.mark.dialogue_engine
+def test_llm_interpret_disabled_with_dialogue_engine() -> None:
+    assert not llm_interpret_enabled()
+
+
+def test_llm_interpret_opt_in_for_legacy_planner(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "0")
+    monkeypatch.setenv("IMVERA_LLM_INTERPRET", "0")
+    assert not llm_interpret_enabled()
+    monkeypatch.setenv("IMVERA_LLM_INTERPRET", "1")
+    assert llm_interpret_enabled()

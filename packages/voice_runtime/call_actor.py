@@ -36,10 +36,17 @@ from packages.dialogue_engine.effects import (
     TimerEffect,
 )
 from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
-from packages.dialogue_engine.issue_mention_extract import should_use_rich_turn
+from packages.dialogue_engine.issue_mention_extract import (
+    extract_issue_mentions,
+    should_use_rich_turn,
+)
+from packages.dialogue_engine.runtime import llm_interpret_enabled
 from packages.dialogue_engine.semantic import semantic_to_interpretation
 from packages.dialogue_engine.topic_tracker import is_topic_slot
-from packages.dialogue_engine.turn_understanding import payload_to_rich_turn
+from packages.dialogue_engine.turn_understanding import (
+    build_rich_turn_from_text,
+    payload_to_rich_turn,
+)
 from packages.voice_perception.config import PerceptionConfig
 from packages.voice_perception.session import PerceptionSession
 from packages.voice_perception.text_echo import text_echo_similarity
@@ -1634,36 +1641,44 @@ class CallActor:
                 is_topic_slot_fn=is_topic_slot,
                 pending_episode_attribute=pending_episode_attribute,
             )
+            issue_mentions = ()
+            if self.session.uses_dialogue_engine():
+                issue_mentions = extract_issue_mentions(text)
+            use_rich_deterministic = self.session.uses_dialogue_engine() and (
+                force_rich or bool(issue_mentions)
+            )
             if self.session.uses_dialogue_engine():
                 ctx = InterpretContext.from_engine_state(
                     self.session._engine.state, turn_id=utterance_id
                 )
-                if not force_rich:
-                    sem, contextual_confident = contextual_interpret(text, ctx)
-                    fast_confident = contextual_confident
-                    if contextual_confident:
-                        interpret_path = "fast_contextual"
-                    if not fast_confident:
-                        sem, rules_confident = fast_interpret_semantic(
-                            text, answer_slot=answer_slot
-                        )
-                        fast_confident = rules_confident
-                        if rules_confident:
-                            interpret_path = "fast_rules"
-                    if fast_confident:
-                        interp = semantic_to_interpretation(sem)
-                        await self._emit_stage(
-                            "interpret.fast_path",
-                            utterance_id=utterance_id,
-                            answer_slot=answer_slot or "",
-                        )
-                else:
+                sem, contextual_confident = contextual_interpret(text, ctx)
+                fast_confident = contextual_confident
+                if contextual_confident:
+                    interpret_path = "fast_contextual"
+                if not fast_confident:
+                    sem, rules_confident = fast_interpret_semantic(
+                        text, answer_slot=answer_slot
+                    )
+                    fast_confident = rules_confident
+                    if rules_confident:
+                        interpret_path = "fast_rules"
+                if fast_confident and not use_rich_deterministic:
+                    interp = semantic_to_interpretation(sem)
+                    await self._emit_stage(
+                        "interpret.fast_path",
+                        utterance_id=utterance_id,
+                        answer_slot=answer_slot or "",
+                        force_rich=force_rich,
+                    )
+                elif use_rich_deterministic:
+                    interpret_path = "rich_deterministic"
+                elif force_rich:
                     interpret_path = "rich_required"
             llm_request_id = f"llm-{uuid.uuid4().hex[:8]}"
             self._active_llm_request_id = llm_request_id
             semantic_payload = None
             try:
-                if not fast_confident:
+                if not fast_confident and not use_rich_deterministic and llm_interpret_enabled():
                     ctx = build_turn_context(
                         self.session.state,
                         turn_id=turn_id,
@@ -1718,19 +1733,21 @@ class CallActor:
                         utterance_id=utterance_id,
                         raw_text=text,
                     )
+            elif use_rich_deterministic:
+                from packages.dialogue.interpretation import interpret_user_turn
+
+                rich_turn = build_rich_turn_from_text(text, utterance_id=utterance_id)
+                if fast_confident:
+                    interp = semantic_to_interpretation(sem)
+                else:
+                    interp = interpret_user_turn(self.session.state, text)
             elif not fast_confident:
                 interpret_path = "rules_fallback"
                 from packages.dialogue.interpretation import interpret_user_turn
 
                 interp = interpret_user_turn(self.session.state, text)
-                if self.session.uses_dialogue_engine() and force_rich:
-                    from packages.dialogue_engine.turn_understanding import (
-                        build_rich_turn_from_text,
-                    )
-
-                    rich_turn = build_rich_turn_from_text(
-                        text, utterance_id=utterance_id
-                    )
+            elif fast_confident:
+                interp = semantic_to_interpretation(sem)
             await self._emit_forensic_turn(
                 utterance_id=utterance_id,
                 stt_text=text,

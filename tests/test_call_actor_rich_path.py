@@ -248,3 +248,52 @@ def test_correction_rich_turn_reaches_engine() -> None:
     )
     assert captured[0] is not None
     assert captured[0].correction or captured[0].dialogue_act == "correction"
+
+
+def test_wellness_plus_symptoms_stays_on_fast_contextual_path() -> None:
+    """Regression: fs-72b01e3c — deterministic rich path, no LLM on hot path."""
+    from packages.dialogue.interpretation import to_turn_interpretation
+    from packages.dialogue_engine.context import InterpretContext
+    from packages.dialogue_engine.contextual_interpreter import contextual_interpret
+    from packages.dialogue_engine.issue_mention_extract import (
+        extract_issue_mentions,
+        should_use_rich_turn,
+    )
+    from packages.dialogue_engine.runtime import llm_interpret_enabled
+    from packages.dialogue_engine.semantic import semantic_to_interpretation
+    from packages.dialogue_engine.topic_tracker import is_topic_slot
+    from packages.dialogue_engine.turn_understanding import build_rich_turn_from_text
+
+    assert not llm_interpret_enabled()
+
+    session = _session_at_wellness()
+    text = (
+        "Привет. Чувствую себя сейчас в данный момент хорошо. "
+        "В 4:00 утра болела у меня голова и в 3:00 болело у меня колено."
+    )
+    answer_slot = session._engine.answer_context_slot()
+    assert should_use_rich_turn(
+        text, answer_slot, is_topic_slot_fn=is_topic_slot
+    )
+    mentions = extract_issue_mentions(text)
+    assert mentions, "headache clause must be extractable until Semantic Kernel"
+    ctx = InterpretContext.from_engine_state(session._engine.state, turn_id="u-1")
+    sem, confident = contextual_interpret(text, ctx)
+    assert confident
+    rich_turn = build_rich_turn_from_text(text, utterance_id="u-1")
+    interp = semantic_to_interpretation(sem)
+    contract = to_turn_interpretation(
+        session.state,
+        1,
+        text,
+        interp,
+        state_version=session.state.state_version,
+    )
+    result = session.handle_user_text(
+        text,
+        interp=interp,
+        contract=contract,
+        utterance_id="u-1",
+        rich_turn=rich_turn,
+    )
+    assert result.validated.speech
