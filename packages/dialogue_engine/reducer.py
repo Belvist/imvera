@@ -37,7 +37,6 @@ from packages.dialogue_engine.events import (
     TimerExpired,
     UserTurnReceived,
 )
-from packages.dialogue_engine.issue_memory import ingest_rich_turn
 from packages.dialogue_engine.policy import (
     apply_slot_answer,
     can_ask_slot,
@@ -49,7 +48,7 @@ from packages.dialogue_engine.policy import (
 )
 from packages.dialogue_engine.response_plan import build_response_plan, compose_speech
 from packages.dialogue_engine.semantic import SemanticAct
-from packages.dialogue_engine.semantic_kernel.observation_memory import persist_turn_observations
+from packages.dialogue_engine.semantic_kernel.observation_memory import atomic_semantic_apply
 from packages.dialogue_engine.state import (
     CheckPath,
     EngineState,
@@ -353,6 +352,12 @@ def _apply_goal_facts(state: EngineState, turn: RichUserTurn) -> list[str]:
             confidence=0.9,
             correction=turn.correction,
         )
+        if fact.evidence and fact.evidence.quote:
+            rec = state.slot_records.get(fact.field)
+            if rec is not None:
+                state.slot_records[fact.field] = rec.model_copy(
+                    update={"source_text": fact.evidence.quote}
+                )
         filled.append(fact.field)
     return filled
 
@@ -404,22 +409,6 @@ def _apply_rich_turn(
             return _speak_never_silent(state, answer_slot or "wellness", user_text)
         return state, []
 
-    if turn.user_question and not turn.answers_pending_question:
-        decision = decide_conversation_policy(state, turn)
-        if decision is not None and decision.text:
-            if decision.suspend is not None:
-                state.suspended_obligation = decision.suspend
-            state.processing_turn_id = None
-            state.processing_effect_id = None
-            state.bump_revision()
-            return _emit_speak(
-                state,
-                text=decision.text,
-                intent=decision.intent or "rich_policy",
-                slot=decision.slot or answer_slot or "wellness",
-                marks_question=decision.marks_question,
-            )
-
     if is_topic_slot(answer_slot):
         from packages.dialogue_engine.topic_tracker import (
             observe_topic_answer,
@@ -427,8 +416,22 @@ def _apply_rich_turn(
         )
 
         sync_topic_hints_from_answer(state, user_text, answer_slot=answer_slot)
-        persist_turn_observations(state, turn)
-        ingest_rich_turn(state, turn)
+        atomic_semantic_apply(state, turn)
+        if turn.user_question and not turn.answers_pending_question:
+            decision = decide_conversation_policy(state, turn)
+            if decision is not None and decision.text:
+                if decision.suspend is not None:
+                    state.suspended_obligation = decision.suspend
+                state.processing_turn_id = None
+                state.processing_effect_id = None
+                state.bump_revision()
+                return _emit_speak(
+                    state,
+                    text=decision.text,
+                    intent=decision.intent or "rich_policy",
+                    slot=decision.slot or answer_slot or "wellness",
+                    marks_question=decision.marks_question,
+                )
         if turn.correction:
             decision = decide_conversation_policy(state, turn)
             if decision is not None and decision.text:
@@ -450,8 +453,41 @@ def _apply_rich_turn(
         observe_topic_answer(state, user_text)
         return _advance_after_topic(state, user_text, newly_filled=newly_filled)
 
-    persist_turn_observations(state, turn)
-    ingest_rich_turn(state, turn)
+    if state.probe_phase and turn.dialogue_act == "answer":
+        if should_start_topic_flow(
+            state, user_text, answer_slot=f"probe_{state.probe_phase}"
+        ):
+            atomic_semantic_apply(state, turn)
+            state.probe_phase = None
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.waiting_on_slot = None
+            state.bump_revision()
+            prime_topics(state, user_text)
+            return _advance_after_topic(state, user_text, newly_filled=[])
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.waiting_on_slot = None
+        state.bump_revision()
+        return _advance_probe_after_answer(state, user_text)
+
+    atomic_semantic_apply(state, turn)
+
+    if turn.user_question and not turn.answers_pending_question:
+        decision = decide_conversation_policy(state, turn)
+        if decision is not None and decision.text:
+            if decision.suspend is not None:
+                state.suspended_obligation = decision.suspend
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.bump_revision()
+            return _emit_speak(
+                state,
+                text=decision.text,
+                intent=decision.intent or "rich_policy",
+                slot=decision.slot or answer_slot or "wellness",
+                marks_question=decision.marks_question,
+            )
 
     if turn.needs_clarification:
         from packages.dialogue_engine.semantic_kernel.kernel import clarify_text
@@ -489,6 +525,12 @@ def _apply_rich_turn(
             )
 
     newly_filled = _apply_goal_facts(state, turn)
+    if newly_filled:
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.waiting_on_slot = None
+        state.bump_revision()
+        return _advance_after_fills(state, newly_filled)
 
     decision = decide_conversation_policy(state, turn)
     if decision is not None:
@@ -509,12 +551,6 @@ def _apply_rich_turn(
                 slot=decision.slot or answer_slot or "wellness",
                 marks_question=decision.marks_question,
             )
-
-    if newly_filled:
-        state.processing_turn_id = None
-        state.processing_effect_id = None
-        state.waiting_on_slot = None
-        return _advance_after_fills(state, newly_filled)
 
     if any(m.kind == "sleep_problem" for m in turn.issue_mentions):
         if should_start_topic_flow(state, user_text, answer_slot=answer_slot):
@@ -833,7 +869,8 @@ def _advance_after_fills(
     state.delivered_question = None
 
     if "wellness" in filled_slots:
-        wellness_text = state.slot_values.get("wellness", "")
+        rec = state.slot_records.get("wellness")
+        wellness_text = (rec.source_text if rec else "") or state.slot_values.get("wellness", "")
         if should_start_topic_flow(state, wellness_text, answer_slot="wellness"):
             state.probe_phase = None
             prime_topics(state, wellness_text)
@@ -949,7 +986,7 @@ def _branch_after_wellness(state: EngineState) -> tuple[EngineState, list[Effect
     if not state.wellness_probes_enabled:
         return None
     rec = state.slot_records.get("wellness")
-    text = rec.value if rec else state.slot_values.get("wellness", "")
+    text = (rec.source_text if rec else "") or state.slot_values.get("wellness", "")
     polarity = rec.polarity if rec else None
     branch = classify_wellness_path(wellness_text=text, polarity=polarity)
     if branch.path == CheckPath.STANDARD:

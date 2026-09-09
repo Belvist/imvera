@@ -1,7 +1,8 @@
-"""Link semantic spans within a clause."""
+"""Link semantic spans within a clause — no cross-clause misbinding."""
 
 from __future__ import annotations
 
+from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
 from packages.dialogue_engine.semantic_kernel.types import (
     RelationType,
     SemanticRelation,
@@ -11,7 +12,10 @@ from packages.dialogue_engine.semantic_kernel.types import (
 
 
 def _nearest_issue(
-    anchor: SemanticSpan, issues: list[SemanticSpan], *, max_distance: int = 80
+    anchor: SemanticSpan,
+    issues: list[SemanticSpan],
+    *,
+    max_distance: int = 80,
 ) -> SemanticSpan | None:
     best: SemanticSpan | None = None
     best_dist = max_distance + 1
@@ -23,10 +27,10 @@ def _nearest_issue(
     return best
 
 
-def parse_relations(spans: tuple[SemanticSpan, ...]) -> tuple[SemanticRelation, ...]:
+def _relations_in_clause(spans: tuple[SemanticSpan, ...]) -> list[SemanticRelation]:
     issues = [s for s in spans if s.type == SpanType.ISSUE]
-    if not issues and not spans:
-        return ()
+    if not issues:
+        return []
 
     relations: list[SemanticRelation] = []
     for sp in spans:
@@ -96,16 +100,22 @@ def parse_relations(spans: tuple[SemanticSpan, ...]) -> tuple[SemanticRelation, 
                         confidence=0.8,
                     )
                 )
+    return relations
 
-    if len(issues) >= 2:
-        primary = issues[0]
-        for extra in issues[1:]:
-            relations.append(
-                SemanticRelation(
-                    type=RelationType.ASSOCIATED_WITH,
-                    source_span_id=extra.span_id,
-                    target_span_id=primary.span_id,
-                    confidence=0.75,
-                )
-            )
+
+def parse_relations(
+    spans: tuple[SemanticSpan, ...],
+    *,
+    raw_text: str = "",
+) -> tuple[SemanticRelation, ...]:
+    if not spans:
+        return ()
+
+    if not raw_text.strip():
+        return tuple(_relations_in_clause(spans))
+
+    relations: list[SemanticRelation] = []
+    for start, end, _clause in clause_bounds(raw_text):
+        clause_spans = tuple(s for s in spans if start <= s.start < end)
+        relations.extend(_relations_in_clause(clause_spans))
     return tuple(relations)

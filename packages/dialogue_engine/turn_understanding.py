@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from packages.contracts.semantic import (
+    Evidence,
     FactCandidate,
     IssueMention,
     RiskCandidate,
@@ -122,7 +123,60 @@ def build_rich_turn_from_text(
     from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
 
     result = interpret(text, utterance_id=utterance_id, engine_state=engine_state)
-    return kernel_to_rich_turn(result)
+    answer_slot = None
+    if engine_state is not None and hasattr(engine_state, "answer_context_slot"):
+        answer_slot = engine_state.answer_context_slot()
+    turn = kernel_to_rich_turn(result, answer_slot=answer_slot)
+    if engine_state is not None and hasattr(engine_state, "answer_context_slot"):
+        from packages.dialogue_engine.context import InterpretContext
+        from packages.dialogue_engine.contextual_interpreter import contextual_interpret
+
+        ctx = InterpretContext.from_engine_state(engine_state, turn_id=utterance_id)
+        sem, confident = contextual_interpret(text.strip(), ctx)
+        if confident and sem.slots:
+            facts: list[FactCandidate] = []
+            raw = text.strip()
+            for slot_name, cand in sem.slots.items():
+                if slot_name not in ("wellness", "mood", "sleep", "plans"):
+                    continue
+                value = cand.value or raw
+                if slot_name in ("wellness", "mood") and cand.polarity:
+                    value = cand.polarity
+                facts.append(
+                    FactCandidate(
+                        field=slot_name,
+                        value=value,
+                        subject="speaker",
+                        temporal_scope="now",
+                        negated=False,
+                        evidence=Evidence(start=0, end=len(raw), quote=raw),
+                    )
+                )
+            if facts:
+                return turn.model_copy(update={"goal_facts": tuple(facts)})
+    if turn.goal_facts or not answer_slot:
+        return turn
+    from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
+
+    sem, confident = fast_interpret_semantic(text.strip(), answer_slot=answer_slot)
+    if (
+        not confident
+        or not sem.target_slot
+        or sem.target_slot not in ("wellness", "mood", "sleep", "plans")
+    ):
+        return turn
+    value = sem.value or text.strip()
+    if sem.target_slot in ("wellness", "mood") and sem.polarity:
+        value = sem.polarity
+    fact = FactCandidate(
+        field=sem.target_slot,
+        value=value,
+        subject="speaker",
+        temporal_scope="now",
+        negated=False,
+        evidence=Evidence(start=0, end=len(text.strip()), quote=text.strip()),
+    )
+    return turn.model_copy(update={"goal_facts": (fact,)})
 
 
 def build_rich_turn_from_text_legacy(text: str, *, utterance_id: str) -> RichUserTurn:

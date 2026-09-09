@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds, clause_for_position
 from packages.dialogue_engine.semantic_kernel.lexicon import (
     OTHER_PERSON_MARKERS,
     SPEAKER_MARKERS,
@@ -22,31 +23,6 @@ _DOCTOR_QUOTE = re.compile(
     re.I,
 )
 _U_OTHER = re.compile(r"\bу\s+([а-яё\-]+)\b", re.I)
-_CLAUSE_SPLIT = re.compile(r"\s*(?:[,;]|\s+и\s+|\s+а\s+)\s*", re.I)
-
-
-def _clause_bounds(text: str) -> list[tuple[int, int, str]]:
-    clauses: list[tuple[int, int, str]] = []
-    offset = 0
-    lower = text.lower()
-    for part in _CLAUSE_SPLIT.split(text):
-        part = part.strip()
-        if not part:
-            continue
-        start = lower.find(part.lower(), offset)
-        if start < 0:
-            start = offset
-        end = start + len(part)
-        clauses.append((start, end, part))
-        offset = end
-    return clauses or [(0, len(text), text)]
-
-
-def _clause_for_position(clauses: list[tuple[int, int, str]], pos: int) -> str:
-    for start, end, clause in clauses:
-        if start <= pos < end:
-            return clause
-    return clauses[-1][2] if clauses else ""
 
 
 def _subject_for_clause(clause: str, *, has_issue: bool) -> SubjectKind:
@@ -81,16 +57,16 @@ def resolve_subject(
     """Bind SUBJECT_OF per ISSUE span; global kind is only a coarse hint."""
     issues = [s for s in spans if s.type == SpanType.ISSUE]
     if not issues:
-        clauses = _clause_bounds(text)
+        clauses = clause_bounds(text)
         clause = clauses[0][2] if clauses else text
         return _subject_for_clause(clause, has_issue=False), ()
 
-    clauses = _clause_bounds(text)
+    clauses = clause_bounds(text)
     relations: list[SemanticRelation] = []
     subjects: list[SubjectKind] = []
 
     for issue in issues:
-        clause = _clause_for_position(clauses, issue.start)
+        clause = clause_for_position(clauses, issue.start)
         subject = _subject_for_clause(clause, has_issue=True)
         subjects.append(subject)
         if subject == SubjectKind.OTHER_PERSON:

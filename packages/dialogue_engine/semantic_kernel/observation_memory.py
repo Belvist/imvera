@@ -6,9 +6,8 @@ import uuid
 from typing import TYPE_CHECKING
 
 from packages.contracts.semantic import Evidence, IssueMention
+from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds, clause_for_position
 from packages.dialogue_engine.semantic_kernel.subject_resolver import (
-    _clause_bounds,
-    _clause_for_position,
     _subject_for_clause,
     subject_for_issue,
 )
@@ -90,13 +89,13 @@ def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
     status_of = _targets_for_relation(RelationType.STATUS_OF, spans, relations)
 
     observations: list[Observation] = []
-    clauses = _clause_bounds(result.raw_text)
+    clauses = clause_bounds(result.raw_text)
     for issue in issues:
         body_spans = body_of.get(issue.span_id, [])
         body_site = body_spans[0].normalized if body_spans else None
         issue_norm = issue.normalized or issue.text.lower()
         label = f"{body_site} {issue_norm}".strip() if body_site else issue.text
-        clause = _clause_for_position(clauses, issue.start)
+        clause = clause_for_position(clauses, issue.start)
         clause_subject = _subject_for_clause(clause, has_issue=True)
         subject = subject_for_issue(
             issue.span_id,
@@ -316,30 +315,61 @@ def apply_corrections(
     state.observations = store  # type: ignore[assignment]
 
 
-def persist_turn_observations(state: EngineState, turn: RichUserTurn) -> None:
-    """Canonical observation memory — source of truth before IssueEpisode projection."""
-    if turn.observations:
-        store: dict[str, Observation] = dict(state.observations)  # type: ignore[arg-type]
-        for obs in turn.observations:
-            if obs.status == "superseded":
-                continue
-            store[obs.observation_id] = obs
-        state.observations = store  # type: ignore[assignment]
-    if turn.kernel_corrections:
-        apply_corrections(state, turn.kernel_corrections, turn.observations)
-    _project_observations_to_episodes(state)
+def _episode_key(ep) -> tuple[str | None, str]:
+    return (ep.body_site, (ep.primary_label or "").lower())
 
 
-def _project_observations_to_episodes(state: EngineState) -> None:
-    """Compatibility projection: canonical observations → IssueEpisode.known_attributes."""
-    store: dict[str, Observation] = state.observations  # type: ignore[assignment]
-    for obs in store.values():
+def _match_episode_for_observation(
+    state: EngineState,
+    obs: Observation,
+    turn: RichUserTurn,
+) -> str | None:
+    if obs.episode_id:
+        return obs.episode_id
+    if obs.body_site:
+        for ep_id, ep in state.issue_episodes.items():
+            if ep.body_site == obs.body_site:
+                return ep_id
+    if obs.issue_normalized:
+        norm = obs.issue_normalized.lower()
+        for ep_id, ep in state.issue_episodes.items():
+            label = (ep.primary_label or "").lower()
+            if norm in label or (ep.body_site and norm.startswith(ep.body_site)):
+                return ep_id
+    if (
+        obs.attribute in ("onset", "duration", "severity", "current")
+        and not turn.issue_mentions
+        and state.active_episode_id
+    ):
+        return state.active_episode_id
+    return None
+
+
+def _bind_observations_to_episodes(
+    state: EngineState,
+    turn: RichUserTurn,
+) -> tuple[Observation, ...]:
+    bound: list[Observation] = []
+    for obs in turn.observations:
+        ep_id = _match_episode_for_observation(state, obs, turn)
+        if ep_id and obs.episode_id != ep_id:
+            bound.append(obs.model_copy(update={"episode_id": ep_id}))
+        else:
+            bound.append(obs)
+    return tuple(bound)
+
+
+def _apply_bound_observations_to_episodes(
+    state: EngineState,
+    observations: tuple[Observation, ...],
+) -> None:
+    """Project only explicitly bound turn observations — no active_episode fallback."""
+    for obs in observations:
         if obs.status != "confirmed" or obs.subject != SubjectKind.SPEAKER:
             continue
-        ep_id = obs.episode_id or state.active_episode_id
-        if not ep_id:
+        if not obs.episode_id:
             continue
-        ep = state.issue_episodes.get(ep_id)
+        ep = state.issue_episodes.get(obs.episode_id)
         if ep is None:
             continue
         if obs.attribute in ("onset", "duration", "severity", "current"):
@@ -348,11 +378,43 @@ def _project_observations_to_episodes(state: EngineState) -> None:
             ep.body_site = obs.body_site
 
 
+def atomic_semantic_apply(state: EngineState, turn: RichUserTurn) -> None:
+    """Atomic: episodes first, bind observations, persist, project this turn only."""
+    from packages.dialogue_engine.issue_memory import ingest_rich_turn
+
+    ingest_rich_turn(state, turn)
+    bound = _bind_observations_to_episodes(state, turn)
+
+    store: dict[str, Observation] = dict(state.observations)  # type: ignore[arg-type]
+    for obs in bound:
+        if obs.status == "superseded":
+            continue
+        store[obs.observation_id] = obs
+    state.observations = store  # type: ignore[assignment]
+
+    if turn.kernel_corrections:
+        apply_corrections(state, turn.kernel_corrections, bound)
+    _apply_bound_observations_to_episodes(state, bound)
+
+
+def persist_turn_observations(state: EngineState, turn: RichUserTurn) -> None:
+    """Deprecated alias — use atomic_semantic_apply."""
+    atomic_semantic_apply(state, turn)
+
+
 def observations_to_issue_mentions(
     observations: tuple[Observation, ...],
     raw_text: str,
 ) -> tuple[IssueMention, ...]:
     """Compatibility projection for existing IssueEpisode ingest."""
+    severity_by_key: dict[tuple[str | None, str], str] = {}
+    for obs in observations:
+        if obs.status == "superseded" or obs.attribute != "severity":
+            continue
+        if obs.subject != SubjectKind.SPEAKER:
+            continue
+        severity_by_key[(obs.body_site, obs.issue_normalized)] = obs.value
+
     mentions: list[IssueMention] = []
     primary_set = False
     for obs in observations:
@@ -363,6 +425,7 @@ def observations_to_issue_mentions(
         if obs.attribute != "issue":
             continue
         body_site = obs.body_site
+        severity = severity_by_key.get((body_site, obs.issue_normalized))
         start = raw_text.lower().find(obs.evidence.lower())
         if start < 0:
             start = 0
@@ -388,8 +451,8 @@ def observations_to_issue_mentions(
                 body_site=body_site,
                 temporal_scope=temporal,
                 status=status,
-                onset=obs.temporal.onset,
-                severity=obs.value if obs.attribute == "severity" else None,
+                onset=obs.temporal.onset or obs.temporal.duration,
+                severity=severity,
                 evidence=Evidence(start=start, end=end, quote=raw_text[start:end] or obs.evidence),
             )
         )

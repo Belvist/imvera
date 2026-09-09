@@ -6,6 +6,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 
+from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
 from packages.dialogue_engine.semantic_kernel.lexicon import (
     BODY_SITE_LEMMAS,
     ISSUE_VERB_LEMMAS,
@@ -13,22 +14,34 @@ from packages.dialogue_engine.semantic_kernel.lexicon import (
 from packages.dialogue_engine.semantic_kernel.morphology import normalize_token
 from packages.dialogue_engine.semantic_kernel.types import SemanticSpan, SpanType
 
-_CLAUSE_SPLIT = re.compile(
-    r"\s*(?:[,;]|\s+и\s+|\s+а\s+(?!также)|\s+а\s+также\s+|\s+ещё\s+|\s+еще\s+)\s*",
-    re.I,
-)
 _TOKEN = re.compile(r"[а-яёa-z]+(?:-[а-яёa-z]+)?", re.I)
 
-_TEMPORAL = re.compile(
+_DURATION = re.compile(
+    r"\b("
+    r"(?:первый|второй|третий|четвёртый|четвертый|пятый)\s+(?:день|час)|"
+    r"\d+\s*(?:день|дня|дней|недел\w*|месяц\w*|год\w*|час\w*)|"
+    r"пару\s+дней|несколько\s+дней"
+    r")\b",
+    re.I,
+)
+_TIME = re.compile(
     r"\b("
     r"сейчас|сегодня|вчера|позавчера|утром|вечером|ночью|"
     r"с\s+утра|с\s+десяти|с\s+\d{1,2}(?::\d{2})?|"
     r"\d{1,2}\s*:\s*\d{2}|"
-    r"(?:первый|второй|третий|четвёртый|четвертый|пятый)\s+день|"
-    r"\d+\s*(?:день|дня|дней|недел\w*|месяц\w*|год\w*|час\w*)|"
     r"давно|иногда|периодически|постоянно|уже\s+почти|почти\s+прошл\w*|"
     r"три\s+года\s+назад|год\s+назад"
     r")\b",
+    re.I,
+)
+
+_FALSE_ISSUE_TOKENS = frozenset(
+    {"больше", "больной", "больница", "больницы", "болезнь", "болезни"}
+)
+_FALSE_BODY_SITE_TOKENS = frozenset({"голод", "голодный", "голодная", "голоден"})
+_ISSUE_SURFACE = re.compile(
+    r"^(бол\w*|ноет\w*|беспоко\w*|давит\w*|ломит\w*|тян\w*|перш\w*|"
+    r"залож\w*|онем\w*|тошн\w*|кашл\w*|урч\w*|стрел\w*)$",
     re.I,
 )
 _SEVERITY = re.compile(r"\b(сильн\w*|терпим\w*|слаб\w*|невыносим\w*|ужасн\w*)\b", re.I)
@@ -88,29 +101,33 @@ class _ParseAcc:
 
 def _body_site_from_token(token: str) -> str | None:
     lemma = normalize_token(token)
-    if len(lemma) < 3 and lemma not in BODY_SITE_LEMMAS:
+    raw = token.lower()
+    if raw in _FALSE_BODY_SITE_TOKENS:
         return None
     if lemma in BODY_SITE_LEMMAS:
         return lemma
-    raw = token.lower()
     if len(raw) < 4:
         return None
     for site in BODY_SITE_LEMMAS:
         if len(site) < 4:
             continue
-        if raw.startswith(site[:4]) or site.startswith(lemma[:4]) or lemma.startswith(site[:4]):
+        if site[:4] == raw[:4] and abs(len(raw) - len(site)) <= 2:
             return site
     return None
 
 
 def _issue_from_token(token: str) -> bool:
     lemma = normalize_token(token)
+    raw = token.lower()
+    if raw in _FALSE_ISSUE_TOKENS or lemma in _FALSE_ISSUE_TOKENS:
+        return False
     if lemma in ISSUE_VERB_LEMMAS:
         return True
-    raw = token.lower()
+    if _ISSUE_SURFACE.match(raw):
+        return True
     for verb in ISSUE_VERB_LEMMAS:
-        stem = verb[:3]
-        if len(stem) >= 3 and (raw.startswith(stem) or lemma.startswith(stem)):
+        stem = verb[:4]
+        if len(stem) >= 4 and (raw.startswith(stem) or lemma.startswith(stem)):
             return True
     return False
 
@@ -143,9 +160,14 @@ def parse_spans(text: str) -> tuple[SemanticSpan, ...]:
     if not raw:
         return ()
     acc = _ParseAcc()
-    lower = raw.lower()
 
-    for m in _TEMPORAL.finditer(raw):
+    duration_ranges: list[tuple[int, int]] = []
+    for m in _DURATION.finditer(raw):
+        duration_ranges.append((m.start(), m.end()))
+        acc.add(SpanType.DURATION, m.group(0), m.start(), m.end(), 0.9)
+    for m in _TIME.finditer(raw):
+        if any(s <= m.start() < e or s < m.end() <= e for s, e in duration_ranges):
+            continue
         acc.add(SpanType.TIME, m.group(0), m.start(), m.end(), 0.88)
     for m in _SEVERITY.finditer(raw):
         acc.add(SpanType.SEVERITY, m.group(0), m.start(), m.end(), 0.85)
@@ -156,17 +178,7 @@ def parse_spans(text: str) -> tuple[SemanticSpan, ...]:
     for m in _UNCERTAINTY.finditer(raw):
         acc.add(SpanType.UNCERTAINTY, m.group(0), m.start(), m.end(), 0.8)
 
-    clauses = _CLAUSE_SPLIT.split(raw)
-    offset = 0
-    for clause in clauses:
-        clause = clause.strip()
-        if not clause:
-            offset = lower.find(clause, offset) + len(clause) if clause else offset
-            continue
-        cstart = lower.find(clause.lower(), offset)
-        if cstart < 0:
-            cstart = offset
-        cend = cstart + len(clause)
+    for cstart, cend, clause in clause_bounds(raw):
 
         for m in _ISSUE_BEFORE_BODY.finditer(clause):
             issue_text = m.group(1)
@@ -209,8 +221,6 @@ def parse_spans(text: str) -> tuple[SemanticSpan, ...]:
                     for s in acc.spans
                 ):
                     acc.add(SpanType.ISSUE, tok, cstart + tm.start(), cstart + tm.end(), 0.84)
-
-        offset = cend
 
     # Deduplicate overlapping same-type spans (keep longer)
     deduped: list[SemanticSpan] = []

@@ -101,19 +101,4 @@ REFERENCE_MARKERS: frozenset[str] = frozenset(
     }
 )
 
-CONTROL_EXACT: dict[str, str] = {
-    "да": "yes",
-    "нет": "no",
-    "угу": "backchannel",
-    "ага": "backchannel",
-    "повторите": "repeat",
-    "повтори": "repeat",
-    "алло": "repeat",
-    "стоп": "stop",
-    "хватит": "stop",
-    "позже": "defer",
-    "не знаю": "unknown",
-    "не помню": "unknown",
-    "не хочу": "refuse",
-    "не хочу разговаривать": "refuse",
-}
+# Level-0 controls: see semantic_kernel/controls.py (canonical contract).

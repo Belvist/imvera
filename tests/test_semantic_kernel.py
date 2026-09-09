@@ -13,7 +13,7 @@ from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to
 from packages.dialogue_engine.semantic_kernel.observation_memory import merge_legacy_mentions
 from packages.dialogue_engine.semantic_kernel.span_parser import parse_spans
 from packages.dialogue_engine.semantic_kernel.subject_resolver import resolve_subject
-from packages.dialogue_engine.semantic_kernel.types import SubjectKind
+from packages.dialogue_engine.semantic_kernel.types import SpanType, SubjectKind
 from packages.dialogue_engine.state import EngineState
 from packages.dialogue_engine.turn_understanding import build_rich_turn_from_text
 
@@ -251,6 +251,66 @@ def test_level0_controls_fast() -> None:
     result = interpret("угу", utterance_id="u-bc")
     assert result.level == 0
     assert result.elapsed_ms < 50
+    assert result.control == "none"
+    turn = kernel_to_rich_turn(result)
+    assert turn.control == "none"
+
+
+def test_stop_maps_to_stop_call_not_legacy_stop() -> None:
+    result = interpret("стоп", utterance_id="u-stop")
+    assert result.control == "stop_call"
+    turn = kernel_to_rich_turn(result)
+    assert turn.control == "stop_call"
+
+
+def test_yes_no_are_not_controls() -> None:
+    for text in ("да", "нет", "не знаю"):
+        result = interpret(text, utterance_id=f"u-{text}")
+        assert result.route != "kernel_l0" or result.control == "none"
+
+
+def test_duration_span_not_time() -> None:
+    result = interpret("колено второй день тянет", utterance_id="u-dur")
+    assert any(s.type == SpanType.DURATION for s in result.spans)
+    assert any(o.attribute == "duration" for o in result.observations)
+
+
+def test_severity_on_issue_mention() -> None:
+    turn = build_rich_turn_from_text("локоть очень сильно ноет", utterance_id="u-sev")
+    assert turn.issue_mentions
+    assert turn.issue_mentions[0].severity
+
+
+def test_bольше_not_invented_as_issue() -> None:
+    result = interpret("мне больше не надо", utterance_id="u-fp")
+    assert not any(s.type == SpanType.ISSUE for s in result.spans)
+
+
+def test_mixed_user_question_preserves_knee_episode() -> None:
+    from packages.dialogue_engine.events import CallStarted, UserTurnReceived
+    from packages.dialogue_engine.reducer import reduce
+
+    state = EngineState(call_id="mix-q", elder_display_name="Даниил")
+    state, _ = reduce(state, CallStarted(call_id="mix-q"))
+    turn = build_rich_turn_from_text(
+        "Нормально. А вы кто? И колено второй день тянет.",
+        utterance_id="u-mix",
+        engine_state=state,
+    )
+    state, effects = reduce(
+        state,
+        UserTurnReceived(turn_id="u-mix", text=turn.raw_text, rich_turn=turn),
+    )
+    assert any("Вера" in e.text for e in effects if hasattr(e, "text"))
+    knee_eps = [
+        ep for ep in state.issue_episodes.values() if ep.body_site == "колено"
+    ]
+    assert knee_eps
+    assert knee_eps[0].known_attributes.get("duration") or any(
+        o.body_site == "колено"
+        for o in state.observations.values()
+        if getattr(o, "attribute", "") in ("issue", "duration")
+    )
 
 
 def test_property_no_empty_evidence_on_spans() -> None:

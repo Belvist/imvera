@@ -206,18 +206,21 @@ def _probe_concern(state: EngineState, text: str) -> ProbeStep:
 
 
 def _probe_duration(state: EngineState, text: str) -> ProbeStep:
+    from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
     from packages.dialogue_engine.state import CheckPath
 
     state.wellness_duration = text
     state.probe_phase = None
-    if state.active_episode_id:
-        ep = state.issue_episodes.get(state.active_episode_id)
-        if ep is not None:
-            ep.known_attributes["duration"] = text
-            return ProbeStep(action=ProbeAction.CONTINUE_LADDER)
     if is_urgent_concern(text) or is_urgent_concern(state.wellness_concern):
         state.check_path = CheckPath.URGENT
         return ProbeStep(action=ProbeAction.URGENT_CLOSE)
+    if state.active_episode_id:
+        ep = state.issue_episodes.get(state.active_episode_id)
+        if ep is not None:
+            duration = extract_grounded_onset_value(text)
+            if duration:
+                ep.known_attributes["duration"] = duration
+            return ProbeStep(action=ProbeAction.CONTINUE_LADDER)
     next_slot = state.next_open_slot()
     return ProbeStep(
         action=ProbeAction.SPEAK_SLOT,

@@ -11,6 +11,7 @@ from packages.dialogue_engine.issue_mention_extract import (
     detect_user_question,
     extract_goal_facts,
 )
+from packages.dialogue_engine.semantic_kernel.controls import match_level0, normalize_control
 from packages.dialogue_engine.semantic_kernel.ml_fallback import ml_enhance_spans
 from packages.dialogue_engine.semantic_kernel.observation_memory import (
     build_observations,
@@ -36,16 +37,6 @@ _USER_QUESTION = re.compile(
     re.I,
 )
 _VAGUE_ISSUE = re.compile(r"\bчто-то\s+там\b|\bопять\s+прихватил\w*\b", re.I)
-
-
-def _level0_control(text: str) -> str | None:
-    norm = text.strip().lower()
-    from packages.dialogue_engine.semantic_kernel.lexicon import CONTROL_EXACT
-
-    for phrase, control in sorted(CONTROL_EXACT.items(), key=lambda x: -len(x[0])):
-        if norm == phrase or norm.startswith(phrase + " "):
-            return control
-    return None
 
 
 def _parse_corrections(text: str) -> tuple[CorrectionRecord, ...]:
@@ -88,15 +79,14 @@ def interpret(
             route="kernel_empty",
         )
 
-    control = _level0_control(raw)
-    if control:
-        act = "backchannel" if control == "backchannel" else "answer"
+    level0 = match_level0(raw)
+    if level0:
         elapsed = (time.perf_counter() - started) * 1000
         return SemanticKernelResult(
             raw_text=raw,
             utterance_id=utterance_id,
-            dialogue_act=act,
-            control=control,
+            dialogue_act=level0.dialogue_act,
+            control=level0.control,
             confidence=1.0,
             level=0,
             route="kernel_l0",
@@ -105,7 +95,7 @@ def interpret(
 
     spans = list(parse_spans(raw))
     spans = list(ml_enhance_spans(raw, tuple(spans)))
-    relations = list(parse_relations(tuple(spans)))
+    relations = list(parse_relations(tuple(spans), raw_text=raw))
     _subject, subj_rels = resolve_subject(raw, tuple(spans))
     relations.extend(subj_rels)
     ref_spans, ref_rels = resolve_references(raw, tuple(spans), engine_state)
@@ -159,7 +149,11 @@ def interpret(
     )
 
 
-def kernel_to_rich_turn(result: SemanticKernelResult):
+def kernel_to_rich_turn(
+    result: SemanticKernelResult,
+    *,
+    answer_slot: str | None = None,
+):
     from packages.dialogue_engine.turn_understanding import RichUserTurn
 
     mentions = observations_to_issue_mentions(result.observations, result.raw_text)
@@ -172,12 +166,12 @@ def kernel_to_rich_turn(result: SemanticKernelResult):
         r.type.value == "REFERS_TO" for r in result.relations
     )
     needs_clarify = (result.level >= 3 or "vague_issue" in result.ambiguity) and not ref_only
-    goal_facts = extract_goal_facts(result.raw_text)
+    goal_facts = extract_goal_facts(result.raw_text, answer_slot=answer_slot)
     return RichUserTurn(
         utterance_id=result.utterance_id,
         raw_text=result.raw_text,
         dialogue_act=result.dialogue_act,
-        control=result.control,
+        control=normalize_control(result.control),
         answers_pending_question=result.dialogue_act == "answer" and not needs_clarify,
         needs_clarification=needs_clarify,
         user_question=result.user_question,
