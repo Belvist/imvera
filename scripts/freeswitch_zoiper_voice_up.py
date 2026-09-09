@@ -140,6 +140,22 @@ def main() -> int:
     if not _wait_http(BRIDGE_URL, "media-bridge"):
         return 1
 
+    expected_sha = _git_image_tag()
+    try:
+        bridge_health = httpx.get(BRIDGE_URL, timeout=3.0).json()
+        runtime_sha = str((bridge_health.get("dialogue") or {}).get("dialogue.engine.version", ""))
+        if runtime_sha != expected_sha:
+            print(
+                f"BLOCKED: runtime SHA mismatch — git={expected_sha} bridge={runtime_sha}. "
+                "Restart bridge after pull.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"  runtime SHA verified: {runtime_sha}")
+    except httpx.HTTPError as exc:
+        print(f"BLOCKED: cannot verify bridge runtime SHA: {exc}", file=sys.stderr)
+        return 1
+
     data = sync_freeswitch_zoiper_profile()
     print("\n=== Zoiper → Vera (FreeSWITCH CallActor) ===\n")
     print(f"  Zoiper: Registered → dial {data['dial_number']}")

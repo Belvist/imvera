@@ -272,6 +272,22 @@ def _acoustic_echo_strong(ctx: PostSTTContext) -> bool:
     return False
 
 
+def _user_added_tokens_beyond_bot(user_text: str, bot_text: str) -> bool:
+    user = normalize_speech_text(user_text).split()
+    bot = set(normalize_speech_text(bot_text).split())
+    if not user:
+        return False
+    return any(token not in bot for token in user)
+
+
+def _is_probable_playback_echo(ctx: PostSTTContext, metrics: dict[str, float | bool]) -> bool:
+    if not _near_exact_reproduction(metrics) or not _acoustic_echo_strong(ctx):
+        return False
+    if _user_added_tokens_beyond_bot(ctx.user_text, ctx.last_bot_text):
+        return False
+    return True
+
+
 def _near_exact_reproduction(metrics: dict[str, float | bool]) -> bool:
     if not metrics:
         return False
@@ -315,7 +331,7 @@ def evaluate_post_stt_turn(ctx: PostSTTContext) -> TurnAdmissionDecision:
             fragment=fragment_info,
         )
 
-    if _near_exact_reproduction(metrics) and _acoustic_echo_strong(ctx):
+    if _is_probable_playback_echo(ctx, metrics):
         return TurnAdmissionDecision(
             verdict=TurnAdmissionVerdict.DROP_ECHO,
             confidence=0.92,

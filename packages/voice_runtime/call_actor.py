@@ -687,12 +687,6 @@ class CallActor:
         self._pending_fragment_mono = None
 
     def _merge_pending_fragment(self, text: str) -> tuple[str, bool]:
-        now = self._monotonic()
-        if (
-            self._pending_fragment_mono is not None
-            and (now - self._pending_fragment_mono) > FRAGMENT_HOLD_TIMEOUT_S
-        ):
-            self._clear_pending_fragment()
         if not self._pending_fragment_text:
             return text, False
         merged = f"{self._pending_fragment_text} {text}".strip()

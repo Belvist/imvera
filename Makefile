@@ -45,9 +45,9 @@ test-semantic-kernel:
 test-voice-perception:
 	@echo "GATE: Post-STT admission, text echo metrics, fragment hold/merge"
 	$(PYTHON) -m pytest tests/test_post_stt_gate.py tests/test_voice_perception.py \
+		tests/test_live_call_regression.py tests/test_call_actor_post_stt.py \
 		tests/test_uplink_preroll.py::test_assistant_echo_discarded \
-		tests/test_uplink_preroll.py::test_wellness_answers_never_echo_discarded \
-		tests/test_call_actor_post_stt.py -q
+		tests/test_uplink_preroll.py::test_wellness_answers_never_echo_discarded -q
 
 benchmark-semantic-kernel:
 	$(PYTHON) scripts/benchmark_semantic_kernel.py

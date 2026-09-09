@@ -220,6 +220,7 @@ def _probe_duration(state: EngineState, text: str) -> ProbeStep:
             duration = extract_grounded_onset_value(text)
             if duration:
                 ep.known_attributes["duration"] = duration
+                ep.known_attributes.setdefault("onset", duration)
             return ProbeStep(action=ProbeAction.CONTINUE_LADDER)
     next_slot = state.next_open_slot()
     return ProbeStep(

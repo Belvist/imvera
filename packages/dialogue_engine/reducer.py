@@ -859,7 +859,9 @@ def _speak_never_silent(
             slot=answer_slot,
             marks_question=True,
         )
-    return _close_partial(state)
+    if may_close_partial(state, answer_slot):
+        return _close_partial(state)
+    return _speak_repair(state, answer_slot)
 
 
 def _advance_after_fills(
