@@ -2,19 +2,124 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field
 
 from packages.contracts.semantic import IssueMention
 from packages.dialogue_engine.state import EngineState, IssueEpisode
-from packages.dialogue_engine.topic_tracker import TopicFamily, is_topic_slot
+from packages.dialogue_engine.topic_tracker import (
+    _DURATION_MARKERS,
+    TopicFamily,
+    _norm,
+    is_topic_slot,
+)
 from packages.dialogue_engine.turn_understanding import RichUserTurn
+
+_UNKNOWN_ATTRIBUTE_ANSWER = re.compile(
+    r"\b(не\s+знаю|не\s+помню|затрудня\w*(?:\s+сказ\w*)?|"
+    r"не\s+могу\s+сказ|сложно\s+сказ|не\s+уверен\w*|не\s+скажу)\b",
+    re.I,
+)
+_TEMPORAL_ANCHOR = re.compile(
+    r"\b(давно|дня|дней|недел\w*|месяц\w*|час\w*|утр\w*|вчера|сегодня|"
+    r"второй\s+день|третий\s+день|пару\s+дней|несколько|с\s+утра|"
+    r"уже\s+\w+\s+дн|в\s+четыре|в\s+\d+|"
+    r"с\s+десят\w*|с\s+\d+)\b",
+    re.I,
+)
+_SEVERITY_ANCHOR = re.compile(
+    r"\b(сильн\w*|терпим\w*|слаб\w*|невыносим\w*)\b",
+    re.I,
+)
 
 
 @dataclass
 class IngestResult:
     episodes_touched: list[str] = field(default_factory=list)
     activated: str | None = None
+
+
+def _original_clause_slices(raw_text: str) -> list[str]:
+    """Split user text into clauses without destroying original casing."""
+    raw = raw_text.strip()
+    raw = re.sub(r"[.!?]+$", "", raw)
+    parts = re.split(r"\s*,\s*|\s*;\s*", raw)
+    out: list[str] = []
+    for part in parts:
+        subs = re.split(r"\s+и\s+", part.strip(), maxsplit=0)
+        out.extend(s.strip() for s in subs if s.strip())
+    return out or [raw_text.strip()]
+
+
+def _clause_excluded(clause: str, exclude_clauses: tuple[str, ...]) -> bool:
+    c = _norm(clause)
+    for excluded in exclude_clauses:
+        e = _norm(excluded)
+        if e and (e in c or c in e):
+            return True
+    return False
+
+
+def extract_grounded_onset_value(
+    raw_text: str,
+    *,
+    exclude_clauses: tuple[str, ...] = (),
+) -> str | None:
+    """Return onset only when a clause contains a grounded temporal anchor."""
+    clauses = _original_clause_slices(raw_text) or [raw_text.strip()]
+    for clause in clauses:
+        text = clause.strip()
+        if not text:
+            continue
+        if _clause_excluded(text, exclude_clauses):
+            continue
+        n = _norm(text)
+        if _UNKNOWN_ATTRIBUTE_ANSWER.search(n):
+            continue
+        if _TEMPORAL_ANCHOR.search(n) or _DURATION_MARKERS.search(n):
+            if len(clauses) == 1:
+                return raw_text.strip().rstrip(",;")
+            return text.rstrip(",;")
+    return None
+
+
+def extract_grounded_severity_value(
+    raw_text: str,
+    *,
+    exclude_clauses: tuple[str, ...] = (),
+) -> str | None:
+    """Return severity only when a clause contains a grounded severity marker."""
+    clauses = _original_clause_slices(raw_text) or [raw_text.strip()]
+    for clause in clauses:
+        text = clause.strip()
+        if not text:
+            continue
+        if _clause_excluded(text, exclude_clauses):
+            continue
+        n = _norm(text)
+        if _UNKNOWN_ATTRIBUTE_ANSWER.search(n):
+            continue
+        match = _SEVERITY_ANCHOR.search(n)
+        if match:
+            if len(clauses) == 1:
+                return raw_text.strip().rstrip(",;")
+            start, end = match.span()
+            return text[start:end]
+    return None
+
+
+def _mention_exclusion_clauses(turn: RichUserTurn) -> tuple[str, ...]:
+    return tuple(m.evidence.quote for m in turn.issue_mentions if m.evidence.quote)
+
+
+def _maybe_clear_pending_attribute(
+    state: EngineState,
+    episode_id: str,
+    attribute: str,
+) -> None:
+    if state.pending_episode_attribute == attribute:
+        state.pending_episode_attribute = None
 
 
 def _new_episode_id() -> str:
@@ -210,23 +315,20 @@ def _fill_pending_attribute_for_episode(
     ep = state.issue_episodes.get(episode_id)
     if ep is None:
         return
+    exclude = _mention_exclusion_clauses(turn)
+    if attribute == "onset":
+        value = extract_grounded_onset_value(turn.raw_text, exclude_clauses=exclude)
+        if value:
+            ep.known_attributes["onset"] = value
+            _maybe_clear_pending_attribute(state, episode_id, attribute)
+        return
+    if attribute == "severity":
+        value = extract_grounded_severity_value(turn.raw_text, exclude_clauses=exclude)
+        if value:
+            ep.known_attributes["severity"] = value
+            _maybe_clear_pending_attribute(state, episode_id, attribute)
+        return
     raw = turn.raw_text.strip().lower()
-    if attribute == "onset" and raw:
-        ep.known_attributes["onset"] = turn.raw_text.strip()
-        if (
-            state.pending_episode_attribute == attribute
-            and state.active_episode_id == episode_id
-        ):
-            state.pending_episode_attribute = None
-        return
-    if attribute == "severity" and raw:
-        ep.known_attributes["severity"] = turn.raw_text.strip()
-        if (
-            state.pending_episode_attribute == attribute
-            and state.active_episode_id == episode_id
-        ):
-            state.pending_episode_attribute = None
-        return
     if attribute == "current" and raw:
         if any(x in raw for x in ("не бол", "прошл", "легче", "лучше", "нет")):
             ep.known_attributes["current"] = "resolved"
@@ -234,11 +336,7 @@ def _fill_pending_attribute_for_episode(
             ep.known_attributes["current"] = "active"
         else:
             ep.known_attributes["current"] = turn.raw_text.strip()
-        if (
-            state.pending_episode_attribute == attribute
-            and state.active_episode_id == episode_id
-        ):
-            state.pending_episode_attribute = None
+        _maybe_clear_pending_attribute(state, episode_id, attribute)
 
 
 def _fill_pending_attribute_from_answer(state: EngineState, turn: RichUserTurn) -> None:

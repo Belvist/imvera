@@ -48,8 +48,7 @@ def _mention_in(text: str, label: str, quote: str, *, body_site: str | None = No
     )
 
 
-def test_pending_attribute_stays_on_original_episode() -> None:
-    state = EngineState(call_id="t", elder_display_name="Тест")
+def _headache_with_pending_onset(state: EngineState) -> str:
     headache = _mention("головная боль", "Голова болит", body_site="голова")
     ingest_rich_turn(
         state,
@@ -69,6 +68,12 @@ def test_pending_attribute_stays_on_original_episode() -> None:
     headache_id = state.active_episode_id
     assert headache_id is not None
     state.pending_episode_attribute = "onset"
+    return headache_id
+
+
+def test_unknown_onset_with_new_issue_does_not_fill_headache() -> None:
+    state = EngineState(call_id="t", elder_display_name="Тест")
+    headache_id = _headache_with_pending_onset(state)
 
     quote = "Не знаю, но ещё грудь давит."
     chest = _mention_in(quote, "давление в груди", "грудь давит", body_site="грудь")
@@ -92,8 +97,40 @@ def test_pending_attribute_stays_on_original_episode() -> None:
     chest_ep = next(
         ep for ep_id, ep in state.issue_episodes.items() if ep_id != headache_id
     )
-    assert headache_ep.known_attributes.get("onset") == quote
+    assert headache_ep.known_attributes.get("onset") is None
     assert chest_ep.known_attributes.get("onset") is None
+    assert state.pending_episode_attribute == "onset"
+
+
+def test_valid_onset_with_new_issue_fills_only_grounded_onset() -> None:
+    state = EngineState(call_id="t", elder_display_name="Тест")
+    headache_id = _headache_with_pending_onset(state)
+
+    quote = "С десяти утра, и ещё грудь давит."
+    chest = _mention_in(quote, "давление в груди", "грудь давит", body_site="грудь")
+    ingest_rich_turn(
+        state,
+        build_rich_turn_from_payload(
+            SemanticPayload(
+                dialogue_act="answer",
+                control="none",
+                consent_answer="not_applicable",
+                answers_pending_question=True,
+                needs_clarification=False,
+                issue_mentions=(chest,),
+            ),
+            utterance_id="u-2",
+            raw_text=quote,
+        ),
+    )
+
+    headache_ep = state.issue_episodes[headache_id]
+    chest_ep = next(
+        ep for ep_id, ep in state.issue_episodes.items() if ep_id != headache_id
+    )
+    assert headache_ep.known_attributes.get("onset") == "С десяти утра"
+    assert chest_ep.known_attributes.get("onset") is None
+    assert state.pending_episode_attribute is None
 
 
 def test_resume_generic_throat_episode_after_sleep_topic() -> None:
