@@ -17,9 +17,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from packages.contracts.enums import SlotStatus
-from packages.dialogue_engine.action_policy.actions import ActionKind
+from packages.dialogue_engine.action_policy.actions import ActionKind, PolicyConstraintViolation
 from packages.dialogue_engine.action_policy.bridge import legacy_plan_to_action_key, to_response_plan
-from packages.dialogue_engine.action_policy.actions import PolicyConstraintViolation
 from packages.dialogue_engine.action_policy.policy import choose
 from packages.dialogue_engine.action_policy.scorer import POLICY_VERSION
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView, build_policy_snapshot
@@ -307,7 +306,8 @@ def main() -> int:
     held_ratio = (held.get("new_ok", 0) / held.get("total", 1)) if held.get("total") else 0.0
     held_ok = held_ratio >= 0.95 and held.get("new_forbidden") == 0
     latency_ok = bool(report["latency"]["target_pass"])
-    return 0 if p0_ok and held_ok and latency_ok else 1
+    pipeline_ok = report["pipeline_diagnostic"]["policy_failure"] == 0
+    return 0 if p0_ok and held_ok and latency_ok and pipeline_ok else 1
 
 
 if __name__ == "__main__":

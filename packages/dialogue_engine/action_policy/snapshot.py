@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from packages.contracts.enums import SlotStatus
 from packages.dialogue_engine.question_context import QuestionNeed
@@ -73,12 +74,31 @@ class EpisodeSnapshot:
         )
 
     @property
-    def needs_attention(self) -> bool:
-        """Generic low-burden rule: at most two useful dimensions for a mild open issue."""
-        if not self.speaker_owned or self.status == "resolved" or self.resolving:
+    def interrogation_eligible(self) -> bool:
+        """Hard gate only: wrong subject / resolved episodes cannot be interrogated."""
+        return self.speaker_owned and self.status != "resolved" and not self.resolving
+
+    @property
+    def has_open_questions(self) -> bool:
+        """Candidate generation hint — scorer decides whether asking is worthwhile."""
+        if not self.interrogation_eligible:
             return False
-        if not self.temporal_known:
-            return True
+        return not (
+            self.temporal_known
+            and self.current_known
+            and self.severity_known
+        )
+
+    @property
+    def needs_attention(self) -> bool:
+        """Backward-compatible alias for candidate generation."""
+        return self.has_open_questions
+
+    @property
+    def worthwhile_followup(self) -> bool:
+        """Scorer-facing: optional follow-up still has information value."""
+        if not self.interrogation_eligible or not self.has_open_questions:
+            return False
         return self.known_dimension_count < 2
 
 
@@ -107,6 +127,7 @@ class PolicySnapshot:
     user_burden: float = 0.0
     call_closed: bool = False
     fsm_state: str = ""
+    unresolved_concern: bool = False
 
     @property
     def its_pending(self) -> bool:
@@ -134,6 +155,27 @@ class PolicySnapshot:
                 ordered.append(ep)
         return tuple(ordered)
 
+    @property
+    def interrogatable_episodes(self) -> tuple[EpisodeSnapshot, ...]:
+        return tuple(ep for ep in self.episodes if ep.interrogation_eligible)
+
+    @property
+    def pressing_interrogation_episodes(self) -> tuple[EpisodeSnapshot, ...]:
+        return tuple(ep for ep in self.attention_episodes if ep.worthwhile_followup)
+
+    def transition_preferred(self, ctx: TurnContextView) -> bool:
+        """True when further episode questions are low-value and transition is appropriate."""
+        if ctx.has_new_issue:
+            if self.episodes and not any(ep.speaker_owned for ep in self.episodes):
+                return False
+            if not self.pressing_interrogation_episodes:
+                return True
+        if self.interrogatable_episodes and all(
+            ep.resolving for ep in self.interrogatable_episodes
+        ):
+            return True
+        return False
+
     def episode(self, episode_id: str | None) -> EpisodeSnapshot | None:
         if episode_id is None:
             return None
@@ -143,7 +185,7 @@ class PolicySnapshot:
         return dict(self.background_goal_status).get(goal, BackgroundGoalCoverage.UNSEEN.value)
 
     @classmethod
-    def from_mapping(cls, raw: Mapping[str, Any]) -> "PolicySnapshot":
+    def from_mapping(cls, raw: Mapping[str, Any]) -> PolicySnapshot:
         eps = []
         for item in raw.get("episodes", ()):
             known = item.get("known_attributes", item.get("known", {}))
@@ -181,6 +223,7 @@ class PolicySnapshot:
             user_burden=float(raw.get("user_burden", 0.0)),
             call_closed=bool(raw.get("call_closed", False)),
             fsm_state=str(raw.get("fsm_state", "")),
+            unresolved_concern=bool(raw.get("unresolved_concern", False)),
         )
 
 
@@ -197,6 +240,8 @@ class TurnContextView:
     correction: bool = False
     meta: bool = False
     clarify_target: str | None = None
+    unresolved_concern: bool = False
+    vague_negative_wellness: bool = False
 
     @property
     def repair(self) -> bool:
@@ -219,29 +264,46 @@ class TurnContextView:
         )
 
     @classmethod
-    def from_turn(cls, turn: object | None) -> "TurnContextView":
+    def from_turn(cls, turn: object | None) -> TurnContextView:
         if turn is None:
             return cls()
+        from packages.dialogue_engine.check_path import wellness_already_describes_concern
+
         issue_mentions = tuple(getattr(turn, "issue_mentions", ()) or ())
         goal_facts = tuple(getattr(turn, "goal_facts", ()) or ())
         user_q = bool(getattr(turn, "user_question", None))
         dialogue_act = str(getattr(turn, "dialogue_act", "answer"))
+        raw_text = str(getattr(turn, "raw_text", ""))
         grounded = bool(issue_mentions or goal_facts or getattr(turn, "correction", False))
+        ambiguities = tuple(getattr(turn, "kernel_ambiguities", ()) or ())
+        needs_clarification = bool(getattr(turn, "needs_clarification", False))
+        vague_negative = "vague_issue" in ambiguities
+        if not vague_negative:
+            for fact in goal_facts:
+                if getattr(fact, "field", None) != "wellness":
+                    continue
+                if str(getattr(fact, "value", "")).lower() in {"negative", "uncertain"}:
+                    vague_negative = not wellness_already_describes_concern(raw_text)
+                    break
+        unresolved = (needs_clarification or vague_negative) and not issue_mentions
         return cls(
-            raw_text=str(getattr(turn, "raw_text", "")),
+            raw_text=raw_text,
             dialogue_act=dialogue_act,
             control=str(getattr(turn, "control", "none")),
             user_question=user_q,
-            needs_clarification=bool(getattr(turn, "needs_clarification", False)),
+            needs_clarification=needs_clarification,
             answers_pending_question=bool(getattr(turn, "answers_pending_question", False)),
             has_new_issue=bool(issue_mentions),
             has_goal_facts=bool(goal_facts),
             correction=bool(getattr(turn, "correction", False)),
             meta=(user_q or dialogue_act == "question") and not grounded,
+            unresolved_concern=unresolved,
+            vague_negative_wellness=vague_negative,
+            clarify_target="concern" if unresolved else None,
         )
 
     @classmethod
-    def from_mapping(cls, raw: Mapping[str, Any]) -> "TurnContextView":
+    def from_mapping(cls, raw: Mapping[str, Any]) -> TurnContextView:
         return cls(
             raw_text=str(raw.get("raw_text", "")),
             dialogue_act=str(raw.get("dialogue_act", "answer")),
@@ -254,6 +316,8 @@ class TurnContextView:
             correction=bool(raw.get("correction", False)),
             meta=bool(raw.get("meta", False)),
             clarify_target=raw.get("clarify_target"),
+            unresolved_concern=bool(raw.get("unresolved_concern", False)),
+            vague_negative_wellness=bool(raw.get("vague_negative_wellness", False)),
         )
 
 
@@ -306,6 +370,21 @@ def _wellness_covered(state: EngineState) -> bool:
     return False
 
 
+def _snapshot_unresolved_concern(state: EngineState) -> bool:
+    from packages.dialogue_engine.check_path import wellness_already_describes_concern
+
+    if state.issue_episodes:
+        return False
+    if state.probe_phase == "concern":
+        return True
+    wellness_text = state.wellness_concern or str(state.slot_values.get("wellness", ""))
+    if not wellness_text:
+        return False
+    if wellness_already_describes_concern(wellness_text):
+        return False
+    return state.check_path == CheckPath.NEGATIVE_PROBE
+
+
 def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
     """Read EngineState only; never calls mutating helpers."""
     episodes = tuple(
@@ -313,7 +392,9 @@ def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
             episode_id=ep.episode_id,
             kind=ep.kind,
             status=ep.status,
-            known_attributes=tuple(sorted((str(k), str(v)) for k, v in ep.known_attributes.items())),
+            known_attributes=tuple(
+                sorted((str(k), str(v)) for k, v in ep.known_attributes.items())
+            ),
             speaker_owned=_speaker_owned_episode(state, ep.episode_id),
         )
         for ep in sorted(state.issue_episodes.values(), key=lambda item: item.episode_id)
@@ -359,4 +440,5 @@ def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
         user_burden=burden,
         call_closed=state.call_closed,
         fsm_state=_value(state.fsm_state),
+        unresolved_concern=_snapshot_unresolved_concern(state),
     )

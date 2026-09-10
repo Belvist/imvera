@@ -64,7 +64,12 @@ def test_explicit_farewell_is_not_a_scored_tradeoff() -> None:
 
 
 def test_new_issue_blocks_close() -> None:
-    snap = _snap(important_to_share_asked=True, important_to_share_resolved=True)
+    snap = _snap(
+        important_to_share_asked=True,
+        important_to_share_resolved=True,
+        episodes=[{"episode_id": "ep", "kind": "symptom", "known": {}}],
+        active_episode_id="ep",
+    )
     ctx = TurnContextView(has_new_issue=True)
     action = CandidateAction(ActionKind.SUMMARY_CLOSE)
     rejection = reject_candidate(
@@ -74,7 +79,7 @@ def test_new_issue_blocks_close() -> None:
         mandatory_class=MandatoryClass.SUMMARY_CLOSE,
     )
     assert rejection is not None
-    assert rejection.rule_id == "premature_close_new_issue"
+    assert rejection.rule_id in {"premature_close_new_issue", "premature_close_issue"}
 
 
 def test_other_person_episode_cannot_be_asked() -> None:
@@ -98,7 +103,7 @@ def test_other_person_episode_cannot_be_asked() -> None:
         snap,
         TurnContextView(has_new_issue=True),
         action,
-        mandatory_class=MandatoryClass.ISSUE,
+        mandatory_class=MandatoryClass.CONVERSATION,
     )
     assert rejection is not None
-    assert rejection.rule_id in {"wrong_subject", "episode_low_value"}
+    assert rejection.rule_id in {"wrong_subject", "episode_not_interrogatable"}

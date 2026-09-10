@@ -65,4 +65,24 @@ def test_ack_only_mandatory_when_no_higher_class() -> None:
     ctx = TurnContextView(raw_text="угу", dialogue_act="answer")
     decision = choose(snap, ctx)
     assert decision.chosen.kind == ActionKind.ACK_ONLY
-    assert compute_mandatory_class(snap, ctx) == MandatoryClass.ACK_ONLY
+    assert compute_mandatory_class(snap, ctx) == MandatoryClass.CONVERSATION
+
+
+def test_improving_new_issue_transitions_to_its_not_ack() -> None:
+    snap = _snap(
+        episodes=[
+            {
+                "episode_id": "ep-h",
+                "kind": "symptom",
+                "known": {"onset": "с утра", "current": "improving"},
+            }
+        ],
+        active_episode_id="ep-h",
+    )
+    ctx = TurnContextView(
+        raw_text="Голова болела, но уже почти прошла.",
+        has_new_issue=True,
+    )
+    decision = choose(snap, ctx)
+    assert decision.chosen.kind == ActionKind.IMPORTANT_TO_SHARE
+    assert decision.chosen.kind != ActionKind.ACK_ONLY

@@ -8,7 +8,7 @@ from packages.dialogue_engine.action_policy.actions import CandidateAction, Scor
 from packages.dialogue_engine.action_policy.features import extract_features
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView
 
-POLICY_VERSION = "action-policy-phase1-v1"
+POLICY_VERSION = "action-policy-phase1-v2"
 
 DEFAULT_WEIGHTS: dict[str, float] = {
     "bias": 0.0,
@@ -24,6 +24,7 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "pending_need_match": 6.0,
     "active_issue": 2.0,
     "known_dimensions": -0.6,
+    "enough_dimensions": -35.0,
     "episode_resolving": -20.0,
     "user_burden": -4.0,
     "repeat_penalty": -30.0,
@@ -33,6 +34,8 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "fit:ack": 1.0,
     "new_grounded_issue": 0.2,
     "its_pending": 0.1,
+    "transition_preferred": 45.0,
+    "transition_penalty": -55.0,
 }
 
 

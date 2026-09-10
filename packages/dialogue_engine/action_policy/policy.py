@@ -49,8 +49,13 @@ def generate_candidates(
     if ctx.meta or (snapshot.its_pending and ctx.unclear_without_grounding):
         _append_unique(out, CandidateAction(ActionKind.LISTEN_META))
 
-    clarify_target = ctx.clarify_target or snapshot.probe_phase
-    if ctx.needs_clarification or clarify_target:
+    unresolved = ctx.unresolved_concern or snapshot.unresolved_concern
+    clarify_target = (
+        ctx.clarify_target
+        or snapshot.probe_phase
+        or ("concern" if unresolved else None)
+    )
+    if ctx.needs_clarification or unresolved or clarify_target:
         _append_unique(
             out,
             CandidateAction(
