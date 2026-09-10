@@ -8,7 +8,7 @@ from packages.dialogue_engine.action_policy.actions import CandidateAction, Scor
 from packages.dialogue_engine.action_policy.features import extract_features
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView
 
-POLICY_VERSION = "action-policy-phase1-v5"
+POLICY_VERSION = "action-policy-phase1-v6"
 
 DEFAULT_WEIGHTS: dict[str, float] = {
     "bias": 0.0,
@@ -19,28 +19,25 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "fit:answer_user": 80.0,
     "fit:meta": 75.0,
     "fit:clarify": 70.0,
-    "fit:episode": 12.0,
-    "information_gain": 8.0,
-    "unanswered_dimension_value": 10.0,
-    "remaining_information_value": 6.0,
-    "useful_follow_up": 22.0,
-    "pending_need_match": 6.0,
-    "active_issue": 2.0,
-    "known_dimensions": -4.0,
-    "enough_dimensions": -18.0,
+    "fit:episode": 14.0,
+    "information_value": 10.0,
+    "need_ask_utility": 28.0,
+    "pending_obligation": 35.0,
     "episode_resolving": -20.0,
-    "ask_burden_penalty": -25.0,
-    "transition_burden_relief": 45.0,
-    "episode_question_cost": -8.0,
-    "repeat_penalty": -30.0,
-    "fit:its": 30.0,
+    "ask_burden_penalty": -22.0,
+    "transition_burden_relief": 42.0,
+    "episode_question_cost": -7.0,
+    "repeat_penalty": -32.0,
+    "fit:its": 28.0,
     "fit:background": 20.0,
     "fit:summary": 25.0,
     "fit:ack": 1.0,
     "new_grounded_issue": 0.2,
     "its_pending": 0.1,
-    "transition_preferred": 45.0,
-    "transition_penalty": -55.0,
+    "transition_preferred": 40.0,
+    "transition_penalty": -50.0,
+    "transition_utility": 18.0,
+    "best_remaining_need_penalty": -32.0,
 }
 
 

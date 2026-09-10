@@ -18,13 +18,17 @@ from packages.dialogue_engine.action_policy.policy import choose
 from packages.dialogue_engine.action_policy.scorer import POLICY_VERSION
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView
 
-CHALLENGE_PATH = ROOT / "tests" / "action_policy" / "corpus" / "challenge_frozen" / "scenarios.json"
-FROZEN_POLICY_SHA = "0271c624e93e3f8e6f01d5f6dafcf03a377c8b8b"
-FREEZE_MANIFEST_SHA = "639babcc13c69ee498bbe7a9700f7362a7586808"
+CORPUS_CHOICES = {
+    "challenge_frozen": ROOT / "tests" / "action_policy" / "corpus" / "challenge_frozen" / "scenarios.json",
+    "challenge_v6_frozen": ROOT / "tests" / "action_policy" / "corpus" / "challenge_v6_frozen" / "scenarios.json",
+}
+DEFAULT_CORPUS = "challenge_v6_frozen"
+FROZEN_POLICY_SHA_V5 = "0271c624e93e3f8e6f01d5f6dafcf03a377c8b8b"
+FREEZE_MANIFEST_SHA_V5 = "639babcc13c69ee498bbe7a9700f7362a7586808"
 
 
-def _load_cases() -> list[dict[str, Any]]:
-    return json.loads(CHALLENGE_PATH.read_text(encoding="utf-8"))
+def _load_cases(challenge_path: Path) -> list[dict[str, Any]]:
+    return json.loads(challenge_path.read_text(encoding="utf-8"))
 
 
 def _scored_row(item) -> dict[str, Any]:
@@ -36,8 +40,13 @@ def _scored_row(item) -> dict[str, Any]:
     }
 
 
-def run_challenge() -> dict[str, Any]:
-    cases = _load_cases()
+def run_challenge(
+    *,
+    challenge_path: Path,
+    frozen_policy_sha: str | None = None,
+    freeze_manifest_commit: str | None = None,
+) -> dict[str, Any]:
+    cases = _load_cases(challenge_path)
     rows: list[dict[str, Any]] = []
     passed = 0
     failed = 0
@@ -51,7 +60,9 @@ def run_challenge() -> dict[str, Any]:
         ctx = TurnContextView.from_mapping(case.get("context", {}))
         acceptable = set(case.get("acceptable", ()))
         forbidden = set(case.get("forbidden", ()))
-        is_p0_like = case["id"].startswith(("ch_safety", "ch_no_ack", "ch_no_premature", "ch_no_repeat"))
+        is_p0_like = case["id"].startswith(
+            ("ch_safety", "ch_no_ack", "ch_no_premature", "ch_no_repeat", "v6ch_no_", "v6ch_safety")
+        )
 
         try:
             decision = choose(snapshot, ctx)
@@ -99,11 +110,11 @@ def run_challenge() -> dict[str, Any]:
 
     total = len(cases)
     return {
-        "frozen_policy_sha": FROZEN_POLICY_SHA,
-        "freeze_manifest_commit": FREEZE_MANIFEST_SHA,
+        "frozen_policy_sha": frozen_policy_sha,
+        "freeze_manifest_commit": freeze_manifest_commit,
         "challenge_corpus_commit": None,
         "policy_version": POLICY_VERSION,
-        "corpus_path": str(CHALLENGE_PATH.relative_to(ROOT)),
+        "corpus_path": str(challenge_path.relative_to(ROOT)),
         "total": total,
         "passed": passed,
         "failed": failed,
@@ -134,16 +145,44 @@ def run_challenge() -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--output",
-        default=str(ROOT / "docs/evaluation/action-policy-phase1-v5-challenge.json"),
+        "--corpus",
+        choices=sorted(CORPUS_CHOICES),
+        default=DEFAULT_CORPUS,
+        help="Challenge corpus split (default: v6 independent challenge)",
     )
+    parser.add_argument(
+        "--output",
+        default="",
+        help="Report path (default depends on --corpus)",
+    )
+    parser.add_argument("--frozen-policy-sha", default="")
+    parser.add_argument("--freeze-manifest-sha", default="")
     parser.add_argument("--challenge-sha", default="")
     args = parser.parse_args()
 
-    report = run_challenge()
+    challenge_path = CORPUS_CHOICES[args.corpus]
+    output = args.output or str(
+        ROOT / (
+            "docs/evaluation/action-policy-phase1-v6-challenge.json"
+            if args.corpus == "challenge_v6_frozen"
+            else "docs/evaluation/action-policy-phase1-v5-challenge.json"
+        )
+    )
+    frozen_sha = args.frozen_policy_sha or (
+        FROZEN_POLICY_SHA_V5 if args.corpus == "challenge_frozen" else ""
+    )
+    manifest_sha = args.freeze_manifest_sha or (
+        FREEZE_MANIFEST_SHA_V5 if args.corpus == "challenge_frozen" else ""
+    )
+
+    report = run_challenge(
+        challenge_path=challenge_path,
+        frozen_policy_sha=frozen_sha or None,
+        freeze_manifest_commit=manifest_sha or None,
+    )
     if args.challenge_sha:
         report["challenge_corpus_commit"] = args.challenge_sha
-    out = Path(args.output)
+    out = Path(output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(

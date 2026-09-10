@@ -115,6 +115,12 @@ def reject_candidate(
             )
 
     if kind == ActionKind.IMPORTANT_TO_SHARE:
+        if snapshot.outstanding_pending_obligation():
+            return _reject(
+                action,
+                "pending_obligation_blocks_its",
+                "unsettled pending question need blocks transition",
+            )
         if ctx.has_new_speaker_issue and snapshot.has_askable_open_issues:
             return _reject(
                 action,
@@ -127,6 +133,12 @@ def reject_candidate(
             return _reject(action, "its_already_used", "IMPORTANT_TO_SHARE is bounded")
 
     if kind == ActionKind.SUMMARY_CLOSE:
+        if snapshot.outstanding_pending_obligation():
+            return _reject(
+                action,
+                "pending_obligation_blocks_close",
+                "unsettled pending question need blocks close",
+            )
         if snapshot.has_askable_open_issues:
             return _reject(action, "premature_close_issue", "open useful issue blocks close")
         if ctx.has_new_speaker_issue and not snapshot.transition_preferred(ctx):

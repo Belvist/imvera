@@ -80,14 +80,12 @@ class EpisodeSnapshot:
 
     @property
     def has_open_questions(self) -> bool:
-        """Candidate generation hint — scorer decides whether asking is worthwhile."""
+        """Candidate generation hint — any unresolved askable need remains."""
         if not self.interrogation_eligible:
             return False
-        return not (
-            self.temporal_known
-            and self.current_known
-            and self.severity_known
-        )
+        from packages.dialogue_engine.action_policy.need_value import ASKABLE_NEEDS
+
+        return any(not self.need_known(need) for need in ASKABLE_NEEDS)
 
     @property
     def needs_attention(self) -> bool:
@@ -178,8 +176,27 @@ class PolicySnapshot:
                 ordered.append(ep)
         return tuple(ordered)
 
+    def outstanding_pending_obligation(self) -> bool:
+        from packages.dialogue_engine.action_policy.need_value import (
+            outstanding_pending_obligation,
+        )
+
+        return outstanding_pending_obligation(self)
+
+    def best_remaining_ask_utility(self) -> float:
+        from packages.dialogue_engine.action_policy.need_value import (
+            best_remaining_ask_utility,
+        )
+
+        return best_remaining_ask_utility(self)
+
     def transition_preferred(self, ctx: TurnContextView) -> bool:
-        """True only when no queued speaker episode still needs early interrogation."""
+        """True when transition utility beats best remaining ask utility."""
+        from packages.dialogue_engine.action_policy.need_value import (
+            episode_unknown_needs,
+            transition_preferred as _transition_preferred,
+        )
+
         if self.episodes and not any(ep.speaker_owned for ep in self.episodes):
             return False
         owned = [ep for ep in self.episodes if ep.speaker_owned]
@@ -187,16 +204,15 @@ class PolicySnapshot:
             return False
         if all(ep.resolving for ep in owned):
             return True
-        needing = [
-            ep
-            for ep in self.episode_decision_queue()
-            if ep.interrogation_eligible and ep.has_open_questions and not ep.resolving
-        ]
-        if not needing:
+        queue = self.episode_decision_queue()
+        if not any(
+            ep.interrogation_eligible
+            and episode_unknown_needs(ep)
+            and not ep.resolving
+            for ep in queue
+        ):
             return True
-        if any(ep.known_dimension_count < 2 for ep in needing):
-            return False
-        return True
+        return _transition_preferred(self, answer_pending=ctx.answers_pending_question)
 
     def episode(self, episode_id: str | None) -> EpisodeSnapshot | None:
         if episode_id is None:

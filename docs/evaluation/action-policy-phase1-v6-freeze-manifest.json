@@ -1,0 +1,38 @@
+{
+  "action_policy_phase1_freeze": true,
+  "tested_sha": null,
+  "policy_version": "action-policy-phase1-v6",
+  "weights_sha256": "dba02767664f4f48ad0746ac1045a4f59b4cd98c91742d0cb1a8ea52963497c6",
+  "corpus_sha256": {
+    "development": "99617f6c354866005ca1b2fd008802f681d1be64a79d387a379977f02e529858",
+    "held_out": "2f838baff7fc22ece2e39677e2fe4a0c6f64ca702e40acc8048f12a07b7566d2",
+    "p0_golden": "83b2ae965a6d90a409e8515b8e18afc965f4f071ab24542fb8431378bcb79907"
+  },
+  "challenge_corpus": {
+    "path": "tests/action_policy/corpus/challenge_v6_frozen/scenarios.json",
+    "sha256": "d204a143bfa623eee4242833e1b510b14ebff90c8fb196b460aa48c76da9ea1b",
+    "cases": 61,
+    "note": "Independent challenge frozen after v6 policy freeze; not used for tuning"
+  },
+  "v5_challenge_regression": {
+    "path": "tests/action_policy/corpus/challenge_frozen/scenarios.json",
+    "commit": "e21cf6e",
+    "note": "v5 failure evidence only; not independent validation for v6"
+  },
+  "benchmark_artifact": {
+    "path": "docs/evaluation/action-policy-phase1-v6-benchmark.json",
+    "sha256": "6c1bf4777efc0af0f0ac02398433f8804680dadba27e2bb657d63fa405dcf8d0"
+  },
+  "python": "3.13.14",
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "gates": {
+    "p0_golden": "13/13, 0 forbidden",
+    "held_out": "12/12, 0 forbidden",
+    "development": "16/16, 0 forbidden",
+    "v6_independent_challenge": "61/61, 0 forbidden, 0 constraint violations",
+    "v5_challenge_regression": "54/54 (regression only)",
+    "latency_p99_ms": 0.600458,
+    "latency_target_ms": 10.0
+  }
+}
