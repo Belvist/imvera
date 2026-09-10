@@ -34,7 +34,7 @@ from packages.dialogue_engine.state import EngineState
 from packages.dialogue_engine.turn_understanding import RichUserTurn
 
 ROOT = Path(__file__).resolve().parents[2]
-FROZEN_SHA = "61e17934f7be3b10ca5df9b2581cb0a8b853c1fe"
+FROZEN_SHA = "c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4"
 
 
 @pytest.fixture(autouse=True)

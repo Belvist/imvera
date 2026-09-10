@@ -86,10 +86,12 @@ Branch: `feature/action-policy-v8`
 ### Evidence
 | Field | Value |
 |-------|-------|
-| phase | v8 implementation |
-| freeze | not yet (COMMIT A only) |
-| challenge | forbidden until freeze |
-| next gate | CI green on v8 → freeze manifest (COMMIT B) → independent challenge |
+| phase | v8 implementation + freeze |
+| policy SHA (COMMIT A) | `c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4` |
+| CI (COMMIT A) | [34539702387](https://github.com/Belvist/imvera/actions/runs/34539702387) — 1104 passed, 5 skipped |
+| freeze | `docs/evaluation/action-policy-phase1-v8-freeze-manifest.json` |
+| challenge | **not started** (must be separate post-freeze commit) |
+| next gate | independent v8 challenge corpus (EngineState→snapshot→choose) |
 
 ---
 

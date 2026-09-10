@@ -8,8 +8,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
-# Candidate under development — freeze commit sets immutable SHA.
-FROZEN_POLICY_SHA = "UNFROZEN-action-policy-phase1-v8"
+# Frozen v8 provenance — must match freeze manifest tested_sha.
+FROZEN_POLICY_SHA = "c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4"
 POLICY_VERSION = "action-policy-phase1-v8"
 SHADOW_SCHEMA_VERSION = 1
 SHADOW_BUFFER_MAX = 64

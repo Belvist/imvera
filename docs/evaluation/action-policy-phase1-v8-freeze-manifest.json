@@ -1,0 +1,42 @@
+{
+  "action_policy_phase1_freeze": true,
+  "tested_sha": "c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4",
+  "policy_version": "action-policy-phase1-v8",
+  "weights_sha256": "45f8f1bbddd8f2610db1c06e80c832fb779e105da82a3fd5faa8c927d1f32a70",
+  "policy_tree_sha256": "9da9cb59a458983e964234740a27075b7031c27983bdf95c2be5b862c3215726",
+  "corpus_sha256": {
+    "live_builder_tests": "6cf1ae590dc63a1f6d925661a3f42fb9f3e893c886db4184f8913b298270aec1",
+    "invariant_tests": "34773286d465d784d41df38f274c7d0f31ba1ef66c9370341e74f84222d29fa6"
+  },
+  "ci_run_id": 34539702387,
+  "ci_conclusion": "success",
+  "ci_url": "https://github.com/Belvist/imvera/actions/runs/34539702387",
+  "python": "3.13.14",
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "gates": {
+    "live_builder": "tests/action_policy/test_v8_live_builder.py",
+    "invariants": "tests/action_policy/test_v8_invariants.py",
+    "action_policy_suite": "71 passed (pre-freeze local) / full CI 1104 passed, 5 skipped",
+    "lint_dialogue": "success",
+    "contracts": "success",
+    "semantic_kernel": "success",
+    "dialogue_rich": "success",
+    "dialogue_runtime": "success",
+    "action_policy_shadow": "success",
+    "full_pytest": "success",
+    "pipeline_policy_failure": 0
+  },
+  "known_limitations": [
+    "Independent unseen challenge corpus not yet run (must be separate post-freeze commit)",
+    "Soft/hard cutover OFF",
+    "Production shadow acceptance (100/1000) not started",
+    "Operator plumbing canary on Shadow M1.2 still required before real shadow evidence"
+  ],
+  "notes": {
+    "v7_p0": "pending mirrored into last_question_need → repeat_question killed obligation; fixed by separating last_delivered_question_need",
+    "production_hook": "OFF",
+    "shadow": "instrumentation ready; candidate SHA unfrozen until this freeze pin",
+    "supersedes": "action-policy-phase1-v7 as cutover candidate"
+  }
+}
