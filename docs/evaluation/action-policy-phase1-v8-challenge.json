@@ -1,7 +1,7 @@
 {
   "frozen_policy_sha": "c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4",
   "freeze_manifest_commit": "822c391bc7da1fe3aad57e261f962718cd633132",
-  "challenge_corpus_commit": null,
+  "challenge_corpus_commit": "f2f0821b4156a269a716badd3ad5dac5797b1565",
   "policy_version": "action-policy-phase1-v8",
   "corpus_path": "tests/action_policy/corpus/challenge_v8_live/scenarios.json",
   "total": 20,
