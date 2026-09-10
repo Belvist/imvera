@@ -1225,13 +1225,15 @@ def _apply_off_context_slot_answer(
         return None
     from packages.dialogue_engine.issue_mention_extract import extract_goal_facts
 
+    # Free harvest only — never pass answer_slot=plans/mood/sleep here, or any
+    # episode answer gets falsely claimed as a background goal.
+    harvested = extract_goal_facts(turn.raw_text)
     for slot in ("plans", "mood", "sleep"):
         if state.slots.get(slot) != SlotStatus.OPEN:
             continue
-        facts = extract_goal_facts(turn.raw_text, answer_slot=slot)
-        if not facts or facts[0].field != slot:
+        fact = next((f for f in harvested if f.field == slot), None)
+        if fact is None:
             continue
-        fact = facts[0]
         quote = fact.evidence.quote if fact.evidence else turn.raw_text
         apply_slot_answer(
             state,

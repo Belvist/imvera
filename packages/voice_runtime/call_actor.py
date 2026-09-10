@@ -2152,10 +2152,41 @@ class CallActor:
             self._start_pause_wait()
             return
         await self._cancel_wait_timer()
-        if self._stopped or self._transport_closed or not result.validated.allowed:
+        if self._stopped or self._transport_closed:
             return
-        planner_text = result.validated.speech
+        if not result.validated.allowed:
+            notes = (result.validated.validator_notes or "").strip()
+            engine_speech = (
+                result.from_engine
+                and result.speak_effect is not None
+                and bool((result.validated.speech or result.speak_effect.text or "").strip())
+                and notes == "mandatory checks incomplete"
+            )
+            if engine_speech:
+                await self._emit_stage(
+                    "validator.override_engine_speech",
+                    intent=result.proposal.intent,
+                    notes=notes,
+                    mandatory_remaining=list(result.proposal.mandatory_remaining or []),
+                )
+            else:
+                await self._emit_stage(
+                    "delivery.blocked",
+                    intent=result.proposal.intent,
+                    notes=notes,
+                    from_engine=result.from_engine,
+                )
+                return
+        planner_text = (result.validated.speech or "").strip()
+        if not planner_text and result.speak_effect is not None:
+            planner_text = (result.speak_effect.text or "").strip()
         if not planner_text:
+            await self._emit_stage(
+                "delivery.blocked",
+                intent=result.proposal.intent,
+                notes="empty_speech",
+                from_engine=result.from_engine,
+            )
             return
 
         render_generation = f"g-{uuid.uuid4().hex[:8]}"

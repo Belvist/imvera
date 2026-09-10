@@ -161,8 +161,11 @@ def test_sleep_topic_then_mood_ladder() -> None:
     assert "important_to_share" in intents
     assert "summary" in intents
     assert result.state.slots["sleep"] == SlotStatus.FILLED
-    assert result.state.slots["mood"] == SlotStatus.OPEN
-    assert result.state.slots["plans"] == SlotStatus.OPEN
+    # Free speech covers mood/plans when the elder states them — not a forced ladder.
+    assert result.state.slots["mood"] == SlotStatus.FILLED
+    assert result.state.slots["plans"] == SlotStatus.FILLED
+    assert "check_mood" not in intents
+    assert "check_plans" not in intents
 
 
 def test_abdominal_in_probe_answer_switches_topic() -> None:

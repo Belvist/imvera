@@ -153,7 +153,8 @@ def test_fs_f0daadb9_delayed_interpret_stays_stable() -> None:
     )
     assert result.opening_count == 1
     assert not result.partial_close
-    assert result.state.slots["mood"] == SlotStatus.OPEN
+    # "Хорошее." may cover mood from free speech; must not force mood ladder or partial-close.
+    assert "check_mood" not in [e.intent for e in result.speak_effects]
     assert "repair_repeat" in [e.intent for e in result.speak_effects]
 
 

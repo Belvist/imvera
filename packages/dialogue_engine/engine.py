@@ -243,8 +243,17 @@ class DialogueEngine:
         return self._outbox.peek_pending_speaks()
 
     def slot_mandatory_remaining(self) -> list[str]:
-        """Daily-check slots only — legacy identity/consent/can_talk are not engine-owned."""
+        """Daily-check slots that still block close — optional background ≠ mandatory."""
         eng = self.state
+        if not eng.mandatory_background_goals:
+            required = eng.required_background_goals
+            return [
+                slot
+                for slot in PILOT_SLOT_CHECKS
+                if slot in required
+                and slot not in eng.skipped_slots
+                and eng.slots.get(slot) != SlotStatus.FILLED
+            ]
         return [
             slot
             for slot in PILOT_SLOT_CHECKS

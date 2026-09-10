@@ -66,7 +66,9 @@ def test_background_goal_coverage_unseen_initially(slot: str) -> None:
 def test_background_goal_marked_answered_after_fill() -> None:
     r = _run("Нормально.")
     assert r.state.background_goal_status["wellness"] == BackgroundGoalCoverage.ANSWERED
-    assert r.state.background_goal_status["mood"] == BackgroundGoalCoverage.UNSEEN
+    # Short positive wellness may also cover mood polarity from free harvest — that is OK.
+    assert r.state.background_goal_status["sleep"] == BackgroundGoalCoverage.UNSEEN
+    assert r.state.background_goal_status["plans"] == BackgroundGoalCoverage.UNSEEN
 
 
 def test_plans_not_required_before_close() -> None:

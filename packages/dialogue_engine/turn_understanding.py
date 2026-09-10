@@ -137,8 +137,13 @@ def build_rich_turn_from_text(
 
         ctx = InterpretContext.from_engine_state(engine_state, turn_id=utterance_id)
         sem, confident = contextual_interpret(text.strip(), ctx)
+        harvested = {
+            f.field: f
+            for f in extract_goal_facts(text.strip(), answer_slot=answer_slot)
+        }
+        for f in turn.goal_facts:
+            harvested.setdefault(f.field, f)
         if confident and sem.slots:
-            facts: list[FactCandidate] = []
             raw = text.strip()
             multi_slot = len(sem.slots) >= 2
             for slot_name, cand in sem.slots.items():
@@ -146,19 +151,25 @@ def build_rich_turn_from_text(
                     continue
                 if not multi_slot and answer_slot and slot_name != answer_slot:
                     continue
+                if slot_name in harvested and harvested[slot_name].value in (
+                    "positive",
+                    "negative",
+                    "uncertain",
+                    "neutral",
+                ):
+                    continue
                 value = cand.value or raw
-                facts.append(
-                    FactCandidate(
-                        field=slot_name,
-                        value=value,
-                        subject="speaker",
-                        temporal_scope="now",
-                        negated=False,
-                        evidence=Evidence(start=0, end=len(raw), quote=raw),
-                    )
+                harvested[slot_name] = FactCandidate(
+                    field=slot_name,
+                    value=value,
+                    subject="speaker",
+                    temporal_scope="now",
+                    negated=False,
+                    evidence=Evidence(start=0, end=len(raw), quote=raw),
                 )
-            if facts:
-                return turn.model_copy(update={"goal_facts": tuple(facts)})
+        if harvested:
+            return turn.model_copy(update={"goal_facts": tuple(harvested.values())})
+        return turn
     if turn.goal_facts or not answer_slot:
         return turn
     from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
@@ -169,6 +180,9 @@ def build_rich_turn_from_text(
         or not sem.target_slot
         or sem.target_slot not in ("wellness", "mood", "sleep", "plans")
     ):
+        harvested = extract_goal_facts(text.strip(), answer_slot=answer_slot)
+        if harvested:
+            return turn.model_copy(update={"goal_facts": harvested})
         return turn
     value = sem.value or text.strip()
     fact = FactCandidate(
@@ -179,7 +193,9 @@ def build_rich_turn_from_text(
         negated=False,
         evidence=Evidence(start=0, end=len(text.strip()), quote=text.strip()),
     )
-    return turn.model_copy(update={"goal_facts": (fact,)})
+    harvested = {f.field: f for f in extract_goal_facts(text.strip(), answer_slot=answer_slot)}
+    harvested.setdefault(fact.field, fact)
+    return turn.model_copy(update={"goal_facts": tuple(harvested.values())})
 
 
 def build_rich_turn_from_text_legacy(text: str, *, utterance_id: str) -> RichUserTurn:

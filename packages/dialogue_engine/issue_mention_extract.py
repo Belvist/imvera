@@ -160,18 +160,38 @@ def extract_issue_mentions(text: str) -> tuple[IssueMention, ...]:
     return tuple(all_mentions)
 
 
+_WELLNESS_FREE_POSITIVE = re.compile(
+    r"(?:\bвс[её]\s+(?:хорошо|нормально|отлично|прекрасно|замечательно)\b|"
+    r"\b(?:хорошо|нормально|отлично|великолепн\w*|прекрасно|замечательно|"
+    r"великолепно)\b)",
+    re.I,
+)
+_WELLNESS_FREE_NEGATED_POSITIVE = re.compile(
+    r"\bне\s+(?:очень\s+)?(?:хорош\w*|нормальн\w*|отличн\w*|прекрасн\w*)",
+    re.I,
+)
+_WELLNESS_CRISIS = re.compile(
+    r"\b(умира\w*|умираю|помогите|спасите|скор\w*|плохо\s+мне|мне\s+плохо)\b",
+    re.I,
+)
+
+
 def extract_goal_facts(
     text: str,
     *,
     answer_slot: str | None = None,
 ) -> tuple[FactCandidate, ...]:
-    """Check-slot facts for kernel path — mirrors fast_interpreter slot semantics."""
+    """Harvest all check-slot facts visible in free speech (any order).
+
+    answer_slot is a hint, not a gate — one utterance may cover wellness+mood+plans.
+    """
     raw = text.strip()
     if not raw:
         return ()
-    n = raw.lower()
+    n = raw.lower().replace("ё", "е")
     facts: list[FactCandidate] = []
     full_evidence = _evidence(raw, 0, len(raw))
+    seen: set[str] = set()
 
     from packages.dialogue_engine.fast_interpreter import (
         _MOOD_NEGATIVE,
@@ -188,118 +208,67 @@ def extract_goal_facts(
     )
 
     core = re.sub(r"[.!?…]+$", "", raw).strip()
+    # «плохо спал» is sleep evidence, not a wellness crisis by itself
+    n_wellness = re.sub(r"плох\w*\s+спал\w*", " ", n)
 
-    if answer_slot == "wellness":
-        if _WELLNESS_NEGATIVE.search(n) or re.search(
-            r"\b(не\s+очень|плох\w*|состояние\s+не)\b", n
-        ):
-            start = n.find("плох")
-            if start < 0:
-                start = n.find("не")
-            if start < 0:
-                start = 0
-            facts.append(
-                FactCandidate(
-                    field="wellness",
-                    value="negative",
-                    subject="speaker",
-                    temporal_scope="now",
-                    negated=False,
-                    evidence=_evidence(raw, start, min(len(raw), start + 40)),
-                )
-            )
-        elif _WELLNESS_POSITIVE.search(n) or _POSITIVE.match(core):
-            facts.append(
-                FactCandidate(
-                    field="wellness",
-                    value="positive",
-                    subject="speaker",
-                    temporal_scope="now",
-                    negated=False,
-                    evidence=full_evidence,
-                )
-            )
-        elif _NEGATIVE.match(core):
-            facts.append(
-                FactCandidate(
-                    field="wellness",
-                    value="negative",
-                    subject="speaker",
-                    temporal_scope="now",
-                    negated=False,
-                    evidence=full_evidence,
-                )
-            )
-    elif answer_slot == "mood":
-        if _MOOD_NEGATIVE.match(core) or _MOOD_NEGATIVE_PHRASE.search(n):
-            facts.append(
-                FactCandidate(
-                    field="mood",
-                    value="negative",
-                    subject="speaker",
-                    temporal_scope="now",
-                    negated=False,
-                    evidence=full_evidence,
-                )
-            )
-        elif _MOOD_POSITIVE.search(n) or _POSITIVE.match(core) or _SO_SO.match(core):
-            facts.append(
-                FactCandidate(
-                    field="mood",
-                    value="positive",
-                    subject="speaker",
-                    temporal_scope="now",
-                    negated=False,
-                    evidence=full_evidence,
-                )
-            )
-        elif _NORMAL.match(core):
-            facts.append(
-                FactCandidate(
-                    field="mood",
-                    value="neutral",
-                    subject="speaker",
-                    temporal_scope="now",
-                    negated=False,
-                    evidence=full_evidence,
-                )
-            )
-    elif answer_slot == "sleep" and _SLEEP_ANSWER.search(n):
+    def _add(field: str, value: str, *, start: int = 0, end: int | None = None) -> None:
+        if field in seen:
+            return
+        seen.add(field)
+        evidence = full_evidence if end is None else _evidence(raw, start, end)
         facts.append(
             FactCandidate(
-                field="sleep",
-                value=raw,
+                field=field,
+                value=value,
                 subject="speaker",
                 temporal_scope="now",
                 negated=False,
-                evidence=full_evidence,
+                evidence=evidence,
             )
         )
-    elif answer_slot == "plans" and _PLANS_ANSWER.search(n):
-        facts.append(
-            FactCandidate(
-                field="plans",
-                value=raw,
-                subject="speaker",
-                temporal_scope="now",
-                negated=False,
-                evidence=full_evidence,
-            )
+
+    wellness_neg = bool(
+        _WELLNESS_CRISIS.search(n_wellness)
+        or _WELLNESS_NEGATIVE.search(n_wellness)
+        or _WELLNESS_FREE_NEGATED_POSITIVE.search(n_wellness)
+        or re.search(r"\b(не\s+очень|плох\w*|состояние\s+не|умира\w*)\b", n_wellness)
+        or _NEGATIVE.match(core)
+    )
+    wellness_pos = bool(
+        not wellness_neg
+        and (
+            _WELLNESS_POSITIVE.search(n)
+            or _POSITIVE.match(core)
+            or _WELLNESS_FREE_POSITIVE.search(n_wellness)
+            or _NORMAL.match(core)
         )
-    elif re.search(r"\b(не\s+очень|плох\w*|состояние\s+не)\b", n):
-        start = n.find("не")
-        if start < 0:
-            start = 0
-        facts.append(
-            FactCandidate(
-                field="wellness",
-                value="negative",
-                subject="speaker",
-                temporal_scope="now",
-                negated=False,
-                evidence=_evidence(raw, start, min(len(raw), start + 20)),
-            )
-        )
+    )
+    if wellness_neg:
+        _add("wellness", "negative")
+    elif wellness_pos:
+        _add("wellness", "positive")
+    elif answer_slot == "wellness" and (_POSITIVE.match(core) or _SO_SO.match(core)):
+        _add("wellness", "positive" if not _SO_SO.match(core) else "uncertain")
+
+    if _MOOD_NEGATIVE.match(core) or _MOOD_NEGATIVE_PHRASE.search(n):
+        _add("mood", "negative")
+    elif _MOOD_POSITIVE.search(n) or (
+        re.search(r"настроени\w*", n)
+        and re.search(r"\b(хорош\w*|нормальн\w*|отличн\w*|спокойн\w*)\b", n)
+        and not _MOOD_NEGATIVE_PHRASE.search(n)
+    ):
+        _add("mood", "positive")
+    elif answer_slot == "mood" and (
+        _POSITIVE.match(core) or _SO_SO.match(core) or _NORMAL.match(core)
+    ):
+        _add("mood", "positive" if not _SO_SO.match(core) else "uncertain")
+
+    if _SLEEP_ANSWER.search(n):
+        _add("sleep", raw)
+
+    if _PLANS_ANSWER.search(n):
+        _add("plans", raw)
+
     return tuple(facts)
 
 
