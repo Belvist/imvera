@@ -37,7 +37,7 @@ def reject_candidate(
         )
 
     has_nonterminal_control = ctx.control not in {"", "none", "stop_call"}
-    unresolved = ctx.unresolved_concern or snapshot.unresolved_concern
+    unresolved = ctx.unresolved_concern
 
     if kind == ActionKind.SAFETY and snapshot.risk_level != "urgent":
         return _reject(action, "safety_not_present", "no urgent safety state")
@@ -95,7 +95,7 @@ def reject_candidate(
             return _reject(action, "repeat_question", "same semantic question was just asked")
 
     if kind == ActionKind.BACKGROUND_GOAL:
-        if snapshot.pressing_interrogation_episodes:
+        if snapshot.has_askable_open_issues:
             return _reject(action, "active_issue_blocks_background", "issue has higher priority")
         goal = action.target_goal or ""
         required = snapshot.mandatory_background_goals or goal in snapshot.required_background_goals
@@ -125,7 +125,7 @@ def reject_candidate(
             return _reject(action, "its_already_used", "IMPORTANT_TO_SHARE is bounded")
 
     if kind == ActionKind.SUMMARY_CLOSE:
-        if snapshot.pressing_interrogation_episodes:
+        if snapshot.has_askable_open_issues:
             return _reject(action, "premature_close_issue", "open useful issue blocks close")
         if ctx.has_new_issue and not snapshot.transition_preferred(ctx):
             return _reject(action, "premature_close_new_issue", "new grounded issue blocks close")
@@ -144,12 +144,12 @@ def reject_candidate(
 
     if kind == ActionKind.CLARIFY:
         target = action.clarify_target
-        wanted = ctx.clarify_target or snapshot.probe_phase or ("concern" if unresolved else None)
+        wanted = ctx.clarify_target or ("concern" if unresolved else None)
         if not (ctx.needs_clarification or wanted or unresolved):
             return _reject(action, "clarify_not_needed", "no clarification need")
         if target != wanted and wanted:
             return _reject(action, "clarify_target_mismatch", "clarification target mismatch")
-        if snapshot.pressing_interrogation_episodes and not unresolved:
+        if snapshot.has_askable_open_issues and not unresolved:
             return _reject(action, "issue_replaces_generic_clarify", "grounded issue owns the turn")
 
     return None

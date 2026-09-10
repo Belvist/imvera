@@ -53,3 +53,24 @@ def test_phase1_does_not_import_legacy_information_gain_policy() -> None:
         if matches:
             offenders[str(path.relative_to(ROOT))] = matches
     assert offenders == {}
+
+
+def test_phase1_does_not_import_legacy_check_path_or_topic_tracker() -> None:
+    policy_dir = ROOT / "packages/dialogue_engine/action_policy"
+    forbidden_prefixes = (
+        "packages.dialogue_engine.check_path",
+        "packages.dialogue_engine.topic_tracker",
+    )
+    offenders: dict[str, list[str]] = {}
+    for path in policy_dir.glob("*.py"):
+        matches = [
+            module
+            for module in _imported_modules(path)
+            if any(
+                module == prefix or module.startswith(f"{prefix}.")
+                for prefix in forbidden_prefixes
+            )
+        ]
+        if matches:
+            offenders[str(path.relative_to(ROOT))] = matches
+    assert offenders == {}

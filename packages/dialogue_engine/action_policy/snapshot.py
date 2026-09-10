@@ -94,14 +94,6 @@ class EpisodeSnapshot:
         """Backward-compatible alias for candidate generation."""
         return self.has_open_questions
 
-    @property
-    def worthwhile_followup(self) -> bool:
-        """Scorer-facing: optional follow-up still has information value."""
-        if not self.interrogation_eligible or not self.has_open_questions:
-            return False
-        return self.known_dimension_count < 2
-
-
 @dataclass(frozen=True)
 class PolicySnapshot:
     turn_number: int = 0
@@ -127,8 +119,6 @@ class PolicySnapshot:
     user_burden: float = 0.0
     call_closed: bool = False
     fsm_state: str = ""
-    unresolved_concern: bool = False
-
     @property
     def its_pending(self) -> bool:
         return self.important_to_share_asked and not self.important_to_share_resolved
@@ -160,19 +150,23 @@ class PolicySnapshot:
         return tuple(ep for ep in self.episodes if ep.interrogation_eligible)
 
     @property
-    def pressing_interrogation_episodes(self) -> tuple[EpisodeSnapshot, ...]:
-        return tuple(ep for ep in self.attention_episodes if ep.worthwhile_followup)
+    def has_askable_open_issues(self) -> bool:
+        """Hard-constraint hint: legally askable unknowns remain on speaker-owned episodes."""
+        return any(
+            ep.interrogation_eligible and ep.has_open_questions and not ep.resolving
+            for ep in self.episodes
+        )
 
     def transition_preferred(self, ctx: TurnContextView) -> bool:
-        """True when further episode questions are low-value and transition is appropriate."""
-        if ctx.has_new_issue:
-            if self.episodes and not any(ep.speaker_owned for ep in self.episodes):
-                return False
-            if not self.pressing_interrogation_episodes:
-                return True
-        if self.interrogatable_episodes and all(
-            ep.resolving for ep in self.interrogatable_episodes
-        ):
+        """True when episode state favors transition over further interrogation."""
+        if self.episodes and not any(ep.speaker_owned for ep in self.episodes):
+            return False
+        owned = [ep for ep in self.episodes if ep.speaker_owned]
+        if not owned:
+            return False
+        if all(ep.resolving for ep in owned):
+            return True
+        if not any(ep.interrogation_eligible and ep.has_open_questions for ep in owned):
             return True
         return False
 
@@ -223,7 +217,6 @@ class PolicySnapshot:
             user_burden=float(raw.get("user_burden", 0.0)),
             call_closed=bool(raw.get("call_closed", False)),
             fsm_state=str(raw.get("fsm_state", "")),
-            unresolved_concern=bool(raw.get("unresolved_concern", False)),
         )
 
 
@@ -267,7 +260,10 @@ class TurnContextView:
     def from_turn(cls, turn: object | None) -> TurnContextView:
         if turn is None:
             return cls()
-        from packages.dialogue_engine.check_path import wellness_already_describes_concern
+        from packages.dialogue_engine.action_policy.semantic_signals import (
+            derive_unresolved_concern,
+            wellness_polarity_negative,
+        )
 
         issue_mentions = tuple(getattr(turn, "issue_mentions", ()) or ())
         goal_facts = tuple(getattr(turn, "goal_facts", ()) or ())
@@ -277,15 +273,13 @@ class TurnContextView:
         grounded = bool(issue_mentions or goal_facts or getattr(turn, "correction", False))
         ambiguities = tuple(getattr(turn, "kernel_ambiguities", ()) or ())
         needs_clarification = bool(getattr(turn, "needs_clarification", False))
-        vague_negative = "vague_issue" in ambiguities
-        if not vague_negative:
-            for fact in goal_facts:
-                if getattr(fact, "field", None) != "wellness":
-                    continue
-                if str(getattr(fact, "value", "")).lower() in {"negative", "uncertain"}:
-                    vague_negative = not wellness_already_describes_concern(raw_text)
-                    break
-        unresolved = (needs_clarification or vague_negative) and not issue_mentions
+        vague_negative = wellness_polarity_negative(goal_facts) or "vague_issue" in ambiguities
+        unresolved = derive_unresolved_concern(
+            issue_mentions=issue_mentions,
+            goal_facts=goal_facts,
+            kernel_ambiguities=ambiguities,
+            needs_clarification=needs_clarification,
+        )
         return cls(
             raw_text=raw_text,
             dialogue_act=dialogue_act,
@@ -370,21 +364,6 @@ def _wellness_covered(state: EngineState) -> bool:
     return False
 
 
-def _snapshot_unresolved_concern(state: EngineState) -> bool:
-    from packages.dialogue_engine.check_path import wellness_already_describes_concern
-
-    if state.issue_episodes:
-        return False
-    if state.probe_phase == "concern":
-        return True
-    wellness_text = state.wellness_concern or str(state.slot_values.get("wellness", ""))
-    if not wellness_text:
-        return False
-    if wellness_already_describes_concern(wellness_text):
-        return False
-    return state.check_path == CheckPath.NEGATIVE_PROBE
-
-
 def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
     """Read EngineState only; never calls mutating helpers."""
     episodes = tuple(
@@ -440,5 +419,4 @@ def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
         user_burden=burden,
         call_closed=state.call_closed,
         fsm_state=_value(state.fsm_state),
-        unresolved_concern=_snapshot_unresolved_concern(state),
     )

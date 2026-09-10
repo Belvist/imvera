@@ -22,6 +22,25 @@ def _nonterminal_control(ctx: TurnContextView) -> bool:
     return ctx.control not in {"", "none", "stop_call"}
 
 
+def _clarify_signal(ctx: TurnContextView) -> bool:
+    return bool(
+        ctx.needs_clarification
+        or ctx.unresolved_concern
+        or ctx.clarify_target
+    )
+
+
+def _its_context_fit(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
+    if not snapshot.wellness_entry_covered:
+        return False
+    if snapshot.transition_preferred(ctx):
+        return True
+    active = snapshot.active_episode
+    if active and active.known_dimension_count >= 2:
+        return True
+    return not snapshot.has_askable_open_issues
+
+
 def extract_features(
     snapshot: PolicySnapshot,
     ctx: TurnContextView,
@@ -30,12 +49,16 @@ def extract_features(
     features: dict[str, float] = {"bias": 1.0}
     features[f"action:{action.kind.value}"] = 1.0
     transition_preferred = snapshot.transition_preferred(ctx)
+    burden = snapshot.user_burden
 
     if action.kind == ActionKind.ASK_EPISODE:
         ep = snapshot.episode(action.episode_id)
         need = normalize_need(action.question_need)
+        gain = _GAIN.get(need or "", 0.4)
+        dim_count = ep.known_dimension_count if ep else 0
         features["active_issue"] = 1.0 if ep is not None else 0.0
-        features["information_gain"] = _GAIN.get(need or "", 0.4)
+        features["information_gain"] = gain
+        features["unanswered_dimension_value"] = gain * max(0.15, 1.0 - burden)
         features["pending_need_match"] = (
             1.0
             if snapshot.pending_episode_attribute
@@ -50,25 +73,32 @@ def extract_features(
             else 0.0
         )
         features["episode_resolving"] = 1.0 if ep and ep.resolving else 0.0
-        dim_count = ep.known_dimension_count if ep else 0
         features["known_dimensions"] = float(dim_count)
         features["enough_dimensions"] = 1.0 if dim_count >= 2 else 0.0
-        features["user_burden"] = snapshot.user_burden
+        features["user_burden"] = burden
+        features["episode_questions"] = float(snapshot.questions_asked_this_episode)
         features["repeat_penalty"] = (
             1.0 if need and need == snapshot.last_question_need else 0.0
         )
         features["transition_penalty"] = 1.0 if transition_preferred else 0.0
+        features["useful_follow_up"] = (
+            1.0
+            if ep
+            and ep.interrogation_eligible
+            and ep.has_open_questions
+            and dim_count < 2
+            and need
+            and need != snapshot.last_question_need
+            else 0.0
+        )
+        features["fit:episode"] = (
+            1.0
+            if ep and ep.interrogation_eligible and ep.has_open_questions
+            else 0.0
+        )
 
-    clarify_signal = (
-        ctx.needs_clarification
-        or ctx.unresolved_concern
-        or ctx.clarify_target
-        or snapshot.probe_phase
-        or snapshot.unresolved_concern
-    )
-    its_signal = snapshot.wellness_entry_covered and (
-        transition_preferred or not snapshot.pressing_interrogation_episodes
-    )
+    clarify_on = _clarify_signal(ctx)
+    its_on = _its_context_fit(snapshot, ctx)
 
     features["fit:safety"] = (
         1.0 if action.kind == ActionKind.SAFETY and snapshot.risk_level == "urgent" else 0.0
@@ -89,15 +119,8 @@ def extract_features(
         and (ctx.meta or ctx.unclear_without_grounding)
         else 0.0
     )
-    features["fit:clarify"] = 1.0 if action.kind == ActionKind.CLARIFY and clarify_signal else 0.0
-    worthwhile = action.kind == ActionKind.ASK_EPISODE and any(
-        ep.episode_id == action.episode_id and ep.worthwhile_followup
-        for ep in snapshot.attention_episodes
-    )
-    features["fit:episode"] = 1.0 if worthwhile else 0.0
-    features["fit:its"] = (
-        1.0 if action.kind == ActionKind.IMPORTANT_TO_SHARE and its_signal else 0.0
-    )
+    features["fit:clarify"] = 1.0 if action.kind == ActionKind.CLARIFY and clarify_on else 0.0
+    features["fit:its"] = 1.0 if action.kind == ActionKind.IMPORTANT_TO_SHARE and its_on else 0.0
     features["fit:background"] = 1.0 if action.kind == ActionKind.BACKGROUND_GOAL else 0.0
     features["fit:summary"] = (
         1.0
@@ -109,4 +132,5 @@ def extract_features(
     features["its_pending"] = 1.0 if snapshot.its_pending else 0.0
     if action.kind == ActionKind.IMPORTANT_TO_SHARE:
         features["transition_preferred"] = 1.0 if transition_preferred else 0.0
+        features["user_burden"] = burden
     return features

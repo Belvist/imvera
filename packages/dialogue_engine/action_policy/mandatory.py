@@ -28,9 +28,9 @@ def _has_nonterminal_control(ctx: TurnContextView) -> bool:
 def _unresolved_concern(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
     if ctx.has_new_issue or snapshot.interrogatable_episodes:
         return False
-    if ctx.needs_clarification and not ctx.has_grounded_information:
-        return True
-    return ctx.unresolved_concern or snapshot.unresolved_concern
+    return ctx.unresolved_concern or (
+        ctx.needs_clarification and not ctx.has_grounded_information
+    )
 
 
 def _conversation_eligible(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
@@ -40,7 +40,7 @@ def _conversation_eligible(snapshot: PolicySnapshot, ctx: TurnContextView) -> bo
 
 
 def _background_eligible(snapshot: PolicySnapshot) -> bool:
-    if snapshot.interrogatable_episodes or snapshot.its_pending:
+    if snapshot.has_askable_open_issues or snapshot.its_pending:
         return False
     for goal in ("wellness", "mood", "sleep", "plans"):
         required = snapshot.mandatory_background_goals or goal in snapshot.required_background_goals
@@ -50,7 +50,9 @@ def _background_eligible(snapshot: PolicySnapshot) -> bool:
 
 
 def _summary_close_eligible(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
-    if snapshot.pressing_interrogation_episodes or ctx.has_new_issue:
+    if snapshot.has_askable_open_issues:
+        return False
+    if ctx.has_new_issue and not snapshot.transition_preferred(ctx):
         return False
     if not snapshot.important_to_share_resolved:
         return False
@@ -76,9 +78,8 @@ def compute_mandatory_class(snapshot: PolicySnapshot, ctx: TurnContextView) -> M
         return MandatoryClass.ITS_META
     if _unresolved_concern(snapshot, ctx):
         return MandatoryClass.CLARIFY
-    clarify_target = ctx.clarify_target or snapshot.probe_phase
     if (
-        clarify_target
+        ctx.clarify_target
         and not ctx.has_new_issue
         and not snapshot.interrogatable_episodes
     ):

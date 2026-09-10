@@ -51,23 +51,26 @@ Future weights may only rank surviving candidates.
 
 ### Generic features and linear scorer
 
-Phase 1 does not call `semantic_kernel/information_gain.py` and does not reuse body-site conditionals. Named features include active issue, semantic information gain, pending-need match, known dimension count, resolving episode, user burden, recent/repeat question, ITS state, and action/context fit. Score is `sum(weight_i * feature_i)`. Initial weights are human-written and versioned. Every scored candidate logs per-feature contributions.
+Phase 1 does not call `semantic_kernel/information_gain.py` and does not reuse body-site conditionals. Hard constraints answer whether a question may legally be asked; the linear scorer answers whether asking is worth user burden. Named features include information gain, unanswered dimension value, known dimension count, episode question count, resolving episode, user burden, pending-need match, transition preference/penalty, and action/context fit. `fit:episode` is not allowed to dwarf burden/transition features. Score is `sum(weight_i * feature_i)`. Initial weights are human-written and versioned (`POLICY_VERSION`). Every scored candidate logs per-feature contributions.
 
 ### Corpus split and anti-overfit rule
 
 The offline corpus has three physically separate splits:
 
 - `development/`: tuning/debug allowed
-- `held_out/`: frozen after baseline; do not tune against outcomes
+- `held_out/`: regression corpus; not independent generalization evidence until frozen before weight tuning
 - `p0_golden/`: known live regressions; no tuning and 100% pass required
+- `challenge_frozen/`: reserved for post-freeze unseen evaluation; must be labeled before first run and never used for tuning
 
-It is invalid to tune weights on a scenario and then count the same scenario as held-out evidence.
+It is invalid to tune weights on a scenario and then count the same scenario as held-out/challenge evidence.
 
 ### Two benchmark levels
 
 PolicySnapshot benchmark compares ActionPolicy against the current scheduler on an independent deep copy and normalizes both outputs to canonical `ActionKey` values.
 
-Conversation replay diagnostic runs `raw turn -> Semantic Kernel/RichUserTurn -> filter_rich_turn_mentions -> atomic_semantic_apply -> PolicySnapshot -> ActionPolicy.choose`. It separates semantic/state-loss failures from policy-selection failures and is diagnostic only in Phase 1.
+Conversation replay runs `raw turn -> Semantic Kernel/RichUserTurn -> filter_rich_turn_mentions -> atomic_semantic_apply -> PolicySnapshot -> ActionPolicy.choose`. It separates semantic/state-loss failures from policy-selection failures. **Phase 1 gate:** `tests/action_policy/test_pipeline_gate.py` requires `policy_failure == 0` and `nlu_state_loss == 0`; the benchmark CLI exit code enforces the same pair.
+
+ActionPolicy decision inputs MUST NOT import or depend on legacy scheduler signals: `check_path`, `topic_tracker`, `probe_phase`, or `next_open_slot`. `probe_phase` may remain on `PolicySnapshot` for diagnostics/logging only. `unresolved_concern` is derived canonically from Semantic Kernel outputs (negative/uncertain wellness, `vague_issue` ambiguity, `needs_clarification`) when no grounded speaker issue exists.
 
 ### Canonical comparison
 

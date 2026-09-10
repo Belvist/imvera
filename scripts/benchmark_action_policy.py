@@ -306,7 +306,8 @@ def main() -> int:
     held_ratio = (held.get("new_ok", 0) / held.get("total", 1)) if held.get("total") else 0.0
     held_ok = held_ratio >= 0.95 and held.get("new_forbidden") == 0
     latency_ok = bool(report["latency"]["target_pass"])
-    pipeline_ok = report["pipeline_diagnostic"]["policy_failure"] == 0
+    pipeline = report["pipeline_diagnostic"]
+    pipeline_ok = pipeline["policy_failure"] == 0 and pipeline["nlu_state_loss"] == 0
     return 0 if p0_ok and held_ok and latency_ok and pipeline_ok else 1
 
 
