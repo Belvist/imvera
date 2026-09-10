@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from packages.dialogue_engine.action_policy.semantic_signals import derive_unresolved_concern
+from packages.dialogue_engine.action_policy.semantic_signals import (
+    classify_turn_issues,
+    derive_turn_risk_level,
+    derive_unresolved_concern,
+    has_grounded_speaker_issue,
+)
+from packages.dialogue_engine.semantic_kernel.types import Observation, SubjectKind
 
 
 def test_vague_negative_wellness_without_issue_is_unresolved() -> None:
@@ -19,3 +25,21 @@ def test_grounded_issue_blocks_unresolved_concern() -> None:
         label = "headache"
 
     assert not derive_unresolved_concern(issue_mentions=(_Mention(),))
+
+
+def test_other_person_issue_does_not_block_unresolved_concern() -> None:
+    obs = Observation(
+        observation_id="o1",
+        attribute="issue",
+        value="heart",
+        subject=SubjectKind.OTHER_PERSON,
+    )
+    assert not has_grounded_speaker_issue(issue_mentions=(object(),), observations=(obs,))
+    speaker, other = classify_turn_issues(issue_mentions=(object(),), observations=(obs,))
+    assert not speaker
+    assert other
+
+
+def test_turn_risk_from_raw_text_without_check_path() -> None:
+    assert derive_turn_risk_level(raw_text="Не могу дышать") == "urgent"
+    assert derive_turn_risk_level(raw_text="Всё нормально") == "none"

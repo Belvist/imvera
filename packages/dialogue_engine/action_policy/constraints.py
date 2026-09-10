@@ -16,6 +16,10 @@ from packages.dialogue_engine.action_policy.mandatory import (
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView
 
 
+def _urgent_risk(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
+    return ctx.urgent_risk or snapshot.risk_level == "urgent"
+
+
 def _reject(action: CandidateAction, rule_id: str, reason: str) -> ConstraintRejection:
     return ConstraintRejection(action=action, rule_id=rule_id, reason=reason)
 
@@ -39,7 +43,7 @@ def reject_candidate(
     has_nonterminal_control = ctx.control not in {"", "none", "stop_call"}
     unresolved = ctx.unresolved_concern
 
-    if kind == ActionKind.SAFETY and snapshot.risk_level != "urgent":
+    if kind == ActionKind.SAFETY and not _urgent_risk(snapshot, ctx):
         return _reject(action, "safety_not_present", "no urgent safety state")
 
     if kind == ActionKind.GOODBYE_FINAL and not ctx.explicit_farewell:
@@ -111,13 +115,11 @@ def reject_candidate(
             )
 
     if kind == ActionKind.IMPORTANT_TO_SHARE:
-        if ctx.has_new_issue and snapshot.episodes and not any(
-            ep.speaker_owned for ep in snapshot.episodes
-        ):
+        if ctx.has_new_speaker_issue and snapshot.has_askable_open_issues:
             return _reject(
                 action,
-                "non_speaker_issue_blocks_its",
-                "other-person issue cannot jump to IMPORTANT_TO_SHARE",
+                "speaker_issue_blocks_its",
+                "new speaker issue still needs episode handling",
             )
         if not snapshot.wellness_entry_covered:
             return _reject(action, "entry_not_covered", "wellness entry is not yet covered")
@@ -127,7 +129,7 @@ def reject_candidate(
     if kind == ActionKind.SUMMARY_CLOSE:
         if snapshot.has_askable_open_issues:
             return _reject(action, "premature_close_issue", "open useful issue blocks close")
-        if ctx.has_new_issue and not snapshot.transition_preferred(ctx):
+        if ctx.has_new_speaker_issue and not snapshot.transition_preferred(ctx):
             return _reject(action, "premature_close_new_issue", "new grounded issue blocks close")
         if not snapshot.important_to_share_resolved:
             return _reject(
@@ -140,6 +142,22 @@ def reject_candidate(
                 action,
                 "premature_close_meta",
                 "meta/unclear text cannot close conversation",
+            )
+
+    if kind == ActionKind.ACK_ONLY and mandatory == MandatoryClass.CONVERSATION:
+        if (
+            snapshot.wellness_entry_covered
+            and not snapshot.important_to_share_asked
+            and snapshot.user_burden >= 0.75
+            and (
+                snapshot.has_askable_open_issues
+                or snapshot.questions_asked_this_episode >= 2
+            )
+        ):
+            return _reject(
+                action,
+                "ack_dead_end",
+                "high burden cannot dead-end with bare ACK_ONLY",
             )
 
     if kind == ActionKind.CLARIFY:

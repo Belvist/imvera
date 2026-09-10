@@ -70,7 +70,7 @@ def test_new_issue_blocks_close() -> None:
         episodes=[{"episode_id": "ep", "kind": "symptom", "known": {}}],
         active_episode_id="ep",
     )
-    ctx = TurnContextView(has_new_issue=True)
+    ctx = TurnContextView(has_new_speaker_issue=True, has_new_issue=True)
     action = CandidateAction(ActionKind.SUMMARY_CLOSE)
     rejection = reject_candidate(
         snap,

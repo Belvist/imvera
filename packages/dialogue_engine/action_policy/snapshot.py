@@ -8,7 +8,7 @@ from typing import Any
 
 from packages.contracts.enums import SlotStatus
 from packages.dialogue_engine.question_context import QuestionNeed
-from packages.dialogue_engine.state import BackgroundGoalCoverage, CheckPath, EngineState
+from packages.dialogue_engine.state import BackgroundGoalCoverage, EngineState
 
 
 def _value(value: object) -> str:
@@ -166,6 +166,8 @@ class PolicySnapshot:
             return False
         if all(ep.resolving for ep in owned):
             return True
+        if any(ep.known_dimension_count >= 2 for ep in owned):
+            return True
         if not any(ep.interrogation_eligible and ep.has_open_questions for ep in owned):
             return True
         return False
@@ -229,6 +231,9 @@ class TurnContextView:
     needs_clarification: bool = False
     answers_pending_question: bool = False
     has_new_issue: bool = False
+    has_new_speaker_issue: bool = False
+    has_new_other_person_issue: bool = False
+    turn_risk_level: str = "none"
     has_goal_facts: bool = False
     correction: bool = False
     meta: bool = False
@@ -245,8 +250,17 @@ class TurnContextView:
         return self.control == "stop_call"
 
     @property
+    def urgent_risk(self) -> bool:
+        return self.turn_risk_level == "urgent"
+
+    @property
     def has_grounded_information(self) -> bool:
-        return self.has_new_issue or self.has_goal_facts or self.correction
+        return (
+            self.has_new_speaker_issue
+            or self.has_new_other_person_issue
+            or self.has_goal_facts
+            or self.correction
+        )
 
     @property
     def unclear_without_grounding(self) -> bool:
@@ -261,16 +275,29 @@ class TurnContextView:
         if turn is None:
             return cls()
         from packages.dialogue_engine.action_policy.semantic_signals import (
+            classify_turn_issues,
+            derive_turn_risk_level,
             derive_unresolved_concern,
             wellness_polarity_negative,
         )
 
         issue_mentions = tuple(getattr(turn, "issue_mentions", ()) or ())
+        observations = tuple(getattr(turn, "observations", ()) or ())
         goal_facts = tuple(getattr(turn, "goal_facts", ()) or ())
+        risk_candidates = tuple(getattr(turn, "risk_candidates", ()) or ())
         user_q = bool(getattr(turn, "user_question", None))
         dialogue_act = str(getattr(turn, "dialogue_act", "answer"))
         raw_text = str(getattr(turn, "raw_text", ""))
-        grounded = bool(issue_mentions or goal_facts or getattr(turn, "correction", False))
+        speaker_issue, other_issue = classify_turn_issues(
+            issue_mentions=issue_mentions,
+            observations=observations,
+        )
+        grounded = bool(
+            speaker_issue
+            or other_issue
+            or goal_facts
+            or getattr(turn, "correction", False)
+        )
         ambiguities = tuple(getattr(turn, "kernel_ambiguities", ()) or ())
         needs_clarification = bool(getattr(turn, "needs_clarification", False))
         vague_negative = wellness_polarity_negative(goal_facts) or "vague_issue" in ambiguities
@@ -279,6 +306,7 @@ class TurnContextView:
             goal_facts=goal_facts,
             kernel_ambiguities=ambiguities,
             needs_clarification=needs_clarification,
+            observations=observations,
         )
         return cls(
             raw_text=raw_text,
@@ -287,7 +315,13 @@ class TurnContextView:
             user_question=user_q,
             needs_clarification=needs_clarification,
             answers_pending_question=bool(getattr(turn, "answers_pending_question", False)),
-            has_new_issue=bool(issue_mentions),
+            has_new_issue=speaker_issue or other_issue,
+            has_new_speaker_issue=speaker_issue,
+            has_new_other_person_issue=other_issue,
+            turn_risk_level=derive_turn_risk_level(
+                raw_text=raw_text,
+                risk_candidates=risk_candidates,
+            ),
             has_goal_facts=bool(goal_facts),
             correction=bool(getattr(turn, "correction", False)),
             meta=(user_q or dialogue_act == "question") and not grounded,
@@ -298,6 +332,13 @@ class TurnContextView:
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any]) -> TurnContextView:
+        speaker_issue = bool(raw.get("has_new_speaker_issue", False))
+        other_issue = bool(raw.get("has_new_other_person_issue", False))
+        if not speaker_issue and not other_issue and raw.get("has_new_issue"):
+            speaker_issue = True
+        turn_risk = str(raw.get("turn_risk_level", "none"))
+        if turn_risk == "none" and raw.get("urgent_risk"):
+            turn_risk = "urgent"
         return cls(
             raw_text=str(raw.get("raw_text", "")),
             dialogue_act=str(raw.get("dialogue_act", "answer")),
@@ -305,7 +346,10 @@ class TurnContextView:
             user_question=bool(raw.get("user_question", False)),
             needs_clarification=bool(raw.get("needs_clarification", False)),
             answers_pending_question=bool(raw.get("answers_pending_question", False)),
-            has_new_issue=bool(raw.get("has_new_issue", False)),
+            has_new_issue=speaker_issue or other_issue or bool(raw.get("has_new_issue", False)),
+            has_new_speaker_issue=speaker_issue,
+            has_new_other_person_issue=other_issue,
+            turn_risk_level=turn_risk,
             has_goal_facts=bool(raw.get("has_goal_facts", False)),
             correction=bool(raw.get("correction", False)),
             meta=bool(raw.get("meta", False)),
@@ -390,14 +434,13 @@ def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
             if str(goal.slot).startswith(prefix):
                 q_count += int(goal.delivered_attempts)
     burden = min(1.0, (q_count / 4.0) + max(0, state.turn_seq - 6) * 0.05)
-    risk = "urgent" if state.check_path == CheckPath.URGENT else "none"
     return PolicySnapshot(
         turn_number=state.turn_seq,
         episodes=episodes,
         active_episode_id=state.active_episode_id,
         pending_episode_ids=tuple(state.pending_episode_ids),
         pending_episode_attribute=state.pending_episode_attribute,
-        risk_level=risk,
+        risk_level="none",
         important_to_share_asked=state.important_to_share_asked,
         important_to_share_resolved=state.important_to_share_resolved,
         background_goal_status=tuple(

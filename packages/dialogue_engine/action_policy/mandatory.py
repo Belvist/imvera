@@ -25,8 +25,12 @@ def _has_nonterminal_control(ctx: TurnContextView) -> bool:
     return ctx.control not in {"", "none", "stop_call"}
 
 
+def _urgent_risk(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
+    return ctx.urgent_risk or snapshot.risk_level == "urgent"
+
+
 def _unresolved_concern(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
-    if ctx.has_new_issue or snapshot.interrogatable_episodes:
+    if ctx.has_new_speaker_issue or snapshot.interrogatable_episodes:
         return False
     return ctx.unresolved_concern or (
         ctx.needs_clarification and not ctx.has_grounded_information
@@ -36,7 +40,7 @@ def _unresolved_concern(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
 def _conversation_eligible(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
     if snapshot.wellness_entry_covered:
         return True
-    return bool(snapshot.interrogatable_episodes or ctx.has_new_issue)
+    return bool(snapshot.interrogatable_episodes or ctx.has_new_speaker_issue)
 
 
 def _background_eligible(snapshot: PolicySnapshot) -> bool:
@@ -52,7 +56,7 @@ def _background_eligible(snapshot: PolicySnapshot) -> bool:
 def _summary_close_eligible(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
     if snapshot.has_askable_open_issues:
         return False
-    if ctx.has_new_issue and not snapshot.transition_preferred(ctx):
+    if ctx.has_new_speaker_issue and not snapshot.transition_preferred(ctx):
         return False
     if not snapshot.important_to_share_resolved:
         return False
@@ -63,7 +67,7 @@ def _summary_close_eligible(snapshot: PolicySnapshot, ctx: TurnContextView) -> b
 
 def compute_mandatory_class(snapshot: PolicySnapshot, ctx: TurnContextView) -> MandatoryClass:
     """Fixed precedence ending in scorer-driven CONVERSATION, not hard must-ask."""
-    if snapshot.risk_level == "urgent":
+    if _urgent_risk(snapshot, ctx):
         return MandatoryClass.SAFETY
     if ctx.explicit_farewell or _has_nonterminal_control(ctx):
         return MandatoryClass.TERMINAL_CONTROL
@@ -80,7 +84,7 @@ def compute_mandatory_class(snapshot: PolicySnapshot, ctx: TurnContextView) -> M
         return MandatoryClass.CLARIFY
     if (
         ctx.clarify_target
-        and not ctx.has_new_issue
+        and not ctx.has_new_speaker_issue
         and not snapshot.interrogatable_episodes
     ):
         return MandatoryClass.CLARIFY
