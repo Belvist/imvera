@@ -15,7 +15,7 @@ SHADOW_SCHEMA_VERSION = 1
 SHADOW_BUFFER_MAX = 64
 DECISION_SCOPE = "conversation_scheduler"
 
-# Modes — soft/hard intentionally unavailable in M1/M1.1.
+# Modes — soft/hard intentionally unavailable until DecisionRouter phase.
 _ALLOWED_MODES = frozenset({"off", "shadow"})
 
 ERROR_FLAG_BY_STAGE = {
@@ -71,24 +71,6 @@ def ensure_shadow_health(state: Any) -> dict[str, Any]:
     return health
 
 
-def buffer_shadow_record_light(state: Any, record: dict[str, Any]) -> None:
-    """Append shadow record without importing the heavy evaluator package."""
-    health = ensure_shadow_health(state)
-    health["shadow_records_produced"] = int(health["shadow_records_produced"]) + 1
-    buf = getattr(state, "action_policy_shadow_records", None)
-    if buf is None:
-        try:
-            state.action_policy_shadow_records = []
-            buf = state.action_policy_shadow_records
-        except Exception:
-            return
-    while len(buf) >= SHADOW_BUFFER_MAX:
-        buf.pop(0)
-        health["shadow_records_dropped"] = int(health["shadow_records_dropped"]) + 1
-        health["telemetry_health"] = "degraded"
-    buf.append(record)
-
-
 def make_error_record(
     state: Any,
     *,
@@ -141,7 +123,7 @@ def make_error_record(
         "divergence_class": "unclassified",
         "shadow_total_latency_ms": None,
         "policy_choose_latency_ms": None,
-        "shadow_latency_ms": None,  # deprecated alias; prefer shadow_total_latency_ms
+        "shadow_latency_ms": None,
         "policy_influenced_output": False,
         "pending_before": {"episode_id": None, "need": None},
         "critical_flags": {

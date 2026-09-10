@@ -16,8 +16,8 @@ from packages.dialogue_engine.action_policy_shadow import (
     allocate_decision_id,
     classify_divergence,
     run_shadow_pre_legacy,
-    shadow_health_counters,
 )
+from packages.dialogue_engine.action_policy_shadow_buffer import shadow_health_counters
 from packages.dialogue_engine.action_policy_shadow_config import (
     action_policy_mode,
     make_error_record,

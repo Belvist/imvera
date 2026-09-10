@@ -151,7 +151,7 @@ class CallSession:
         if self._engine is None:
             return
         try:
-            from packages.dialogue_engine.action_policy_shadow import (
+            from packages.dialogue_engine.action_policy_shadow_buffer import (
                 drain_shadow_records,
                 mark_shadow_persisted,
                 requeue_shadow_records,
@@ -199,6 +199,27 @@ class CallSession:
                     self.state.call_id,
                 )
 
+    def _persist_action_policy_shadow_health(self) -> None:
+        """Emit one ACTION_POLICY_SHADOW_HEALTH summary at call finalization."""
+        if self._engine is None:
+            return
+        try:
+            from packages.dialogue_engine.action_policy_shadow_buffer import (
+                compute_telemetry_health_status,
+            )
+
+            payload = compute_telemetry_health_status(self._engine.state)
+            self._append_event(
+                "ACTION_POLICY_SHADOW_HEALTH",
+                payload,
+                idempotency_key=f"{self.state.call_id}:ACTION_POLICY_SHADOW_HEALTH",
+            )
+        except Exception:
+            _log.exception(
+                "ACTION_POLICY_SHADOW_HEALTH persist failed call_id=%s",
+                self.state.call_id,
+            )
+
     def _snapshot(self) -> CallResultSnapshot:
         facts = {k: v.value for k, v in self.state.facts.items()}
         quotes = {k: v.source_quote for k, v in self.state.facts.items()}
@@ -229,6 +250,7 @@ class CallSession:
             return True, None
         # Final flush attempt for any requeued shadow telemetry.
         self._persist_action_policy_shadow_records()
+        self._persist_action_policy_shadow_health()
         snap = self._snapshot().model_copy(update={"call_ended": True})
         result = self.store.finalize_call(snap)
         if not result.ok:

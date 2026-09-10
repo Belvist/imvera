@@ -1,10 +1,10 @@
-"""Live-route coverage: outer guards vs conversation_scheduler shadow."""
+"""Expanded live-route outer-guard vs conversation_scheduler shadow coverage."""
 
 from __future__ import annotations
 
 import pytest
 
-from packages.contracts.enums import SlotStatus
+from packages.contracts.enums import FsmState, SlotStatus
 from packages.dialogue_engine.engine import DialogueEngine
 from packages.dialogue_engine.events import CallStarted
 from packages.dialogue_engine.reducer import reduce
@@ -79,10 +79,7 @@ def test_live_control_outer_guard_bypasses_scheduler_shadow() -> None:
             dialogue_act="other",
         ),
     )
-    records = eng.drain_action_policy_shadow_records()
-    assert records == [], (
-        "explicit control is OUTER_GUARD — must not count as ActionPolicy evaluated"
-    )
+    assert eng.drain_action_policy_shadow_records() == []
 
 
 def test_live_repair_outer_guard_bypasses_scheduler_shadow() -> None:
@@ -97,23 +94,58 @@ def test_live_repair_outer_guard_bypasses_scheduler_shadow() -> None:
             dialogue_act="repair",
         ),
     )
-    records = eng.drain_action_policy_shadow_records()
-    assert records == [], (
-        "repair is OUTER_GUARD — must not count as ActionPolicy evaluated"
+    assert eng.drain_action_policy_shadow_records() == []
+
+
+def test_live_closing_goodbye_outer_guard_bypasses_scheduler_shadow() -> None:
+    eng = _eng()
+    eng.state.fsm_state = FsmState.GOODBYE
+    eng.state.awaiting_goodbye_confirm = True
+    eng.on_user_turn(
+        "bye-1",
+        "да, до свидания",
+        rich_turn=_rich(
+            utterance_id="bye-1",
+            raw_text="да, до свидания",
+            dialogue_act="goodbye",
+            control="none",
+        ),
     )
+    assert eng.drain_action_policy_shadow_records() == []
 
 
-# Coverage matrix (documentation for reports):
-#
-# | Production path                         | Shadow evaluated? | Origin / note        |
-# |-----------------------------------------|-------------------|----------------------|
-# | schedule_next_action / _schedule_advance| yes               | conversation_scheduler|
-# | rich control (stop/defer/revoke/…)      | no                | OUTER_GUARD          |
-# | repair / delivery repeat                | no                | OUTER_GUARD          |
-# | closing/goodbye FSM                     | no                | OUTER_GUARD          |
-# | timer retry direct speak/close          | no                | OUTER_GUARD          |
-# | backchannel wait                        | no                | OUTER_GUARD          |
-#
-# Denominators: total_engine_decisions, outer_guard_decisions,
-# scheduler_decisions, shadow_evaluated, shadow_persisted.
-# Primary ActionPolicy comparison denominator: shadow_evaluated.
+def test_live_backchannel_wait_outer_guard_bypasses_scheduler_shadow() -> None:
+    eng = _eng()
+    eng.state.waiting_on_slot = "wellness"
+    eng.state.fsm_state = FsmState.DAILY_CHECK
+    eng.on_user_turn(
+        "bc-1",
+        "угу",
+        rich_turn=_rich(
+            utterance_id="bc-1",
+            raw_text="угу",
+            dialogue_act="backchannel",
+        ),
+    )
+    assert eng.drain_action_policy_shadow_records() == []
+
+
+def test_live_timer_direct_retry_bypasses_scheduler_shadow() -> None:
+    eng = _eng()
+    eng.state.fsm_state = FsmState.DAILY_CHECK
+    eng.state.waiting_on_slot = "wellness"
+    eng.state.revision = 3
+    effects = eng.on_timer_expired("wait-wellness")
+    assert effects is not None
+    assert eng.drain_action_policy_shadow_records() == []
+
+
+# Coverage matrix:
+# | Production path                          | Shadow evaluated? |
+# |------------------------------------------|-------------------|
+# | schedule_next_action / _schedule_advance | yes               |
+# | rich control                             | no OUTER_GUARD    |
+# | repair / delivery repeat                 | no OUTER_GUARD    |
+# | closing/goodbye FSM                      | no OUTER_GUARD    |
+# | timer retry direct speak/close           | no OUTER_GUARD    |
+# | backchannel wait                         | no OUTER_GUARD    |

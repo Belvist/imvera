@@ -10,7 +10,6 @@ import hashlib
 import json
 import logging
 import time
-from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from packages.dialogue_engine.action_policy.actions import PolicyConstraintViolation
@@ -22,6 +21,13 @@ from packages.dialogue_engine.action_policy.snapshot import (
     TurnContextView,
     build_policy_snapshot,
 )
+from packages.dialogue_engine.action_policy_shadow_buffer import (
+    buffer_shadow_record,
+    drain_shadow_records,
+    mark_shadow_persisted,
+    requeue_shadow_records,
+    shadow_health_counters,
+)
 from packages.dialogue_engine.action_policy_shadow_config import (
     DECISION_SCOPE,
     FROZEN_POLICY_SHA,
@@ -29,7 +35,6 @@ from packages.dialogue_engine.action_policy_shadow_config import (
     SHADOW_SCHEMA_VERSION,
     action_policy_mode,
     action_policy_runtime_truth,
-    ensure_shadow_health,
     make_error_record,
 )
 from packages.dialogue_engine.response_plan import ResponsePlan
@@ -37,7 +42,7 @@ from packages.dialogue_engine.runtime import git_sha_short
 
 _LOG = logging.getLogger("dialogue.action_policy_shadow")
 
-# Re-export for existing imports.
+# Re-export for evaluator tests; session/engine must use buffer module directly.
 __all__ = [
     "FROZEN_POLICY_SHA",
     "POLICY_VERSION",
@@ -49,9 +54,11 @@ __all__ = [
     "drain_shadow_records",
     "finalize_shadow_record",
     "make_error_record",
+    "mark_shadow_persisted",
     "requeue_shadow_records",
     "run_shadow_pre_legacy",
     "shadow_health_counters",
+    "snapshot_fingerprint_sha256",
 ]
 
 
@@ -65,20 +72,49 @@ def _burden_bucket(burden: float) -> str:
     return "very_high"
 
 
-def _safe_jsonable(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, dict):
-        return {str(k): _safe_jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_safe_jsonable(v) for v in value]
-    if is_dataclass(value):
-        return _safe_jsonable(asdict(value))
-    return str(value)
+def _structural_fingerprint_payload(snapshot: PolicySnapshot) -> dict[str, Any]:
+    """Normalized structural state only — no free-text / medical attribute values."""
+    episodes = []
+    for ep in snapshot.episodes:
+        episodes.append(
+            {
+                "episode_id": ep.episode_id,
+                "kind": ep.kind,
+                "status": ep.status,
+                "speaker_owned": bool(ep.speaker_owned),
+                "temporal_known": bool(ep.temporal_known),
+                "current_known": bool(ep.current_known),
+                "severity_known": bool(ep.severity_known),
+                "functional_impact_known": bool(ep.functional_impact_known),
+                "known_dimension_count": int(ep.known_dimension_count),
+                "interrogation_eligible": bool(ep.interrogation_eligible),
+            }
+        )
+    return {
+        "turn_number": int(snapshot.turn_number),
+        "episodes": episodes,
+        "active_episode_id": snapshot.active_episode_id,
+        "pending_episode_ids": list(snapshot.pending_episode_ids),
+        "pending_episode_attribute": snapshot.pending_episode_attribute,
+        "risk_level": snapshot.risk_level,
+        "important_to_share_asked": bool(snapshot.important_to_share_asked),
+        "important_to_share_resolved": bool(snapshot.important_to_share_resolved),
+        "background_goal_status": list(snapshot.background_goal_status),
+        "required_background_goals": list(snapshot.required_background_goals),
+        "mandatory_background_goals": bool(snapshot.mandatory_background_goals),
+        "wellness_entry_covered": bool(snapshot.wellness_entry_covered),
+        "probe_phase": snapshot.probe_phase,
+        "suspended_kind": snapshot.suspended_kind,
+        "last_question_need": snapshot.last_question_need,
+        "questions_asked_this_episode": int(snapshot.questions_asked_this_episode),
+        "user_burden_bucket": _burden_bucket(float(snapshot.user_burden)),
+        "call_closed": bool(snapshot.call_closed),
+        "fsm_state": snapshot.fsm_state,
+    }
 
 
 def snapshot_fingerprint_sha256(snapshot: PolicySnapshot) -> str:
-    payload = _safe_jsonable(asdict(snapshot))
+    payload = _structural_fingerprint_payload(snapshot)
     raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
@@ -386,12 +422,9 @@ def run_shadow_pre_legacy(state: Any, turn_context: Any) -> dict[str, Any]:
         choose_started = time.perf_counter()
         decision = choose(snapshot, ctx)
         choose_ms = (time.perf_counter() - choose_started) * 1000.0
-        total_ms = (time.perf_counter() - total_started) * 1000.0
         shadow_label = decision.chosen.key.label()
         record["shadow_action"] = shadow_label
         record["policy_choose_latency_ms"] = round(choose_ms, 4)
-        record["shadow_total_latency_ms"] = round(total_ms, 4)
-        record["shadow_latency_ms"] = record["shadow_total_latency_ms"]
         record["mandatory_class"] = compute_mandatory_class(snapshot, ctx).value
         if decision.candidates:
             record["chosen_score"] = float(decision.candidates[0].score)
@@ -416,6 +449,10 @@ def run_shadow_pre_legacy(state: Any, turn_context: Any) -> dict[str, Any]:
             record["cutover_eligible"] = False
         record["_shadow_ctx"] = ctx
         record["_shadow_snapshot"] = snapshot
+        # Stamp total only when the pre-legacy record is fully formed.
+        total_ms = (time.perf_counter() - total_started) * 1000.0
+        record["shadow_total_latency_ms"] = round(total_ms, 4)
+        record["shadow_latency_ms"] = record["shadow_total_latency_ms"]
         return record
     except PolicyConstraintViolation as exc:
         total_ms = (time.perf_counter() - total_started) * 1000.0
@@ -497,6 +534,8 @@ def finalize_shadow_record(
             record["cutover_eligible"] = False
         elif record.get("critical_violation"):
             record["cutover_eligible"] = False
+        elif record.get("divergence_class") == "unclassified":
+            record["cutover_eligible"] = False
         else:
             record["cutover_eligible"] = True
     else:
@@ -506,6 +545,9 @@ def finalize_shadow_record(
         record["cutover_eligible"] = False
         if record.get("shadow_status") == "error":
             record["critical_violation"] = True
+
+    if record.get("divergence_class") == "unclassified":
+        record["cutover_eligible"] = False
 
     record.pop("_shadow_ctx", None)
     record.pop("_shadow_snapshot", None)
@@ -519,51 +561,3 @@ def finalize_shadow_record(
     ):
         record.pop(forbidden, None)
     return record
-
-
-def buffer_shadow_record(state: Any, record: dict[str, Any]) -> None:
-    from packages.dialogue_engine.action_policy_shadow_config import (
-        buffer_shadow_record_light,
-    )
-
-    buffer_shadow_record_light(state, record)
-
-
-def drain_shadow_records(state: Any) -> list[dict[str, Any]]:
-    buf = getattr(state, "action_policy_shadow_records", None)
-    if not buf:
-        return []
-    out = list(buf)
-    buf.clear()
-    return out
-
-
-def requeue_shadow_records(state: Any, records: list[dict[str, Any]]) -> None:
-    """Requeue failed persistence attempts. Fail-open; may drop on overflow."""
-    from packages.dialogue_engine.action_policy_shadow_config import SHADOW_BUFFER_MAX
-
-    if not records:
-        return
-    health = ensure_shadow_health(state)
-    health["shadow_records_retry"] = int(health["shadow_records_retry"]) + len(records)
-    health["shadow_records_persist_failed"] = int(
-        health["shadow_records_persist_failed"]
-    ) + len(records)
-    buf = getattr(state, "action_policy_shadow_records", None)
-    if buf is None:
-        return
-    for record in records:
-        if len(buf) >= SHADOW_BUFFER_MAX:
-            health["shadow_records_dropped"] = int(health["shadow_records_dropped"]) + 1
-            health["telemetry_health"] = "degraded"
-            continue
-        buf.append(record)
-
-
-def mark_shadow_persisted(state: Any, count: int = 1) -> None:
-    health = ensure_shadow_health(state)
-    health["shadow_records_persisted"] = int(health["shadow_records_persisted"]) + count
-
-
-def shadow_health_counters(state: Any) -> dict[str, Any]:
-    return dict(ensure_shadow_health(state))

@@ -230,7 +230,9 @@ class DialogueEngine:
 
     def drain_action_policy_shadow_records(self) -> list[dict]:
         """Return and clear ephemeral ActionPolicy shadow records (CallSession persists)."""
-        from packages.dialogue_engine.action_policy_shadow import drain_shadow_records
+        from packages.dialogue_engine.action_policy_shadow_buffer import (
+            drain_shadow_records,
+        )
 
         return drain_shadow_records(self.state)
 

@@ -694,9 +694,9 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
     Shadow scope = conversation_scheduler only. Outer guards (safety/control/repair/
     timer) are owned by the reducer and intentionally bypass this path.
     """
+    from packages.dialogue_engine.action_policy_shadow_buffer import buffer_shadow_record
     from packages.dialogue_engine.action_policy_shadow_config import (
         action_policy_mode,
-        buffer_shadow_record_light,
         make_error_record,
     )
 
@@ -704,12 +704,18 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
         return _schedule_next_action_legacy(state, turn_context)
 
     shadow_record: dict | None = None
+    finalize_shadow_record = None
+    run_shadow_pre_legacy = None
     try:
         from packages.dialogue_engine.action_policy_shadow import (
-            buffer_shadow_record,
-            finalize_shadow_record,
-            run_shadow_pre_legacy,
+            finalize_shadow_record as _finalize,
         )
+        from packages.dialogue_engine.action_policy_shadow import (
+            run_shadow_pre_legacy as _run,
+        )
+
+        finalize_shadow_record = _finalize
+        run_shadow_pre_legacy = _run
     except Exception as exc:
         try:
             shadow_record = make_error_record(
@@ -719,9 +725,6 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
             )
         except Exception:
             shadow_record = None
-        run_shadow_pre_legacy = None  # type: ignore[assignment]
-        finalize_shadow_record = None  # type: ignore[assignment]
-        buffer_shadow_record = None  # type: ignore[assignment]
     else:
         try:
             # CRITICAL: snapshot + choose happen BEFORE legacy mutates EngineState.
@@ -741,13 +744,13 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
 
     if shadow_record is not None:
         try:
-            if finalize_shadow_record is not None and buffer_shadow_record is not None:
+            if finalize_shadow_record is not None:
                 finalized = finalize_shadow_record(shadow_record, plan)
                 buffer_shadow_record(state, finalized)
             else:
                 shadow_record["legacy_action"] = None
                 shadow_record["policy_influenced_output"] = False
-                buffer_shadow_record_light(state, shadow_record)
+                buffer_shadow_record(state, shadow_record)
         except Exception as exc:
             try:
                 err = make_error_record(
@@ -757,9 +760,8 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
                     decision_id=str(shadow_record.get("decision_id") or ""),
                     utterance_id=str(shadow_record.get("utterance_id") or ""),
                 )
-                buffer_shadow_record_light(state, err)
+                buffer_shadow_record(state, err)
             except Exception:
-                # Telemetry failure must never affect the call.
                 pass
 
     return plan
