@@ -689,42 +689,78 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
 
 
 def schedule_next_action(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
-    """Thin routing wrapper: optional pre-legacy shadow, then legacy ResponsePlan owner."""
-    from packages.dialogue_engine.action_policy_shadow import (
+    """Thin routing wrapper: optional pre-legacy shadow, then legacy ResponsePlan owner.
+
+    Shadow scope = conversation_scheduler only. Outer guards (safety/control/repair/
+    timer) are owned by the reducer and intentionally bypass this path.
+    """
+    from packages.dialogue_engine.action_policy_shadow_config import (
         action_policy_mode,
-        buffer_shadow_record,
-        finalize_shadow_record,
-        run_shadow_pre_legacy,
+        buffer_shadow_record_light,
+        make_error_record,
     )
 
-    shadow_record = None
-    if action_policy_mode() == "shadow":
+    if action_policy_mode() != "shadow":
+        return _schedule_next_action_legacy(state, turn_context)
+
+    shadow_record: dict | None = None
+    try:
+        from packages.dialogue_engine.action_policy_shadow import (
+            buffer_shadow_record,
+            finalize_shadow_record,
+            run_shadow_pre_legacy,
+        )
+    except Exception as exc:
+        try:
+            shadow_record = make_error_record(
+                state,
+                error_stage="import",
+                error_type=type(exc).__name__,
+            )
+        except Exception:
+            shadow_record = None
+        run_shadow_pre_legacy = None  # type: ignore[assignment]
+        finalize_shadow_record = None  # type: ignore[assignment]
+        buffer_shadow_record = None  # type: ignore[assignment]
+    else:
         try:
             # CRITICAL: snapshot + choose happen BEFORE legacy mutates EngineState.
             shadow_record = run_shadow_pre_legacy(state, turn_context)
-        except Exception:
-            shadow_record = {
-                "schema_version": 1,
-                "shadow_status": "error",
-                "error_stage": "shadow_wrapper",
-                "error_type": "Exception",
-                "policy_influenced_output": False,
-                "idempotency_key": (
-                    f"{state.call_id}:ACTION_POLICY_SHADOW:"
-                    f"{state.processing_turn_id or state.turn_seq}:{state.revision}"
-                ),
-            }
+        except Exception as exc:
+            try:
+                shadow_record = make_error_record(
+                    state,
+                    error_stage="shadow_wrapper",
+                    error_type=type(exc).__name__,
+                )
+            except Exception:
+                shadow_record = None
 
     # Exactly one legacy invocation on the real state.
     plan = _schedule_next_action_legacy(state, turn_context)
 
     if shadow_record is not None:
         try:
-            finalized = finalize_shadow_record(shadow_record, plan)
-            buffer_shadow_record(state, finalized)
-        except Exception:
-            # Telemetry failure must never affect the call.
-            pass
+            if finalize_shadow_record is not None and buffer_shadow_record is not None:
+                finalized = finalize_shadow_record(shadow_record, plan)
+                buffer_shadow_record(state, finalized)
+            else:
+                shadow_record["legacy_action"] = None
+                shadow_record["policy_influenced_output"] = False
+                buffer_shadow_record_light(state, shadow_record)
+        except Exception as exc:
+            try:
+                err = make_error_record(
+                    state,
+                    error_stage="finalize",
+                    error_type=type(exc).__name__,
+                    decision_id=str(shadow_record.get("decision_id") or ""),
+                    utterance_id=str(shadow_record.get("utterance_id") or ""),
+                )
+                buffer_shadow_record_light(state, err)
+            except Exception:
+                # Telemetry failure must never affect the call.
+                pass
 
     return plan
 

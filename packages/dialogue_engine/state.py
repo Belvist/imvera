@@ -194,9 +194,19 @@ class EngineState(BaseModel):
     required_background_goals: set[str] = Field(default_factory=set)
     mandatory_background_goals: bool = False
 
-    # Ephemeral shadow telemetry buffer — never persisted via model dump / DB snapshot.
+    # Ephemeral shadow telemetry — never persisted via model dump / DB snapshot.
     action_policy_shadow_records: list[dict] = Field(
         default_factory=list,
+        exclude=True,
+        repr=False,
+    )
+    action_policy_shadow_health: dict = Field(
+        default_factory=dict,
+        exclude=True,
+        repr=False,
+    )
+    action_policy_shadow_decision_ordinal: int = Field(
+        default=0,
         exclude=True,
         repr=False,
     )

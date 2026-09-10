@@ -57,7 +57,9 @@ def dialogue_engine_mode() -> str:
 
 
 def runtime_truth() -> dict[str, Any]:
-    from packages.dialogue_engine.action_policy_shadow import action_policy_runtime_truth
+    from packages.dialogue_engine.action_policy_shadow_config import (
+        action_policy_runtime_truth,
+    )
 
     truth = {
         "dialogue.engine.enabled": dialogue_engine_active(),

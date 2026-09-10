@@ -143,16 +143,27 @@ class CallSession:
         return self.store.append_event(event, self.state.family_id).ok
 
     def _persist_action_policy_shadow_records(self) -> None:
-        """Persist shadow telemetry via CallEvent. Failures never abort the call."""
+        """Persist shadow telemetry via CallEvent with bounded fail-open retry.
+
+        Failures never abort the call. Failed records are requeued (max 64).
+        Dropped records mark telemetry_health=degraded (not cutover evidence).
+        """
         if self._engine is None:
             return
         try:
-            records = self._engine.drain_action_policy_shadow_records()
+            from packages.dialogue_engine.action_policy_shadow import (
+                drain_shadow_records,
+                mark_shadow_persisted,
+                requeue_shadow_records,
+            )
+
+            records = drain_shadow_records(self._engine.state)
         except Exception:
             _log.exception(
                 "ACTION_POLICY_SHADOW drain failed call_id=%s", self.state.call_id
             )
             return
+        failed: list[dict] = []
         for record in records:
             try:
                 key = str(
@@ -164,15 +175,27 @@ class CallSession:
                     record,
                     idempotency_key=key,
                 )
-                if not ok:
+                if ok:
+                    mark_shadow_persisted(self._engine.state, 1)
+                else:
+                    failed.append(record)
                     _log.warning(
                         "ACTION_POLICY_SHADOW persist soft-fail call_id=%s key=%s",
                         self.state.call_id,
                         key,
                     )
             except Exception:
+                failed.append(record)
                 _log.exception(
                     "ACTION_POLICY_SHADOW persist exception call_id=%s",
+                    self.state.call_id,
+                )
+        if failed:
+            try:
+                requeue_shadow_records(self._engine.state, failed)
+            except Exception:
+                _log.exception(
+                    "ACTION_POLICY_SHADOW requeue failed call_id=%s",
                     self.state.call_id,
                 )
 
@@ -204,6 +227,8 @@ class CallSession:
     def _finalize_call_if_needed(self) -> tuple[bool, str | None]:
         if not self.state.final_action_done or self.state.call_finalized:
             return True, None
+        # Final flush attempt for any requeued shadow telemetry.
+        self._persist_action_policy_shadow_records()
         snap = self._snapshot().model_copy(update={"call_ended": True})
         result = self.store.finalize_call(snap)
         if not result.ok:
