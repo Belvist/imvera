@@ -15,8 +15,8 @@ SHADOW_SCHEMA_VERSION = 1
 SHADOW_BUFFER_MAX = 64
 DECISION_SCOPE = "conversation_scheduler"
 
-# Modes — soft/hard intentionally unavailable until DecisionRouter phase.
-_ALLOWED_MODES = frozenset({"off", "shadow"})
+# Effective modes after kill switches. "off" is an alias for "legacy".
+_ALLOWED_MODES = frozenset({"off", "legacy", "shadow", "soft", "policy"})
 
 ERROR_FLAG_BY_STAGE = {
     "turn_context_view": "shadow_context_error",
@@ -26,24 +26,56 @@ ERROR_FLAG_BY_STAGE = {
     "finalize": "shadow_finalize_error",
     "shadow_wrapper": "shadow_choose_error",
     "import": "shadow_choose_error",
+    "authoritative_fallback": "authoritative_fallback_legacy",
 }
 
 
+def cutover_enabled() -> bool:
+    """Hard kill companion for soft/policy. Default false — fail secure."""
+    raw = os.environ.get("IMVERA_ACTION_POLICY_CUTOVER_ENABLED", "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def soft_percent() -> int:
+    raw = os.environ.get("IMVERA_ACTION_POLICY_SOFT_PERCENT", "0").strip()
+    try:
+        return max(0, min(100, int(raw)))
+    except ValueError:
+        return 0
+
+
 def action_policy_mode() -> str:
+    """Effective router mode. Unknown / ungated soft|policy → legacy."""
     raw = os.environ.get("IMVERA_ACTION_POLICY_MODE", "off").strip().lower()
-    if raw in _ALLOWED_MODES:
-        return raw
-    return "off"
+    if raw not in _ALLOWED_MODES:
+        return "legacy"
+    if raw in {"off", "legacy"}:
+        return "legacy"
+    if raw == "shadow":
+        return "shadow"
+    # soft / policy require explicit cutover enable (no redeploy kill: unset/0).
+    if not cutover_enabled():
+        return "legacy"
+    return raw
 
 
 def action_policy_runtime_truth() -> dict[str, Any]:
     """Safe for startup even when evaluator package is broken."""
     return {
         "action_policy.mode": action_policy_mode(),
+        "action_policy.mode_raw": os.environ.get("IMVERA_ACTION_POLICY_MODE", "off"),
+        "action_policy.cutover_enabled": cutover_enabled(),
+        "action_policy.soft_percent": soft_percent(),
         "action_policy.policy_version": POLICY_VERSION,
         "action_policy.frozen_policy_sha": FROZEN_POLICY_SHA,
         "action_policy.decision_scope": DECISION_SCOPE,
         "IMVERA_ACTION_POLICY_MODE": os.environ.get("IMVERA_ACTION_POLICY_MODE", "off"),
+        "IMVERA_ACTION_POLICY_CUTOVER_ENABLED": os.environ.get(
+            "IMVERA_ACTION_POLICY_CUTOVER_ENABLED", ""
+        ),
+        "IMVERA_ACTION_POLICY_SOFT_PERCENT": os.environ.get(
+            "IMVERA_ACTION_POLICY_SOFT_PERCENT", "0"
+        ),
     }
 
 

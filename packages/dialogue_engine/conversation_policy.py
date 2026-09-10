@@ -689,82 +689,19 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
 
 
 def schedule_next_action(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
-    """Thin routing wrapper: optional pre-legacy shadow, then legacy ResponsePlan owner.
+    """Thin routing wrapper via DecisionRouter.
 
-    Shadow scope = conversation_scheduler only. Outer guards (safety/control/repair/
-    timer) are owned by the reducer and intentionally bypass this path.
+    Shadow/soft/policy scope = conversation_scheduler only. Outer guards
+    (safety/control/repair/timer) are owned by the reducer and bypass this path.
+    Exactly one authoritative scheduler mutates/returns per invocation.
     """
-    from packages.dialogue_engine.action_policy_shadow_buffer import buffer_shadow_record
-    from packages.dialogue_engine.action_policy_shadow_config import (
-        action_policy_mode,
-        make_error_record,
+    from packages.dialogue_engine.decision_router import route_schedule_next_action
+
+    return route_schedule_next_action(
+        state,
+        turn_context,
+        legacy=_schedule_next_action_legacy,
     )
-
-    if action_policy_mode() != "shadow":
-        return _schedule_next_action_legacy(state, turn_context)
-
-    shadow_record: dict | None = None
-    finalize_shadow_record = None
-    run_shadow_pre_legacy = None
-    try:
-        from packages.dialogue_engine.action_policy_shadow import (
-            finalize_shadow_record as _finalize,
-        )
-        from packages.dialogue_engine.action_policy_shadow import (
-            run_shadow_pre_legacy as _run,
-        )
-
-        finalize_shadow_record = _finalize
-        run_shadow_pre_legacy = _run
-    except Exception as exc:
-        try:
-            shadow_record = make_error_record(
-                state,
-                error_stage="import",
-                error_type=type(exc).__name__,
-            )
-        except Exception:
-            shadow_record = None
-    else:
-        try:
-            # CRITICAL: snapshot + choose happen BEFORE legacy mutates EngineState.
-            shadow_record = run_shadow_pre_legacy(state, turn_context)
-        except Exception as exc:
-            try:
-                shadow_record = make_error_record(
-                    state,
-                    error_stage="shadow_wrapper",
-                    error_type=type(exc).__name__,
-                )
-            except Exception:
-                shadow_record = None
-
-    # Exactly one legacy invocation on the real state.
-    plan = _schedule_next_action_legacy(state, turn_context)
-
-    if shadow_record is not None:
-        try:
-            if finalize_shadow_record is not None:
-                finalized = finalize_shadow_record(shadow_record, plan)
-                buffer_shadow_record(state, finalized)
-            else:
-                shadow_record["legacy_action"] = None
-                shadow_record["policy_influenced_output"] = False
-                buffer_shadow_record(state, shadow_record)
-        except Exception as exc:
-            try:
-                err = make_error_record(
-                    state,
-                    error_stage="finalize",
-                    error_type=type(exc).__name__,
-                    decision_id=str(shadow_record.get("decision_id") or ""),
-                    utterance_id=str(shadow_record.get("utterance_id") or ""),
-                )
-                buffer_shadow_record(state, err)
-            except Exception:
-                pass
-
-    return plan
 
 
 def resume_episode_obligation(state: EngineState) -> PolicyDecision | None:

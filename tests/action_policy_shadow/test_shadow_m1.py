@@ -76,7 +76,7 @@ def _rich(**kwargs) -> RichUserTurn:
 
 def test_a_mode_off_does_not_call_evaluator(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IMVERA_ACTION_POLICY_MODE", "off")
-    assert action_policy_mode() == "off"
+    assert action_policy_mode() == "legacy"
     called = {"n": 0}
 
     def boom(*_a, **_k):
@@ -148,9 +148,15 @@ def test_mode_shadow_import_error_fail_open(monkeypatch: pytest.MonkeyPatch) -> 
         sys.modules.pop("packages.dialogue_engine.action_policy_shadow", None)
 
 
-def test_unknown_mode_fails_safe_to_off(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_soft_without_cutover_fails_safe_to_legacy(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IMVERA_ACTION_POLICY_MODE", "soft")
-    assert action_policy_mode() == "off"
+    monkeypatch.delenv("IMVERA_ACTION_POLICY_CUTOVER_ENABLED", raising=False)
+    assert action_policy_mode() == "legacy"
+
+
+def test_unknown_mode_fails_safe_to_legacy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IMVERA_ACTION_POLICY_MODE", "hard")
+    assert action_policy_mode() == "legacy"
 
 
 def test_b_shadow_disagreement_does_not_control_output(

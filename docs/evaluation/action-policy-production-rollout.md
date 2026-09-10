@@ -18,16 +18,6 @@ Statuses:
 
 **decision:** continue on PR #10 (`feature/action-policy-shadow-m1`)
 
-### Targets
-- Lightweight transport (`action_policy_shadow_buffer.py`) — session/engine never import heavy evaluator
-- Persist ImportError as `ACTION_POLICY_SHADOW`
-- Persist `ACTION_POLICY_SHADOW_HEALTH` at call finalize
-- Privacy-safe structural fingerprint
-- Latency split: `policy_choose_latency_ms` / `shadow_total_latency_ms`
-- Live outer-guard coverage (control/repair/closing/timer/backchannel)
-- `divergence_class=unclassified` ⇒ `cutover_eligible=false`
-- Frozen v7 unchanged
-
 ### Evidence
 | Field | Value |
 |-------|-------|
@@ -47,21 +37,6 @@ Statuses:
 
 **NOT a quality gate for v7.** Plumbing only.
 
-### Operator sequence
-1. Deploy code with `IMVERA_ACTION_POLICY_MODE=off`
-2. Run a few normal voice calls
-3. Set `IMVERA_ACTION_POLICY_MODE=shadow` for controlled cohort
-4. Collect 5–10 calls / 30–100 scheduler decisions
-5. Return `MODE=off`
-
-### Canary PASS criteria
-- `policy_influenced_output=0`
-- shadow exceptions / snapshot errors / persistence errors = 0
-- `produced == persisted`, `dropped=0`, `buffer_remaining=0`
-- `ACTION_POLICY_SHADOW_HEALTH` present on completed calls
-- correct `frozen_policy_sha` / `policy_version`
-- known v7 pending defect may appear in telemetry (not instrumentation failure)
-
 ### Evidence
 | Field | Value |
 |-------|-------|
@@ -70,13 +45,13 @@ Statuses:
 | runbook | `docs/runbooks/action-policy-shadow-canary.md` |
 | real-call evidence | **NOT VERIFIED** (no production access in agent session) |
 | decision | do not start 100/1000 on v7; operator runs canary |
-| next gate | Phase 3 ActionPolicy v8 (code started in parallel) |
+| next gate | Phase 3 ActionPolicy v8 |
 
 ---
 
-## Phase 3 — ActionPolicy v8 (in progress)
+## Phase 3–5 — ActionPolicy v8 + freeze + independent challenge
 
-Branch: `feature/action-policy-v8`
+Branch: `feature/action-policy-v8` · PR #11
 
 ### Semantic change
 - Separate `last_delivered_question_need` from `pending_episode_attribute`
@@ -86,12 +61,60 @@ Branch: `feature/action-policy-v8`
 ### Evidence
 | Field | Value |
 |-------|-------|
-| phase | v8 implementation + freeze |
+| phase | v8 impl + freeze + challenge |
 | policy SHA (COMMIT A) | `c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4` |
 | CI (COMMIT A) | [34539702387](https://github.com/Belvist/imvera/actions/runs/34539702387) — 1104 passed, 5 skipped |
-| freeze | `docs/evaluation/action-policy-phase1-v8-freeze-manifest.json` |
-| challenge | **not started** (must be separate post-freeze commit) |
-| next gate | independent v8 challenge corpus (EngineState→snapshot→choose) |
+| freeze commit (COMMIT B) | `822c391bc7da1fe3aad57e261f962718cd633132` |
+| freeze manifest | `docs/evaluation/action-policy-phase1-v8-freeze-manifest.json` |
+| challenge commit | `f2f0821b4156a269a716badd3ad5dac5797b1565` |
+| challenge report | `docs/evaluation/action-policy-phase1-v8-challenge.json` |
+| challenge gate | **PASSED** — 20/20, P0-like 100%, forbidden=0, constraint_violations=0 |
+| corpus | `tests/action_policy/corpus/challenge_v8_live/` (EngineState→snapshot→choose) |
+| decision | **v8 CODE READY as cutover candidate (offline)** |
+| next gate | Phase 2 operator canary (plumbing) then Phase 6 real shadow 100/1000 on **v8** |
+
+---
+
+## Phase 6 — Real shadow acceptance (v8)
+
+| Field | Value |
+|-------|-------|
+| status | **NOT VERIFIED** — requires operator deploy + real calls |
+| hard gates | see user brief / operability runbook |
+| incomplete telemetry | exclude from evidence |
+| next | after canary plumbing healthy |
+
+---
+
+## Phase 7 — DecisionRouter (code)
+
+| Field | Value |
+|-------|-------|
+| module | `packages/dialogue_engine/decision_router.py` |
+| modes | `legacy` (`off` alias) / `shadow` / `soft` / `policy` |
+| kill switch | `MODE=off\|legacy` **or** `CUTOVER_ENABLED=0` |
+| soft % | `IMVERA_ACTION_POLICY_SOFT_PERCENT` (default 0) |
+| metamorphic tests | `tests/action_policy_shadow/test_decision_router.py` |
+| soft/policy in prod | **blocked** until Phase 6 shadow hard gate + explicit `CUTOVER_ENABLED=1` |
+| decision | router CODE READY; soft/policy NOT enabled |
+
+---
+
+## Phase 8–9 — Soft / full policy
+
+| Field | Value |
+|-------|-------|
+| status | **NOT VERIFIED** — blocked on real shadow evidence |
+
+---
+
+## Phase 10 — Operability
+
+| Field | Value |
+|-------|-------|
+| runbook | `docs/runbooks/action-policy-production-operability.md` |
+| canary runbook | `docs/runbooks/action-policy-shadow-canary.md` |
+| status | docs CODE READY |
 
 ---
 
@@ -99,8 +122,17 @@ Branch: `feature/action-policy-v8`
 
 | Status | State |
 |--------|-------|
-| CODE READY | Shadow M1.2 YES; v8 candidate in progress |
-| STAGING READY | Canary runbook YES — awaiting operator |
-| SHADOW VERIFIED | NOT VERIFIED (no real calls) |
-| SOFT ROLLOUT VERIFIED | NOT VERIFIED |
-| FULL PROD VERIFIED | NOT VERIFIED |
+| CODE READY | Shadow M1.2 YES; v8 frozen+challenge YES; DecisionRouter YES |
+| STAGING READY | Canary + operability runbooks YES — awaiting operator |
+| SHADOW VERIFIED | **NOT VERIFIED** (no real calls) |
+| SOFT ROLLOUT VERIFIED | **NOT VERIFIED** |
+| FULL PROD VERIFIED | **NOT VERIFIED** |
+
+### STOP: READY FOR OPERATOR DEPLOY
+
+Agent cannot access production. Required operator actions:
+
+1. Deploy voice build with `IMVERA_ACTION_POLICY_MODE=off` (smoke calls)
+2. Short plumbing canary `MODE=shadow` (5–10 calls) — verify HEALTH + produced==persisted
+3. After healthy plumbing: real shadow acceptance on **v8** (100 complete calls / 1000 scheduler evals)
+4. Only then enable soft via `CUTOVER_ENABLED=1` + percent ladder

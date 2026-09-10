@@ -210,6 +210,11 @@ class EngineState(BaseModel):
         exclude=True,
         repr=False,
     )
+    action_policy_router_stats: dict = Field(
+        default_factory=dict,
+        exclude=True,
+        repr=False,
+    )
 
     def uses_issue_episodes(self) -> bool:
         return bool(self.issue_episodes or self.active_episode_id)

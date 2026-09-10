@@ -20,10 +20,13 @@ Runtime truth must show:
 
 ```text
 action_policy.mode
-action_policy.policy_version=action-policy-phase1-v7
-action_policy.frozen_policy_sha=61e17934f7be3b10ca5df9b2581cb0a8b853c1fe
+action_policy.policy_version=action-policy-phase1-v8
+action_policy.frozen_policy_sha=c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4
 action_policy.decision_scope=conversation_scheduler
+action_policy.cutover_enabled=false
 ```
+
+For M1.2 plumbing-only canary on older image still pinning v7, expect v7 SHA instead — do not treat v7 as cutover candidate.
 
 ## Kill switch (no redeploy)
 
