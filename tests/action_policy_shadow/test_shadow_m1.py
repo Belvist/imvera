@@ -292,7 +292,34 @@ def test_g_exactly_one_legacy_call(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls["n"] == 1
 
 
+def _git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _ensure_frozen_sha_available() -> None:
+    """Shallow CI clones often omit the frozen SHA — fetch it or fail closed."""
+    probe = _git("cat-file", "-e", f"{FROZEN_SHA}^{{commit}}")
+    if probe.returncode == 0:
+        return
+    fetched = _git("fetch", "--depth=1", "origin", FROZEN_SHA)
+    assert fetched.returncode == 0, (
+        f"frozen SHA {FROZEN_SHA} missing and fetch failed: "
+        f"rc={fetched.returncode} stderr={fetched.stderr!r}"
+    )
+    probe2 = _git("cat-file", "-e", f"{FROZEN_SHA}^{{commit}}")
+    assert probe2.returncode == 0, (
+        f"frozen SHA {FROZEN_SHA} still missing after fetch: stderr={probe2.stderr!r}"
+    )
+
+
 def test_h_frozen_policy_unchanged() -> None:
+    _ensure_frozen_sha_available()
     core = [
         "policy.py",
         "scorer.py",
@@ -307,13 +334,7 @@ def test_h_frozen_policy_unchanged() -> None:
     ]
     for name in core:
         path = f"packages/dialogue_engine/action_policy/{name}"
-        proc = subprocess.run(
-            ["git", "diff", "--exit-code", f"{FROZEN_SHA}", "HEAD", "--", path],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        proc = _git("diff", "--exit-code", f"{FROZEN_SHA}", "HEAD", "--", path)
         assert proc.returncode == 0, (
             f"frozen guard failed for {name}: rc={proc.returncode}\n"
             f"stdout={proc.stdout!r}\nstderr={proc.stderr!r}"
@@ -330,7 +351,7 @@ def test_h_frozen_guard_fails_when_git_object_missing(
         return SimpleNamespace(returncode=128, stdout="", stderr="fatal: bad object")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    with pytest.raises(AssertionError, match="frozen guard failed"):
+    with pytest.raises(AssertionError, match="frozen SHA|frozen guard failed"):
         test_h_frozen_policy_unchanged()
 
 

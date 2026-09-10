@@ -118,6 +118,9 @@ jobs:
       IMVERA_PG_URL: postgresql://imvera:imvera_dev_change_me@localhost:5432/imvera
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Shadow frozen-policy guard needs history for SHA 61e17934…
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
