@@ -43,8 +43,8 @@ def _conversation_eligible(snapshot: PolicySnapshot, ctx: TurnContextView) -> bo
     return bool(snapshot.interrogatable_episodes or ctx.has_new_speaker_issue)
 
 
-def _background_eligible(snapshot: PolicySnapshot) -> bool:
-    if snapshot.has_askable_open_issues or snapshot.its_pending:
+def _background_eligible(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
+    if snapshot.has_askable_open_issues(ctx) or snapshot.its_pending:
         return False
     for goal in ("wellness", "mood", "sleep", "plans"):
         required = snapshot.mandatory_background_goals or goal in snapshot.required_background_goals
@@ -54,7 +54,7 @@ def _background_eligible(snapshot: PolicySnapshot) -> bool:
 
 
 def _summary_close_eligible(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
-    if snapshot.has_askable_open_issues:
+    if snapshot.has_askable_open_issues(ctx):
         return False
     if ctx.has_new_speaker_issue and not snapshot.transition_preferred(ctx):
         return False
@@ -88,7 +88,7 @@ def compute_mandatory_class(snapshot: PolicySnapshot, ctx: TurnContextView) -> M
         and not snapshot.interrogatable_episodes
     ):
         return MandatoryClass.CLARIFY
-    if _background_eligible(snapshot):
+    if _background_eligible(snapshot, ctx):
         return MandatoryClass.BACKGROUND_GOAL
     if _summary_close_eligible(snapshot, ctx):
         return MandatoryClass.SUMMARY_CLOSE

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from packages.contracts.enums import SlotStatus
+from packages.dialogue_engine.action_policy.needs import ASKABLE_NEEDS
 from packages.dialogue_engine.question_context import QuestionNeed
 from packages.dialogue_engine.state import BackgroundGoalCoverage, EngineState
 
@@ -80,17 +81,16 @@ class EpisodeSnapshot:
 
     @property
     def has_open_questions(self) -> bool:
-        """Candidate generation hint — any unresolved askable need remains."""
+        """Unresolved askable needs exist (optional or obligatory)."""
         if not self.interrogation_eligible:
             return False
-        from packages.dialogue_engine.action_policy.need_value import ASKABLE_NEEDS
-
         return any(not self.need_known(need) for need in ASKABLE_NEEDS)
 
     @property
     def needs_attention(self) -> bool:
         """Backward-compatible alias for candidate generation."""
         return self.has_open_questions
+
 
 @dataclass(frozen=True)
 class PolicySnapshot:
@@ -147,13 +147,16 @@ class PolicySnapshot:
     def interrogatable_episodes(self) -> tuple[EpisodeSnapshot, ...]:
         return tuple(ep for ep in self.episodes if ep.interrogation_eligible)
 
-    @property
-    def has_askable_open_issues(self) -> bool:
-        """Hard-constraint hint: legally askable unknowns remain on speaker-owned episodes."""
-        return any(
-            ep.interrogation_eligible and ep.has_open_questions and not ep.resolving
-            for ep in self.episodes
-        )
+    def has_askable_open_issues(self, ctx: TurnContextView | None = None) -> bool:
+        """
+        Hard progression blocker — NOT "any optional unknown remains".
+
+        Optional unresolved needs do not hard-block after intentional ITS leave.
+        Pending obligations, reopenable fresh episodes, and new-turn evidence still do.
+        """
+        import packages.dialogue_engine.action_policy.need_value as need_value
+
+        return need_value.has_hard_blocking_episode_work(self, ctx=ctx)
 
     def episode_decision_queue(self) -> tuple[EpisodeSnapshot, ...]:
         """Speaker-owned episodes in priority order: active → pending → remaining."""
@@ -177,25 +180,18 @@ class PolicySnapshot:
         return tuple(ordered)
 
     def outstanding_pending_obligation(self) -> bool:
-        from packages.dialogue_engine.action_policy.need_value import (
-            outstanding_pending_obligation,
-        )
+        import packages.dialogue_engine.action_policy.need_value as need_value
 
-        return outstanding_pending_obligation(self)
+        return need_value.outstanding_pending_obligation(self)
 
-    def best_remaining_ask_utility(self) -> float:
-        from packages.dialogue_engine.action_policy.need_value import (
-            best_remaining_ask_utility,
-        )
+    def best_remaining_ask_utility(self, ctx: TurnContextView | None = None) -> float:
+        import packages.dialogue_engine.action_policy.need_value as need_value
 
-        return best_remaining_ask_utility(self)
+        return need_value.best_remaining_ask_utility(self, ctx=ctx)
 
     def transition_preferred(self, ctx: TurnContextView) -> bool:
         """True when transition utility beats best remaining ask utility."""
-        from packages.dialogue_engine.action_policy.need_value import (
-            episode_unknown_needs,
-            transition_preferred as _transition_preferred,
-        )
+        import packages.dialogue_engine.action_policy.need_value as need_value
 
         if self.episodes and not any(ep.speaker_owned for ep in self.episodes):
             return False
@@ -204,15 +200,24 @@ class PolicySnapshot:
             return False
         if all(ep.resolving for ep in owned):
             return True
-        queue = self.episode_decision_queue()
-        if not any(
-            ep.interrogation_eligible
-            and episode_unknown_needs(ep)
-            and not ep.resolving
-            for ep in queue
-        ):
+        if need_value.has_hard_blocking_episode_work(self, ctx=ctx):
+            return need_value.transition_preferred(
+                self,
+                answer_pending=ctx.answers_pending_question,
+                ctx=ctx,
+            )
+        currently_askable = any(
+            need_value.need_is_currently_askable(self, ep, need, ctx=ctx)
+            for ep in self.episode_decision_queue()
+            for need in need_value.episode_unknown_needs(ep)
+        )
+        if not currently_askable:
             return True
-        return _transition_preferred(self, answer_pending=ctx.answers_pending_question)
+        return need_value.transition_preferred(
+            self,
+            answer_pending=ctx.answers_pending_question,
+            ctx=ctx,
+        )
 
     def episode(self, episode_id: str | None) -> EpisodeSnapshot | None:
         if episode_id is None:

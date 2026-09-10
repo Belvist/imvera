@@ -12,6 +12,8 @@ from packages.dialogue_engine.action_policy.actions import (
 )
 from packages.dialogue_engine.action_policy.constraints import reject_candidate
 from packages.dialogue_engine.action_policy.mandatory import compute_mandatory_class
+from packages.dialogue_engine.action_policy.need_value import need_is_currently_askable
+from packages.dialogue_engine.action_policy.needs import episode_unknown_needs, normalize_attribute
 from packages.dialogue_engine.action_policy.scorer import (
     DEFAULT_WEIGHTS,
     POLICY_VERSION,
@@ -61,29 +63,22 @@ def generate_candidates(
         )
 
     for ep in snapshot.episode_decision_queue():
-        if not (ep.interrogation_eligible and ep.has_open_questions):
+        if not ep.interrogation_eligible:
             continue
-        attrs: list[str] = []
-        if (
-            snapshot.active_episode_id == ep.episode_id
-            and snapshot.pending_episode_attribute
-        ):
-            attrs.append(snapshot.pending_episode_attribute)
-        if not ep.temporal_known:
-            attrs.append("onset")
-        if not ep.current_known:
-            attrs.append("current")
-        if not ep.severity_known:
-            attrs.append("severity")
-        if snapshot.pending_episode_attribute == "functional_impact":
-            attrs.append("functional_impact")
-        for attr in attrs:
+        # Generic: every currently-askable unresolved ASKABLE_NEED gets a candidate.
+        # Same source of truth as best_remaining_ask_utility / need_is_currently_askable.
+        for need in episode_unknown_needs(ep):
+            if not need_is_currently_askable(snapshot, ep, need, ctx=ctx):
+                continue
+            attr = normalize_attribute(need) or need
+            # QuestionNeed.for_attribute expects a concrete attribute for temporal.
+            ask_attr = "onset" if attr == "temporal" else attr
             _append_unique(
                 out,
                 CandidateAction(
                     ActionKind.ASK_EPISODE,
                     episode_id=ep.episode_id,
-                    question_need=QuestionNeed.for_attribute(attr),
+                    question_need=QuestionNeed.for_attribute(ask_attr),
                 ),
             )
 

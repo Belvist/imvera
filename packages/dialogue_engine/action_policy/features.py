@@ -11,9 +11,9 @@ from packages.dialogue_engine.action_policy.need_value import (
     best_remaining_ask_utility,
     need_ask_utility,
     need_information_value,
-    normalize_attribute,
     transition_utility,
 )
+from packages.dialogue_engine.action_policy.needs import normalize_attribute
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView
 
 
@@ -45,10 +45,10 @@ def _its_context_fit(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
     if (
         snapshot.user_burden >= 0.75
         and snapshot.questions_asked_this_episode >= 2
-        and best_remaining_ask_utility(snapshot) < 0.42
+        and best_remaining_ask_utility(snapshot, ctx=ctx) < 0.42
     ):
         return True
-    return best_remaining_ask_utility(snapshot) < 0.25
+    return best_remaining_ask_utility(snapshot, ctx=ctx) < 0.25
 
 
 def extract_features(
@@ -60,13 +60,13 @@ def extract_features(
     features[f"action:{action.kind.value}"] = 1.0
     transition_preferred = snapshot.transition_preferred(ctx)
     burden = snapshot.user_burden
-    best_ask = best_remaining_ask_utility(snapshot)
+    best_ask = best_remaining_ask_utility(snapshot, ctx=ctx)
     trans_util = transition_utility(snapshot, answer_pending=ctx.answers_pending_question)
 
     if action.kind == ActionKind.ASK_EPISODE:
         ep = snapshot.episode(action.episode_id)
         need = normalize_need(action.question_need)
-        need_util = need_ask_utility(snapshot, ep, need) if ep and need else 0.0
+        need_util = need_ask_utility(snapshot, ep, need, ctx=ctx) if ep and need else 0.0
         info = (
             need_information_value(ep, need, last_question_need=snapshot.last_question_need)
             if ep and need

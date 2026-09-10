@@ -13,6 +13,7 @@ from packages.dialogue_engine.action_policy.mandatory import (
     action_matches_mandatory_class,
     compute_mandatory_class,
 )
+from packages.dialogue_engine.action_policy.need_value import need_is_currently_askable
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView
 
 
@@ -97,9 +98,16 @@ def reject_candidate(
         need = normalize_need(action.question_need)
         if snapshot.last_question_need and need == snapshot.last_question_need:
             return _reject(action, "repeat_question", "same semantic question was just asked")
+        # Optional needs after intentional ITS leave are not currently askable.
+        if need and not need_is_currently_askable(snapshot, ep, need, ctx=ctx):
+            return _reject(
+                action,
+                "optional_need_after_transition",
+                "optional unresolved need is not askable after interrogation leave",
+            )
 
     if kind == ActionKind.BACKGROUND_GOAL:
-        if snapshot.has_askable_open_issues:
+        if snapshot.has_askable_open_issues(ctx):
             return _reject(action, "active_issue_blocks_background", "issue has higher priority")
         goal = action.target_goal or ""
         required = snapshot.mandatory_background_goals or goal in snapshot.required_background_goals
@@ -121,7 +129,7 @@ def reject_candidate(
                 "pending_obligation_blocks_its",
                 "unsettled pending question need blocks transition",
             )
-        if ctx.has_new_speaker_issue and snapshot.has_askable_open_issues:
+        if ctx.has_new_speaker_issue and snapshot.has_askable_open_issues(ctx):
             return _reject(
                 action,
                 "speaker_issue_blocks_its",
@@ -139,8 +147,14 @@ def reject_candidate(
                 "pending_obligation_blocks_close",
                 "unsettled pending question need blocks close",
             )
-        if snapshot.has_askable_open_issues:
-            return _reject(action, "premature_close_issue", "open useful issue blocks close")
+        # Optional unresolved needs must NOT hard-block close after ITS leave.
+        # has_askable_open_issues is redefined as hard-blocking work only.
+        if snapshot.has_askable_open_issues(ctx):
+            return _reject(
+                action,
+                "premature_close_issue",
+                "hard-blocking episode work blocks close",
+            )
         if ctx.has_new_speaker_issue and not snapshot.transition_preferred(ctx):
             return _reject(action, "premature_close_new_issue", "new grounded issue blocks close")
         if not snapshot.important_to_share_resolved:
@@ -162,7 +176,7 @@ def reject_candidate(
             and not snapshot.important_to_share_asked
             and snapshot.user_burden >= 0.75
             and (
-                snapshot.has_askable_open_issues
+                snapshot.has_askable_open_issues(ctx)
                 or snapshot.questions_asked_this_episode >= 2
             )
         ):
@@ -179,7 +193,7 @@ def reject_candidate(
             return _reject(action, "clarify_not_needed", "no clarification need")
         if target != wanted and wanted:
             return _reject(action, "clarify_target_mismatch", "clarification target mismatch")
-        if snapshot.has_askable_open_issues and not unresolved:
+        if snapshot.has_askable_open_issues(ctx) and not unresolved:
             return _reject(action, "issue_replaces_generic_clarify", "grounded issue owns the turn")
 
     return None
