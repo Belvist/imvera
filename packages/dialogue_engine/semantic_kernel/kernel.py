@@ -175,7 +175,7 @@ def kernel_to_rich_turn(
     )
     needs_clarify = (result.level >= 3 or "vague_issue" in result.ambiguity) and not ref_only
     goal_facts = extract_goal_facts(result.raw_text, answer_slot=answer_slot)
-    return RichUserTurn(
+    turn = RichUserTurn(
         utterance_id=result.utterance_id,
         raw_text=result.raw_text,
         dialogue_act=result.dialogue_act,
@@ -196,6 +196,9 @@ def kernel_to_rich_turn(
         kernel_elapsed_ms=result.elapsed_ms,
         kernel_corrections=result.corrections,
     )
+    from packages.dialogue_engine.turn_understanding import attach_mission_understanding
+
+    return attach_mission_understanding(turn, engine_state=engine_state)
 
 
 def clarify_text(result: SemanticKernelResult) -> str:

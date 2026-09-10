@@ -29,6 +29,7 @@ from packages.dialogue_engine.events import (
     TimerExpired,
     UserTurnReceived,
 )
+from packages.dialogue_engine.mission import CallMission
 from packages.dialogue_engine.reducer import reduce
 from packages.dialogue_engine.semantic import SemanticTurn
 from packages.dialogue_engine.state import EngineState, OpeningState
@@ -44,13 +45,18 @@ class DialogueEngine:
         call_id: str,
         elder_display_name: str = "Анной Петровной",
         prior_call_context: dict[str, str] | None = None,
+        mission: CallMission | None = None,
     ) -> None:
+        from packages.dialogue_engine.mission_seed import apply_mission_to_state, resolve_mission
+
+        self.mission = resolve_mission(mission)
         self.state = EngineState(
             call_id=call_id,
             elder_display_name=elder_display_name,
             prior_call_context=dict(prior_call_context or {}),
             follow_up_opening=bool(prior_call_context),
         )
+        apply_mission_to_state(self.state, self.mission)
         self._outbox = EffectOutbox(call_id=call_id)
         self._dispatcher = EffectDispatcher(self._outbox)
         self._started = False

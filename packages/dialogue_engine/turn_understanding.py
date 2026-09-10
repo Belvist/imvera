@@ -18,6 +18,7 @@ from packages.dialogue_engine.issue_mention_extract import (
     extract_goal_facts,
     extract_issue_mentions,
 )
+from packages.dialogue_engine.mission import GoalAnswerCandidate
 from packages.dialogue_engine.semantic_kernel.types import (
     Observation,
     SemanticRelation,
@@ -39,6 +40,7 @@ class RichUserTurn(BaseModel):
     user_question: str | None = None
 
     goal_facts: tuple[FactCandidate, ...] = ()
+    goal_answers: tuple[GoalAnswerCandidate, ...] = ()
     issue_mentions: tuple[IssueMention, ...] = ()
     risk_candidates: tuple[RiskCandidate, ...] = ()
 
@@ -113,6 +115,81 @@ def build_rich_turn_from_payload(
     return payload_to_rich_turn(payload, utterance_id=utterance_id, raw_text=raw_text)
 
 
+def attach_mission_understanding(
+    turn: RichUserTurn,
+    *,
+    engine_state: object | None,
+) -> RichUserTurn:
+    """Merge generic mission goal_answers + side observations into a RichUserTurn.
+
+    Does not mutate EngineState. Used by production understanding entry points.
+    """
+    if engine_state is None or not getattr(engine_state, "mission_catalog", None):
+        return turn
+    from packages.dialogue_engine.mission_seed import mission_from_state
+    from packages.dialogue_engine.mission_understanding import (
+        extract_goal_answers,
+        extract_side_observations,
+    )
+
+    mission = mission_from_state(engine_state)  # type: ignore[arg-type]
+    if not mission.goals:
+        return turn
+    active = None
+    if hasattr(engine_state, "answer_context_slot"):
+        active = engine_state.answer_context_slot()
+    answers = extract_goal_answers(
+        turn.raw_text,
+        mission=mission,
+        active_goal_id=active,
+        engine_state=engine_state,  # type: ignore[arg-type]
+    )
+    side = extract_side_observations(
+        turn.raw_text,
+        goal_answer_evidence=tuple(a.evidence for a in answers),
+    )
+    observations = tuple(turn.observations) + tuple(
+        o for o in side if o.observation_id not in {x.observation_id for x in turn.observations}
+    )
+    # Promote reported_problem observations into issue_mentions for IssueEpisode path.
+    from packages.contracts.semantic import Evidence, IssueMention
+
+    extra_mentions: list[IssueMention] = []
+    existing_labels = {m.label.lower() for m in turn.issue_mentions}
+    for obs in side:
+        if obs.attribute != "reported_problem":
+            continue
+        if obs.value.lower() in existing_labels:
+            continue
+        quote = obs.evidence or obs.value
+        start = turn.raw_text.lower().find(quote.lower())
+        if start < 0:
+            start = 0
+        end = min(len(turn.raw_text), start + len(quote))
+        extra_mentions.append(
+            IssueMention(
+                mention_id=f"im-{obs.observation_id[-8:]}",
+                kind="other",
+                label=obs.value,
+                role="primary",
+                body_site=None,
+                temporal_scope="now",
+                status="active",
+                onset=None,
+                severity=None,
+                evidence=Evidence(start=start, end=end, quote=quote),
+            )
+        )
+    mentions = tuple(turn.issue_mentions) + tuple(extra_mentions)
+    return turn.model_copy(
+        update={
+            "goal_answers": answers,
+            "observations": observations,
+            "issue_mentions": mentions,
+        }
+    )
+
+
 def build_rich_turn_from_text(
     text: str,
     *,
@@ -131,6 +208,7 @@ def build_rich_turn_from_text(
         answer_slot=answer_slot,
         engine_state=engine_state,
     )
+    turn = attach_mission_understanding(turn, engine_state=engine_state)
     if engine_state is not None and hasattr(engine_state, "answer_context_slot"):
         from packages.dialogue_engine.context import InterpretContext
         from packages.dialogue_engine.contextual_interpreter import contextual_interpret
@@ -168,7 +246,8 @@ def build_rich_turn_from_text(
                     evidence=Evidence(start=0, end=len(raw), quote=raw),
                 )
         if harvested:
-            return turn.model_copy(update={"goal_facts": tuple(harvested.values())})
+            turn = turn.model_copy(update={"goal_facts": tuple(harvested.values())})
+            return attach_mission_understanding(turn, engine_state=engine_state)
         return turn
     if turn.goal_facts or not answer_slot:
         return turn
@@ -182,8 +261,8 @@ def build_rich_turn_from_text(
     ):
         harvested = extract_goal_facts(text.strip(), answer_slot=answer_slot)
         if harvested:
-            return turn.model_copy(update={"goal_facts": harvested})
-        return turn
+            turn = turn.model_copy(update={"goal_facts": harvested})
+        return attach_mission_understanding(turn, engine_state=engine_state)
     value = sem.value or text.strip()
     fact = FactCandidate(
         field=sem.target_slot,
@@ -195,7 +274,8 @@ def build_rich_turn_from_text(
     )
     harvested = {f.field: f for f in extract_goal_facts(text.strip(), answer_slot=answer_slot)}
     harvested.setdefault(fact.field, fact)
-    return turn.model_copy(update={"goal_facts": tuple(harvested.values())})
+    turn = turn.model_copy(update={"goal_facts": tuple(harvested.values())})
+    return attach_mission_understanding(turn, engine_state=engine_state)
 
 
 def build_rich_turn_from_text_legacy(text: str, *, utterance_id: str) -> RichUserTurn:

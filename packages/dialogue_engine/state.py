@@ -48,24 +48,51 @@ class QuestionPhase(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class GoalLifecycle(StrEnum):
+    """Runtime lifecycle for mission / slot goals (distinct from GoalDefinition)."""
+
+    UNSEEN = "UNSEEN"
+    AVAILABLE = "AVAILABLE"
+    ACTIVE = "ACTIVE"
+    ASKED = "ASKED"
+    ANSWER_PENDING = "ANSWER_PENDING"
+    SATISFIED = "SATISFIED"
+    DECLINED = "DECLINED"
+    SKIPPED = "SKIPPED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    BLOCKED = "BLOCKED"
+    UNCLEAR = "UNCLEAR"
+
+
 class Question(BaseModel):
     question_id: str
     slot: str
     text: str
     phase: QuestionPhase = QuestionPhase.PLANNED
     intent: str = ""
+    goal_id: str | None = None
 
     model_config = {"frozen": True}
 
 
 class GoalState(BaseModel):
-    slot: str
+    """Runtime goal progress. Catalog fields live on GoalDefinition (mission)."""
+
+    slot: str  # compatibility key; for mission goals equals goal_id
+    goal_id: str = ""
     delivered_attempts: int = 0
     max_attempts: int = MAX_SLOT_ATTEMPTS
-    status: SlotStatus = SlotStatus.OPEN
+    status: SlotStatus = SlotStatus.OPEN  # legacy slot projection
+    lifecycle: GoalLifecycle = GoalLifecycle.AVAILABLE
     reserved_question_id: str | None = None
+    answer: str | None = None
+    evidence_ids: list[str] = Field(default_factory=list)
+    source: str = "slot"
 
     model_config = {"frozen": False}
+
+    def resolved_goal_id(self) -> str:
+        return self.goal_id or self.slot
 
 
 class TopicEvidence(BaseModel):
@@ -130,6 +157,12 @@ class EngineState(BaseModel):
     slot_values: dict[str, str] = Field(default_factory=dict)
     slot_records: dict[str, SlotValue] = Field(default_factory=dict)
     goals: dict[str, GoalState] = Field(default_factory=dict)
+    # Immutable mission input snapshot (definitions only). Runtime = goals.
+    mission_id: str = "daily_check"
+    mission_preset: str | None = "daily_check"
+    mission_goal_ids: tuple[str, ...] = ()
+    # GoalDefinition catalog from CallMission — not a second runtime store.
+    mission_catalog: tuple = ()
 
     planned_question: Question | None = None
     playing_question: Question | None = None
@@ -229,18 +262,48 @@ class EngineState(BaseModel):
     def ensure_goal(self, slot: str) -> GoalState:
         goal = self.goals.get(slot)
         if goal is None:
-            goal = GoalState(slot=slot)
+            goal = GoalState(slot=slot, goal_id=slot)
             self.goals[slot] = goal
+        elif not goal.goal_id:
+            goal.goal_id = slot
         return goal
 
+    def mission_goal(self, goal_id: str) -> GoalState | None:
+        return self.goals.get(goal_id)
+
+    def unanswered_required_mission_goals(self) -> list[GoalState]:
+        out: list[GoalState] = []
+        for gid in self.mission_goal_ids:
+            goal = self.goals.get(gid)
+            if goal is None:
+                continue
+            if goal.lifecycle in {
+                GoalLifecycle.SATISFIED,
+                GoalLifecycle.DECLINED,
+                GoalLifecycle.SKIPPED,
+                GoalLifecycle.NOT_APPLICABLE,
+            }:
+                continue
+            out.append(goal)
+        return out
+
     def answer_context_slot(self) -> str | None:
-        """Slot used to interpret the next user answer — delivered, not planned."""
+        """Slot/goal used to interpret the next user answer — delivered, not planned."""
         if self.probe_phase:
             return f"probe_{self.probe_phase}"
         if self.delivered_question is not None:
-            return self.delivered_question.slot
+            return self.delivered_question.goal_id or self.delivered_question.slot
         if self.playing_question is not None:
-            return self.playing_question.slot
+            return self.playing_question.goal_id or self.playing_question.slot
+        # Custom mission: fall back to ACTIVE/ASKED/ANSWER_PENDING goal.
+        for gid in self.mission_goal_ids:
+            goal = self.goals.get(gid)
+            if goal and goal.lifecycle in {
+                GoalLifecycle.ACTIVE,
+                GoalLifecycle.ASKED,
+                GoalLifecycle.ANSWER_PENDING,
+            }:
+                return goal.resolved_goal_id()
         return None
 
     def next_open_slot(self) -> str | None:
