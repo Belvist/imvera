@@ -1,6 +1,6 @@
 {
   "action_policy_phase1_freeze": true,
-  "tested_sha": null,
+  "tested_sha": "c0646758a9a99999048fb389e078f943b68f538e",
   "policy_version": "action-policy-phase1-v6",
   "weights_sha256": "dba02767664f4f48ad0746ac1045a4f59b4cd98c91742d0cb1a8ea52963497c6",
   "corpus_sha256": {
