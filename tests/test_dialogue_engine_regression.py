@@ -228,7 +228,11 @@ def test_plans_none_fast_path_to_summary() -> None:
     )
     summary = [e for e in result.speak_effects if e.intent == "summary"]
     assert summary, "expected summary after important_to_share"
-    assert summary[-1].text == "Спасибо за разговор."
+    text = summary[-1].text
+    assert "спасибо" in text.lower()
+    assert "до свидания" in text.lower()
+    assert "Даниил" in text
+    assert text != "Спасибо за разговор."
 
 
 def test_plans_colloquial_none_phrase() -> None:

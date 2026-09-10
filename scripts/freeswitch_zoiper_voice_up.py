@@ -191,7 +191,7 @@ def main() -> int:
     print(f"  Zoiper: Registered → dial {data['dial_number']}")
     print(f"  SIP:    {data['sip_host']}:{data['sip_port']}")
     print(f"  Elder:  {elder}")
-    print(f'  Opening: «Здравствуйте. Это сервис IMVERA, {elder}. Как вы себя чувствуете?»')
+    print(f'  Opening: «Здравствуйте. Это сервис Амвера. {elder}, Как вы себя чувствуете?»')
     print("  Then: issue-first scheduler (wellness → issues → important_to_share → close)")
     print("\n  Logs:   .run/freeswitch_media_bridge.log")
     print("  Forensic after call: make freeswitch-forensic-collect UUID=<fs_uuid> CALL_ID=fs-xxxxxxxx")

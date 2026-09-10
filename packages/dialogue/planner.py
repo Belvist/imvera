@@ -16,6 +16,7 @@ from packages.dialogue.question_ledger import (
 )
 from packages.dialogue.reducer import DialogueReducer
 from packages.dialogue.state import DialogueState
+from packages.dialogue_engine import questions
 
 _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
 _GOODBYE_FINAL = "До свидания. Хорошего дня."
@@ -39,7 +40,7 @@ _STT_GARBAGE_PHRASES = frozenset(
     }
 )
 
-_VERA_INTRO = "Я Вера, голосовой помощник IMVERA."
+_VERA_INTRO = f"Я Вера, голосовой помощник сервиса {questions.service_spoken_name()}."
 _DEFER_ACK = "Поняла. Поговорим в другой раз. До свидания."
 _WRONG_PERSON_FINAL = "Извините, видимо, ошиблись номером. До свидания."
 _REVOKE_FINAL = "Поняла. Без вашего согласия больше не буду звонить. До свидания."
@@ -76,7 +77,10 @@ class Planner:
     @staticmethod
     def _opening_wellness_speech(state: DialogueState) -> str:
         name = state.elder_display_name
-        return f"Здравствуйте. Это сервис IMVERA, {name}. Как вы себя чувствуете?"
+        return (
+            f"Здравствуйте. Это сервис {questions.service_spoken_name()}. "
+            f"{name}, Как вы себя чувствуете?"
+        )
 
     @staticmethod
     def _begin_direct_daily_check(state: DialogueState) -> None:
@@ -747,7 +751,7 @@ class Planner:
             if not state.identity_intro_spoken:
                 return TurnProposal(
                     **base,
-                    speech="Здравствуйте. Я Вера, голосовой помощник IMVERA.",
+                    speech="Здравствуйте. Я Вера, голосовой помощник сервиса Амвера.",
                     intent="identity_intro",
                 )
             if state.pending_question_delivered:
@@ -760,7 +764,7 @@ class Planner:
 
         if state.fsm_state == FsmState.CHECK_CONSENT:
             question = (
-                "Вы согласны получать регулярные звонки от IMVERA? "
+                "Вы согласны получать регулярные звонки от Амвера? "
                 "Это важно — звонки только с вашего согласия."
             )
             state.pending_question = question
@@ -775,7 +779,7 @@ class Planner:
                 state.greeted = True
                 return TurnProposal(
                     **base,
-                    speech="Доброе утро. Это IMVERA, ваш регулярный звонок.",
+                    speech="Доброе утро. Это сервис Амвера, ваш регулярный звонок.",
                     intent="greeting",
                 )
             Planner._advance_when_ready(state)
@@ -903,7 +907,7 @@ class Planner:
             intent = f"repeat_{state.pending_slot}"
         elif state.fsm_state == FsmState.CHECK_CONSENT:
             speech = (
-                "Вы согласны получать регулярные звонки от IMVERA? "
+                "Вы согласны получать регулярные звонки от Амвера? "
                 "Это важно — звонки только с вашего согласия."
             )
             intent = "repeat_consent"

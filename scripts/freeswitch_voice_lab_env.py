@@ -35,7 +35,8 @@ def build_freeswitch_voice_lab_env() -> dict[str, str]:
     env.setdefault("IMVERA_TELEPHONY_STREAM", "1")
     # Live TTS opening on phone — cached 24k→16k via JSON playback can clip «IMVERA».
     env.setdefault("IMVERA_OPENING_CACHE", "0")
-    # Product opening: «Здравствуйте. Это сервис IMVERA, <name>. Как вы себя чувствуете?»
+    # Product opening: «Здравствуйте. Это сервис Амвера. <name>, Как вы себя чувствуете?»
+    # Cyrillic brand — Latin «IMVERA» is skipped/garbled by Silero RU TTS.
     env.setdefault("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1")
     # Single-writer DialogueEngine for daily-check pilot (must match session.py gate).
     env.setdefault("IMVERA_DIALOGUE_ENGINE", "1")

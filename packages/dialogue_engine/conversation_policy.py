@@ -63,11 +63,74 @@ class PolicyDecision:
 
 
 _IDENTITY_ANSWER = (
-    "Я Вера, голосовой помощник IMVERA. Звоню, чтобы узнать, как вы себя чувствуете."
+    "Я Вера, голосовой помощник сервиса Амвера. "
+    "Звоню, чтобы узнать, как вы себя чувствуете."
 )
-_IMPORTANT_TO_SHARE_QUESTION = (
-    "Есть ли ещё что-то важное, чем вы хотели бы поделиться?"
-)
+_IMPORTANT_TO_SHARE_QUESTION = questions.important_to_share_question()
+
+
+def _is_important_to_share_decline(text: str) -> bool:
+    """Soft «nothing more» answers to the closing add-anything question."""
+    import re
+
+    low = text.lower().strip().rstrip(".!?")
+    if not low:
+        return False
+    if low in (
+        "нет",
+        "неа",
+        "ничего",
+        "не",
+        "всё",
+        "все",
+        "нет ничего",
+        "пока всё",
+        "пока все",
+    ):
+        return True
+    strong = (
+        "больше ничего",
+        "нечего добавить",
+        "не хочу добавить",
+        "ничего добавить",
+        "сказал уже",
+        "сказала уже",
+        "я ж сказал",
+        "я же сказал",
+        "я уже сказал",
+        "на этом всё",
+        "на этом все",
+        "больше нечего",
+        "уже всё сказал",
+        "уже все сказал",
+    )
+    if any(m in low for m in strong):
+        return True
+    soft_no = (
+        "вроде бы нет",
+        "вроде нет",
+        "да нет",
+        "да вроде нет",
+        "ничего такого",
+        "уже всё",
+        "уже все",
+    )
+    if any(m in low for m in soft_no):
+        return True
+    if re.search(r"\bнет\b", low) and any(
+        x in low for x in ("вроде", "больше", "ничего", "толком")
+    ):
+        return True
+    if re.search(r"^(так\s+)?вроде\s+(бы\s+)?вс[её](\s+нормально)?\.?$", low):
+        return True
+    return False
+
+
+def _record_important_share(state: EngineState, text: str) -> None:
+    note = text.strip()
+    if not note:
+        return
+    state.observations["important_to_share"] = note
 
 
 def capture_suspended_obligation(state: EngineState) -> SuspendedObligation | None:
@@ -226,9 +289,39 @@ def _wellness_entry_covered(state: EngineState) -> bool:
     if state.slots.get("wellness") != SlotStatus.OPEN:
         return True
     status = state.background_goal_status.get("wellness", BackgroundGoalCoverage.UNSEEN)
-    return status in (
+    if status in (
         BackgroundGoalCoverage.ANSWERED,
         BackgroundGoalCoverage.COVERED_FROM_SPEECH,
+    ):
+        return True
+    # Mood/sleep already answered after opening also counts as entry coverage.
+    for slot in ("mood", "sleep"):
+        st = state.background_goal_status.get(slot, BackgroundGoalCoverage.UNSEEN)
+        if st in (
+            BackgroundGoalCoverage.ANSWERED,
+            BackgroundGoalCoverage.COVERED_FROM_SPEECH,
+        ):
+            return True
+        if state.slots.get(slot) == SlotStatus.FILLED:
+            return True
+    return False
+
+
+def _important_to_share_plan(state: EngineState) -> ResponsePlan | None:
+    if state.important_to_share_asked or state.important_to_share_resolved:
+        return None
+    if _has_open_episodes(state):
+        return None
+    if not _wellness_entry_covered(state):
+        return None
+    state.important_to_share_asked = True
+    return ResponsePlan(
+        obligation=ConversationObligation.IMPORTANT_TO_SHARE,
+        action="speak",
+        mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
+        intent="important_to_share",
+        slot="important_to_share",
+        marks_question=True,
     )
 
 
@@ -263,22 +356,6 @@ def _topic_plan(state: EngineState) -> ResponsePlan | None:
     )
 
 
-def _important_to_share_plan(state: EngineState) -> ResponsePlan | None:
-    if state.important_to_share_asked or state.important_to_share_resolved:
-        return None
-    if _has_open_episodes(state):
-        return None
-    if not _wellness_entry_covered(state):
-        return None
-    state.important_to_share_asked = True
-    return ResponsePlan(
-        obligation=ConversationObligation.IMPORTANT_TO_SHARE,
-        action="speak",
-        mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
-        intent="important_to_share",
-        slot="important_to_share",
-        marks_question=True,
-    )
 
 
 def _background_goal_plan(
@@ -301,12 +378,13 @@ def _background_goal_plan(
     )
 
 
-def _summary_plan(state: EngineState) -> ResponsePlan:
+def _summary_plan(state: EngineState, *, acknowledge: str = "") -> ResponsePlan:
     return ResponsePlan(
         obligation=ConversationObligation.SUMMARY_CLOSE,
         action="close_summary",
         close_reason="complete",
         marks_question=False,
+        acknowledge=acknowledge,
     )
 
 
@@ -452,28 +530,71 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
         return topic
 
     if state.important_to_share_asked and not state.important_to_share_resolved:
+        raw = ""
         if turn and turn.raw_text.strip():
+            raw = turn.raw_text.strip()
+        elif turn_context.user_text.strip():
+            raw = turn_context.user_text.strip()
+        if raw:
             state.important_to_share_resolved = True
-            low = turn.raw_text.lower().strip().rstrip(".!?")
+            low = raw.lower().strip().rstrip(".!?")
+            # Confused about closing — re-ask ITS, do not hang up.
+            # Do NOT treat every "?" as confusion (side questions have "?")
             if (
-                low in ("нет", "неа", "ничего", "не", "всё", "все")
-                or "больше ничего" in low
-                or low.startswith("нет")
+                "что ли" in low
+                or "это всё" in low
+                or "это все" in low
+                or "все что ли" in low.replace(",", "")
+                or "всё что ли" in low.replace(",", "")
             ):
+                state.important_to_share_resolved = False
+                return ResponsePlan(
+                    obligation=ConversationObligation.IMPORTANT_TO_SHARE,
+                    action="speak",
+                    acknowledge="Да, почти.",
+                    mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
+                    intent="important_to_share",
+                    slot="important_to_share",
+                    marks_question=True,
+                )
+            if _is_important_to_share_decline(raw):
                 if state.mandatory_background_goals:
                     bg = _background_goal_plan(state, filled=filled)
                     if bg:
                         return bg
                 return _summary_plan(state)
-            return ResponsePlan(
-                obligation=ConversationObligation.IMPORTANT_TO_SHARE,
-                action="speak",
-                acknowledge="Понимаю.",
-                mandatory_question="Расскажите, пожалуйста, коротко.",
-                intent="important_to_share_followup",
-                slot="important_to_share",
-                marks_question=True,
-            )
+            # Shared something — record, then warm close (never «расскажите коротко»).
+            _record_important_share(state, raw)
+            if state.mandatory_background_goals:
+                bg = _background_goal_plan(state, filled=filled)
+                if bg:
+                    if not bg.acknowledge:
+                        bg = ResponsePlan(
+                            obligation=bg.obligation,
+                            action=bg.action,
+                            acknowledge="Хорошо, записала.",
+                            mandatory_question=bg.mandatory_question,
+                            intent=bg.intent,
+                            slot=bg.slot,
+                            next_slot=bg.next_slot,
+                            acknowledge_facts=bg.acknowledge_facts,
+                            question_needs=bg.question_needs,
+                            marks_question=bg.marks_question,
+                            close_reason=bg.close_reason,
+                            episode_id=bg.episode_id,
+                            clarification=bg.clarification,
+                        )
+                    return bg
+            return _summary_plan(state, acknowledge="Хорошо, записала.")
+        # Still waiting for ITS answer — repeat once, never silent.
+        return ResponsePlan(
+            obligation=ConversationObligation.IMPORTANT_TO_SHARE,
+            action="speak",
+            mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
+            intent="important_to_share",
+            slot="important_to_share",
+            marks_question=True,
+        )
 
     its = _important_to_share_plan(state)
     if its:
@@ -485,6 +606,17 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
 
     if not _has_open_episodes(state) or _all_episodes_resolved(state):
         if _next_background_goal(state) is None:
+            if not state.important_to_share_resolved:
+                if state.first_user_turn_received:
+                    state.important_to_share_asked = True
+                    return ResponsePlan(
+                        obligation=ConversationObligation.IMPORTANT_TO_SHARE,
+                        action="speak",
+                        mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
+                        intent="important_to_share",
+                        slot="important_to_share",
+                        marks_question=True,
+                    )
             return _summary_plan(state)
 
     return ResponsePlan(

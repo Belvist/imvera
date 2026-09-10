@@ -269,6 +269,18 @@ def extract_goal_facts(
     if _PLANS_ANSWER.search(n):
         _add("plans", raw)
 
+    # Opening «как себя чувствуете?» answered with mood/sleep still covers wellness entry.
+    if (
+        answer_slot == "wellness"
+        and "wellness" not in seen
+        and ("mood" in seen or "sleep" in seen)
+    ):
+        mood_fact = next((f for f in facts if f.field == "mood"), None)
+        if mood_fact and mood_fact.value == "negative":
+            _add("wellness", "negative")
+        else:
+            _add("wellness", "positive")
+
     return tuple(facts)
 
 

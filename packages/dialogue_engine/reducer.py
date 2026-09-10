@@ -375,7 +375,7 @@ def _emit_from_plan(
     if plan.action == "close_urgent":
         return _emit_urgent_close(state)
     if plan.action == "close_summary":
-        return _emit_summary(state)
+        return _emit_summary(state, acknowledge=getattr(plan, "acknowledge", "") or "")
     if plan.action == "close_partial":
         return _close_partial(state)
     if plan.action == "control":
@@ -611,7 +611,9 @@ def _apply_rich_turn(
             state.processing_effect_id = None
             state.waiting_on_slot = None
             state.bump_revision()
-            return _advance_after_fills(state, slot_filled)
+            return _advance_after_fills(
+                state, slot_filled, user_text=user_text, turn=turn
+            )
         decision = decide_conversation_policy(state, turn)
         if decision is not None and decision.text:
             state.processing_turn_id = None
@@ -631,7 +633,9 @@ def _apply_rich_turn(
             state.processing_effect_id = None
             state.waiting_on_slot = None
             state.bump_revision()
-            return _advance_after_fills(state, slot_filled)
+            return _advance_after_fills(
+                state, slot_filled, user_text=user_text, turn=turn
+            )
 
     if not turn.goal_facts and not answer_slot:
         from packages.dialogue_engine.issue_mention_extract import extract_goal_facts
@@ -650,7 +654,9 @@ def _apply_rich_turn(
         state.processing_effect_id = None
         state.waiting_on_slot = None
         state.bump_revision()
-        return _advance_after_fills(state, newly_filled)
+        return _advance_after_fills(
+            state, newly_filled, user_text=user_text, turn=turn
+        )
 
     plan = schedule_next_action(
         state,
@@ -924,7 +930,7 @@ def _apply_semantic(
             state.processing_turn_id = None
             state.processing_effect_id = None
             state.waiting_on_slot = None
-            return _advance_after_fills(state, filled)
+            return _advance_after_fills(state, filled, user_text=user_text)
 
     if should_start_topic_flow(state, user_text, answer_slot=answer_slot):
         if semantic.act in (SemanticAct.ANSWER, SemanticAct.UNCLEAR):
@@ -942,7 +948,7 @@ def _apply_semantic(
         state.processing_turn_id = None
         state.processing_effect_id = None
         state.waiting_on_slot = None
-        return _advance_after_fills(state, filled)
+        return _advance_after_fills(state, filled, user_text=user_text)
 
     state.processing_turn_id = None
     state.processing_effect_id = None
@@ -1000,11 +1006,28 @@ def _speak_never_silent(
 def _advance_after_fills(
     state: EngineState,
     filled_slots: list[str],
+    *,
+    user_text: str = "",
+    turn: RichUserTurn | None = None,
 ) -> tuple[EngineState, list[Effect]]:
-    user_text = ""
+    if not user_text and turn is not None:
+        user_text = turn.raw_text or ""
+    if not user_text:
+        for slot in filled_slots:
+            rec = state.slot_records.get(slot)
+            if rec and rec.source_text:
+                user_text = rec.source_text
+                break
+            val = state.slot_values.get(slot, "")
+            if val:
+                user_text = val
+                break
     if "wellness" in filled_slots:
-        rec = state.slot_records.get("wellness")
-        user_text = (rec.source_text if rec else "") or state.slot_values.get("wellness", "")
+        if not user_text:
+            rec = state.slot_records.get("wellness")
+            user_text = (
+                (rec.source_text if rec else "") or state.slot_values.get("wellness", "")
+            )
         state.set_background_goal_coverage("wellness", BackgroundGoalCoverage.ANSWERED)
         if should_start_topic_flow(state, user_text, answer_slot="wellness"):
             state.probe_phase = None
@@ -1018,7 +1041,12 @@ def _advance_after_fills(
     state.processing_turn_id = None
     state.processing_effect_id = None
     state.bump_revision()
-    return _schedule_advance(state, newly_filled=filled_slots, user_text=user_text)
+    return _schedule_advance(
+        state,
+        newly_filled=filled_slots,
+        user_text=user_text,
+        turn=turn,
+    )
 
 
 def _resolve_sleep_problem_episodes_after_topic(state: EngineState) -> None:
@@ -1157,13 +1185,13 @@ def _speak_probe(
     return _schedule_advance(state, clarify=clarification)
 
 
-def _emit_summary(state: EngineState) -> tuple[EngineState, list[Effect]]:
+def _emit_summary(state: EngineState, *, acknowledge: str = "") -> tuple[EngineState, list[Effect]]:
     state.fsm_state = FsmState.SUMMARY
     state.summary_spoken = True
     state.bump_revision()
     return _emit_speak(
         state,
-        text=questions._SUMMARY_TEXT,
+        text=questions.summary_close_speech(state, acknowledge=acknowledge),
         intent="summary",
         slot=None,
         marks_question=False,
@@ -1249,7 +1277,9 @@ def _apply_off_context_slot_answer(
         state.playing_question = None
         state.active_playout = None
         state.bump_revision()
-        return _advance_after_fills(state, [slot])
+        return _advance_after_fills(
+            state, [slot], user_text=turn.raw_text, turn=turn
+        )
     return None
 
 
@@ -1298,7 +1328,9 @@ def _advance_after_episode_answer(
         if outcome[1]:
             return outcome
         return state, []
-    return _advance_after_fills(state, [])
+    return _advance_after_fills(
+        state, [], user_text=turn.raw_text, turn=turn
+    )
 
 
 def _speak_repair(
@@ -1389,7 +1421,7 @@ def _on_speak_effect_stale(
     ):
         return _emit_speak(
             state,
-            text=questions._SUMMARY_TEXT,
+            text=questions.summary_close_speech(state),
             intent="summary",
             slot=None,
             marks_question=False,
@@ -1397,7 +1429,7 @@ def _on_speak_effect_stale(
     if intent == "goodbye_final" and state.call_closed:
         return _emit_speak(
             state,
-            text=questions._GOODBYE_FINAL,
+            text=questions.goodbye_final_speech(state),
             intent="goodbye_final",
             slot=None,
             marks_question=False,
@@ -1461,7 +1493,7 @@ def _handle_closing_turn(
         state.bump_revision()
         return _emit_speak(
             state,
-            text=questions._GOODBYE_FINAL,
+            text=questions.goodbye_final_speech(state),
             intent="goodbye_final",
             slot=None,
             marks_question=False,
@@ -1479,7 +1511,7 @@ def _handle_closing_turn(
             state.bump_revision()
             return _emit_speak(
                 state,
-                text=questions._GOODBYE_FINAL,
+                text=questions.goodbye_final_speech(state),
                 intent="goodbye_final",
                 slot=None,
                 marks_question=False,

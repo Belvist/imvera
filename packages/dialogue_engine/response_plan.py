@@ -49,7 +49,9 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
         plan.marks_question = False
         return plan
     if plan.action == "close_summary":
-        plan.mandatory_question = questions._SUMMARY_TEXT
+        plan.mandatory_question = questions.summary_close_speech(
+            state, acknowledge=plan.acknowledge
+        )
         plan.intent = "summary"
         plan.marks_question = False
         return plan

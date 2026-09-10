@@ -8,40 +8,23 @@ SIP operator → FreeSWITCH → mod_imvera_audio → CallActor
 → Silero TTS → FreeSWITCH → caller
 ```
 
-Nearest goal (not new features):
+## Active residual (this session)
 
-```text
-позвонил → Вера сняла → услышала → правильно поняла
-→ не зависла → не повторилась → дошла по сценарию
-→ попрощалась → корректно положила трубку
-```
+**Calls:** `fs-c83012aa` (mood → bare summary), `fs-f534c2e6` (soft «нет» → «Расскажите коротко» → bare «Спасибо за разговор.»).
 
-**100 times in a row.** Then, and only then: `ARCHITECTURE = FROZEN` / `TELEPHONY = ACCEPTED` / `DIALOGUE_ENGINE = ACCEPTED` / `VOICE_RUNTIME = ACCEPTED` / `PRODUCTION PILOT = READY`.
+**Local fix (NOT committed / NOT deployed):**
 
-## Allowed now
+- ITS: «Спасибо за разговор. Хотите ещё что-то добавить?»
+- Soft decline («да вроде бы нет», «сказал уже») → warm close
+- Share content → `observations["important_to_share"]` + «Хорошо, записала.» + warm close
+- Summary: «Всё, спасибо, {name}. Всего вам хорошего. До свидания.»
+- Optional schedule line via `prior_call_context["next_call_spoken"]` (not wired from CallActor yet)
+- Plans harvest: «планов толком тоже нет»
 
-Residual bugs on `DialogueEngine ↔ CallActor ↔ playout`:
+Offline reproduce `fs-f534c2e6` → ITS then named farewell. `pytest tests/` green.
 
-- live daily-check through `goodbye_final` (no planner fallback, no second opening, no lost summary/goodbye)
-- timer/wait fully owned by `DialogueEngine` (CallActor only fires the timer)
-- stale-safe effect delivery
-- soak + hangup cleanup evidence
+**NEXT GATE:** commit + push + CI + lab redeploy; Zoiper re-test; CALL_ID ≠ `a76ab4d`.
 
-## Forbidden now
+## Forbidden
 
-New features, scenarios, voice design, models, or architecture. See ADR-014.
-
-## NOT VERIFIED
-
-- Telephony gate 100/100 full calls (answer, uplink, downlink, cleanup, 0 hung channels, 0 silent)
-- DialogueEngine-only live path to `goodbye_final`
-- Scenario matrix (алло / barge-in / silence / repeat / bad STT / unexpected)
-- Latency: short phrase without LLM; conversational STT→reply start
-- Reliability soak (leaks, cross-call audio, dup TTS, lost turns)
-- Failure path STT/TTS/LLM down
-- Production: real trunk, Linux, pinned images, health, restart, monitoring
-- P0-A tone 100/100 (ADR-013) — still not a substitute for ADR-014 gate 1
-
-## NEXT GATE
-
-One live daily-check on the frozen path to `goodbye_final` with `call_id` trace: no `planner_legacy`, no repeated opening, hangup cleanup. Then repeat toward 100.
+New features / fourth system (ADR-014). Closing copy fix = residual spoken-surface on frozen path.

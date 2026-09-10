@@ -16,7 +16,7 @@ def test_opening_cache_roundtrip(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(oc, "CACHE_DIR", tmp_path)
     monkeypatch.setenv("IMVERA_TTS_MODEL_REVISION", "silero_lab:silero:v5_ru:xenia")
-    text = "Здравствуйте, это сервис Имвера, Даниил. Как вы себя чувствуете?"
+    text = "Здравствуйте, это сервис Амвера, Даниил. Как вы себя чувствуете?"
     pcm = b"\x00\x01" * 100
     path = save_opening(text, pcm, 24000, engine="silero_lab:silero:v5_ru:xenia")
     assert path.exists()

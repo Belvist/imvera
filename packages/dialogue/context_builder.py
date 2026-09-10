@@ -46,7 +46,7 @@ def _pending_question_text(state: DialogueState) -> str | None:
         return f"Я разговариваю с {state.elder_display_name}?"
     if state.fsm_state == FsmState.CHECK_CONSENT:
         return (
-            "Вы согласны получать регулярные звонки от IMVERA? "
+            "Вы согласны получать регулярные звонки от Амвера? "
             "Это важно — звонки только с вашего согласия."
         )
     if state.fsm_state == FsmState.CHECK_CAN_TALK:

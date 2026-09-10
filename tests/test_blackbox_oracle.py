@@ -10,7 +10,7 @@ from tools.blackbox_caller.oracle import (
 
 def test_opening_and_mood_intents_detected() -> None:
     text = (
-        "Здравствуйте. Это сервис IMVERA, Даниил. Как вы себя чувствуете? "
+        "Здравствуйте. Это сервис Амвера. Даниил, Как вы себя чувствуете? "
         "А какое у вас сегодня настроение?"
     )
     assertions = analyze_transcript(text)

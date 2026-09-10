@@ -29,6 +29,67 @@ def _no_background_ladder_before(intents: list[str], marker: str) -> None:
         assert bad not in prefix, f"{bad} before {marker}: {prefix}"
 
 
+def test_flow_mood_answer_to_wellness_asks_important_to_share() -> None:
+    """Live fs-c83012aa: mood-only answer must not jump to summary."""
+    r = _runner()
+    r.run([CallStarted(), "Настроение вроде бы тоже нормальное."])
+    intents = _intents(r)
+    assert "important_to_share" in intents
+    assert "summary" not in intents
+    _no_background_ladder_before(intents, "important_to_share")
+    assert r.state.slots["mood"].name == "FILLED"
+    assert r.state.important_to_share_asked is True
+
+
+def test_flow_fs_f534c2e6_soft_no_closes_warm() -> None:
+    """Live fs-f534c2e6: soft «да вроде бы нет…» must not ask «расскажите коротко»."""
+    r = ScenarioRunner(call_id="fs-f534c2e6", elder_display_name="Даниил")
+    r.run([CallStarted()])
+    r.run(["Привет! Чувствую себя хорошо, настроение хорошее."])
+    assert "important_to_share" in _intents(r)
+    its = [e for e in r.effects if getattr(e, "intent", "") == "important_to_share"]
+    assert its
+    assert "добавить" in its[-1].text.lower()
+    result = r.run(
+        [
+            "Да вроде бы нет, планов толком тоже нет никаких. Так вроде всё нормально."
+        ]
+    )
+    intents = [e.intent for e in result.speak_effects]
+    texts = " ".join(e.text.lower() for e in result.speak_effects)
+    assert "summary" in intents
+    assert "расскажите" not in texts
+    assert "коротко" not in texts
+    summary = next(e for e in result.speak_effects if e.intent == "summary")
+    assert "Даниил" in summary.text
+    assert "до свидания" in summary.text.lower()
+    assert "всего" in summary.text.lower()
+    assert result.state.slots["plans"].name == "FILLED"
+
+
+def test_flow_important_share_recorded_then_warm_close() -> None:
+    r = ScenarioRunner(call_id="share-note", elder_display_name="Даниил")
+    r.run([CallStarted(), "Хорошо.", "Болит колено с утра."])
+    assert r.state.observations.get("important_to_share")
+    assert "колено" in str(r.state.observations["important_to_share"]).lower()
+    summary = [e for e in r.effects if getattr(e, "intent", "") == "summary"]
+    assert summary
+    assert "записала" in summary[-1].text.lower()
+    assert "Даниил" in summary[-1].text
+
+
+def test_flow_summary_mentions_next_call_when_scheduled() -> None:
+    r = ScenarioRunner(call_id="sched", elder_display_name="Даниил")
+    r.state.prior_call_context["next_call_spoken"] = (
+        "Следующий разговор в пять, перезвоню вам по расписанию."
+    )
+    r.run([CallStarted(), "Хорошо.", "Нет."])
+    summary = [e for e in r.effects if getattr(e, "intent", "") == "summary"]
+    assert summary
+    assert "пять" in summary[-1].text.lower()
+    assert "Даниил" in summary[-1].text
+
+
 def test_flow_c_all_good_to_important_to_share() -> None:
     r = _runner()
     r.run([CallStarted(), "Всё хорошо", "Нет"])

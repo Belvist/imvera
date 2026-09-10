@@ -62,12 +62,60 @@ _WELLNESS_ACK_NORMAL = "Понятно."
 _WELLNESS_ACK_OKAY = "Хорошо, поняла."
 _WELLNESS_ACK_UNCERTAIN = "Понимаю."
 _WELLNESS_ACK_NEGATIVE = "Мне жаль это слышать."
-_SUMMARY_TEXT = "Спасибо за разговор."
+# Legacy constant — prefer summary_close_speech(state).
+_SUMMARY_TEXT = "Всё, спасибо. Всего вам хорошего. До свидания."
 _URGENT_CLOSE = (
     "Понимаю, это важно. Я передам информацию близким. "
     "Спасибо за разговор. До свидания."
 )
 _ANSWER_WAIT_MS = 7000
+_IMPORTANT_TO_SHARE_QUESTION = (
+    "Спасибо за разговор. Хотите ещё что-то добавить?"
+)
+# Phone-spoken brand. Latin «IMVERA» is skipped/garbled by Russian Silero TTS.
+# Pronunciation: Амвера (not «им вера»).
+_SERVICE_SPOKEN_NAME = "Амвера"
+
+
+def service_spoken_name() -> str:
+    return _SERVICE_SPOKEN_NAME
+
+
+def summary_close_speech(
+    state: EngineState,
+    *,
+    acknowledge: str = "",
+) -> str:
+    """Warm terminal close — never bare «Спасибо за разговор.»"""
+    name = (state.elder_display_name or "").strip()
+    if name:
+        core = f"Всё, спасибо, {name}. Всего вам хорошего. До свидания."
+    else:
+        core = _SUMMARY_TEXT
+    next_hint = (state.prior_call_context or {}).get("next_call_spoken", "").strip()
+    if next_hint:
+        if name:
+            core = (
+                f"Всё, спасибо, {name}. {next_hint} "
+                "Всего вам хорошего. До свидания."
+            )
+        else:
+            core = f"Всё, спасибо. {next_hint} Всего вам хорошего. До свидания."
+    ack = acknowledge.strip()
+    if ack:
+        return f"{ack} {core}"
+    return core
+
+
+def goodbye_final_speech(state: EngineState) -> str:
+    name = (state.elder_display_name or "").strip()
+    if name:
+        return f"До свидания, {name}. Всего вам хорошего."
+    return _GOODBYE_FINAL
+
+
+def important_to_share_question() -> str:
+    return _IMPORTANT_TO_SHARE_QUESTION
 
 
 def topic_question(intent: str) -> str:
@@ -123,11 +171,13 @@ def wellness_ack(*, polarity: str | None = None, value: str = "") -> str:
 def opening_speech(elder_display_name: str, prior_context: dict[str, str] | None = None) -> str:
     from packages.dialogue_engine.check_path import prior_followup_question
 
+    name = (elder_display_name or "").strip() or "вас"
+    brand = _SERVICE_SPOKEN_NAME
     follow = prior_followup_question(prior_context or {})
     if follow:
-        return f"Здравствуйте. Это сервис IMVERA, {elder_display_name}. {follow}"
+        return f"Здравствуйте. Это сервис {brand}. {name}, {follow}"
     return (
-        f"Здравствуйте. Это сервис IMVERA, {elder_display_name}. "
+        f"Здравствуйте. Это сервис {brand}. {name}, "
         f"{_SLOT_QUESTIONS['wellness']}"
     )
 

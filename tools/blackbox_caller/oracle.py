@@ -81,7 +81,7 @@ def _match_intents(text: str) -> list[IntentObservation]:
     found: list[IntentObservation] = []
 
     patterns: list[tuple[str, str]] = [
-        (r"здравствуйте|это сервис imvera|как вы себя чувствуете", "opening"),
+        (r"здравствуйте|это сервис амвера|как вы себя чувствуете", "opening"),
         (r"настроени", "check_mood"),
         (r"как вы спали|спали", "check_sleep"),
         (r"план|занят|собираетесь", "check_plans"),

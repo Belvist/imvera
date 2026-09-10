@@ -531,7 +531,7 @@ def test_wellness_answers_never_echo_discarded() -> None:
         llm=SimpleNamespace(),
         media=MediaCallbacks(_noop, _noop, _noop, _noop),
     )
-    opening = "Здравствуйте, это сервис Имвера, Даниил. Как вы себя чувствуете?"
+    opening = "Здравствуйте, это сервис Амвера, Даниил. Как вы себя чувствуете?"
     actor._delivered_phrases.append(opening)
     actor.session.state.pending_question = opening
     for answer in (
