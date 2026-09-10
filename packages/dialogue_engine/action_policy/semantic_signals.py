@@ -15,6 +15,14 @@ _URGENT_RISK_TEXT = re.compile(
     re.I,
 )
 _URGENT_RISK_KINDS = frozenset({"fall", "cannot_stand", "help_request"})
+_SPEAKER_OK = re.compile(
+    r"\b(я\s+нормально|мне\s+нормально|я\s+в\s+порядке|со\s+мной\s+вс[её]\s+хорошо)\b",
+    re.I,
+)
+_SPEAKER_UNWELL = re.compile(
+    r"\b(мне\s+самому\s+плохо|мне\s+плохо|я\s+.*плохо|чувствую\s+себя\s+плохо)\b",
+    re.I,
+)
 
 
 def _subject_kind(value: object) -> str:
@@ -64,9 +72,12 @@ def has_grounded_speaker_issue(
     return speaker
 
 
-def wellness_polarity_negative(goal_facts: tuple[object, ...]) -> bool:
+def _speaker_wellness_negative(goal_facts: tuple[object, ...]) -> bool:
     for fact in goal_facts:
         if getattr(fact, "field", None) != "wellness":
+            continue
+        subject = str(getattr(fact, "subject", "speaker")).strip().lower()
+        if subject not in {"speaker", "unknown"}:
             continue
         value = str(getattr(fact, "value", "")).strip().lower()
         if value in _WELLNESS_NEGATIVE:
@@ -74,8 +85,13 @@ def wellness_polarity_negative(goal_facts: tuple[object, ...]) -> bool:
     return False
 
 
+def wellness_polarity_negative(goal_facts: tuple[object, ...]) -> bool:
+    return _speaker_wellness_negative(goal_facts)
+
+
 def derive_unresolved_concern(
     *,
+    raw_text: str = "",
     issue_mentions: tuple[object, ...] = (),
     goal_facts: tuple[object, ...] = (),
     kernel_ambiguities: tuple[str, ...] = (),
@@ -90,12 +106,16 @@ def derive_unresolved_concern(
     if speaker_issue:
         return False
     if other_issue and not speaker_issue:
+        if _SPEAKER_OK.search(raw_text or ""):
+            return False
+        if _SPEAKER_UNWELL.search(raw_text or "") or _speaker_wellness_negative(goal_facts):
+            return True
         return False
     if needs_clarification:
         return True
     if "vague_issue" in kernel_ambiguities:
         return True
-    return wellness_polarity_negative(goal_facts)
+    return _speaker_wellness_negative(goal_facts)
 
 
 def derive_turn_risk_level(

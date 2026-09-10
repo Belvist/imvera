@@ -17,7 +17,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from packages.contracts.enums import SlotStatus
-from packages.dialogue_engine.action_policy.actions import ActionKind, PolicyConstraintViolation
+from packages.dialogue_engine.action_policy.actions import (
+    ActionKind,
+    CandidateAction,
+    PolicyConstraintViolation,
+    normalize_need,
+)
 from packages.dialogue_engine.action_policy.bridge import legacy_plan_to_action_key, to_response_plan
 from packages.dialogue_engine.action_policy.policy import choose
 from packages.dialogue_engine.action_policy.scorer import POLICY_VERSION
@@ -165,7 +170,7 @@ def _expected_prefix_to_kind(prefix: str | None) -> ActionKind | None:
         return None
     if prefix.startswith("episode_"):
         return ActionKind.ASK_EPISODE
-    if prefix.startswith("probe_concern"):
+    if prefix.startswith("probe_"):
         return ActionKind.CLARIFY
     if prefix.startswith("important_to_share_listen"):
         return ActionKind.LISTEN_META
@@ -178,6 +183,67 @@ def _expected_prefix_to_kind(prefix: str | None) -> ActionKind | None:
     return None
 
 
+def _plan_intent_strings(snapshot: PolicySnapshot, decision) -> tuple[str, ...]:
+    plan = to_response_plan(decision, snapshot)
+    intents: list[str] = []
+    if plan.intent:
+        intents.append(plan.intent)
+    chosen: CandidateAction = decision.chosen
+    if chosen.kind == ActionKind.ASK_EPISODE:
+        need = normalize_need(chosen.question_need) or "concern"
+        intents.append(f"episode_{need}")
+        intents.append(f"action_policy_episode_{need}")
+        if need == "temporal":
+            intents.extend(("episode_onset", "episode_duration", "episode_headache_onset"))
+    return tuple(dict.fromkeys(intents))
+
+
+def _forbidden_intent_hit(intents: tuple[str, ...], forbidden: str) -> bool:
+    token = forbidden.lower()
+    for intent in intents:
+        lowered = intent.lower()
+        if token == lowered or token in lowered or lowered in token:
+            return True
+    if token.endswith("_onset") or token.endswith("_duration") or "onset" in token:
+        return any(
+            intent.endswith("_temporal")
+            or intent.endswith("_onset")
+            or intent.endswith("_duration")
+            or intent == "episode_temporal"
+            for intent in intents
+        )
+    if "severity" in token:
+        return any("severity" in intent for intent in intents)
+    return False
+
+
+def _pipeline_policy_failure(
+    *,
+    decision,
+    snapshot: PolicySnapshot,
+    turn: dict[str, Any],
+    expected_kind: ActionKind,
+    state_loss: bool,
+) -> tuple[bool, str]:
+    if state_loss:
+        return False, ""
+    chosen = decision.chosen
+    if chosen.kind != expected_kind:
+        return True, f"kind:{chosen.kind.value}!={expected_kind.value}"
+    intents = _plan_intent_strings(snapshot, decision)
+    for forbidden in turn.get("expected_no_intents", ()):
+        if _forbidden_intent_hit(intents, forbidden):
+            return True, f"forbidden:{forbidden}"
+    if chosen.kind == ActionKind.ASK_EPISODE:
+        need = normalize_need(chosen.question_need)
+        answered_attr = turn.get("pending_episode_attribute")
+        if answered_attr in {"onset", "duration", "temporal"} and need == "temporal":
+            return True, "repeated_temporal_after_duration_answer"
+        if snapshot.last_question_need and need == snapshot.last_question_need:
+            return True, f"repeat_need:{need}"
+    return False, ""
+
+
 def run_pipeline_diagnostic() -> dict[str, Any]:
     """SK -> filter -> atomic apply -> snapshot -> ActionPolicy, without production scheduler."""
     results = []
@@ -188,6 +254,9 @@ def run_pipeline_diagnostic() -> dict[str, Any]:
         raw = json.loads(path.read_text(encoding="utf-8"))
         state = EngineState(call_id=f"action-policy-{raw.get('call_id', path.stem)}", elder_display_name=raw.get("elder_display_name", "Даниил"))
         for idx, turn in enumerate(raw.get("turns", ()), start=1):
+            pending_attr = turn.get("pending_episode_attribute")
+            if pending_attr:
+                state.pending_episode_attribute = pending_attr
             answer_slot = turn.get("answer_slot")
             if answer_slot:
                 state.delivered_question = Question(
@@ -198,6 +267,13 @@ def run_pipeline_diagnostic() -> dict[str, Any]:
                 )
                 if answer_slot.startswith("probe_"):
                     state.probe_phase = answer_slot.removeprefix("probe_")
+            elif pending_attr and state.active_episode_id:
+                state.delivered_question = Question(
+                    question_id=f"offline-{idx}",
+                    slot=f"episode_{state.active_episode_id}_{pending_attr}",
+                    text=turn.get("bot_text", ""),
+                    intent=f"episode_{pending_attr}",
+                )
             rich = build_rich_turn_from_text(turn["stt_final"], utterance_id=f"u-{idx}", engine_state=state)
             rich = filter_rich_turn_mentions(state, rich)
             before_episode_ids = set(state.issue_episodes)
@@ -215,9 +291,16 @@ def run_pipeline_diagnostic() -> dict[str, Any]:
             if expected_kind == ActionKind.ASK_EPISODE:
                 new_ids = set(state.issue_episodes) - before_episode_ids
                 state_loss = not bool(new_ids or snapshot.attention_episodes)
+            failed, reason = _pipeline_policy_failure(
+                decision=decision,
+                snapshot=snapshot,
+                turn=turn,
+                expected_kind=expected_kind,
+                state_loss=state_loss,
+            )
             if state_loss:
                 nlu_state_loss += 1
-            elif decision.chosen.kind != expected_kind:
+            elif failed:
                 policy_failure += 1
             results.append({
                 "fixture": path.stem,
@@ -225,8 +308,10 @@ def run_pipeline_diagnostic() -> dict[str, Any]:
                 "text": turn["stt_final"],
                 "expected_kind": expected_kind.value,
                 "chosen": decision.chosen.key.label(),
+                "pending_episode_attribute": turn.get("pending_episode_attribute"),
+                "failure_reason": reason,
                 "nlu_state_loss": state_loss,
-                "policy_failure": (not state_loss and decision.chosen.kind != expected_kind),
+                "policy_failure": failed and not state_loss,
             })
     return {"checked_turns": checked, "nlu_state_loss": nlu_state_loss, "policy_failure": policy_failure, "turns": results}
 

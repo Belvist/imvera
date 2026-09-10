@@ -71,17 +71,17 @@ def extract_features(
     features[f"action:{action.kind.value}"] = 1.0
     transition_preferred = snapshot.transition_preferred(ctx)
     burden = snapshot.user_burden
-    remaining_info = _remaining_information_value(snapshot.active_episode)
 
     if action.kind == ActionKind.ASK_EPISODE:
         ep = snapshot.episode(action.episode_id)
+        target_remaining_info = _remaining_information_value(ep)
         need = normalize_need(action.question_need)
         gain = _GAIN.get(need or "", 0.4)
         dim_count = ep.known_dimension_count if ep else 0
         features["active_issue"] = 1.0 if ep is not None else 0.0
         features["information_gain"] = gain
         features["unanswered_dimension_value"] = gain * max(0.15, 1.0 - burden)
-        features["remaining_information_value"] = remaining_info
+        features["remaining_information_value"] = target_remaining_info
         features["pending_need_match"] = (
             1.0
             if snapshot.pending_episode_attribute
@@ -105,7 +105,7 @@ def extract_features(
         )
         features["transition_penalty"] = 1.0 if transition_preferred else 0.0
         features["useful_follow_up"] = (
-            remaining_info
+            target_remaining_info
             if ep
             and ep.interrogation_eligible
             and ep.has_open_questions
@@ -153,8 +153,10 @@ def extract_features(
     features["new_grounded_issue"] = 1.0 if ctx.has_new_speaker_issue else 0.0
     features["its_pending"] = 1.0 if snapshot.its_pending else 0.0
     if action.kind == ActionKind.IMPORTANT_TO_SHARE:
+        focus = snapshot.episode_decision_queue()
+        focus_remaining = _remaining_information_value(focus[0] if focus else None)
         features["transition_preferred"] = 1.0 if transition_preferred else 0.0
         question_pressure = min(1.0, snapshot.questions_asked_this_episode / 2.0)
         features["transition_burden_relief"] = burden * question_pressure
-        features["remaining_information_value"] = 1.0 - remaining_info
+        features["remaining_information_value"] = 1.0 - focus_remaining
     return features

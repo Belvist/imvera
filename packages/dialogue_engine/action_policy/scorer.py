@@ -8,7 +8,7 @@ from packages.dialogue_engine.action_policy.actions import CandidateAction, Scor
 from packages.dialogue_engine.action_policy.features import extract_features
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView
 
-POLICY_VERSION = "action-policy-phase1-v4"
+POLICY_VERSION = "action-policy-phase1-v5"
 
 DEFAULT_WEIGHTS: dict[str, float] = {
     "bias": 0.0,

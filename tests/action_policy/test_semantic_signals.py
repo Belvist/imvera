@@ -31,8 +31,31 @@ def test_other_person_issue_does_not_block_unresolved_concern() -> None:
     obs = Observation(
         observation_id="o1",
         attribute="issue",
-        value="heart",
+        value="back pain",
         subject=SubjectKind.OTHER_PERSON,
+    )
+
+    class _PositiveWellness:
+        field = "wellness"
+        value = "positive"
+        subject = "speaker"
+
+    assert not derive_unresolved_concern(
+        issue_mentions=(object(),),
+        observations=(obs,),
+        goal_facts=(_PositiveWellness(),),
+    )
+
+    class _NegativeWellness:
+        field = "wellness"
+        value = "negative"
+        subject = "speaker"
+
+    assert derive_unresolved_concern(
+        raw_text="У мужа болит спина, а мне самому плохо.",
+        issue_mentions=(object(),),
+        observations=(obs,),
+        goal_facts=(_NegativeWellness(),),
     )
     assert not has_grounded_speaker_issue(issue_mentions=(object(),), observations=(obs,))
     speaker, other = classify_turn_issues(issue_mentions=(object(),), observations=(obs,))

@@ -1,0 +1,1507 @@
+{
+  "snapshot_benchmark": {
+    "policy_version": "action-policy-phase1-v5",
+    "splits": {
+      "development": {
+        "total": 14,
+        "new_ok": 14,
+        "legacy_ok": 10,
+        "new_forbidden": 0,
+        "legacy_forbidden": 4
+      },
+      "held_out": {
+        "total": 12,
+        "new_ok": 12,
+        "legacy_ok": 8,
+        "new_forbidden": 0,
+        "legacy_forbidden": 1
+      },
+      "p0_golden": {
+        "total": 13,
+        "new_ok": 13,
+        "legacy_ok": 9,
+        "new_forbidden": 0,
+        "legacy_forbidden": 2
+      }
+    },
+    "cases": [
+      {
+        "split": "development",
+        "id": "dev_vague_wellness_clarify",
+        "new": "CLARIFY:concern",
+        "legacy": "CLARIFY:concern",
+        "acceptable": [
+          "CLARIFY:concern"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:clarify": 70.0
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_new_issue_temporal",
+        "new": "ASK_EPISODE:temporal",
+        "legacy": "ASK_EPISODE:temporal",
+        "acceptable": [
+          "ASK_EPISODE:temporal"
+        ],
+        "forbidden": [
+          "BACKGROUND_GOAL:mood",
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "speaker_issue_blocks_its"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 8.0,
+          "unanswered_dimension_value": 10.0,
+          "remaining_information_value": 6.0,
+          "useful_follow_up": 22.0,
+          "fit:episode": 12.0,
+          "new_grounded_issue": 0.2
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_temporal_then_current",
+        "new": "ASK_EPISODE:current",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "ASK_EPISODE:current"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "IMPORTANT_TO_SHARE"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 7.2,
+          "unanswered_dimension_value": 9.0,
+          "remaining_information_value": 4.0,
+          "known_dimensions": -4.0,
+          "useful_follow_up": 14.666666666666666,
+          "fit:episode": 12.0
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_two_dims_finish",
+        "new": "IMPORTANT_TO_SHARE",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "IMPORTANT_TO_SHARE"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "BACKGROUND_GOAL:mood",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:its": 30.0,
+          "transition_preferred": 45.0,
+          "remaining_information_value": 4.0
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_temporal_severity_finish",
+        "new": "IMPORTANT_TO_SHARE",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "IMPORTANT_TO_SHARE"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:its": 30.0,
+          "transition_preferred": 45.0,
+          "remaining_information_value": 4.0
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_resolving_finish",
+        "new": "IMPORTANT_TO_SHARE",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "IMPORTANT_TO_SHARE"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:severity",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:its": 30.0,
+          "transition_preferred": 45.0,
+          "remaining_information_value": 4.0
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_other_person_not_interrogated",
+        "new": "IMPORTANT_TO_SHARE",
+        "legacy": "ASK_EPISODE:temporal",
+        "acceptable": [
+          "IMPORTANT_TO_SHARE"
+        ],
+        "forbidden": [
+          "ACK_ONLY",
+          "ASK_EPISODE:temporal",
+          "BACKGROUND_GOAL:mood",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:its": 30.0,
+          "remaining_information_value": 6.0
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_high_burden_prefers_transition",
+        "new": "IMPORTANT_TO_SHARE",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "IMPORTANT_TO_SHARE"
+        ],
+        "forbidden": [
+          "ACK_ONLY",
+          "ASK_EPISODE:severity"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "ack_dead_end"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:its": 30.0,
+          "transition_burden_relief": 45.0,
+          "remaining_information_value": 2.0
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_low_burden_allows_useful_ask",
+        "new": "ASK_EPISODE:current",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "ASK_EPISODE:current"
+        ],
+        "forbidden": [
+          "ACK_ONLY",
+          "IMPORTANT_TO_SHARE"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 7.2,
+          "unanswered_dimension_value": 8.100000000000001,
+          "remaining_information_value": 4.0,
+          "known_dimensions": -4.0,
+          "ask_burden_penalty": -2.5,
+          "useful_follow_up": 14.666666666666666,
+          "fit:episode": 12.0
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_user_question_preempts_issue",
+        "new": "ANSWER_USER",
+        "legacy": "ANSWER_USER",
+        "acceptable": [
+          "ANSWER_USER"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "IMPORTANT_TO_SHARE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:temporal",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:current",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:severity",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:answer_user": 80.0,
+          "new_grounded_issue": 0.2
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_repair_preempts",
+        "new": "REPAIR",
+        "legacy": "REPAIR",
+        "acceptable": [
+          "REPAIR"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:temporal",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:current",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:severity",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:repair": 85.0
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_goodbye_direct",
+        "new": "GOODBYE_FINAL",
+        "legacy": "GOODBYE_FINAL",
+        "acceptable": [
+          "GOODBYE_FINAL"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:goodbye": 95.0
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_safety_preempts",
+        "new": "SAFETY",
+        "legacy": "ASK_EPISODE:temporal",
+        "acceptable": [
+          "SAFETY"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "IMPORTANT_TO_SHARE"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:temporal",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:current",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:severity",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:safety": 100.0,
+          "new_grounded_issue": 0.2
+        }
+      },
+      {
+        "split": "development",
+        "id": "dev_required_background_only",
+        "new": "BACKGROUND_GOAL:wellness",
+        "legacy": "BACKGROUND_GOAL:wellness",
+        "acceptable": [
+          "BACKGROUND_GOAL:wellness"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:background": 20.0
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_pending_severity",
+        "new": "ASK_EPISODE:severity",
+        "legacy": "ACK_ONLY",
+        "acceptable": [
+          "ASK_EPISODE:severity"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "IMPORTANT_TO_SHARE"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 5.2,
+          "unanswered_dimension_value": 6.5,
+          "remaining_information_value": 4.0,
+          "pending_need_match": 6.0,
+          "known_dimensions": -4.0,
+          "useful_follow_up": 14.666666666666666,
+          "fit:episode": 12.0
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_repeat_temporal_rejected",
+        "new": "ASK_EPISODE:current",
+        "legacy": "ASK_EPISODE:temporal",
+        "acceptable": [
+          "ASK_EPISODE:current"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:temporal",
+            "rule": "repeat_question"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 7.2,
+          "unanswered_dimension_value": 9.0,
+          "remaining_information_value": 6.0,
+          "useful_follow_up": 22.0,
+          "fit:episode": 12.0
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_its_meta",
+        "new": "LISTEN_META",
+        "legacy": "LISTEN_META",
+        "acceptable": [
+          "LISTEN_META"
+        ],
+        "forbidden": [
+          "ACK_ONLY",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:meta": 75.0,
+          "its_pending": 0.1
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_its_unclear",
+        "new": "LISTEN_META",
+        "legacy": "LISTEN_META",
+        "acceptable": [
+          "LISTEN_META"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:meta": 75.0,
+          "its_pending": 0.1
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_new_issue_at_its",
+        "new": "ASK_EPISODE:current",
+        "legacy": "LISTEN_META",
+        "acceptable": [
+          "ASK_EPISODE:current"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "speaker_issue_blocks_its"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 7.2,
+          "unanswered_dimension_value": 9.0,
+          "remaining_information_value": 4.0,
+          "known_dimensions": -4.0,
+          "useful_follow_up": 14.666666666666666,
+          "fit:episode": 12.0,
+          "new_grounded_issue": 0.2,
+          "its_pending": 0.1
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_control_pause",
+        "new": "CONTROL:pause",
+        "legacy": "CONTROL:pause",
+        "acceptable": [
+          "CONTROL:pause"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:control": 90.0
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_summary_after_its_decline",
+        "new": "SUMMARY_CLOSE",
+        "legacy": "SUMMARY_CLOSE",
+        "acceptable": [
+          "SUMMARY_CLOSE"
+        ],
+        "forbidden": [
+          "BACKGROUND_GOAL:mood",
+          "IMPORTANT_TO_SHARE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:summary": 25.0
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_required_mood_before_entry",
+        "new": "BACKGROUND_GOAL:mood",
+        "legacy": "BACKGROUND_GOAL:mood",
+        "acceptable": [
+          "BACKGROUND_GOAL:mood"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:background": 20.0
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_active_episode_priority",
+        "new": "ASK_EPISODE:temporal",
+        "legacy": "ASK_EPISODE:temporal",
+        "acceptable": [
+          "ASK_EPISODE:temporal"
+        ],
+        "forbidden": [
+          "BACKGROUND_GOAL:sleep",
+          "IMPORTANT_TO_SHARE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 8.0,
+          "unanswered_dimension_value": 10.0,
+          "remaining_information_value": 6.0,
+          "useful_follow_up": 22.0,
+          "fit:episode": 12.0
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_high_burden_still_no_repeat",
+        "new": "ASK_EPISODE:current",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "ASK_EPISODE:current"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:severity",
+          "ASK_EPISODE:temporal"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "ack_dead_end"
+          },
+          {
+            "action": "ASK_EPISODE:severity",
+            "rule": "repeat_question"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 7.2,
+          "unanswered_dimension_value": 1.35,
+          "remaining_information_value": 4.0,
+          "known_dimensions": -4.0,
+          "ask_burden_penalty": -25.0,
+          "useful_follow_up": 14.666666666666666,
+          "fit:episode": 12.0
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_healthy_goes_its",
+        "new": "IMPORTANT_TO_SHARE",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "IMPORTANT_TO_SHARE"
+        ],
+        "forbidden": [
+          "BACKGROUND_GOAL:mood",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:its": 30.0,
+          "remaining_information_value": 6.0
+        }
+      },
+      {
+        "split": "held_out",
+        "id": "held_explicit_farewell_variant",
+        "new": "GOODBYE_FINAL",
+        "legacy": "GOODBYE_FINAL",
+        "acceptable": [
+          "GOODBYE_FINAL"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:goodbye": 95.0
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_fs1_vague_wellness",
+        "new": "CLARIFY:concern",
+        "legacy": "CLARIFY:concern",
+        "acceptable": [
+          "CLARIFY:concern"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:clarify": 70.0
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_fs1_headache_survives_probe",
+        "new": "ASK_EPISODE:current",
+        "legacy": "CLARIFY:concern",
+        "acceptable": [
+          "ASK_EPISODE:current"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "speaker_issue_blocks_its"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 7.2,
+          "unanswered_dimension_value": 9.0,
+          "remaining_information_value": 4.0,
+          "known_dimensions": -4.0,
+          "useful_follow_up": 14.666666666666666,
+          "fit:episode": 12.0,
+          "new_grounded_issue": 0.2
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_fs1_meta_no_close",
+        "new": "LISTEN_META",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "LISTEN_META"
+        ],
+        "forbidden": [
+          "GOODBYE_FINAL",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:current",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:severity",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:meta": 75.0
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_fs1_goodbye_no_confirm",
+        "new": "GOODBYE_FINAL",
+        "legacy": "GOODBYE_FINAL",
+        "acceptable": [
+          "GOODBYE_FINAL"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:goodbye": 95.0
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_repeat_onset_not_asked_again",
+        "new": "ASK_EPISODE:current",
+        "legacy": "ASK_EPISODE:temporal",
+        "acceptable": [
+          "ASK_EPISODE:current"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ASK_EPISODE:temporal",
+            "rule": "repeat_question"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 7.2,
+          "unanswered_dimension_value": 9.0,
+          "remaining_information_value": 6.0,
+          "useful_follow_up": 22.0,
+          "fit:episode": 12.0
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_unclear_never_partial_close",
+        "new": "CLARIFY:concern",
+        "legacy": "CLARIFY:concern",
+        "acceptable": [
+          "CLARIFY:concern"
+        ],
+        "forbidden": [
+          "GOODBYE_FINAL",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:clarify": 70.0
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_resolved_headache_to_its",
+        "new": "IMPORTANT_TO_SHARE",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "IMPORTANT_TO_SHARE"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:severity",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:its": 30.0,
+          "transition_preferred": 45.0,
+          "remaining_information_value": 4.0
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_new_issue_during_its",
+        "new": "ASK_EPISODE:temporal",
+        "legacy": "ASK_EPISODE:temporal",
+        "acceptable": [
+          "ASK_EPISODE:temporal"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "speaker_issue_blocks_its"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "active_issue": 2.0,
+          "information_gain": 8.0,
+          "unanswered_dimension_value": 10.0,
+          "remaining_information_value": 6.0,
+          "useful_follow_up": 22.0,
+          "fit:episode": 12.0,
+          "new_grounded_issue": 0.2,
+          "its_pending": 0.1
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_its_meta_listen",
+        "new": "LISTEN_META",
+        "legacy": "LISTEN_META",
+        "acceptable": [
+          "LISTEN_META"
+        ],
+        "forbidden": [
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:meta": 75.0,
+          "its_pending": 0.1
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_other_person_not_speaker",
+        "new": "IMPORTANT_TO_SHARE",
+        "legacy": "ASK_EPISODE:temporal",
+        "acceptable": [
+          "IMPORTANT_TO_SHARE"
+        ],
+        "forbidden": [
+          "ASK_EPISODE:temporal",
+          "BACKGROUND_GOAL:mood"
+        ],
+        "new_ok": true,
+        "legacy_ok": false,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:its": 30.0,
+          "remaining_information_value": 6.0
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_safety_never_scored_away",
+        "new": "SAFETY",
+        "legacy": "SAFETY",
+        "acceptable": [
+          "SAFETY"
+        ],
+        "forbidden": [
+          "IMPORTANT_TO_SHARE",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "IMPORTANT_TO_SHARE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "ACK_ONLY",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:safety": 100.0
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_no_background_ladder",
+        "new": "IMPORTANT_TO_SHARE",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "IMPORTANT_TO_SHARE"
+        ],
+        "forbidden": [
+          "BACKGROUND_GOAL:mood",
+          "BACKGROUND_GOAL:plans",
+          "BACKGROUND_GOAL:sleep"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:its": 30.0,
+          "remaining_information_value": 6.0
+        }
+      },
+      {
+        "split": "p0_golden",
+        "id": "p0_improving_new_issue_to_its",
+        "new": "IMPORTANT_TO_SHARE",
+        "legacy": "IMPORTANT_TO_SHARE",
+        "acceptable": [
+          "IMPORTANT_TO_SHARE"
+        ],
+        "forbidden": [
+          "ACK_ONLY",
+          "ASK_EPISODE:temporal",
+          "SUMMARY_CLOSE"
+        ],
+        "new_ok": true,
+        "legacy_ok": true,
+        "rejected": [
+          {
+            "action": "SAFETY",
+            "rule": "mandatory_class_mismatch"
+          },
+          {
+            "action": "SUMMARY_CLOSE",
+            "rule": "mandatory_class_mismatch"
+          }
+        ],
+        "chosen_contributions": {
+          "fit:its": 30.0,
+          "new_grounded_issue": 0.2,
+          "transition_preferred": 45.0,
+          "remaining_information_value": 4.0
+        }
+      }
+    ]
+  },
+  "pipeline_diagnostic": {
+    "checked_turns": 5,
+    "nlu_state_loss": 0,
+    "policy_failure": 0,
+    "turns": [
+      {
+        "fixture": "fs-1f6d3000",
+        "turn": 1,
+        "text": "Привет. Чувствую себя вроде бы хорошо, но состояние такое плохое.",
+        "expected_kind": "CLARIFY",
+        "chosen": "CLARIFY:concern",
+        "pending_episode_attribute": null,
+        "failure_reason": "",
+        "nlu_state_loss": false,
+        "policy_failure": false
+      },
+      {
+        "fixture": "fs-1f6d3000",
+        "turn": 2,
+        "text": "Ну, наверное, со вчерашнего дня плохое самочувствие, вот головная боль.",
+        "expected_kind": "ASK_EPISODE",
+        "chosen": "ASK_EPISODE:current",
+        "pending_episode_attribute": null,
+        "failure_reason": "",
+        "nlu_state_loss": false,
+        "policy_failure": false
+      },
+      {
+        "fixture": "fs-1f6d3000",
+        "turn": 4,
+        "text": "До свидания.",
+        "expected_kind": "GOODBYE_FINAL",
+        "chosen": "GOODBYE_FINAL",
+        "pending_episode_attribute": null,
+        "failure_reason": "",
+        "nlu_state_loss": false,
+        "policy_failure": false
+      },
+      {
+        "fixture": "fs-77afbbf1",
+        "turn": 1,
+        "text": "Привет, чувствую себя не очень. Голова болит, чё-то плохо чувствую себя.",
+        "expected_kind": "ASK_EPISODE",
+        "chosen": "ASK_EPISODE:temporal",
+        "pending_episode_attribute": null,
+        "failure_reason": "",
+        "nlu_state_loss": false,
+        "policy_failure": false
+      },
+      {
+        "fixture": "fs-77afbbf1",
+        "turn": 2,
+        "text": "Достаточно давно.",
+        "expected_kind": "ASK_EPISODE",
+        "chosen": "ASK_EPISODE:current",
+        "pending_episode_attribute": "duration",
+        "failure_reason": "",
+        "nlu_state_loss": false,
+        "policy_failure": false
+      }
+    ]
+  },
+  "latency": {
+    "iterations": 100000,
+    "python": "3.13.14",
+    "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "policy_version": "action-policy-phase1-v5",
+    "p50_ms": 0.064416,
+    "p95_ms": 0.167583,
+    "p99_ms": 0.325959,
+    "mean_ms": 0.0823964156,
+    "target_p99_ms": 10.0,
+    "target_pass": true
+  }
+}

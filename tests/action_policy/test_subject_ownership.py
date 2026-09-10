@@ -49,6 +49,22 @@ def test_classify_turn_issues_uses_observation_subject() -> None:
     assert other
 
 
+def test_third_person_plus_speaker_negative_wellness_clarifies() -> None:
+    state = EngineState(call_id="flow-e-bad")
+    state.turn_seq = 2
+    state.slots["wellness"] = SlotStatus.FILLED
+    state.background_goal_status["wellness"] = BackgroundGoalCoverage.ANSWERED.value
+
+    rich = build_rich_turn_from_text(
+        "У мужа болит спина, а мне самому плохо.",
+        utterance_id="u-flow-e-bad",
+        engine_state=state,
+    )
+    ctx = TurnContextView.from_turn(rich)
+    decision = choose(_other_person_snapshot(), ctx)
+    assert decision.chosen.kind == ActionKind.CLARIFY
+
+
 def test_third_person_plus_speaker_wellness_allows_its() -> None:
     state = EngineState(call_id="flow-e")
     state.turn_seq = 2

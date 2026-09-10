@@ -157,8 +157,29 @@ class PolicySnapshot:
             for ep in self.episodes
         )
 
+    def episode_decision_queue(self) -> tuple[EpisodeSnapshot, ...]:
+        """Speaker-owned episodes in priority order: active → pending → remaining."""
+        ordered: list[EpisodeSnapshot] = []
+        if self.active_episode_id:
+            ep = self.active_episode
+            if ep and ep.speaker_owned:
+                ordered.append(ep)
+        for ep_id in self.pending_episode_ids:
+            ep = self.episode(ep_id)
+            if ep and ep.speaker_owned and ep not in ordered:
+                ordered.append(ep)
+        for ep in self.episodes:
+            if (
+                ep.speaker_owned
+                and ep.interrogation_eligible
+                and ep.has_open_questions
+                and ep not in ordered
+            ):
+                ordered.append(ep)
+        return tuple(ordered)
+
     def transition_preferred(self, ctx: TurnContextView) -> bool:
-        """True when episode state favors transition over further interrogation."""
+        """True only when no queued speaker episode still needs early interrogation."""
         if self.episodes and not any(ep.speaker_owned for ep in self.episodes):
             return False
         owned = [ep for ep in self.episodes if ep.speaker_owned]
@@ -166,11 +187,16 @@ class PolicySnapshot:
             return False
         if all(ep.resolving for ep in owned):
             return True
-        if any(ep.known_dimension_count >= 2 for ep in owned):
+        needing = [
+            ep
+            for ep in self.episode_decision_queue()
+            if ep.interrogation_eligible and ep.has_open_questions and not ep.resolving
+        ]
+        if not needing:
             return True
-        if not any(ep.interrogation_eligible and ep.has_open_questions for ep in owned):
-            return True
-        return False
+        if any(ep.known_dimension_count < 2 for ep in needing):
+            return False
+        return True
 
     def episode(self, episode_id: str | None) -> EpisodeSnapshot | None:
         if episode_id is None:
@@ -302,6 +328,7 @@ class TurnContextView:
         needs_clarification = bool(getattr(turn, "needs_clarification", False))
         vague_negative = wellness_polarity_negative(goal_facts) or "vague_issue" in ambiguities
         unresolved = derive_unresolved_concern(
+            raw_text=raw_text,
             issue_mentions=issue_mentions,
             goal_facts=goal_facts,
             kernel_ambiguities=ambiguities,

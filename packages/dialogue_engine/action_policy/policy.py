@@ -60,7 +60,9 @@ def generate_candidates(
             ),
         )
 
-    for ep in snapshot.attention_episodes:
+    for ep in snapshot.episode_decision_queue():
+        if not (ep.interrogation_eligible and ep.has_open_questions):
+            continue
         attrs: list[str] = []
         if (
             snapshot.active_episode_id == ep.episode_id
