@@ -1,0 +1,2139 @@
+[
+  {
+    "id": "v7ch_its_resolved_optional_fi_close",
+    "snapshot": {
+      "turn_number": 6,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "episodes": [
+        {
+          "episode_id": "ep-a",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера",
+            "current": "active",
+            "severity": "лёгкая"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-a",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "больше ничего"
+    },
+    "acceptable": [
+      "SUMMARY_CLOSE"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:functional_impact",
+      "ACK_ONLY",
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_its_resolved_optional_current_close",
+    "snapshot": {
+      "turn_number": 6,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "user_burden": 1.0,
+      "questions_asked_this_episode": 3,
+      "episodes": [
+        {
+          "episode_id": "ep-b",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-b",
+      "last_question_need": "temporal",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "нет"
+    },
+    "acceptable": [
+      "SUMMARY_CLOSE"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:current",
+      "ASK_EPISODE:severity",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_its_resolved_optional_severity_close",
+    "snapshot": {
+      "turn_number": 6,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "episodes": [
+        {
+          "episode_id": "ep-c",
+          "kind": "symptom",
+          "known": {
+            "onset": "давно",
+            "current": "active"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-c",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "больше нет"
+    },
+    "acceptable": [
+      "SUMMARY_CLOSE"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:severity",
+      "ASK_EPISODE:functional_impact"
+    ]
+  },
+  {
+    "id": "v7ch_post_its_optional_no_restart_0",
+    "snapshot": {
+      "turn_number": 7,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "episodes": [
+        {
+          "episode_id": "ep-pi0",
+          "kind": "symptom",
+          "known": {
+            "onset": "неделю",
+            "current": "active",
+            "severity": "mild"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-pi0",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "всё"
+    },
+    "acceptable": [
+      "SUMMARY_CLOSE"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal",
+      "ASK_EPISODE:current",
+      "ASK_EPISODE:severity",
+      "ASK_EPISODE:functional_impact",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_post_its_optional_no_restart_1",
+    "snapshot": {
+      "turn_number": 7,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "episodes": [
+        {
+          "episode_id": "ep-pi1",
+          "kind": "symptom",
+          "known": {
+            "duration": "три дня",
+            "current": "active"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-pi1",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "всё"
+    },
+    "acceptable": [
+      "SUMMARY_CLOSE"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal",
+      "ASK_EPISODE:current",
+      "ASK_EPISODE:severity",
+      "ASK_EPISODE:functional_impact",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_post_its_optional_no_restart_2",
+    "snapshot": {
+      "turn_number": 7,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "episodes": [
+        {
+          "episode_id": "ep-pi2",
+          "kind": "symptom",
+          "known": {
+            "onset": "утром",
+            "severity": "сильная"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-pi2",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "всё"
+    },
+    "acceptable": [
+      "SUMMARY_CLOSE"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal",
+      "ASK_EPISODE:current",
+      "ASK_EPISODE:severity",
+      "ASK_EPISODE:functional_impact",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_pending_hard_functional_impact_0",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "user_burden": 0.2,
+      "questions_asked_this_episode": 0,
+      "episodes": [
+        {
+          "episode_id": "ep-ph0",
+          "kind": "symptom",
+          "known": {
+            "onset": "месяц",
+            "current": "active"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-ph0",
+      "pending_episode_attribute": "functional_impact",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "ASK_EPISODE:functional_impact"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE",
+      "SUMMARY_CLOSE",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_pending_hard_current_1",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "user_burden": 0.9,
+      "questions_asked_this_episode": 2,
+      "episodes": [
+        {
+          "episode_id": "ep-ph1",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-ph1",
+      "pending_episode_attribute": "current",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE",
+      "SUMMARY_CLOSE",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_pending_hard_severity_2",
+    "snapshot": {
+      "turn_number": 6,
+      "wellness_entry_covered": true,
+      "user_burden": 0.2,
+      "questions_asked_this_episode": 0,
+      "episodes": [
+        {
+          "episode_id": "ep-ph2",
+          "kind": "symptom",
+          "known": {
+            "onset": "два дня"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-ph2",
+      "pending_episode_attribute": "severity",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "ASK_EPISODE:severity"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE",
+      "SUMMARY_CLOSE",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_pending_hard_current_3",
+    "snapshot": {
+      "turn_number": 7,
+      "wellness_entry_covered": true,
+      "user_burden": 0.9,
+      "questions_asked_this_episode": 2,
+      "episodes": [
+        {
+          "episode_id": "ep-ph3",
+          "kind": "symptom",
+          "known": {
+            "duration": "неделю",
+            "severity": "лёгкая"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-ph3",
+      "pending_episode_attribute": "current",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE",
+      "SUMMARY_CLOSE",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_pending_hard_functional_impact_4",
+    "snapshot": {
+      "turn_number": 8,
+      "wellness_entry_covered": true,
+      "user_burden": 0.2,
+      "questions_asked_this_episode": 0,
+      "episodes": [
+        {
+          "episode_id": "ep-ph4",
+          "kind": "symptom",
+          "known": {
+            "onset": "месяц",
+            "current": "active",
+            "severity": "лёгкая"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-ph4",
+      "pending_episode_attribute": "functional_impact",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "ASK_EPISODE:functional_impact"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE",
+      "SUMMARY_CLOSE",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_pre_its_optional_fi_candidate",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "user_burden": 0.05,
+      "episodes": [
+        {
+          "episode_id": "ep-fi",
+          "kind": "function_issue",
+          "known": {
+            "onset": "месяц",
+            "current": "active"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-fi",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "да"
+    },
+    "acceptable": [
+      "IMPORTANT_TO_SHARE",
+      "ASK_EPISODE:functional_impact",
+      "ASK_EPISODE:severity"
+    ],
+    "forbidden": [
+      "SUMMARY_CLOSE",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_high_burden_optional_transition",
+    "snapshot": {
+      "turn_number": 8,
+      "wellness_entry_covered": true,
+      "user_burden": 1.0,
+      "questions_asked_this_episode": 3,
+      "episodes": [
+        {
+          "episode_id": "ep-hb",
+          "kind": "function_issue",
+          "known": {
+            "onset": "месяц",
+            "current": "active"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-hb",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "угу"
+    },
+    "acceptable": [
+      "IMPORTANT_TO_SHARE"
+    ],
+    "forbidden": [
+      "ACK_ONLY",
+      "SUMMARY_CLOSE"
+    ]
+  },
+  {
+    "id": "v7ch_low_burden_onset_asks_current",
+    "snapshot": {
+      "turn_number": 3,
+      "wellness_entry_covered": true,
+      "user_burden": 0.1,
+      "episodes": [
+        {
+          "episode_id": "ep-lb",
+          "kind": "symptom",
+          "known": {
+            "onset": "с пятницы"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-lb",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "с пятницы"
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE",
+      "ASK_EPISODE:temporal"
+    ]
+  },
+  {
+    "id": "v7ch_zero_dims_temporal",
+    "snapshot": {
+      "turn_number": 2,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-zd",
+          "kind": "symptom",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-zd",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "болит",
+      "has_new_speaker_issue": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_core_done_transition",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-cd",
+          "kind": "symptom",
+          "known": {
+            "onset": "давно",
+            "current": "active"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-cd",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "да"
+    },
+    "acceptable": [
+      "IMPORTANT_TO_SHARE"
+    ],
+    "forbidden": [
+      "SUMMARY_CLOSE"
+    ]
+  },
+  {
+    "id": "v7ch_severity_then_current_value",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-sc",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера",
+            "severity": "умеренная"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-sc",
+      "last_question_need": "severity",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "терпимо"
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:severity",
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_repair_over_pending",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-rp",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-rp",
+      "pending_episode_attribute": "current",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "не расслышала",
+      "dialogue_act": "repair"
+    },
+    "acceptable": [
+      "REPAIR"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:current",
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_user_q_over_pending",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-uq",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-uq",
+      "pending_episode_attribute": "severity",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "кто вы",
+      "user_question": true
+    },
+    "acceptable": [
+      "ANSWER_USER"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:severity",
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_control_pause_over_ask",
+    "snapshot": {
+      "turn_number": 3,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-cp",
+          "kind": "symptom",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-cp",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "минутку",
+      "control": "pause"
+    },
+    "acceptable": [
+      "CONTROL:pause"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal"
+    ]
+  },
+  {
+    "id": "v7ch_safety_over_pending",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-sf",
+          "kind": "symptom",
+          "known": {
+            "onset": "утром"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-sf",
+      "pending_episode_attribute": "current",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "не могу дышать",
+      "turn_risk_level": "urgent"
+    },
+    "acceptable": [
+      "SAFETY"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:current",
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_goodbye_final",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "пока",
+      "control": "stop_call"
+    },
+    "acceptable": [
+      "GOODBYE_FINAL"
+    ],
+    "forbidden": [
+      "SUMMARY_CLOSE"
+    ]
+  },
+  {
+    "id": "v7ch_meta_during_its",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": false,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "а зачем звоните",
+      "dialogue_act": "question",
+      "meta": true
+    },
+    "acceptable": [
+      "LISTEN_META"
+    ],
+    "forbidden": [
+      "SUMMARY_CLOSE"
+    ]
+  },
+  {
+    "id": "v7ch_new_issue_during_its_reopens",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": false,
+      "episodes": [
+        {
+          "episode_id": "ep-ni",
+          "kind": "symptom",
+          "known": {
+            "onset": "второй день"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-ni",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "ещё колено болит",
+      "has_new_issue": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "SUMMARY_CLOSE",
+      "IMPORTANT_TO_SHARE",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_unclear_during_its",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": false,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "ммм",
+      "dialogue_act": "unclear"
+    },
+    "acceptable": [
+      "LISTEN_META"
+    ],
+    "forbidden": [
+      "SUMMARY_CLOSE",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_defer_control",
+    "snapshot": {
+      "turn_number": 2,
+      "wellness_entry_covered": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "позже",
+      "control": "defer"
+    },
+    "acceptable": [
+      "CONTROL:defer"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_clarify_vague",
+    "snapshot": {
+      "turn_number": 2,
+      "wellness_entry_covered": true,
+      "probe_phase": "concern",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "непонятно",
+      "needs_clarification": true,
+      "unresolved_concern": true,
+      "clarify_target": "concern"
+    },
+    "acceptable": [
+      "CLARIFY:concern"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_active_rich_pending_empty",
+    "snapshot": {
+      "turn_number": 6,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-a",
+          "kind": "symptom",
+          "known": {
+            "onset": "три дня",
+            "current": "active"
+          },
+          "speaker_owned": true
+        },
+        {
+          "episode_id": "ep-b",
+          "kind": "symptom",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-a",
+      "pending_episode_ids": [
+        "ep-b"
+      ],
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_its_leave_then_fresh_pending",
+    "snapshot": {
+      "turn_number": 7,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": false,
+      "episodes": [
+        {
+          "episode_id": "ep-old",
+          "kind": "symptom",
+          "known": {
+            "onset": "давно",
+            "current": "active",
+            "severity": "лёгкая"
+          },
+          "speaker_owned": true
+        },
+        {
+          "episode_id": "ep-new",
+          "kind": "symptom",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-old",
+      "pending_episode_ids": [
+        "ep-new"
+      ],
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "ещё плечо",
+      "has_new_speaker_issue": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "SUMMARY_CLOSE",
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_two_pending_empty",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-p1",
+          "kind": "symptom",
+          "known": {},
+          "speaker_owned": true
+        },
+        {
+          "episode_id": "ep-p2",
+          "kind": "symptom",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-p1",
+      "pending_episode_ids": [
+        "ep-p1",
+        "ep-p2"
+      ],
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE",
+      "BACKGROUND_GOAL:mood"
+    ]
+  },
+  {
+    "id": "v7ch_completed_active_pending_need",
+    "snapshot": {
+      "turn_number": 8,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-done",
+          "kind": "symptom",
+          "known": {
+            "onset": "давно",
+            "current": "resolved",
+            "severity": "лёгкая"
+          },
+          "speaker_owned": true
+        },
+        {
+          "episode_id": "ep-open",
+          "kind": "symptom",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-done",
+      "pending_episode_ids": [
+        "ep-open"
+      ],
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_no_ack_dead_end",
+    "snapshot": {
+      "turn_number": 10,
+      "wellness_entry_covered": true,
+      "user_burden": 0.95,
+      "questions_asked_this_episode": 3,
+      "episodes": [
+        {
+          "episode_id": "ep-ack",
+          "kind": "symptom",
+          "known": {
+            "onset": "давно"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-ack",
+      "last_question_need": "temporal",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "ну"
+    },
+    "acceptable": [
+      "IMPORTANT_TO_SHARE"
+    ],
+    "forbidden": [
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_no_premature_close_unclear",
+    "snapshot": {
+      "turn_number": 3,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "хм",
+      "dialogue_act": "unclear",
+      "needs_clarification": true,
+      "unresolved_concern": true,
+      "clarify_target": "concern"
+    },
+    "acceptable": [
+      "CLARIFY:concern"
+    ],
+    "forbidden": [
+      "SUMMARY_CLOSE",
+      "GOODBYE_FINAL"
+    ]
+  },
+  {
+    "id": "v7ch_no_repeat_severity",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-nr",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера",
+            "severity": "сильная"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-nr",
+      "last_question_need": "severity",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "уже"
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:severity"
+    ]
+  },
+  {
+    "id": "v7ch_safety_urgent",
+    "snapshot": {
+      "turn_number": 2,
+      "risk_level": "urgent",
+      "wellness_entry_covered": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "кровь",
+      "turn_risk_level": "urgent"
+    },
+    "acceptable": [
+      "SAFETY"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_third_person_no_ask",
+    "snapshot": {
+      "turn_number": 2,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-tp",
+          "kind": "symptom",
+          "known": {},
+          "speaker_owned": false
+        }
+      ],
+      "active_episode_id": "ep-tp",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "у дочери температура",
+      "has_new_other_person_issue": true
+    },
+    "acceptable": [
+      "IMPORTANT_TO_SHARE"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal"
+    ]
+  },
+  {
+    "id": "v7ch_positive_wellness_its",
+    "snapshot": {
+      "turn_number": 2,
+      "wellness_entry_covered": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "бодро",
+      "has_goal_facts": true
+    },
+    "acceptable": [
+      "IMPORTANT_TO_SHARE"
+    ],
+    "forbidden": [
+      "BACKGROUND_GOAL:mood"
+    ]
+  },
+  {
+    "id": "v7ch_required_wellness",
+    "snapshot": {
+      "turn_number": 1,
+      "wellness_entry_covered": false,
+      "required_background_goals": [
+        "wellness"
+      ],
+      "background_goal_status": {
+        "wellness": "unseen",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "BACKGROUND_GOAL:wellness"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_resolving_its",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-res",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера",
+            "current": "improving"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-res",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "легче",
+      "answers_pending_question": true
+    },
+    "acceptable": [
+      "IMPORTANT_TO_SHARE"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:severity"
+    ]
+  },
+  {
+    "id": "v7ch_active_blocks_background",
+    "snapshot": {
+      "turn_number": 3,
+      "wellness_entry_covered": true,
+      "mandatory_background_goals": true,
+      "episodes": [
+        {
+          "episode_id": "ep-ab",
+          "kind": "symptom",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-ab",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "лодыжка",
+      "has_new_speaker_issue": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "BACKGROUND_GOAL:mood"
+    ]
+  },
+  {
+    "id": "v7ch_summary_only_after_its",
+    "snapshot": {
+      "turn_number": 6,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "нет"
+    },
+    "acceptable": [
+      "SUMMARY_CLOSE"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_no_its_before_wellness",
+    "snapshot": {
+      "turn_number": 1,
+      "wellness_entry_covered": false,
+      "required_background_goals": [
+        "wellness"
+      ],
+      "background_goal_status": {
+        "wellness": "unseen",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "BACKGROUND_GOAL:wellness"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE",
+      "SUMMARY_CLOSE"
+    ]
+  },
+  {
+    "id": "v7ch_pending_resumable_after_repair_state",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-pr",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-pr",
+      "pending_episode_attribute": "current",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE",
+      "SUMMARY_CLOSE"
+    ]
+  },
+  {
+    "id": "v7ch_new_medication_issue",
+    "snapshot": {
+      "turn_number": 2,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-k0",
+          "kind": "medication_issue",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-k0",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "таблетки тошнит",
+      "has_new_speaker_issue": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_new_sleep_problem",
+    "snapshot": {
+      "turn_number": 2,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-k1",
+          "kind": "sleep_problem",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-k1",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "не сплю",
+      "has_new_speaker_issue": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_new_mood_problem",
+    "snapshot": {
+      "turn_number": 2,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-k2",
+          "kind": "mood_problem",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-k2",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "одиноко",
+      "has_new_speaker_issue": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_new_nutrition_issue",
+    "snapshot": {
+      "turn_number": 2,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-k3",
+          "kind": "nutrition_issue",
+          "known": {},
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-k3",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "нет аппетита",
+      "has_new_speaker_issue": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_duration_only_current",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-do",
+          "kind": "symptom",
+          "known": {
+            "duration": "пару недель"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-do",
+      "last_question_need": "temporal",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "пару недель"
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal"
+    ]
+  },
+  {
+    "id": "v7ch_moderate_burden_asks_current",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "user_burden": 0.35,
+      "episodes": [
+        {
+          "episode_id": "ep-mb",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера",
+            "severity": "умеренная"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-mb",
+      "last_question_need": "severity",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "да"
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE"
+    ]
+  },
+  {
+    "id": "v7ch_post_its_no_ack_trap_with_optional_fi",
+    "snapshot": {
+      "turn_number": 6,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "user_burden": 0.8,
+      "episodes": [
+        {
+          "episode_id": "ep-trap",
+          "kind": "symptom",
+          "known": {
+            "onset": "месяц",
+            "current": "active",
+            "severity": "лёгкая"
+          },
+          "speaker_owned": true
+        }
+      ],
+      "active_episode_id": "ep-trap",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "нет"
+    },
+    "acceptable": [
+      "SUMMARY_CLOSE"
+    ],
+    "forbidden": [
+      "ACK_ONLY",
+      "ASK_EPISODE:functional_impact"
+    ]
+  },
+  {
+    "id": "v7ch_its_asked_optional_fi_no_restart",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": false,
+      "episodes": [
+        {
+          "episode_id": "ep-x",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера",
+            "current": "active",
+            "severity": "лёгкая"
+          }
+        }
+      ],
+      "active_episode_id": "ep-x",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "мм",
+      "dialogue_act": "unclear"
+    },
+    "acceptable": [
+      "LISTEN_META"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:functional_impact",
+      "SUMMARY_CLOSE",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_farewell_open_issue",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-fg",
+          "kind": "symptom",
+          "known": {
+            "onset": "сегодня"
+          }
+        }
+      ],
+      "active_episode_id": "ep-fg",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "до свидания",
+      "control": "stop_call"
+    },
+    "acceptable": [
+      "GOODBYE_FINAL"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:current",
+      "SUMMARY_CLOSE"
+    ]
+  },
+  {
+    "id": "v7ch_user_q_new_issue",
+    "snapshot": {
+      "turn_number": 2,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-uq",
+          "kind": "symptom",
+          "known": {}
+        }
+      ],
+      "active_episode_id": "ep-uq",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "кто вы и живот",
+      "user_question": true,
+      "has_new_speaker_issue": true
+    },
+    "acceptable": [
+      "ANSWER_USER"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal"
+    ]
+  },
+  {
+    "id": "v7ch_correction_pending",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-cc",
+          "kind": "symptom",
+          "known": {
+            "onset": "вчера"
+          }
+        }
+      ],
+      "active_episode_id": "ep-cc",
+      "pending_episode_attribute": "current",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "нет хуже",
+      "correction": true,
+      "answers_pending_question": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal"
+    ]
+  },
+  {
+    "id": "v7ch_pending_current_after_temporal",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-pc",
+          "kind": "symptom",
+          "known": {
+            "duration": "четыре дня"
+          }
+        }
+      ],
+      "active_episode_id": "ep-pc",
+      "pending_episode_attribute": "current",
+      "last_question_need": "temporal",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "ещё ноет",
+      "answers_pending_question": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:current"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal"
+    ]
+  },
+  {
+    "id": "v7ch_safety_over_its",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": false,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "срочно",
+      "turn_risk_level": "urgent"
+    },
+    "acceptable": [
+      "SAFETY"
+    ],
+    "forbidden": [
+      "LISTEN_META",
+      "SUMMARY_CLOSE"
+    ]
+  },
+  {
+    "id": "v7ch_two_core_dims_its",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-2d",
+          "kind": "symptom",
+          "known": {
+            "duration": "с неделю",
+            "current": "active"
+          }
+        }
+      ],
+      "active_episode_id": "ep-2d",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "продолжается"
+    },
+    "acceptable": [
+      "IMPORTANT_TO_SHARE"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal",
+      "SUMMARY_CLOSE"
+    ]
+  },
+  {
+    "id": "v7ch_temporal_severity_its",
+    "snapshot": {
+      "turn_number": 4,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-ts",
+          "kind": "symptom",
+          "known": {
+            "duration": "два дня",
+            "severity": "mild"
+          }
+        }
+      ],
+      "active_episode_id": "ep-ts",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "терпимо",
+      "answers_pending_question": true
+    },
+    "acceptable": [
+      "IMPORTANT_TO_SHARE"
+    ],
+    "forbidden": [
+      "ASK_EPISODE:temporal"
+    ]
+  },
+  {
+    "id": "v7ch_high_burden_one_dim_asks_or_its",
+    "snapshot": {
+      "turn_number": 8,
+      "wellness_entry_covered": true,
+      "user_burden": 1.0,
+      "questions_asked_this_episode": 2,
+      "episodes": [
+        {
+          "episode_id": "ep-h1",
+          "kind": "symptom",
+          "known": {
+            "duration": "неделю"
+          }
+        }
+      ],
+      "active_episode_id": "ep-h1",
+      "last_question_need": "temporal",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "угу"
+    },
+    "acceptable": [
+      "IMPORTANT_TO_SHARE"
+    ],
+    "forbidden": [
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_post_its_fresh_episode_reopens",
+    "snapshot": {
+      "turn_number": 7,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "episodes": [
+        {
+          "episode_id": "ep-old",
+          "kind": "symptom",
+          "known": {
+            "onset": "давно",
+            "current": "active"
+          }
+        },
+        {
+          "episode_id": "ep-fresh",
+          "kind": "symptom",
+          "known": {}
+        }
+      ],
+      "active_episode_id": "ep-old",
+      "pending_episode_ids": [
+        "ep-fresh"
+      ],
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "ещё рука",
+      "has_new_speaker_issue": true
+    },
+    "acceptable": [
+      "ASK_EPISODE:temporal"
+    ],
+    "forbidden": [
+      "SUMMARY_CLOSE",
+      "ACK_ONLY"
+    ]
+  },
+  {
+    "id": "v7ch_no_constraint_trap_post_its",
+    "snapshot": {
+      "turn_number": 6,
+      "wellness_entry_covered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "episodes": [
+        {
+          "episode_id": "ep-ct",
+          "kind": "function_issue",
+          "known": {
+            "onset": "месяц",
+            "current": "active",
+            "severity": "лёгкая"
+          }
+        }
+      ],
+      "active_episode_id": "ep-ct",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": "больше ничего"
+    },
+    "acceptable": [
+      "SUMMARY_CLOSE"
+    ],
+    "forbidden": [
+      "ACK_ONLY",
+      "ASK_EPISODE:functional_impact"
+    ]
+  },
+  {
+    "id": "v7ch_pending_fi_blocks_close_even_after_core",
+    "snapshot": {
+      "turn_number": 5,
+      "wellness_entry_covered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-pf",
+          "kind": "function_issue",
+          "known": {
+            "onset": "месяц",
+            "current": "active"
+          }
+        }
+      ],
+      "active_episode_id": "ep-pf",
+      "pending_episode_attribute": "functional_impact",
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      }
+    },
+    "context": {
+      "raw_text": ""
+    },
+    "acceptable": [
+      "ASK_EPISODE:functional_impact"
+    ],
+    "forbidden": [
+      "IMPORTANT_TO_SHARE",
+      "SUMMARY_CLOSE"
+    ]
+  }
+]

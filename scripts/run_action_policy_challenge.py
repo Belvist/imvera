@@ -21,10 +21,13 @@ from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, Turn
 CORPUS_CHOICES = {
     "challenge_frozen": ROOT / "tests" / "action_policy" / "corpus" / "challenge_frozen" / "scenarios.json",
     "challenge_v6_frozen": ROOT / "tests" / "action_policy" / "corpus" / "challenge_v6_frozen" / "scenarios.json",
+    "challenge_v7_frozen": ROOT / "tests" / "action_policy" / "corpus" / "challenge_v7_frozen" / "scenarios.json",
 }
-DEFAULT_CORPUS = "challenge_v6_frozen"
+DEFAULT_CORPUS = "challenge_v7_frozen"
 FROZEN_POLICY_SHA_V5 = "0271c624e93e3f8e6f01d5f6dafcf03a377c8b8b"
 FREEZE_MANIFEST_SHA_V5 = "639babcc13c69ee498bbe7a9700f7362a7586808"
+FROZEN_POLICY_SHA_V7 = "61e17934f7be3b10ca5df9b2581cb0a8b853c1fe"
+FREEZE_MANIFEST_SHA_V7 = "9948077298c66bba09f3ac1cf1c9ca349d22d7ec"
 
 
 def _load_cases(challenge_path: Path) -> list[dict[str, Any]]:
@@ -61,7 +64,16 @@ def run_challenge(
         acceptable = set(case.get("acceptable", ()))
         forbidden = set(case.get("forbidden", ()))
         is_p0_like = case["id"].startswith(
-            ("ch_safety", "ch_no_ack", "ch_no_premature", "ch_no_repeat", "v6ch_no_", "v6ch_safety")
+            (
+                "ch_safety",
+                "ch_no_ack",
+                "ch_no_premature",
+                "ch_no_repeat",
+                "v6ch_no_",
+                "v6ch_safety",
+                "v7ch_no_",
+                "v7ch_safety",
+            )
         )
 
         try:
@@ -161,19 +173,22 @@ def main() -> int:
     args = parser.parse_args()
 
     challenge_path = CORPUS_CHOICES[args.corpus]
-    output = args.output or str(
-        ROOT / (
-            "docs/evaluation/action-policy-phase1-v6-challenge.json"
-            if args.corpus == "challenge_v6_frozen"
-            else "docs/evaluation/action-policy-phase1-v5-challenge.json"
-        )
-    )
-    frozen_sha = args.frozen_policy_sha or (
-        FROZEN_POLICY_SHA_V5 if args.corpus == "challenge_frozen" else ""
-    )
-    manifest_sha = args.freeze_manifest_sha or (
-        FREEZE_MANIFEST_SHA_V5 if args.corpus == "challenge_frozen" else ""
-    )
+    default_outputs = {
+        "challenge_frozen": "docs/evaluation/action-policy-phase1-v5-challenge.json",
+        "challenge_v6_frozen": "docs/evaluation/action-policy-phase1-v6-challenge.json",
+        "challenge_v7_frozen": "docs/evaluation/action-policy-phase1-v7-challenge.json",
+    }
+    output = args.output or str(ROOT / default_outputs[args.corpus])
+    frozen_defaults = {
+        "challenge_frozen": FROZEN_POLICY_SHA_V5,
+        "challenge_v7_frozen": FROZEN_POLICY_SHA_V7,
+    }
+    manifest_defaults = {
+        "challenge_frozen": FREEZE_MANIFEST_SHA_V5,
+        "challenge_v7_frozen": FREEZE_MANIFEST_SHA_V7,
+    }
+    frozen_sha = args.frozen_policy_sha or frozen_defaults.get(args.corpus, "")
+    manifest_sha = args.freeze_manifest_sha or manifest_defaults.get(args.corpus, "")
 
     report = run_challenge(
         challenge_path=challenge_path,
