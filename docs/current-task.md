@@ -2,20 +2,16 @@
 
 **Outcome:** One production path, 100 consecutive full calls. **No fourth system.**
 
-## Live-path simplification (this change)
+## Deployed now
 
-- **Goal:** Legacy probe/topic must not own RichUserTurn before `atomic_semantic_apply`.
-- **Replay:** `fs-1f6d3000` in live corpus + product invariants.
-- **ADR:** `docs/adr/016-live-rich-turn-path.md`
-
-## Gates (local)
-
-- `make test-semantic-kernel test-dialogue-rich test-dialogue-topic test-dialogue-runtime test-voice-perception test-live-replays lint-dialogue` — PASS
-- `python3 -m pytest tests/ -q` — 987 passed, 0 failed
+- **SHA:** `95162a2` (pushed `feature/voice-zoiper-m5`)
+- **GitHub CI:** run `34484342054` SUCCESS
+- **Lab:** `make preflight-gates` + `make freeswitch-zoiper-voice-up` OK
+- **runtime SHA verified:** `95162a2`
+- Opening: «Здравствуйте. Это сервис Амвера. Даниил, Как вы себя чувствуете?»
+- Live path: filter → `atomic_semantic_apply` → scheduler (ADR-016)
+- Replay: `fs-1f6d3000` in `make test-live-replays`
 
 ## NEXT
 
-1. Push → GitHub CI SUCCESS
-2. `make preflight-gates` + FreeSWITCH Zoiper redeploy
-3. Verify runtime SHA == new SHA (`IMVERA_LLM_INTERPRET=0`)
-4. Free live call acceptance (not verbatim `fs-1f6d3000`) + forensic
+Free live Zoiper call (not verbatim `fs-1f6d3000`) → forensic; do not claim live acceptance until call passes.
