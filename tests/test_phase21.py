@@ -157,7 +157,7 @@ def test_planner_opening_wellness_on_call_start() -> None:
     opening = Planner.plan_vera_turn(state, turn_id=1, generation_id="g1")
     assert opening.intent == "opening_wellness"
     assert "здравствуйте" in opening.speech.lower()
-    assert "imvera" in opening.speech.lower()
+    assert "амвера" in opening.speech.lower()
     assert "даниил" in opening.speech.lower()
     assert "чувствуете" in opening.speech.lower()
     assert state.fsm_state == FsmState.DAILY_CHECK
