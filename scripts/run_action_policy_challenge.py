@@ -198,6 +198,8 @@ def main() -> int:
     if args.challenge_sha:
         report["challenge_corpus_commit"] = args.challenge_sha
     out = Path(output)
+    if not out.is_absolute():
+        out = ROOT / out
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(
@@ -208,6 +210,9 @@ def main() -> int:
             "forbidden_count": report["forbidden_count"],
             "constraint_violation_count": report["constraint_violation_count"],
             "pass_rate": report["pass_rate"],
+            "frozen_policy_sha": report["frozen_policy_sha"],
+            "freeze_manifest_commit": report["freeze_manifest_commit"],
+            "challenge_corpus_commit": report["challenge_corpus_commit"],
             "output": str(out.relative_to(ROOT)),
         },
         ensure_ascii=False,
