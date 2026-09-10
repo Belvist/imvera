@@ -38,6 +38,10 @@ test-dialogue-runtime:
 	$(PYTHON) -m pytest tests/test_call_actor_rich_path.py tests/test_llm_worker_contract.py \
 		tests/test_call_actor_deferred_delivery.py tests/test_call_actor_llm_fallback.py -q
 
+test-action-policy-shadow:
+	@echo "GATE: ActionPolicy Shadow M1 (fail-open, pre-legacy, no cutover)"
+	$(PYTHON) -m pytest tests/action_policy_shadow/ tests/action_policy/test_prod_import_guard.py -q
+
 test-semantic-kernel:
 	@echo "GATE: Semantic Kernel adversarial corpus + invariants"
 	$(PYTHON) -m pytest tests/test_semantic_kernel.py -q

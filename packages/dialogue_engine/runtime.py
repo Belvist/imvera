@@ -57,7 +57,9 @@ def dialogue_engine_mode() -> str:
 
 
 def runtime_truth() -> dict[str, Any]:
-    return {
+    from packages.dialogue_engine.action_policy_shadow import action_policy_runtime_truth
+
+    truth = {
         "dialogue.engine.enabled": dialogue_engine_active(),
         "dialogue.engine.mode": dialogue_engine_mode(),
         "dialogue.engine.version": git_sha_short(),
@@ -68,6 +70,8 @@ def runtime_truth() -> dict[str, Any]:
         "IMVERA_LLM_INTERPRET": os.environ.get("IMVERA_LLM_INTERPRET", "0"),
         "dialogue.llm_interpret.enabled": llm_interpret_enabled(),
     }
+    truth.update(action_policy_runtime_truth())
+    return truth
 
 
 def log_runtime_truth(logger: logging.Logger | None = None) -> dict[str, Any]:
@@ -77,12 +81,16 @@ def log_runtime_truth(logger: logging.Logger | None = None) -> dict[str, Any]:
     out.info(
         "dialogue.engine.enabled=%s dialogue.engine.mode=%s dialogue.engine.version=%s "
         "IMVERA_DIALOGUE_ENGINE=%s IMVERA_VOICE_DIRECT_WELLNESS_OPENING=%s "
-        "dialogue.llm_interpret.enabled=%s",
+        "dialogue.llm_interpret.enabled=%s action_policy.mode=%s "
+        "action_policy.policy_version=%s action_policy.frozen_policy_sha=%s",
         truth["dialogue.engine.enabled"],
         truth["dialogue.engine.mode"],
         truth["dialogue.engine.version"],
         truth["IMVERA_DIALOGUE_ENGINE"],
         truth["IMVERA_VOICE_DIRECT_WELLNESS_OPENING"],
         truth["dialogue.llm_interpret.enabled"],
+        truth["action_policy.mode"],
+        truth["action_policy.policy_version"],
+        truth["action_policy.frozen_policy_sha"],
     )
     return truth

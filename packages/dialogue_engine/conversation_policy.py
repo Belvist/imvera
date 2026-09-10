@@ -470,8 +470,8 @@ def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
     return "Понимаю."
 
 
-def schedule_next_action(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
-    """Canonical scheduler — all next-turn decisions flow through here."""
+def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
+    """Canonical legacy scheduler — mutates EngineState; owns real ResponsePlan."""
     turn = turn_context.turn
     filled = turn_context.newly_filled_slots
     clarify = turn_context.clarify
@@ -686,6 +686,47 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
         slot="wellness",
         marks_question=True,
     )
+
+
+def schedule_next_action(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
+    """Thin routing wrapper: optional pre-legacy shadow, then legacy ResponsePlan owner."""
+    from packages.dialogue_engine.action_policy_shadow import (
+        action_policy_mode,
+        buffer_shadow_record,
+        finalize_shadow_record,
+        run_shadow_pre_legacy,
+    )
+
+    shadow_record = None
+    if action_policy_mode() == "shadow":
+        try:
+            # CRITICAL: snapshot + choose happen BEFORE legacy mutates EngineState.
+            shadow_record = run_shadow_pre_legacy(state, turn_context)
+        except Exception:
+            shadow_record = {
+                "schema_version": 1,
+                "shadow_status": "error",
+                "error_stage": "shadow_wrapper",
+                "error_type": "Exception",
+                "policy_influenced_output": False,
+                "idempotency_key": (
+                    f"{state.call_id}:ACTION_POLICY_SHADOW:"
+                    f"{state.processing_turn_id or state.turn_seq}:{state.revision}"
+                ),
+            }
+
+    # Exactly one legacy invocation on the real state.
+    plan = _schedule_next_action_legacy(state, turn_context)
+
+    if shadow_record is not None:
+        try:
+            finalized = finalize_shadow_record(shadow_record, plan)
+            buffer_shadow_record(state, finalized)
+        except Exception:
+            # Telemetry failure must never affect the call.
+            pass
+
+    return plan
 
 
 def resume_episode_obligation(state: EngineState) -> PolicyDecision | None:

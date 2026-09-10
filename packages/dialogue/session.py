@@ -142,6 +142,40 @@ class CallSession:
         )
         return self.store.append_event(event, self.state.family_id).ok
 
+    def _persist_action_policy_shadow_records(self) -> None:
+        """Persist shadow telemetry via CallEvent. Failures never abort the call."""
+        if self._engine is None:
+            return
+        try:
+            records = self._engine.drain_action_policy_shadow_records()
+        except Exception:
+            _log.exception(
+                "ACTION_POLICY_SHADOW drain failed call_id=%s", self.state.call_id
+            )
+            return
+        for record in records:
+            try:
+                key = str(
+                    record.get("idempotency_key")
+                    or f"{self.state.call_id}:ACTION_POLICY_SHADOW:{self._event_seq + 1}"
+                )
+                ok = self._append_event(
+                    "ACTION_POLICY_SHADOW",
+                    record,
+                    idempotency_key=key,
+                )
+                if not ok:
+                    _log.warning(
+                        "ACTION_POLICY_SHADOW persist soft-fail call_id=%s key=%s",
+                        self.state.call_id,
+                        key,
+                    )
+            except Exception:
+                _log.exception(
+                    "ACTION_POLICY_SHADOW persist exception call_id=%s",
+                    self.state.call_id,
+                )
+
     def _snapshot(self) -> CallResultSnapshot:
         facts = {k: v.value for k, v in self.state.facts.items()}
         quotes = {k: v.source_quote for k, v in self.state.facts.items()}
@@ -453,6 +487,7 @@ class CallSession:
                 },
                 idempotency_key=f"{self.state.call_id}:engine:start",
             )
+            self._persist_action_policy_shadow_records()
             return result
         gen = self._next_generation_id()
         proposal = Planner.plan_vera_turn(self.state, self.turn_id, gen)
@@ -606,6 +641,7 @@ class CallSession:
                 },
                 idempotency_key=f"{self.state.call_id}:engine:{uid}",
             )
+            self._persist_action_policy_shadow_records()
             _log.info(
                 "ENGINE_DECISION call_id=%s turn=%s intent=%s rich_turn=%s "
                 "skip_planner=true revision=%s",
@@ -745,6 +781,7 @@ class CallSession:
                 self.state.call_id,
                 self.turn_id,
             )
+            self._persist_action_policy_shadow_records()
             fin_ok, fin_err = self._finalize_call_if_needed()
             return self._build_engine_turn_result(
                 "",

@@ -228,6 +228,12 @@ class DialogueEngine:
         """Claim all remaining speak effects (typed outbox index — timers untouched)."""
         return self._dispatcher.drain_speaks()
 
+    def drain_action_policy_shadow_records(self) -> list[dict]:
+        """Return and clear ephemeral ActionPolicy shadow records (CallSession persists)."""
+        from packages.dialogue_engine.action_policy_shadow import drain_shadow_records
+
+        return drain_shadow_records(self.state)
+
     def pop_speak_effect(self) -> SpeakEffect | None:
         """Claim next speak from outbox. Timers/hangups stay in separate indexes."""
         return self._dispatcher.claim_speak()

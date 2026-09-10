@@ -194,6 +194,13 @@ class EngineState(BaseModel):
     required_background_goals: set[str] = Field(default_factory=set)
     mandatory_background_goals: bool = False
 
+    # Ephemeral shadow telemetry buffer — never persisted via model dump / DB snapshot.
+    action_policy_shadow_records: list[dict] = Field(
+        default_factory=list,
+        exclude=True,
+        repr=False,
+    )
+
     def uses_issue_episodes(self) -> bool:
         return bool(self.issue_episodes or self.active_episode_id)
 

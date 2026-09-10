@@ -82,6 +82,18 @@ jobs:
       - name: Dialogue runtime integration gate
         run: make test-dialogue-runtime
 
+  action-policy-shadow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev,test]"
+      - name: ActionPolicy Shadow M1 gate
+        run: make test-action-policy-shadow
+
   test:
     runs-on: ubuntu-latest
     needs: contracts
