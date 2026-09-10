@@ -184,7 +184,10 @@ def test_full_daily_check_to_goodbye(wellness_answer: str) -> None:
         plans_intent = _advance_slot(session, plans_answer)
         assert plans_intent == "summary"
         assert session.state.fsm_state == FsmState.SUMMARY
-        assert all(session.state.slots[s] == SlotStatus.FILLED for s in ("wellness", "mood", "sleep", "plans"))
+        assert all(
+            session.state.slots[s] == SlotStatus.FILLED
+            for s in ("wellness", "mood", "sleep", "plans")
+        )
         assert session.state.mandatory_remaining() == []
 
     goodbye = session.handle_user_text("до свидания")

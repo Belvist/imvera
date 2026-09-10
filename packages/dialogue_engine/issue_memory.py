@@ -585,9 +585,24 @@ def episode_complete(ep: IssueEpisode) -> bool:
 
 def _needs_severity(ep: IssueEpisode) -> bool:
     label = ep.primary_label.lower()
+    if ep.body_site in ("голова", "живот", "горло", "колено", "зуб", "шея", "спина", "ухо"):
+        return True
     return any(
         tok in label
-        for tok in ("голов", "боль", "болит", "ноет", "ломит", "давит", "тянет")
+        for tok in (
+            "голов",
+            "боль",
+            "болит",
+            "ноет",
+            "ломит",
+            "давит",
+            "тянет",
+            "колен",
+            "зуб",
+            "горл",
+            "шея",
+            "спин",
+        )
     )
 
 

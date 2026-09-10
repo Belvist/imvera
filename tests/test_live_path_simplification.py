@@ -71,9 +71,11 @@ def test_its_true_new_issue_returns_to_episode() -> None:
     r.run([CallStarted(), "Хорошо.", "Ещё колено второй день болит."])
     assert r.state.issue_episodes
     intents = _intents(r)
-    assert "summary" not in intents or any(i.startswith("episode_") for i in intents)
-    assert "Хорошо, записала" not in " ".join(
-        e.text for e in r.effects if hasattr(e, "text")
+    spoken = " ".join(e.text for e in r.effects if hasattr(e, "text"))
+    assert "Хорошо, записала" not in spoken
+    # Must handle the new issue before (or instead of) bare ITS close.
+    assert any(i.startswith("episode_") for i in intents) or (
+        "summary" not in intents and r.state.active_episode_id is not None
     )
 
 

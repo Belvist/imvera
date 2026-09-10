@@ -623,11 +623,21 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
             return _summary_plan(state)
         if its_class == "NEW_GROUNDED_INFORMATION":
             state.important_to_share_resolved = True
+            next_q = _next_episode_plan(state)
+            if next_q:
+                next_q.acknowledge = "Поняла."
+                return next_q
+            # Issue was grounded — never treat raw text as ITS share note / close.
             if turn and turn.issue_mentions:
-                next_q = _next_episode_plan(state)
-                if next_q:
-                    next_q.acknowledge = "Поняла."
-                    return next_q
+                if _has_open_episodes(state):
+                    return ResponsePlan(
+                        obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
+                        action="speak",
+                        mandatory_question="Расскажите подробнее, пожалуйста.",
+                        intent="episode_followup",
+                        marks_question=True,
+                    )
+                return _summary_plan(state)
             _record_important_share(state, raw)
             if state.mandatory_background_goals:
                 bg = _background_goal_plan(state, filled=filled)
