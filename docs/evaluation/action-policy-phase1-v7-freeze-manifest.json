@@ -1,0 +1,42 @@
+{
+  "action_policy_phase1_freeze": true,
+  "tested_sha": "61e17934f7be3b10ca5df9b2581cb0a8b853c1fe",
+  "policy_version": "action-policy-phase1-v7",
+  "weights_sha256": "dba02767664f4f48ad0746ac1045a4f59b4cd98c91742d0cb1a8ea52963497c6",
+  "corpus_sha256": {
+    "development": "99617f6c354866005ca1b2fd008802f681d1be64a79d387a379977f02e529858",
+    "held_out": "2f838baff7fc22ece2e39677e2fe4a0c6f64ca702e40acc8048f12a07b7566d2",
+    "p0_golden": "83b2ae965a6d90a409e8515b8e18afc965f4f071ab24542fb8431378bcb79907"
+  },
+  "benchmark_artifact": {
+    "path": "docs/evaluation/action-policy-phase1-v7-benchmark.json",
+    "sha256": "bb630d35a2a3168159a0b7f8ef9c73cdac20559ddb410a43ca469d2ae5b1a063"
+  },
+  "ci_run_id": 34525583142,
+  "ci_conclusion": "success",
+  "ci_url": "https://github.com/Belvist/imvera/actions/runs/34525583142",
+  "python": "3.13.14",
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "gates": {
+    "p0_golden": "13/13, 0 forbidden",
+    "held_out": "12/12, 0 forbidden",
+    "development": "16/16, 0 forbidden",
+    "v7_lifecycle_regressions": "A-H + candidate invariant",
+    "lint_dialogue": "success",
+    "contracts": "success",
+    "semantic_kernel": "success",
+    "dialogue_rich": "success",
+    "dialogue_runtime": "success",
+    "full_pytest": "success",
+    "latency_p99_ms": 0.698292,
+    "latency_target_ms": 10.0,
+    "pipeline_policy_failure": 0,
+    "pipeline_nlu_state_loss": 0
+  },
+  "notes": {
+    "v6_challenge": "challenge_v6_frozen is regression evidence only; not independent for v7",
+    "production_hook": "OFF",
+    "shadow": "OFF"
+  }
+}

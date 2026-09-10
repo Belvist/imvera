@@ -1,0 +1,29 @@
+{
+  "action_policy_phase1_freeze": true,
+  "tested_sha": "0271c624e93e3f8e6f01d5f6dafcf03a377c8b8b",
+  "policy_version": "action-policy-phase1-v5",
+  "weights_sha256": "7a3ee05e485c180b2e97e49ec0f1c0f20e25c3b59eae91b6110a6f70b8ad553c",
+  "corpus_sha256": {
+    "development": "d0153a3a08cd36f288317dd2d1ff185fecb9d5272abd80ba78fdfb9cb8714e6d",
+    "held_out": "2f838baff7fc22ece2e39677e2fe4a0c6f64ca702e40acc8048f12a07b7566d2",
+    "p0_golden": "83b2ae965a6d90a409e8515b8e18afc965f4f071ab24542fb8431378bcb79907"
+  },
+  "benchmark_artifact": {
+    "path": "docs/evaluation/action-policy-phase1-v5-benchmark.json",
+    "sha256": "7447b8c6e93a6c95650f3497dd451695b50c3e837932c2acd32785dcc894efbb"
+  },
+  "python": "3.13.14",
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "gates": {
+    "p0_golden": "13/13, 0 forbidden",
+    "held_out": "12/12, 0 forbidden",
+    "development": "14/14, 0 forbidden",
+    "pipeline_policy_failure": 0,
+    "pipeline_nlu_state_loss": 0,
+    "latency_p99_ms": 0.203208,
+    "latency_target_ms": 10.0
+  },
+  "ci_run_id": 34517152504,
+  "ci_conclusion": "success"
+}
