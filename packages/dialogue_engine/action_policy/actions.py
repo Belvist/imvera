@@ -103,3 +103,18 @@ class PolicyDecision:
     candidates: tuple[ScoredAction, ...]
     rejected: tuple[ConstraintRejection, ...]
     policy_version: str
+
+
+class PolicyConstraintViolation(Exception):
+    """Raised when hard constraints eliminate every candidate for the mandatory class."""
+
+    def __init__(
+        self,
+        *,
+        mandatory_class: str,
+        rejected: tuple[ConstraintRejection, ...] = (),
+        message: str = "no valid candidates for mandatory class",
+    ) -> None:
+        self.mandatory_class = mandatory_class
+        self.rejected = rejected
+        super().__init__(message)

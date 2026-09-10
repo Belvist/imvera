@@ -8,6 +8,7 @@ from .actions import (
     ActionKind,
     CandidateAction,
     ConstraintRejection,
+    PolicyConstraintViolation,
     PolicyDecision,
     ScoredAction,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "ActionKind",
     "CandidateAction",
     "ConstraintRejection",
+    "PolicyConstraintViolation",
     "PolicyDecision",
     "ScoredAction",
     "PolicySnapshot",

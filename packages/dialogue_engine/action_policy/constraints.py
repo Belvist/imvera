@@ -8,6 +8,11 @@ from packages.dialogue_engine.action_policy.actions import (
     ConstraintRejection,
     normalize_need,
 )
+from packages.dialogue_engine.action_policy.mandatory import (
+    MandatoryClass,
+    action_matches_mandatory_class,
+    compute_mandatory_class,
+)
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView
 
 
@@ -19,39 +24,36 @@ def reject_candidate(
     snapshot: PolicySnapshot,
     ctx: TurnContextView,
     action: CandidateAction,
+    *,
+    mandatory_class: MandatoryClass | None = None,
 ) -> ConstraintRejection | None:
     kind = action.kind
-
-    if snapshot.risk_level == "urgent" and kind != ActionKind.SAFETY:
-        return _reject(action, "safety_preempts", "urgent safety state preempts ordinary policy")
-    if snapshot.risk_level != "urgent" and kind == ActionKind.SAFETY:
-        return _reject(action, "safety_not_present", "no urgent safety state")
-
-    if ctx.explicit_farewell and kind != ActionKind.GOODBYE_FINAL:
-        return _reject(action, "farewell_preempts", "explicit farewell must terminate directly")
-    if not ctx.explicit_farewell and kind == ActionKind.GOODBYE_FINAL:
-        return _reject(action, "farewell_not_present", "goodbye requires explicit farewell")
+    mandatory = mandatory_class or compute_mandatory_class(snapshot, ctx)
+    if not action_matches_mandatory_class(action, mandatory, snapshot, ctx):
+        return _reject(
+            action,
+            "mandatory_class_mismatch",
+            f"mandatory class {mandatory} does not allow {kind.value}",
+        )
 
     has_nonterminal_control = ctx.control not in {"", "none", "stop_call"}
-    if has_nonterminal_control and kind != ActionKind.CONTROL:
-        return _reject(action, "control_preempts", "explicit control preempts ordinary policy")
+
+    if kind == ActionKind.SAFETY and snapshot.risk_level != "urgent":
+        return _reject(action, "safety_not_present", "no urgent safety state")
+
+    if kind == ActionKind.GOODBYE_FINAL and not ctx.explicit_farewell:
+        return _reject(action, "farewell_not_present", "goodbye requires explicit farewell")
+
     if kind == ActionKind.CONTROL:
         if not has_nonterminal_control or action.control != ctx.control:
             return _reject(action, "control_mismatch", "control candidate must match current control")
 
-    if ctx.repair and kind != ActionKind.REPAIR:
-        return _reject(action, "repair_preempts", "repair/repeat must preserve current obligation")
     if kind == ActionKind.REPAIR and not ctx.repair:
         return _reject(action, "repair_not_present", "no repair request")
 
-    if ctx.user_question and kind != ActionKind.ANSWER_USER:
-        return _reject(action, "user_question_preempts", "answer user question before resuming issue")
     if kind == ActionKind.ANSWER_USER and not ctx.user_question:
         return _reject(action, "user_question_not_present", "no user question")
 
-    if snapshot.its_pending and ctx.meta and not ctx.has_grounded_information:
-        if kind != ActionKind.LISTEN_META:
-            return _reject(action, "its_meta_preempts", "ITS meta/side-question keeps conversation open")
     if kind == ActionKind.LISTEN_META:
         allowed = ctx.meta or (snapshot.its_pending and ctx.unclear_without_grounding)
         if not allowed:
@@ -117,16 +119,5 @@ def reject_candidate(
             return _reject(action, "clarify_target_mismatch", "clarification target mismatch")
         if attention:
             return _reject(action, "issue_replaces_generic_clarify", "grounded issue owns the turn")
-
-    if kind == ActionKind.ACK_ONLY:
-        if (
-            snapshot.risk_level == "urgent"
-            or ctx.explicit_farewell
-            or has_nonterminal_control
-            or ctx.repair
-            or ctx.user_question
-            or (snapshot.its_pending and ctx.meta)
-        ):
-            return _reject(action, "ack_cannot_preempt", "ACK_ONLY cannot preempt a mandatory obligation")
 
     return None

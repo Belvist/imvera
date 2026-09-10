@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 from packages.contracts.enums import SlotStatus
 from packages.dialogue_engine.action_policy.actions import ActionKind
 from packages.dialogue_engine.action_policy.bridge import legacy_plan_to_action_key, to_response_plan
+from packages.dialogue_engine.action_policy.actions import PolicyConstraintViolation
 from packages.dialogue_engine.action_policy.policy import choose
 from packages.dialogue_engine.action_policy.scorer import POLICY_VERSION
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView, build_policy_snapshot
@@ -108,7 +109,23 @@ def run_snapshot_benchmark() -> dict[str, Any]:
     for split, case in _load_cases():
         snapshot = PolicySnapshot.from_mapping(case["snapshot"])
         ctx = TurnContextView.from_mapping(case.get("context", {}))
-        decision = choose(snapshot, ctx)
+        try:
+            decision = choose(snapshot, ctx)
+        except PolicyConstraintViolation as exc:
+            rows.append({
+                "split": split,
+                "id": case["id"],
+                "new": f"CONSTRAINT_VIOLATION:{exc.mandatory_class}",
+                "legacy": _legacy_action(snapshot, ctx),
+                "acceptable": sorted(case.get("acceptable", ())),
+                "forbidden": sorted(case.get("forbidden", ())),
+                "new_ok": False,
+                "legacy_ok": False,
+                "constraint_violation": exc.mandatory_class,
+            })
+            stat = split_stats.setdefault(split, {"total": 0, "new_ok": 0, "legacy_ok": 0, "new_forbidden": 0, "legacy_forbidden": 0})
+            stat["total"] += 1
+            continue
         new_key = decision.chosen.key.label()
         legacy_key = _legacy_action(snapshot, ctx)
         acceptable = set(case.get("acceptable", ()))

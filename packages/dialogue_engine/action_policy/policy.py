@@ -7,9 +7,11 @@ from collections.abc import Mapping
 from packages.dialogue_engine.action_policy.actions import (
     ActionKind,
     CandidateAction,
+    PolicyConstraintViolation,
     PolicyDecision,
 )
 from packages.dialogue_engine.action_policy.constraints import reject_candidate
+from packages.dialogue_engine.action_policy.mandatory import compute_mandatory_class
 from packages.dialogue_engine.action_policy.scorer import (
     DEFAULT_WEIGHTS,
     POLICY_VERSION,
@@ -99,10 +101,11 @@ def choose(
     weights: Mapping[str, float] | None = None,
 ) -> PolicyDecision:
     """ZERO MUTATION: only local lists/dicts are created."""
+    mandatory_class = compute_mandatory_class(snapshot, ctx)
     survivors = []
     rejected = []
     for action in generate_candidates(snapshot, ctx):
-        reason = reject_candidate(snapshot, ctx, action)
+        reason = reject_candidate(snapshot, ctx, action, mandatory_class=mandatory_class)
         if reason is not None:
             rejected.append(reason)
             continue
@@ -116,15 +119,10 @@ def choose(
         )
 
     if not survivors:
-        fallback = CandidateAction(ActionKind.ACK_ONLY)
-        survivors = [
-            score_action(
-                snapshot,
-                ctx,
-                fallback,
-                weights=weights or DEFAULT_WEIGHTS,
-            )
-        ]
+        raise PolicyConstraintViolation(
+            mandatory_class=mandatory_class.value,
+            rejected=tuple(rejected),
+        )
 
     ranked = sorted(
         survivors,
