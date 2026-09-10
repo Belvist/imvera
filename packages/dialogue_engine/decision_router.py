@@ -13,7 +13,8 @@ Exactly one mutating scheduler path runs per call.
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from packages.dialogue_engine.action_policy_shadow_buffer import buffer_shadow_record
 from packages.dialogue_engine.action_policy_shadow_config import (
@@ -35,7 +36,7 @@ def soft_cohort_selected(call_id: str, *, percent: int | None = None) -> bool:
         return False
     if pct >= 100:
         return True
-    digest = hashlib.sha256(f"action-policy-soft:{call_id}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"action-policy-soft:{call_id}".encode()).hexdigest()
     return (int(digest[:8], 16) % 100) < pct
 
 

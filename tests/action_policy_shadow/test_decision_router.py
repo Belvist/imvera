@@ -15,8 +15,8 @@ from packages.dialogue_engine.decision_router import (
     route_schedule_next_action,
     soft_cohort_selected,
 )
-from packages.dialogue_engine.state import EngineState
 from packages.dialogue_engine.response_plan import ResponsePlan
+from packages.dialogue_engine.state import EngineState
 
 
 def _state(call_id: str = "router-meta-1") -> EngineState:
