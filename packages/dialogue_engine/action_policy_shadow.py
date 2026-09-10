@@ -106,6 +106,8 @@ def _structural_fingerprint_payload(snapshot: PolicySnapshot) -> dict[str, Any]:
         "probe_phase": snapshot.probe_phase,
         "suspended_kind": snapshot.suspended_kind,
         "last_question_need": snapshot.last_question_need,
+        "last_delivered_question_need": snapshot.last_delivered_question_need
+        or snapshot.last_question_need,
         "questions_asked_this_episode": int(snapshot.questions_asked_this_episode),
         "user_burden_bucket": _burden_bucket(float(snapshot.user_burden)),
         "call_closed": bool(snapshot.call_closed),

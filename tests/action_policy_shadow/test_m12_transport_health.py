@@ -230,7 +230,7 @@ def test_shadow_health_event_on_finalize(monkeypatch: pytest.MonkeyPatch) -> Non
     assert status["buffer_remaining"] == 0
 
 
-def test_known_v7_live_pending_still_visible(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_known_v7_live_pending_fixed_in_v8(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IMVERA_ACTION_POLICY_MODE", "shadow")
     state = EngineState(
         call_id="v7p0",
@@ -250,10 +250,11 @@ def test_known_v7_live_pending_still_visible(monkeypatch: pytest.MonkeyPatch) ->
     state.active_episode_id = "ep-1"
     state.pending_episode_attribute = "current"
     snap = build_policy_snapshot(state)
-    assert snap.last_question_need == "current"
+    assert snap.last_question_need is None
+    assert snap.last_delivered_question_need is None
     schedule_next_action(state, TurnContext(user_text=""))
     rec = state.action_policy_shadow_records[0]
-    if rec["shadow_action"] != "ASK_EPISODE:current":
-        assert rec["critical_violation"] is True
-        assert rec["divergence_class"] == "critical_pending_difference"
-        assert rec["cutover_eligible"] is False
+    assert rec["shadow_action"] == "ASK_EPISODE:current"
+    assert rec.get("critical_violation") is False or "critical_pending_discard" not in (
+        rec.get("critical_violation_flags") or []
+    )

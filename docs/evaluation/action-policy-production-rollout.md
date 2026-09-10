@@ -32,11 +32,11 @@ Statuses:
 | Field | Value |
 |-------|-------|
 | phase | M1.2 |
-| commit SHA | *(filled after push)* |
-| CI run | *(filled after CI)* |
-| tests | `make test-action-policy-shadow` |
-| frozen diff | empty vs `61e17934…` |
-| decision | M1.2 CODE READY when CI blocking green |
+| commit SHA | `886b028c9d787e7234ed0cbe009991a382ea3156` |
+| CI run | [34539222747](https://github.com/Belvist/imvera/actions/runs/34539222747) success |
+| tests | CI full pytest **1088 passed, 4 skipped**; `action-policy-shadow` green |
+| frozen diff | empty vs `61e17934…` on M1.2 commit |
+| decision | **M1.2 CODE READY** |
 | next gate | Phase 2 short plumbing canary (operator) |
 
 **v7 cutover candidate:** NO (pending/repeat P0 remains)
@@ -66,19 +66,30 @@ Statuses:
 | Field | Value |
 |-------|-------|
 | phase | canary |
-| status | READY FOR OPERATOR DEPLOY until real evidence exists |
-| decision | do not start 100/1000 on v7 |
-| next gate | Phase 3 ActionPolicy v8 |
-
-See: `docs/runbooks/action-policy-shadow-canary.md`
+| status | **READY FOR OPERATOR DEPLOY** |
+| runbook | `docs/runbooks/action-policy-shadow-canary.md` |
+| real-call evidence | **NOT VERIFIED** (no production access in agent session) |
+| decision | do not start 100/1000 on v7; operator runs canary |
+| next gate | Phase 3 ActionPolicy v8 (code started in parallel) |
 
 ---
 
-## Phase 3+ — ActionPolicy v8
+## Phase 3 — ActionPolicy v8 (in progress)
 
-Tracked after canary plumbing OR in parallel code branch `feature/action-policy-v8`.
+Branch: `feature/action-policy-v8`
 
-Hard rule: pending obligation > repeat suppression with explicit lifecycle separation.
+### Semantic change
+- Separate `last_delivered_question_need` from `pending_episode_attribute`
+- Live `build_policy_snapshot` no longer copies pending into delivered need
+- `repeat_question` cannot eliminate hard pending obligation candidate
+
+### Evidence
+| Field | Value |
+|-------|-------|
+| phase | v8 implementation |
+| freeze | not yet (COMMIT A only) |
+| challenge | forbidden until freeze |
+| next gate | CI green on v8 → freeze manifest (COMMIT B) → independent challenge |
 
 ---
 
@@ -86,8 +97,8 @@ Hard rule: pending obligation > repeat suppression with explicit lifecycle separ
 
 | Status | State |
 |--------|-------|
-| CODE READY | pending CI for M1.2 |
-| STAGING READY | runbook prepared |
-| SHADOW VERIFIED | NOT VERIFIED (no real calls in this agent session) |
+| CODE READY | Shadow M1.2 YES; v8 candidate in progress |
+| STAGING READY | Canary runbook YES — awaiting operator |
+| SHADOW VERIFIED | NOT VERIFIED (no real calls) |
 | SOFT ROLLOUT VERIFIED | NOT VERIFIED |
 | FULL PROD VERIFIED | NOT VERIFIED |

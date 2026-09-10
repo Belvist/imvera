@@ -111,7 +111,10 @@ class PolicySnapshot:
     last_question_id: str | None = None
     last_question_intent: str | None = None
     last_question_slot: str | None = None
+    # last_question_need remains for scorer/feature compat = last DELIVERED need.
     last_question_need: str | None = None
+    # Explicit delivered need — never auto-copied from pending obligation.
+    last_delivered_question_need: str | None = None
     recent_question_ids: tuple[str, ...] = ()
     questions_asked_this_episode: int = 0
     user_burden: float = 0.0
@@ -260,7 +263,10 @@ class PolicySnapshot:
             last_question_id=raw.get("last_question_id"),
             last_question_intent=raw.get("last_question_intent"),
             last_question_slot=raw.get("last_question_slot"),
-            last_question_need=raw.get("last_question_need"),
+            last_question_need=raw.get("last_question_need")
+            or raw.get("last_delivered_question_need"),
+            last_delivered_question_need=raw.get("last_delivered_question_need")
+            or raw.get("last_question_need"),
             recent_question_ids=tuple(raw.get("recent_question_ids", ())),
             questions_asked_this_episode=int(raw.get("questions_asked_this_episode", 0)),
             user_burden=float(raw.get("user_burden", 0.0)),
@@ -407,23 +413,30 @@ class TurnContextView:
         )
 
 
-def _last_question_need(intent: str | None, pending: str | None) -> str | None:
-    if pending:
-        if pending in ("onset", "duration"):
-            return "temporal"
-        if pending in ("current", "status"):
-            return "current"
-        return pending
+def _delivered_question_need(intent: str | None) -> str | None:
+    """Map last delivered question intent → need. Never uses pending obligation."""
     text = (intent or "").lower()
     if "duration" in text or "onset" in text:
         return "temporal"
-    if "current" in text:
+    if "current" in text or "status" in text:
         return "current"
     if "severity" in text:
         return "severity"
+    if "functional" in text or "impact" in text:
+        return "functional_impact"
     if "concern" in text:
         return "concern"
     return None
+
+
+def _pending_obligation_need(pending: str | None) -> str | None:
+    if not pending:
+        return None
+    if pending in ("onset", "duration"):
+        return "temporal"
+    if pending in ("current", "status"):
+        return "current"
+    return pending
 
 
 def _speaker_owned_episode(state: EngineState, episode_id: str) -> bool:
@@ -502,9 +515,8 @@ def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
         last_question_id=q.question_id if q else None,
         last_question_intent=q.intent if q else None,
         last_question_slot=q.slot if q else None,
-        last_question_need=_last_question_need(
-            q.intent if q else None, state.pending_episode_attribute
-        ),
+        last_question_need=_delivered_question_need(q.intent if q else None),
+        last_delivered_question_need=_delivered_question_need(q.intent if q else None),
         recent_question_ids=tuple(recent),
         questions_asked_this_episode=q_count,
         user_burden=burden,

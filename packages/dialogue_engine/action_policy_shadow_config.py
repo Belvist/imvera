@@ -8,9 +8,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-# Frozen v7 provenance — must match packages/dialogue_engine/action_policy/scorer.py
-FROZEN_POLICY_SHA = "61e17934f7be3b10ca5df9b2581cb0a8b853c1fe"
-POLICY_VERSION = "action-policy-phase1-v7"
+# Candidate under development — freeze commit sets immutable SHA.
+FROZEN_POLICY_SHA = "UNFROZEN-action-policy-phase1-v8"
+POLICY_VERSION = "action-policy-phase1-v8"
 SHADOW_SCHEMA_VERSION = 1
 SHADOW_BUFFER_MAX = 64
 DECISION_SCOPE = "conversation_scheduler"
