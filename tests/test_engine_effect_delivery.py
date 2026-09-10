@@ -355,16 +355,16 @@ def test_fs_14c79443_full_sequence_reaches_goodbye_final() -> None:
             "Хорошо себя чувствую.",
             "Ничего.",
             "до свидания",
-            "да",
         ]
     )
     intents = [e.intent for e in result.speak_effects]
     assert intents.count("opening_wellness") == 1
     assert "important_to_share" in intents
     assert "summary" in intents
-    assert "goodbye_confirm" in intents
+    assert "goodbye_confirm" not in intents
     assert "goodbye_final" in intents
     assert result.state.slots["wellness"] == SlotStatus.FILLED
+    assert result.state.call_closed or result.state.goodbye_confirmed
 
 
 def test_session_summary_allowed_after_probe_path_plans_fill() -> None:

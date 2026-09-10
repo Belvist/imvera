@@ -188,16 +188,10 @@ def test_s12_second_goodbye_reaches_terminal() -> None:
         state.mandatory_checks[key] = True
 
     first = Planner.plan_closing(state, "до свидания", turn_id=1, generation_id="g1")
-    assert state.goodbye_count == 1
-    assert "закончить разговор" in first.speech.lower()
-    assert state.fsm_state == FsmState.GOODBYE
-    assert Validator.validate(first).allowed is True
-
-    second = Planner.plan_closing(state, "да, до свидания", turn_id=2, generation_id="g2")
-    assert state.goodbye_count == 2
     assert state.goodbye_confirmed is True
+    assert first.intent == "goodbye_final"
     assert state.fsm_state == FsmState.FINAL_CLASSIFICATION
-    assert Validator.validate(second).allowed is True
+    assert Validator.validate(first).allowed is True
 
 
 # --- ADR-005 regression: mandatory incomplete must not become TECHNICAL ---

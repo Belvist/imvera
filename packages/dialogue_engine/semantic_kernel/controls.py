@@ -44,6 +44,19 @@ _LEVEL0_EXACT: dict[str, tuple[str, str]] = {
     "стоп": ("answer", "stop_call"),
     "хватит": ("answer", "stop_call"),
     "остановите": ("answer", "stop_call"),
+    "до свидания": ("answer", "stop_call"),
+    "всего доброго": ("answer", "stop_call"),
+    "пока": ("answer", "stop_call"),
+    "заканчиваем": ("answer", "stop_call"),
+    "закончим": ("answer", "stop_call"),
+    "закончим разговор": ("answer", "stop_call"),
+    "давайте закончим": ("answer", "stop_call"),
+    "хватит разговор": ("answer", "stop_call"),
+    "подождите": ("answer", "pause"),
+    "подожди": ("answer", "pause"),
+    "минуточку": ("answer", "pause"),
+    "секундочку": ("answer", "pause"),
+    "погодите": ("answer", "pause"),
     "позже": ("answer", "defer"),
     "не хочу разговаривать": ("answer", "revoke_consent"),
     "не хочу": ("answer", "revoke_consent"),
@@ -76,7 +89,7 @@ def match_level0(text: str) -> Level0Match | None:
     repair = match_repair(text)
     if repair is not None:
         return repair
-    norm = text.strip().lower()
+    norm = text.strip().lower().rstrip(".!?…")
     if not norm:
         return None
     for phrase, (act, control) in sorted(_LEVEL0_EXACT.items(), key=lambda x: -len(x[0])):

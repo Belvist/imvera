@@ -33,19 +33,19 @@ _WELLNESS_FILL = (
 )
 
 _WELLNESS_FILL_INTENTS = {
-    "хорошо": ("check_mood",),
-    "нормально": ("check_mood",),
-    "отлично": ("check_mood",),
-    "чувствую себя хорошо": ("check_mood",),
-    "чувствую себя нормально": ("check_mood",),
-    "не очень": ("reflect_report",),
-    "плохо": ("reflect_report",),
-    "мне плохо": ("reflect_report",),
-    "мне нехорошо": ("reflect_report",),
-    "чувствую себя плохо": ("reflect_report",),
-    "голова болит": ("reflect_report",),
-    "устала": ("reflect_report",),
-    "слабенько": ("check_mood", "reflect_report"),
+    "хорошо": ("check_mood", "important_to_share"),
+    "нормально": ("check_mood", "important_to_share"),
+    "отлично": ("check_mood", "important_to_share"),
+    "чувствую себя хорошо": ("check_mood", "important_to_share"),
+    "чувствую себя нормально": ("check_mood", "important_to_share"),
+    "не очень": ("reflect_report", "probe_concern", "episode_*"),
+    "плохо": ("reflect_report", "probe_concern", "episode_*"),
+    "мне плохо": ("reflect_report", "probe_concern", "episode_*"),
+    "мне нехорошо": ("reflect_report", "probe_concern", "episode_*"),
+    "чувствую себя плохо": ("reflect_report", "probe_concern", "episode_*"),
+    "голова болит": ("reflect_report", "probe_concern", "episode_*"),
+    "устала": ("reflect_report", "probe_concern", "episode_*"),
+    "слабенько": ("check_mood", "reflect_report", "probe_concern", "episode_*"),
 }
 
 _STT_NOISE_NOFILL = (
@@ -402,11 +402,11 @@ def _pause_stop_refuse_cases() -> list[Scenario]:
                 category="pause_stop",
                 turns=(s,),
                 never_fill=("wellness",) if s != "пока" else (),
-                expect_intent_in=("goodbye_confirm",),
+                expect_intent_in=("goodbye_final",),
             )
         )
         n += 1
-        # confirm goodbye
+        # Explicit farewell already closed — redundant confirm must not reopen.
         out.append(
             Scenario(
                 id=_sid("pause_stop", n),

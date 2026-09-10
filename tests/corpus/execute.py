@@ -104,9 +104,14 @@ def run_scenario(scenario: Scenario) -> ScenarioResult:
 
     if scenario.expect_intent_in and traces:
         last_intent = traces[-1].intent
-        if last_intent not in scenario.expect_intent_in:
+        allowed = scenario.expect_intent_in
+        matched = last_intent in allowed or any(
+            pattern.endswith("*") and last_intent.startswith(pattern[:-1])
+            for pattern in allowed
+        )
+        if not matched:
             errors.append(
-                f"intent: expected one of {scenario.expect_intent_in}, got {last_intent!r}"
+                f"intent: expected one of {allowed}, got {last_intent!r}"
             )
 
     elapsed_ms = (time.perf_counter() - t0) * 1000.0

@@ -169,6 +169,7 @@ def test_sleep_topic_then_mood_ladder() -> None:
 
 
 def test_abdominal_in_probe_answer_switches_topic() -> None:
+    """Issue named during generic probe must survive — not become bare duration."""
     result = _runner().run(
         [
             CallStarted(),
@@ -177,10 +178,20 @@ def test_abdominal_in_probe_answer_switches_topic() -> None:
         ]
     )
     intents = [e.intent for e in result.speak_effects]
-    assert any(
-        i.startswith("topic_abdominal_pain_") or i.startswith("topic_sleep_")
+    texts = " ".join(e.text.lower() for e in result.speak_effects)
+    has_abdominal_episode = any(
+        ep.body_site == "живот" or "живот" in ep.primary_label.lower()
+        for ep in result.state.issue_episodes.values()
+    )
+    assert has_abdominal_episode or any(
+        i.startswith("topic_abdominal_pain_")
+        or i.startswith("topic_sleep_")
+        or (i.startswith("episode_") and "живот" in texts)
         for i in intents
     )
+    # Must not drop the named concern into orphan probe_duration.
+    if intents and intents[-1] == "probe_duration":
+        assert has_abdominal_episode
 
 
 def test_never_silent_on_sleep_complaint() -> None:

@@ -944,10 +944,23 @@ class Planner:
         if interp and interp.confirms_goodbye:
             state.goodbye_count = max(state.goodbye_count, 2)
         elif any(marker in normalized for marker in _GOODBYE_MARKERS):
-            state.goodbye_count += 1
+            # Explicit farewell is enough — no double confirm (align with DialogueEngine).
+            state.goodbye_count = 2
             state.closing_requested = True
         elif interp and interp.requests_goodbye:
-            state.goodbye_count += 1
+            state.goodbye_count = 2
+            state.closing_requested = True
+        elif normalized in {
+            "пока",
+            "заканчиваем",
+            "закончим",
+            "давайте закончим",
+            "закончим разговор",
+            "хватит разговор",
+            "хватит",
+            "стоп",
+        }:
+            state.goodbye_count = 2
             state.closing_requested = True
 
         can_close = Planner._may_enter_closing_fsm(state)

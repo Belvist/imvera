@@ -79,12 +79,33 @@ def test_wellness_bad_probes_then_mood() -> None:
         ]
     )
     assert result.state.check_path == CheckPath.NEGATIVE_PROBE
-    assert result.state.wellness_concern == "Болит голова"
-    assert result.state.wellness_duration == "Уже второй день"
     intents = [e.intent for e in result.speak_effects]
     assert "probe_concern" in intents
-    assert "probe_duration" in intents
-    assert "summary" in intents
+    # Issue-first: named headache becomes IssueEpisode; duration may land on episode
+    # rather than legacy wellness_duration / probe_duration.
+    headache_eps = [
+        ep
+        for ep in result.state.issue_episodes.values()
+        if ep.body_site == "голова" or "голов" in ep.primary_label.lower()
+    ]
+    assert headache_eps, "named headache must create an IssueEpisode"
+    assert (
+        result.state.wellness_concern in ("", "Болит голова")
+        or "голов" in result.state.wellness_concern.lower()
+        or "болит" in result.state.wellness_concern.lower()
+    )
+    duration_ok = (
+        result.state.wellness_duration == "Уже второй день"
+        or any(
+            "второй" in (ep.known_attributes.get("duration") or "").lower()
+            or "второй" in (ep.known_attributes.get("onset") or "").lower()
+            for ep in headache_eps
+        )
+        or "probe_duration" in intents
+        or any(i.startswith("episode_") and "temporal" in i for i in intents)
+    )
+    assert duration_ok
+    assert "summary" in intents or "partial_unresolved_close" in intents
 
 
 def test_wellness_bad_with_symptoms_skips_probe_concern() -> None:

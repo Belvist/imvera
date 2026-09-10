@@ -51,7 +51,9 @@ test-voice-perception:
 
 test-live-replays:
 	@echo "GATE: live call trace replay corpus (all fixtures)"
-	$(PYTHON) -m pytest tests/live_replay/test_corpus.py -q
+	$(PYTHON) -m pytest tests/live_replay/test_corpus.py \
+		tests/live_replay/test_fs_1f6d3000.py \
+		tests/test_live_path_simplification.py -q
 
 preflight-gates:
 	$(PYTHON) scripts/preflight_gates.py

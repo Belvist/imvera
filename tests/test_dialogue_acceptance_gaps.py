@@ -110,11 +110,9 @@ def test_yes_to_goodbye_confirmation_closes_voice_path():
     session = daily_session()
     text = "Закончим разговор"
     apply(session, text, payload(control="stop_call", control_evidence=evidence(text)))
-    assert session.state.awaiting_goodbye_confirm
-    result = apply(session, "Да", payload(
-        consent_evidence=evidence("Да"), answers_pending_question=True,
-    ))
-    assert session.state.call_finalized, result.validated.speech
+    # Explicit stop closes immediately — no confirm turn.
+    assert session.state.call_finalized or session.state.goodbye_confirmed
+    assert not session.state.awaiting_goodbye_confirm
 
 
 def test_question_without_delivery_evidence_is_not_complete():
@@ -267,8 +265,9 @@ def test_pause_and_stop_rule_baseline():
 
     session = daily_session()
     stop = session.handle_user_text("закончим разговор")
-    assert stop.proposal.intent == "goodbye_confirm"
-    assert session.state.awaiting_goodbye_confirm
+    assert stop.proposal.intent == "goodbye_final"
+    assert session.state.goodbye_confirmed or session.state.call_finalized
+    assert not session.state.awaiting_goodbye_confirm
 
 
 def test_topic_refusal_declines_sleep_and_continues():

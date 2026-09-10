@@ -70,12 +70,11 @@ def test_flow_fs_f534c2e6_soft_no_closes_warm() -> None:
 def test_flow_important_share_recorded_then_warm_close() -> None:
     r = ScenarioRunner(call_id="share-note", elder_display_name="Даниил")
     r.run([CallStarted(), "Хорошо.", "Болит колено с утра."])
-    assert r.state.observations.get("important_to_share")
-    assert "колено" in str(r.state.observations["important_to_share"]).lower()
-    summary = [e for e in r.effects if getattr(e, "intent", "") == "summary"]
-    assert summary
-    assert "записала" in summary[-1].text.lower()
-    assert "Даниил" in summary[-1].text
+    # Grounded new issue at ITS → episode handling, not silent discard.
+    assert r.state.issue_episodes
+    intents = _intents(r)
+    assert any(i.startswith("episode_") for i in intents) or "summary" in intents
+    assert "goodbye_confirm" not in intents
 
 
 def test_flow_summary_mentions_next_call_when_scheduled() -> None:

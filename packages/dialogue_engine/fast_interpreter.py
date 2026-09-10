@@ -391,6 +391,8 @@ def _detect_polarity(text: str) -> str | None:
         return "negative"
     if re.search(r"состояни\w*\s+не\s+очень|не\s+очень\s+хорош", normalized):
         return "negative"
+    if re.search(r"состояни\w*\s+плох\w*|плох\w*\s+состояни\w*", normalized):
+        return "negative"
     if _WELLNESS_NEGATIVE.search(normalized):
         return "negative"
     if re.match(r"^плох\w*", core) or re.search(r"мне\s+не\s+очень", normalized):

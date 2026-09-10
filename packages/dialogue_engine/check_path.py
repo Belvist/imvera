@@ -80,16 +80,14 @@ def has_symptom_detail(text: str) -> bool:
 
 
 def wellness_already_describes_concern(text: str) -> bool:
-    """Wellness answer already names symptoms — skip redundant probe_concern."""
+    """True only when wellness text names a concrete symptom/concern.
+
+    Length alone is not evidence — «состояние плохое» is still vague.
+    """
     normalized = (text or "").strip()
     if not normalized:
         return False
-    if has_symptom_detail(normalized):
-        return True
-    lower = normalized.lower()
-    if len(lower.split()) >= 5 and re.search(r"\b(плох\w*|беспоко\w*|болит)\b", lower):
-        return True
-    return False
+    return has_symptom_detail(normalized)
 
 
 def is_urgent_concern(text: str) -> bool:

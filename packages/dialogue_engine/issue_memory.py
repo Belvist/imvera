@@ -22,9 +22,9 @@ _UNKNOWN_ATTRIBUTE_ANSWER = re.compile(
     re.I,
 )
 _TEMPORAL_ANCHOR = re.compile(
-    r"\b(давно|дня|дней|недел\w*|месяц\w*|час\w*|утр\w*|вчера|сегодня|"
+    r"\b(давно|дня|дней|недел\w*|месяц\w*|час\w*|утр\w*|вчерашн\w*|вчера|сегодня|"
     r"второй\s+день|третий\s+день|пару\s+дней|несколько|с\s+утра|"
-    r"уже\s+\w+\s+дн|в\s+четыре|в\s+\d+|"
+    r"со?\s+вчерашн\w*|уже\s+\w+\s+дн|в\s+четыре|в\s+\d+|"
     r"с\s+десят\w*|с\s+\d+)\b",
     re.I,
 )
@@ -585,7 +585,10 @@ def episode_complete(ep: IssueEpisode) -> bool:
 
 def _needs_severity(ep: IssueEpisode) -> bool:
     label = ep.primary_label.lower()
-    return "голов" in label or "боль" in label
+    return any(
+        tok in label
+        for tok in ("голов", "боль", "болит", "ноет", "ломит", "давит", "тянет")
+    )
 
 
 def has_abdominal_episode(state: EngineState) -> bool:

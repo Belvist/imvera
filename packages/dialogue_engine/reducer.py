@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 
 from packages.contracts.enums import FsmState, SlotStatus
@@ -444,10 +445,6 @@ def _apply_rich_turn(
         state.processing_effect_id = None
         return _speak_repair(state, answer_slot or "wellness")
 
-    off_slot = _apply_off_context_slot_answer(state, turn, answer_slot=answer_slot)
-    if off_slot is not None:
-        return off_slot
-
     if turn.dialogue_act == "backchannel":
         state.processing_turn_id = None
         state.processing_effect_id = None
@@ -516,28 +513,30 @@ def _apply_rich_turn(
         observe_topic_answer(state, user_text)
         return _advance_after_topic(state, user_text, newly_filled=newly_filled)
 
-    if state.probe_phase and turn.dialogue_act == "answer":
-        if should_start_topic_flow(
-            state, user_text, answer_slot=f"probe_{state.probe_phase}"
-        ):
-            atomic_semantic_apply(state, turn)
-            state.probe_phase = None
-            state.processing_turn_id = None
-            state.processing_effect_id = None
-            state.waiting_on_slot = None
-            state.bump_revision()
-            prime_topics(state, user_text)
-            return _advance_after_topic(state, user_text, newly_filled=[])
-        state.processing_turn_id = None
-        state.processing_effect_id = None
-        state.waiting_on_slot = None
-        state.bump_revision()
-        return _advance_probe_after_answer(state, user_text)
-
+    # Legacy probe/topic may observe semantic state after apply, but must NOT
+    # own a RichUserTurn (ADR live-path simplification). Always apply first.
     from packages.dialogue_engine.issue_memory import filter_rich_turn_mentions
 
     turn = filter_rich_turn_mentions(state, turn)
     atomic_semantic_apply(state, turn)
+    # Background mood/sleep/plans may fill as projection — never before apply,
+    # and never as exclusive owner of the turn.
+    _harvest_off_context_background_slots(state, turn, answer_slot=answer_slot)
+
+    # Explicit issue cancels generic probe ownership (compat projection only).
+    if turn.issue_mentions and state.probe_phase:
+        if not state.wellness_concern:
+            state.wellness_concern = (
+                turn.issue_mentions[0].label.strip() or user_text.strip()
+            )
+        state.probe_phase = None
+    elif (
+        state.probe_phase
+        and turn.dialogue_act == "answer"
+        and not turn.issue_mentions
+    ):
+        # Compatibility projection only — scheduler still owns next speech.
+        advance_probe_phase(state, user_text)
 
     if turn.user_question and not turn.answers_pending_question:
         decision = decide_conversation_policy(state, turn)
@@ -749,9 +748,7 @@ def _apply_rich_control(
     state.bump_revision()
 
     if control == "stop_call":
-        closing = _handle_closing_turn(state, _rich_to_semantic(turn))
-        if closing is not None:
-            return closing
+        return _emit_goodbye_final(state)
 
     if control == "wrong_person":
         state.call_closed = True
@@ -821,6 +818,12 @@ def _apply_semantic(
     answer_slot = state.answer_context_slot()
 
     user_text = semantic.source_quote or semantic.value or ""
+
+    # Explicit farewell closes immediately from any non-terminal state.
+    if semantic.act == SemanticAct.GOODBYE_REQUEST or _is_explicit_farewell(user_text):
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        return _emit_goodbye_final(state)
 
     if semantic.act == SemanticAct.REPAIR_REQUEST:
         if state.delivered_question is None:
@@ -896,20 +899,20 @@ def _apply_semantic(
         return state, []
 
     if state.probe_phase and semantic.act == SemanticAct.ANSWER:
+        # Compatibility only: project probe advance after content is known.
+        # Rich path owns live calls; this branch must not skip issue creation.
         text = semantic.value or semantic.source_quote
-        if should_start_topic_flow(
-            state, text, answer_slot=f"probe_{state.probe_phase}"
-        ):
-            state.processing_turn_id = None
-            state.processing_effect_id = None
-            state.waiting_on_slot = None
-            state.probe_phase = None
-            prime_topics(state, text)
-            return _advance_after_topic(state, text, newly_filled=[])
         state.processing_turn_id = None
         state.processing_effect_id = None
         state.waiting_on_slot = None
-        return _advance_probe_after_answer(state, text)
+        if should_start_topic_flow(
+            state, text, answer_slot=f"probe_{state.probe_phase}"
+        ):
+            state.probe_phase = None
+            prime_topics(state, text)
+            return _advance_after_topic(state, text, newly_filled=[])
+        advance_probe_phase(state, text)
+        return _schedule_advance(state, user_text=text)
 
     if is_topic_slot(answer_slot) and semantic.act == SemanticAct.ANSWER:
         state.processing_turn_id = None
@@ -1239,23 +1242,25 @@ def _speak_slot_question(
     )
 
 
-def _apply_off_context_slot_answer(
+def _harvest_off_context_background_slots(
     state: EngineState,
     turn,
     *,
     answer_slot: str | None = None,
-) -> tuple[EngineState, list[Effect]] | None:
-    """Accept explicit background-slot answers even when another question is active."""
+) -> list[str]:
+    """Fill open background slots from free speech after semantic apply.
+
+    Must not own the RichUserTurn or skip IssueEpisode creation.
+    """
     if not turn.raw_text.strip():
-        return None
+        return []
     slot_ctx = answer_slot or state.answer_context_slot()
     if not slot_ctx or not slot_ctx.startswith("episode_"):
-        return None
+        return []
     from packages.dialogue_engine.issue_mention_extract import extract_goal_facts
 
-    # Free harvest only — never pass answer_slot=plans/mood/sleep here, or any
-    # episode answer gets falsely claimed as a background goal.
     harvested = extract_goal_facts(turn.raw_text)
+    filled: list[str] = []
     for slot in ("plans", "mood", "sleep"):
         if state.slots.get(slot) != SlotStatus.OPEN:
             continue
@@ -1270,16 +1275,32 @@ def _apply_off_context_slot_answer(
             turn_id=turn.utterance_id,
             source_text=quote,
         )
-        state.processing_turn_id = None
-        state.processing_effect_id = None
-        state.pending_episode_attribute = None
-        state.planned_question = None
-        state.playing_question = None
-        state.active_playout = None
-        state.bump_revision()
-        return _advance_after_fills(
-            state, [slot], user_text=turn.raw_text, turn=turn
-        )
+        filled.append(slot)
+    return filled
+
+
+def _apply_off_context_slot_answer(
+    state: EngineState,
+    turn,
+    *,
+    answer_slot: str | None = None,
+) -> tuple[EngineState, list[Effect]] | None:
+    """Deprecated early-owner path — prefer _harvest_off_context_background_slots."""
+    filled = _harvest_off_context_background_slots(
+        state, turn, answer_slot=answer_slot
+    )
+    if not filled:
+        return None
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.pending_episode_attribute = None
+    state.planned_question = None
+    state.playing_question = None
+    state.active_playout = None
+    state.bump_revision()
+    return _advance_after_fills(
+        state, filled, user_text=turn.raw_text, turn=turn
+    )
     return None
 
 
@@ -1485,37 +1506,11 @@ def _handle_closing_turn(
     if semantic.act == SemanticAct.GOODBYE_CONFIRM or (
         state.awaiting_goodbye_confirm and _confirms_goodbye(text)
     ):
-        state.goodbye_confirmed = True
-        state.awaiting_goodbye_confirm = False
-        state.fsm_state = FsmState.FINAL_CLASSIFICATION
-        state.call_closed = True
-        state.closing_reason = "goodbye"
-        state.bump_revision()
-        return _emit_speak(
-            state,
-            text=questions.goodbye_final_speech(state),
-            intent="goodbye_final",
-            slot=None,
-            marks_question=False,
-        )
-    if semantic.act == SemanticAct.GOODBYE_REQUEST or any(
-        marker in text for marker in questions._GOODBYE_MARKERS
-    ):
-        state.goodbye_count += 1
-        if state.goodbye_count >= 2:
-            state.goodbye_confirmed = True
-            state.awaiting_goodbye_confirm = False
-            state.fsm_state = FsmState.FINAL_CLASSIFICATION
-            state.call_closed = True
-            state.closing_reason = "goodbye"
-            state.bump_revision()
-            return _emit_speak(
-                state,
-                text=questions.goodbye_final_speech(state),
-                intent="goodbye_final",
-                slot=None,
-                marks_question=False,
-            )
+        return _emit_goodbye_final(state)
+    if semantic.act == SemanticAct.GOODBYE_REQUEST or _is_explicit_farewell(text):
+        # Explicit farewell is enough — no double confirm.
+        return _emit_goodbye_final(state)
+    if _is_ambiguous_end_hint(text):
         state.awaiting_goodbye_confirm = True
         state.fsm_state = FsmState.GOODBYE
         state.bump_revision()
@@ -1527,6 +1522,50 @@ def _handle_closing_turn(
             marks_question=False,
         )
     return None
+
+
+def _emit_goodbye_final(state: EngineState) -> tuple[EngineState, list[Effect]]:
+    state.goodbye_confirmed = True
+    state.awaiting_goodbye_confirm = False
+    state.fsm_state = FsmState.FINAL_CLASSIFICATION
+    state.call_closed = True
+    state.closing_reason = "goodbye"
+    state.goodbye_count = max(state.goodbye_count, 1)
+    state.bump_revision()
+    return _emit_speak(
+        state,
+        text=questions.goodbye_final_speech(state),
+        intent="goodbye_final",
+        slot=None,
+        marks_question=False,
+    )
+
+
+def _is_explicit_farewell(text: str) -> bool:
+    low = text.lower().strip().rstrip(".!?")
+    if not low:
+        return False
+    if any(marker in low for marker in questions._GOODBYE_MARKERS):
+        return True
+    if low in {
+        "пока",
+        "заканчиваем",
+        "закончили",
+        "закончим",
+        "давайте закончим",
+        "закончим разговор",
+        "хватит разговор",
+        "хватит",
+        "стоп",
+    }:
+        return True
+    return bool(re.search(r"\b(закончим|закончить|заканчива\w*|хватит)\b", low))
+
+
+def _is_ambiguous_end_hint(text: str) -> bool:
+    """Only truly ambiguous end hints may ask goodbye_confirm."""
+    low = text.lower().strip().rstrip(".!?")
+    return low in {"всё", "все", "ладно всё", "ладно все", "ну всё", "ну все"}
 
 
 def _confirms_goodbye(text: str) -> bool:

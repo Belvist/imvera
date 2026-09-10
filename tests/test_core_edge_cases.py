@@ -140,17 +140,19 @@ def test_goodbye_via_plan_after_user_not_slot_fill() -> None:
     state = DialogueState(call_id="gb", fsm_state=FsmState.DAILY_CHECK)
     Planner.plan_vera_turn(state, 1, "g1")
     proposal = Planner.plan_after_user(state, "до свидания", "g1", 2)
-    assert proposal.intent == "goodbye_confirm"
+    assert proposal.intent == "goodbye_final"
     assert state.slots["wellness"] == SlotStatus.OPEN
-    assert state.awaiting_goodbye_confirm is True
+    assert state.goodbye_confirmed is True
 
 
 def test_goodbye_confirm_yes_finalizes() -> None:
     state = DialogueState(call_id="gby", fsm_state=FsmState.DAILY_CHECK)
-    Planner.plan_after_user(state, "до свидания", "g1", 1)
-    final = Planner.plan_after_user(state, "да", "g1", 2)
+    final = Planner.plan_after_user(state, "до свидания", "g1", 1)
     assert final.intent == "goodbye_final"
     assert state.fsm_state == FsmState.FINAL_CLASSIFICATION
+    # Already closed — further "да" is terminal noop.
+    noop = Planner.plan_after_user(state, "да", "g1", 2)
+    assert noop.intent in ("goodbye_final", "terminal_noop")
 
 
 def test_mixed_clause_self_fall_detected() -> None:
@@ -181,10 +183,7 @@ def test_possible_survives_red_false_alarm() -> None:
 
 def test_second_goodbye_ends_call_with_incomplete_mandatory() -> None:
     state = DialogueState(call_id="bye", fsm_state=FsmState.DAILY_CHECK)
-    Planner.plan_closing(state, "до свидания", 1, "g1")
-    assert state.fsm_state == FsmState.DAILY_CHECK
-
-    final = Planner.plan_closing(state, "до свидания", 2, "g2")
+    final = Planner.plan_closing(state, "до свидания", 1, "g1")
     assert final.intent == "goodbye_final"
     assert state.fsm_state == FsmState.FINAL_CLASSIFICATION
     assert state.call_ended_early is True

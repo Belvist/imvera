@@ -219,11 +219,11 @@ def test_sequential_slot_questions_fill_all_four_slots() -> None:
 def test_early_goodbye_does_not_corrupt_daily_check_fsm() -> None:
     state = DialogueState(call_id="early", fsm_state=FsmState.DAILY_CHECK)
     proposal = Planner.plan_closing(state, "до свидания", turn_id=1, generation_id="g1")
-    assert state.fsm_state == FsmState.DAILY_CHECK
-    assert state.closing_requested is True
-    assert state.goodbye_count == 1
-    assert proposal.intent == "goodbye_confirm"
-    assert proposal.fsm_state == FsmState.DAILY_CHECK
+    assert proposal.intent == "goodbye_final"
+    assert state.goodbye_confirmed is True
+    assert state.fsm_state == FsmState.FINAL_CLASSIFICATION
+    assert state.call_ended_early is True
+    assert state.mandatory_remaining() != []
 
 
 def test_sequential_happy_path_call_to_green() -> None:
@@ -271,12 +271,7 @@ def test_sequential_happy_path_call_to_green() -> None:
 
     turn += 1
     first = Planner.plan_closing(state, "до свидания", turn, gid)
-    assert first.intent == "goodbye_confirm"
-    assert state.fsm_state == FsmState.GOODBYE
-
-    turn += 1
-    second = Planner.plan_closing(state, "до свидания", turn, gid)
-    assert second.intent == "goodbye_final"
+    assert first.intent == "goodbye_final"
     assert state.fsm_state == FsmState.FINAL_CLASSIFICATION
     assert state.goodbye_confirmed is True
 

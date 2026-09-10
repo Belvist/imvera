@@ -89,7 +89,6 @@ def _is_important_to_share_decline(text: str) -> bool:
     ):
         return True
     strong = (
-        "больше ничего",
         "нечего добавить",
         "не хочу добавить",
         "ничего добавить",
@@ -105,6 +104,11 @@ def _is_important_to_share_decline(text: str) -> bool:
         "уже все сказал",
     )
     if any(m in low for m in strong):
+        return True
+    # «больше ничего» is decline only when not a meta question about Vera asking more.
+    if "больше ничего" in low and not any(
+        x in low for x in ("спроси", "хотите", "слушаете", "это всё?", "это все?")
+    ):
         return True
     soft_no = (
         "вроде бы нет",
@@ -131,6 +135,33 @@ def _record_important_share(state: EngineState, text: str) -> None:
     if not note:
         return
     state.observations["important_to_share"] = note
+
+
+def _classify_important_to_share_answer(
+    turn: RichUserTurn | None,
+    raw: str,
+) -> str:
+    """Semantic class for ITS answers — raw text alone is never a recorded fact."""
+    if _is_important_to_share_decline(raw):
+        return "DECLINE"
+    if turn is not None:
+        if turn.control not in ("none", ""):
+            return "CONTROL"
+        if turn.dialogue_act == "repair":
+            return "REPAIR"
+        if turn.user_question:
+            return "USER_QUESTION_OR_META"
+        if turn.issue_mentions or turn.goal_facts or turn.correction:
+            return "NEW_GROUNDED_INFORMATION"
+        if turn.dialogue_act in ("unclear", "backchannel"):
+            return "UNCLEAR"
+    # Meaningful text without grounded extraction → not a share note.
+    return "UNCLEAR"
+
+
+_ITS_META_LISTEN = (
+    "Я вас слушаю. Если хотите, можете сказать, что ещё для вас сейчас важно."
+)
 
 
 def capture_suspended_obligation(state: EngineState) -> SuspendedObligation | None:
@@ -328,6 +359,9 @@ def _important_to_share_plan(state: EngineState) -> ResponsePlan | None:
 def _probe_plan(state: EngineState, *, clarify: bool = False) -> ResponsePlan | None:
     if not state.probe_phase:
         return None
+    # Issues own the turn — probe is compatibility context only.
+    if _has_open_episodes(state):
+        return None
     phase = state.probe_phase
     return ResponsePlan(
         obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
@@ -494,6 +528,8 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
             return bg
 
     if turn and turn.issue_mentions:
+        if state.important_to_share_asked and not state.important_to_share_resolved:
+            state.important_to_share_resolved = True
         ack = _grounded_ack_for_mentions(turn)
         next_q = _next_episode_plan(state)
         if next_q:
@@ -501,6 +537,39 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
                 next_q.acknowledge = ack
             next_q.obligation = ConversationObligation.ACKNOWLEDGE_IMPORTANT_FACT
             return next_q
+
+    if _has_open_episodes(state) and turn is not None:
+        pending = state.pending_episode_attribute
+        if pending in ("onset", "duration", "severity", "current"):
+            from packages.dialogue_engine.issue_memory import (
+                extract_grounded_onset_value,
+                extract_grounded_severity_value,
+            )
+
+            grounded = False
+            if pending in ("onset", "duration"):
+                grounded = extract_grounded_onset_value(turn.raw_text) is not None
+            elif pending == "severity":
+                grounded = extract_grounded_severity_value(turn.raw_text) is not None
+            else:
+                grounded = bool(turn.issue_mentions) or turn.answers_pending_question
+            if (
+                not grounded
+                and not turn.issue_mentions
+                and _classify_important_to_share_answer(turn, turn.raw_text)
+                in ("USER_QUESTION_OR_META", "UNCLEAR", "REPAIR")
+            ):
+                next_q = _next_episode_plan(state)
+                if next_q:
+                    next_q.acknowledge = "Я вас слушаю."
+                    return next_q
+                return ResponsePlan(
+                    obligation=ConversationObligation.NEVER_SILENT,
+                    action="speak",
+                    mandatory_question=_ITS_META_LISTEN,
+                    intent="listen_open",
+                    marks_question=True,
+                )
 
     if _has_open_episodes(state):
         from packages.dialogue_engine.policy import can_ask_slot
@@ -535,66 +604,46 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
             raw = turn.raw_text.strip()
         elif turn_context.user_text.strip():
             raw = turn_context.user_text.strip()
-        if raw:
+        if not raw:
+            return ResponsePlan(
+                obligation=ConversationObligation.IMPORTANT_TO_SHARE,
+                action="speak",
+                mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
+                intent="important_to_share",
+                slot="important_to_share",
+                marks_question=True,
+            )
+        its_class = _classify_important_to_share_answer(turn, raw)
+        if its_class == "DECLINE":
             state.important_to_share_resolved = True
-            low = raw.lower().strip().rstrip(".!?")
-            # Confused about closing — re-ask ITS, do not hang up.
-            # Do NOT treat every "?" as confusion (side questions have "?")
-            if (
-                "что ли" in low
-                or "это всё" in low
-                or "это все" in low
-                or "все что ли" in low.replace(",", "")
-                or "всё что ли" in low.replace(",", "")
-            ):
-                state.important_to_share_resolved = False
-                return ResponsePlan(
-                    obligation=ConversationObligation.IMPORTANT_TO_SHARE,
-                    action="speak",
-                    acknowledge="Да, почти.",
-                    mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
-                    intent="important_to_share",
-                    slot="important_to_share",
-                    marks_question=True,
-                )
-            if _is_important_to_share_decline(raw):
-                if state.mandatory_background_goals:
-                    bg = _background_goal_plan(state, filled=filled)
-                    if bg:
-                        return bg
-                return _summary_plan(state)
-            # Shared something — record, then warm close (never «расскажите коротко»).
+            if state.mandatory_background_goals:
+                bg = _background_goal_plan(state, filled=filled)
+                if bg:
+                    return bg
+            return _summary_plan(state)
+        if its_class == "NEW_GROUNDED_INFORMATION":
+            state.important_to_share_resolved = True
+            if turn and turn.issue_mentions:
+                next_q = _next_episode_plan(state)
+                if next_q:
+                    next_q.acknowledge = "Поняла."
+                    return next_q
             _record_important_share(state, raw)
             if state.mandatory_background_goals:
                 bg = _background_goal_plan(state, filled=filled)
                 if bg:
-                    if not bg.acknowledge:
-                        bg = ResponsePlan(
-                            obligation=bg.obligation,
-                            action=bg.action,
-                            acknowledge="Хорошо, записала.",
-                            mandatory_question=bg.mandatory_question,
-                            intent=bg.intent,
-                            slot=bg.slot,
-                            next_slot=bg.next_slot,
-                            acknowledge_facts=bg.acknowledge_facts,
-                            question_needs=bg.question_needs,
-                            marks_question=bg.marks_question,
-                            close_reason=bg.close_reason,
-                            episode_id=bg.episode_id,
-                            clarification=bg.clarification,
-                        )
                     return bg
             return _summary_plan(state, acknowledge="Хорошо, записала.")
-        # Still waiting for ITS answer — repeat once, never silent.
-        return ResponsePlan(
-            obligation=ConversationObligation.IMPORTANT_TO_SHARE,
-            action="speak",
-            mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
-            intent="important_to_share",
-            slot="important_to_share",
-            marks_question=True,
-        )
+        if its_class in ("USER_QUESTION_OR_META", "REPAIR", "UNCLEAR", "CONTROL"):
+            # Do not resolve ITS — keep conversation open.
+            return ResponsePlan(
+                obligation=ConversationObligation.IMPORTANT_TO_SHARE,
+                action="speak",
+                mandatory_question=_ITS_META_LISTEN,
+                intent="important_to_share_listen",
+                slot="important_to_share",
+                marks_question=True,
+            )
 
     its = _important_to_share_plan(state)
     if its:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import TYPE_CHECKING
 
@@ -245,9 +246,9 @@ def build_reference_observations(
         if pending in ("onset", "duration"):
             from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
 
+            # Only grounded temporal anchors — never fall back to arbitrary TIME spans
+            # (e.g. «там» in meta speech).
             value = extract_grounded_onset_value(raw)
-            if not value and time_spans:
-                value = time_spans[0].text
             if value:
                 attr = pending
                 observations.append(
@@ -292,24 +293,39 @@ def build_reference_observations(
     if not refers:
         return ()
 
+    from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
+
+    grounded_temporal = extract_grounded_onset_value(raw)
     for span in time_spans:
+        # Reject weak TIME tokens («там») unless a grounded temporal anchor exists.
+        if not grounded_temporal:
+            continue
+        gt = grounded_temporal.lower()
+        st = span.text.lower()
+        if st not in gt and gt not in st:
+            # Prefer the grounded clause as the value.
+            value = grounded_temporal
+        else:
+            value = span.text
         attr = "duration" if span.type == SpanType.DURATION else "onset"
+        if pending in ("onset", "duration"):
+            attr = pending
         observations.append(
             Observation(
                 observation_id=_oid(),
                 episode_id=ep_id,
                 attribute=attr,
-                value=span.text,
-                normalized_value=span.normalized,
+                value=value,
+                normalized_value=value.lower(),
                 body_site=body_site,
                 issue_normalized=issue_norm,
                 source_turn_id=result.utterance_id,
-                evidence=span.text,
+                evidence=value,
                 status="confirmed",
                 temporal=TemporalFrame(
-                    onset=span.text if attr == "onset" else None,
-                    duration=span.text if attr == "duration" else None,
-                    raw_evidence=span.text,
+                    onset=value if attr == "onset" else None,
+                    duration=value if attr == "duration" else None,
+                    raw_evidence=value,
                 ),
             )
         )
@@ -473,7 +489,10 @@ def _apply_bound_observations_to_episodes(
 
 def atomic_semantic_apply(state: EngineState, turn: RichUserTurn) -> None:
     """Atomic: episodes first, bind observations, persist, project this turn only."""
-    from packages.dialogue_engine.issue_memory import ingest_rich_turn
+    from packages.dialogue_engine.issue_memory import (
+        extract_grounded_onset_value,
+        ingest_rich_turn,
+    )
 
     ingest_rich_turn(state, turn)
     bound = _bind_observations_to_episodes(state, turn)
@@ -488,6 +507,50 @@ def atomic_semantic_apply(state: EngineState, turn: RichUserTurn) -> None:
     if turn.kernel_corrections:
         apply_corrections(state, turn.kernel_corrections, bound)
     _apply_bound_observations_to_episodes(state, bound)
+    # Same-turn temporal for a new issue: same clause, or sole episode if temporal
+    # is not a foreign sleep/topic narrative (e.g. "проснулся в четыре" ≠ throat onset).
+    grounded = extract_grounded_onset_value(turn.raw_text)
+    if grounded and turn.utterance_id:
+        from packages.dialogue_engine.issue_memory import _original_clause_slices
+
+        _FOREIGN_TEMPORAL = re.compile(
+            r"проснул|не\s+спал|плохо\s+спал|во\s+сне|разбуд|кошмар",
+            re.IGNORECASE,
+        )
+        clauses = _original_clause_slices(turn.raw_text)
+        candidates = [
+            ep
+            for ep in state.issue_episodes.values()
+            if turn.utterance_id in ep.evidence_turn_ids
+            and not ep.known_attributes.get("onset")
+            and not ep.known_attributes.get("duration")
+        ]
+        for ep in candidates:
+            issue_bits = [
+                (m.evidence.quote if m.evidence else "") or m.label
+                for m in ep.mentions
+            ]
+            same_clause = False
+            temporal_host = ""
+            for clause in clauses:
+                cl = clause.lower()
+                has_time = grounded.lower() in cl or any(
+                    tok in cl for tok in grounded.lower().split()[:3] if len(tok) > 2
+                )
+                has_issue = any(bit and bit.lower() in cl for bit in issue_bits)
+                if has_time:
+                    temporal_host = clause
+                if has_time and has_issue:
+                    same_clause = True
+                    break
+            if not same_clause and _FOREIGN_TEMPORAL.search(temporal_host or grounded):
+                continue
+            if same_clause or len(candidates) == 1:
+                ep.known_attributes["onset"] = grounded
+                if state.pending_episode_attribute in ("onset", "duration"):
+                    state.pending_episode_attribute = None
+                break
+
 
 
 def persist_turn_observations(state: EngineState, turn: RichUserTurn) -> None:

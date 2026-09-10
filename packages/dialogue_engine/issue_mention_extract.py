@@ -7,7 +7,10 @@ import uuid
 
 from packages.contracts.semantic import Evidence, FactCandidate, IssueMention
 
-_PAIN_VERB = re.compile(r"\b(бол\w*|ноет\w*|беспоко\w*|давит\w*|ломит\w*)\b", re.I)
+_PAIN_VERB = re.compile(
+    r"\b(бол\w*|побал\w*|ноет\w*|беспоко\w*|давит\w*|ломит\w*)\b",
+    re.I,
+)
 _CORRECTION = re.compile(r"\b(я\s+же\s+говорил\w*|говорил\w*\s+же)\b", re.I)
 _REPAIR_HEARING = re.compile(r"\b(алло|слыш\w*|повтор\w*)\b", re.I)
 _USER_QUESTION = re.compile(

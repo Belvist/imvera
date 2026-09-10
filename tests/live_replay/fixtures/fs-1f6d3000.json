@@ -1,0 +1,37 @@
+{
+  "call_id": "fs-1f6d3000",
+  "elder_display_name": "Даниил",
+  "source_trace": ".run/traces/fs-1f6d3000.jsonl",
+  "runtime_note": "Live lab after 18b3810; product invariants below must pass",
+  "turns": [
+    {
+      "bot_text": "Как вы себя чувствуете?",
+      "stt_final": "Привет. Чувствую себя вроде бы хорошо, но состояние такое плохое.",
+      "answer_slot": "wellness",
+      "expected_admission": "ACCEPT",
+      "expected_intent_prefix": "probe_concern",
+      "expected_no_intents": ["probe_duration", "important_to_share", "summary"]
+    },
+    {
+      "bot_text": "Что именно беспокоит?",
+      "stt_final": "Ну, наверное, со вчерашнего дня плохое самочувствие, вот головная боль.",
+      "answer_slot": "probe_concern",
+      "expected_admission": "ACCEPT",
+      "expected_intent_prefix": "episode_",
+      "expected_no_intents": ["important_to_share", "summary", "partial_unresolved_close"]
+    },
+    {
+      "bot_text": "Когда началась головная боль?",
+      "stt_final": "Не спросишь там, ещё что-то.",
+      "expected_admission": "ACCEPT",
+      "expected_no_intents": ["summary", "goodbye_final", "goodbye_confirm"]
+    },
+    {
+      "bot_text": "Я вас слушаю.",
+      "stt_final": "До свидания.",
+      "expected_admission": "ACCEPT",
+      "expected_intent_prefix": "goodbye_final",
+      "expected_no_intents": ["goodbye_confirm"]
+    }
+  ]
+}

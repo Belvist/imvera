@@ -269,12 +269,12 @@ def test_full_daily_check_to_goodbye() -> None:
             "Хорошо.",
             "Нет.",
             "до свидания",
-            "да",
         ]
     )
     intents = [e.intent for e in result.speak_effects]
     assert "important_to_share" in intents
     assert "summary" in intents
-    assert "goodbye_confirm" in intents
+    # Explicit farewell closes immediately — no double confirm.
     assert "goodbye_final" in intents
-    assert result.state.goodbye_confirmed
+    assert "goodbye_confirm" not in intents
+    assert result.state.call_closed

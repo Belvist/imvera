@@ -43,9 +43,8 @@ def _closing_from_share(
         ExpectSpeakIntent(intent="summary"),
         DeliverPlayout(include_summary=True),
         UserStep(text=answers.goodbye),
-        ExpectSpeakIntent(intent="goodbye_confirm"),
+        ExpectSpeakIntent(intent="goodbye_final"),
         DeliverPlayout(),
-        UserStep(text=answers.confirm),
         ExpectTerminal(intent="goodbye_final"),
     )
 
@@ -71,9 +70,8 @@ def _mandatory_closing(answers: SlotAnswers) -> tuple[CorpusStep, ...]:
         ExpectSpeakIntent(intent="summary"),
         DeliverPlayout(include_summary=True),
         UserStep(text=answers.goodbye),
-        ExpectSpeakIntent(intent="goodbye_confirm"),
+        ExpectSpeakIntent(intent="goodbye_final"),
         DeliverPlayout(),
-        UserStep(text=answers.confirm),
         ExpectTerminal(intent="goodbye_final"),
     )
 
@@ -115,9 +113,8 @@ def build_family_steps(
             ExpectSpeakIntent(intent="summary"),
             DeliverPlayout(include_summary=True),
             UserStep(text=a.goodbye),
-            ExpectSpeakIntent(intent="goodbye_confirm"),
+            ExpectSpeakIntent(intent="goodbye_final"),
             DeliverPlayout(),
-            UserStep(text=a.confirm),
             ExpectTerminal(intent="goodbye_final"),
         )
 
@@ -193,9 +190,8 @@ def build_family_steps(
             ExpectSpeakIntent(intent="summary"),
             DeliverPlayout(include_summary=True),
             UserStep(text=a.goodbye),
-            ExpectSpeakIntent(intent="goodbye_confirm"),
+            ExpectSpeakIntent(intent="goodbye_final"),
             DeliverPlayout(),
-            UserStep(text=a.confirm),
             ExpectTerminal(intent="goodbye_final"),
         )
 
@@ -206,12 +202,14 @@ def build_family_steps(
             ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             UserStep(text="А погода какая?"),
+            ExpectSpeakIntent(intent="important_to_share_listen"),
+            DeliverPlayout(),
+            UserStep(text="Ничего."),
             ExpectSpeakIntent(intent="summary"),
             DeliverPlayout(include_summary=True),
             UserStep(text=a.goodbye),
-            ExpectSpeakIntent(intent="goodbye_confirm"),
+            ExpectSpeakIntent(intent="goodbye_final"),
             DeliverPlayout(),
-            UserStep(text=a.confirm),
             ExpectTerminal(intent="goodbye_final"),
         )
 
@@ -222,12 +220,14 @@ def build_family_steps(
             ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             UserStep(text="ммм"),
+            ExpectSpeakIntent(intent="important_to_share_listen"),
+            DeliverPlayout(),
+            UserStep(text="Ничего."),
             ExpectSpeakIntent(intent="summary"),
             DeliverPlayout(include_summary=True),
             UserStep(text=a.goodbye),
-            ExpectSpeakIntent(intent="goodbye_confirm"),
+            ExpectSpeakIntent(intent="goodbye_final"),
             DeliverPlayout(),
-            UserStep(text=a.confirm),
             ExpectTerminal(intent="goodbye_final"),
         )
 
@@ -238,12 +238,14 @@ def build_family_steps(
             ExpectSpeakIntent(intent="important_to_share"),
             DeliverPlayout(),
             UserStep(text="ммм"),
+            ExpectSpeakIntent(intent="important_to_share_listen"),
+            DeliverPlayout(),
+            UserStep(text="Ничего."),
             ExpectSpeakIntent(intent="summary"),
             DeliverPlayout(include_summary=True),
             UserStep(text=a.goodbye),
-            ExpectSpeakIntent(intent="goodbye_confirm"),
+            ExpectSpeakIntent(intent="goodbye_final"),
             DeliverPlayout(),
-            UserStep(text=a.confirm),
             ExpectTerminal(intent="goodbye_final"),
         )
 
@@ -265,9 +267,8 @@ def build_family_steps(
             ExpectSpeakIntent(intent="summary"),
             DeliverPlayout(include_summary=True),
             UserStep(text=a.goodbye),
-            ExpectSpeakIntent(intent="goodbye_confirm"),
+            ExpectSpeakIntent(intent="goodbye_final"),
             DeliverPlayout(),
-            UserStep(text=a.confirm),
             ExpectTerminal(intent="goodbye_final"),
         )
 
@@ -284,9 +285,8 @@ def build_family_steps(
             StaleLastSpeak(),
             DeliverPlayout(include_summary=True),
             UserStep(text=a.goodbye),
-            ExpectSpeakIntent(intent="goodbye_confirm"),
+            ExpectSpeakIntent(intent="goodbye_final"),
             DeliverPlayout(),
-            UserStep(text=a.confirm),
             ExpectTerminal(intent="goodbye_final"),
         )
 

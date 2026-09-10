@@ -50,10 +50,13 @@ def _playout_hangup_after_final(runner: ScenarioRunner, speak) -> list:
 
 
 def test_stop_call_triggers_goodbye_confirm() -> None:
+    """Explicit farewell / stop_call closes immediately (no double confirm)."""
     runner = ScenarioRunner(call_id="ctrl", elder_display_name="Тест")
     result = runner.run([CallStarted(), _control_turn("stop_call", "до свидания")])
     intents = [e.intent for e in result.speak_effects]
-    assert "goodbye_confirm" in intents
+    assert "goodbye_final" in intents
+    assert "goodbye_confirm" not in intents
+    assert result.state.call_closed
 
 
 def test_wrong_person_closes_call() -> None:
@@ -130,5 +133,7 @@ def test_stop_call_wins_over_backchannel() -> None:
     )
     result = runner.run([User(text=turn.raw_text, rich_turn=turn)])
     intents = [e.intent for e in result.speak_effects]
-    assert "goodbye_confirm" in intents
+    assert "goodbye_final" in intents
+    assert "goodbye_confirm" not in intents
+    assert result.state.call_closed
     assert not any(e.kind == "timer" for e in result.effects)

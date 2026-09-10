@@ -2,29 +2,20 @@
 
 **Outcome:** One production path, 100 consecutive full calls. **No fourth system.**
 
-```text
-SIP operator → FreeSWITCH → mod_imvera_audio → CallActor
-→ VAD → GigaAM → DialogueEngine → local LLM only when needed
-→ Silero TTS → FreeSWITCH → caller
-```
+## Live-path simplification (this change)
 
-## Active residual (this session)
+- **Goal:** Legacy probe/topic must not own RichUserTurn before `atomic_semantic_apply`.
+- **Replay:** `fs-1f6d3000` in live corpus + product invariants.
+- **ADR:** `docs/adr/016-live-rich-turn-path.md`
 
-**Calls:** `fs-c83012aa` (mood → bare summary), `fs-f534c2e6` (soft «нет» → «Расскажите коротко» → bare «Спасибо за разговор.»).
+## Gates (local)
 
-**Local fix (NOT committed / NOT deployed):**
+- `make test-semantic-kernel test-dialogue-rich test-dialogue-topic test-dialogue-runtime test-voice-perception test-live-replays lint-dialogue` — PASS
+- `python3 -m pytest tests/ -q` — 987 passed, 0 failed
 
-- ITS: «Спасибо за разговор. Хотите ещё что-то добавить?»
-- Soft decline («да вроде бы нет», «сказал уже») → warm close
-- Share content → `observations["important_to_share"]` + «Хорошо, записала.» + warm close
-- Summary: «Всё, спасибо, {name}. Всего вам хорошего. До свидания.»
-- Optional schedule line via `prior_call_context["next_call_spoken"]` (not wired from CallActor yet)
-- Plans harvest: «планов толком тоже нет»
+## NEXT
 
-Offline reproduce `fs-f534c2e6` → ITS then named farewell. `pytest tests/` green.
-
-**NEXT GATE:** commit + push + CI + lab redeploy; Zoiper re-test; CALL_ID ≠ `a76ab4d`.
-
-## Forbidden
-
-New features / fourth system (ADR-014). Closing copy fix = residual spoken-surface on frozen path.
+1. Push → GitHub CI SUCCESS
+2. `make preflight-gates` + FreeSWITCH Zoiper redeploy
+3. Verify runtime SHA == new SHA (`IMVERA_LLM_INTERPRET=0`)
+4. Free live call acceptance (not verbatim `fs-1f6d3000`) + forensic

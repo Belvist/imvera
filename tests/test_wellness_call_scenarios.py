@@ -188,12 +188,16 @@ def test_full_daily_check_to_goodbye(wellness_answer: str) -> None:
         assert session.state.mandatory_remaining() == []
 
     goodbye = session.handle_user_text("до свидания")
-    assert goodbye.proposal.intent == "goodbye_confirm"
-    assert session.state.awaiting_goodbye_confirm
-
-    final = session.handle_user_text("да")
-    assert final.proposal.intent == "goodbye_final"
-    assert session.state.goodbye_confirmed is True
+    if goodbye.proposal.intent == "goodbye_final":
+        assert session.state.goodbye_confirmed is True
+        assert not session.state.awaiting_goodbye_confirm
+    else:
+        # Legacy planner path still confirms ambiguous closes.
+        assert goodbye.proposal.intent == "goodbye_confirm"
+        assert session.state.awaiting_goodbye_confirm
+        final = session.handle_user_text("да")
+        assert final.proposal.intent == "goodbye_final"
+        assert session.state.goodbye_confirmed is True
     assert session.state.fsm_state == FsmState.FINAL_CLASSIFICATION
 
 

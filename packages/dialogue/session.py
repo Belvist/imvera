@@ -22,7 +22,6 @@ from packages.dialogue.validator import Validator
 from packages.dialogue_engine.effects import EndCallEffect, SpeakEffect, TimerEffect
 from packages.dialogue_engine.engine import DialogueEngine
 from packages.dialogue_engine.runtime import dialogue_engine_active, log_runtime_truth
-from packages.dialogue_engine.semantic import semantic_from_legacy
 from packages.safety import SafetyEngine
 
 _log = logging.getLogger("dialogue.session")
@@ -587,6 +586,8 @@ class CallSession:
                 self._engine.on_user_turn(uid, user_text, rich_turn=rich_turn)
                 intent_label = getattr(rich_turn, "dialogue_act", "rich_turn")
             else:
+                from packages.dialogue_engine.semantic import semantic_from_legacy
+
                 semantic = semantic_from_legacy(
                     interp, text=user_text, answer_slot=answer_slot
                 )
