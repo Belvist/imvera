@@ -40,6 +40,7 @@ COPY conf/dialplan/public.xml /etc/freeswitch/dialplan/public.xml
 COPY conf/vars_imvera.xml /etc/freeswitch/vars_imvera.xml
 COPY conf/directory/default/fs-gate-caller.xml /etc/freeswitch/directory/default/fs-gate-caller.xml
 COPY conf/directory/default/zoiper.xml /etc/freeswitch/directory/default/zoiper.xml
+COPY conf/autoload_configs/acl.conf.xml /etc/freeswitch/autoload_configs/acl.conf.xml
 COPY conf/autoload_configs/event_socket.conf.xml /etc/freeswitch/autoload_configs/event_socket.conf.xml
 
 RUN grep -q 'vars_imvera.xml' /etc/freeswitch/vars.xml \
