@@ -42,7 +42,12 @@ def _repair_mission() -> CallMission:
                 answer_type="enum",
                 allowed_values=("yes", "no", "unknown"),
                 aliases=("мастер",),
-                semantic_hints=("приходил мастер",),
+                # Hints are authoritative for factual negation polarity.
+                semantic_hints=(
+                    "приходил",
+                    "приходил мастер",
+                    "мастер приходил",
+                ),
             ),
             GoalDefinition(
                 goal_id="repair_completed",
@@ -53,7 +58,13 @@ def _repair_mission() -> CallMission:
                 answer_type="enum",
                 allowed_values=("yes", "no", "unknown"),
                 aliases=("кран",),
-                semantic_hints=("починить кран", "починил кран"),
+                semantic_hints=(
+                    "починить",
+                    "починили",
+                    "починить кран",
+                    "починил кран",
+                    "кран починили",
+                ),
             ),
         ),
     )
@@ -682,3 +693,105 @@ def test_p0_near_miss_extra_false_facts_blocked() -> None:
     unk = p.understand(_req("не знаю", mission, "worker_visited"))
     assert unk.goal_answers[0].value == "unknown"
     assert unk.control != "stop_call"
+
+
+def test_p0_j_unable_to_find_out_is_not_worker_no() -> None:
+    """«про мастера не удалось узнать» must NOT become worker_visited=no."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(
+        _req("про мастера не удалось узнать", mission, "worker_visited")
+    )
+    assert not any(
+        a.goal_id == "worker_visited" and a.value == "no" for a in result.goal_answers
+    )
+
+
+def test_p0_k_unable_to_contact_is_not_repair_no() -> None:
+    """«по крану не удалось связаться с мастером» must NOT be repair_completed=no."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(
+        _req("по крану не удалось связаться с мастером", mission, "worker_visited")
+    )
+    assert not any(
+        a.goal_id == "repair_completed" and a.value == "no"
+        for a in result.goal_answers
+    )
+
+
+def test_p0_l_hints_authoritative_direct_worker_and_repair_no() -> None:
+    """Direct predicate negation still binds when semantic_hints cover the verb."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    worker = p.understand(_req("мастер не приходил", mission, "worker_visited"))
+    assert _answers_by_id(worker)["worker_visited"].value == "no"
+    repair = p.understand(_req("кран не починили", mission, "worker_visited"))
+    assert _answers_by_id(repair)["repair_completed"].value == "no"
+
+
+def test_p0_m_uncertain_delivered_yes_is_unclear() -> None:
+    """«Да, кажется мастер приходил.» → NOT hard worker_visited=yes → UNCLEAR."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(
+        _req("Да, кажется мастер приходил.", mission, "worker_visited")
+    )
+    assert not any(
+        a.goal_id == "worker_visited" and a.value in {"yes", "no"}
+        for a in result.goal_answers
+    )
+    assert any(
+        d.goal_id == "worker_visited" and d.disposition == "unclear"
+        for d in result.goal_dispositions
+    )
+
+
+def test_p0_n_mixed_certain_plus_uncertain_clause_local() -> None:
+    """Certain worker yes + uncertain repair clause → worker=yes, repair UNCLEAR."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(
+        _req(
+            "Да, мастер приходил, но кажется кран не починили.",
+            mission,
+            "worker_visited",
+        )
+    )
+    by_id = _answers_by_id(result)
+    assert by_id["worker_visited"].value == "yes"
+    assert not any(
+        a.goal_id == "repair_completed" and a.value in {"yes", "no"}
+        for a in result.goal_answers
+    )
+    assert any(
+        d.goal_id == "repair_completed" and d.disposition == "unclear"
+        for d in result.goal_dispositions
+    )
+
+
+def test_p0_o_empty_semantic_hints_no_free_negation_guess() -> None:
+    """Empty semantic_hints: free negative phrase must not invent factual no."""
+    mission = CallMission(
+        mission_id="no-hints",
+        goals=(
+            GoalDefinition(
+                goal_id="worker_visited",
+                description="Узнать, приходил ли мастер",
+                prompt_hint="Мастер сегодня приходил?",
+                required=True,
+                priority=10,
+                answer_type="enum",
+                allowed_values=("yes", "no", "unknown"),
+                aliases=("мастер",),
+                semantic_hints=(),
+            ),
+        ),
+    )
+    p = DeterministicMissionUnderstandingProvider()
+    guessed = p.understand(_req("мастер не приходил", mission, "worker_visited"))
+    assert not any(
+        a.goal_id == "worker_visited" and a.value == "no" for a in guessed.goal_answers
+    )
+    bare = p.understand(_req("нет", mission, "worker_visited"))
+    assert bare.goal_answers[0].value == "no"
