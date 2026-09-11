@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.core import create_call_record_store
+from packages.core.pg_store import PostgresCallRecordStore
 from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
 from packages.voice_runtime.call_registry import CallBinding, build_call_registry
 from services.providers.http_clients import close_shared_async_client, get_shared_async_client
@@ -25,6 +26,21 @@ from packages.voice_runtime.trace import record_event
 
 _store = create_call_record_store()
 _call_registry = build_call_registry(_store)
+
+
+def _telephony_shared_store_ready() -> tuple[bool, str]:
+    """Telephony must not silently use process-local InMemory CallBinding."""
+    if not os.environ.get("IMVERA_PG_URL"):
+        return (
+            False,
+            "IMVERA_PG_URL unset; telephony transport requires shared Postgres CallBinding store",
+        )
+    if not isinstance(_store, PostgresCallRecordStore):
+        return (
+            False,
+            "telephony transport requires PostgresCallRecordStore, not process-local memory",
+        )
+    return True, ""
 
 
 @dataclass
@@ -160,6 +176,12 @@ async def create_call(body: CreateCallRequest) -> dict[str, Any]:
     elif isinstance(body.mission, dict):
         mission_id = str(body.mission.get("mission_id") or "")
 
+    transport = body.transport.strip().lower()
+    if transport in {"freeswitch", "sip", "telephony"}:
+        ready, reason = _telephony_shared_store_ready()
+        if not ready:
+            raise HTTPException(status_code=503, detail=reason)
+
     # Durable binding in shared CallRecordStore (PG in prod) — survives process boundary.
     _call_registry.register(
         CallBinding(
@@ -174,7 +196,6 @@ async def create_call(body: CreateCallRequest) -> dict[str, Any]:
     )
     _store.ensure_call(call_id, body.family_id)
 
-    transport = body.transport.strip().lower()
     if transport in {"freeswitch", "sip", "telephony"}:
         # Single conversation owner: media-bridge CallActor. Do not start a second brain here.
         from packages.telephony.product_originate import originate_product_call

@@ -601,6 +601,7 @@ def test_product_api_freeswitch_handoff_same_mission(
     monkeypatch.setattr(vs, "_call_registry", registry)
     monkeypatch.setattr(vs, "_sessions", {})
     monkeypatch.setattr(vs, "_store", store)
+    monkeypatch.setattr(vs, "_telephony_shared_store_ready", lambda: (True, ""))
     monkeypatch.setattr(ca, "create_call_record_store", lambda: InMemoryCallRecordStore(shared=shared))
 
     async def fake_originate(*, call_id: str, **_k):
@@ -657,6 +658,91 @@ def test_product_api_freeswitch_handoff_same_mission(
     assert mission_obj.mission_id == "repair-check-381"
     cmd = build_stream_start_command("fs-uuid-test", call_id)
     assert f"call_id={call_id}" in cmd
+
+
+def test_telephony_without_pg_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """POST /v1/calls transport=freeswitch must not originate on process-local InMemory."""
+    monkeypatch.delenv("IMVERA_PG_URL", raising=False)
+    from services.voice_service import main as vs
+
+    store = InMemoryCallRecordStore()
+    registry = build_call_registry(store)
+    monkeypatch.setattr(vs, "_call_registry", registry)
+    monkeypatch.setattr(vs, "_sessions", {})
+    monkeypatch.setattr(vs, "_store", store)
+
+    originated = {"n": 0}
+
+    async def boom(*, call_id: str, **_k):
+        originated["n"] += 1
+        raise AssertionError("must not originate without shared PG")
+
+    monkeypatch.setattr(
+        "packages.telephony.product_originate.originate_product_call",
+        boom,
+    )
+
+    client = TestClient(vs.app)
+    resp = client.post(
+        "/v1/calls",
+        json={
+            "person_id": "p1",
+            "family_id": "fam-no-pg",
+            "elder_name": "Анне Петровне",
+            "transport": "freeswitch",
+            "mission": _unseen_mission().model_dump(mode="json"),
+        },
+    )
+    assert resp.status_code == 503, resp.text
+    detail = resp.json()["detail"]
+    assert "IMVERA_PG_URL" in detail or "Postgres" in detail or "shared" in detail.lower()
+    assert originated["n"] == 0
+    assert registry.resolve(call_id="unused") is None
+
+
+def test_product_call_id_missing_binding_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """?call_id= product path with missing CallBinding: no actor, no daily mission fallback."""
+    from services.imvera_media_bridge import callactor as ca
+
+    monkeypatch.setattr(ca, "create_call_record_store", lambda: InMemoryCallRecordStore())
+    built = {"actor": 0}
+
+    def _forbid_actor(*_a, **_k):
+        built["actor"] += 1
+        raise AssertionError("CallActor must not be constructed without CallBinding")
+
+    monkeypatch.setattr(ca, "build_call_actor", _forbid_actor)
+
+    class _QP(dict):
+        def get(self, key, default=None):
+            return super().get(key, default)
+
+    ws = SimpleNamespace(query_params=_QP({"call_id": "call-missing-binding"}))
+    with pytest.raises(ca.ProductBindingMissing) as ei:
+        ca._resolve_product_mission(ws, "fs-uuid-missing")
+    assert ei.value.call_id == "call-missing-binding"
+    assert ei.value.fs_uuid == "fs-uuid-missing"
+
+    closed: dict[str, object] = {}
+
+    class _WS:
+        query_params = _QP({"call_id": "call-missing-binding"})
+
+        async def close(self, code: int = 1000, reason: str = "") -> None:
+            closed["code"] = code
+            closed["reason"] = reason
+
+    async def _no_blockers() -> list[str]:
+        return []
+
+    monkeypatch.setattr(ca, "inference_blockers", _no_blockers)
+
+    asyncio.run(ca.handle_callactor_ws(_WS(), "fs-uuid-missing"))  # type: ignore[arg-type]
+    assert built["actor"] == 0
+    assert closed.get("code") == 1008
+    assert "CallBinding" in str(closed.get("reason", ""))
 
 
 def test_originate_attaches_audio_stream_with_product_call_id() -> None:
@@ -903,3 +989,71 @@ def test_cancelled_final_open_does_not_commit_asked(monkeypatch: pytest.MonkeyPa
     eng.on_playout_cancelled(speak.generation, speak.question_id)
     assert eng.state.important_to_share_asked is False
     assert eng.state.important_to_share_planned is False
+
+
+def test_two_postgres_stores_share_call_binding() -> None:
+    """Two PostgresCallRecordStore instances must share CallBinding across processes."""
+    import os
+    import uuid
+
+    pg_url = os.environ.get("IMVERA_PG_URL")
+    if not pg_url:
+        pytest.skip("IMVERA_PG_URL not set")
+    try:
+        import psycopg
+
+        with psycopg.connect(pg_url, connect_timeout=2) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+    except Exception as exc:
+        pytest.skip(f"PostgreSQL not available: {exc}")
+
+    from packages.core.pg_store import PostgresCallRecordStore
+
+    call_id = f"pg-bind-{uuid.uuid4().hex[:12]}"
+    family_id = "fam-pg-bind"
+    mission = _unseen_mission()
+    mission_payload = mission.model_dump(mode="json")
+    goals = mission_payload.get("goals") or []
+
+    store_a = PostgresCallRecordStore(pg_url)
+    store_b = PostgresCallRecordStore(pg_url)
+    assert store_a is not store_b
+
+    ensure = store_a.ensure_call(call_id, family_id)
+    assert ensure.ok, ensure.error
+    put = store_a.put_call_binding(
+        {
+            "call_id": call_id,
+            "family_id": family_id,
+            "person_id": "p-pg",
+            "elder_name": "Анне Петровне",
+            "transport": "freeswitch",
+            "mission": mission_payload,
+            "mission_id": mission.mission_id,
+            "metadata": {},
+        }
+    )
+    assert put.ok, put.error
+
+    got = store_b.get_call_binding(call_id)
+    assert got is not None
+    assert got["call_id"] == call_id
+    assert got["family_id"] == family_id
+    assert got["mission_id"] == mission.mission_id
+    got_goals = got.get("mission", {}).get("goals") or []
+    assert {g.get("goal_id") for g in goals if isinstance(g, dict)} == {
+        g.get("goal_id") for g in got_goals if isinstance(g, dict)
+    }
+
+    fs_uuid = f"fs-{uuid.uuid4().hex[:12]}"
+    reg_a = build_call_registry(store_a)
+    bound = reg_a.bind_fs_uuid(call_id, fs_uuid)
+    assert bound is not None
+    assert bound.metadata.get("fs_uuid") == fs_uuid
+
+    via_b = store_b.get_call_binding_by_fs_uuid(fs_uuid)
+    assert via_b is not None
+    assert via_b["call_id"] == call_id
+    assert via_b["family_id"] == family_id
+    assert via_b["mission_id"] == mission.mission_id

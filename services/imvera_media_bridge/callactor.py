@@ -33,6 +33,15 @@ log = logging.getLogger("imvera_media_bridge.callactor")
 ROOT = Path(__file__).resolve().parents[2]
 
 
+class ProductBindingMissing(RuntimeError):
+    """Product ?call_id= present but shared CallBinding not found — fail closed."""
+
+    def __init__(self, call_id: str, fs_uuid: str) -> None:
+        self.call_id = call_id
+        self.fs_uuid = fs_uuid
+        super().__init__(f"CallBinding not found for call_id={call_id} fs_uuid={fs_uuid}")
+
+
 def _gateway_urls() -> tuple[str, str, str]:
     stt = os.environ.get("IMVERA_STT_URL", "http://127.0.0.1:9101")
     tts = os.environ.get("IMVERA_TTS_URL", "http://127.0.0.1:9102")
@@ -41,7 +50,12 @@ def _gateway_urls() -> tuple[str, str, str]:
 
 
 def _resolve_product_mission(websocket: WebSocket, fs_uuid: str):
-    """Prefer shared CallBinding (POST /v1/calls → PG) over manual ?mission= JSON."""
+    """Prefer shared CallBinding (POST /v1/calls → PG) over manual ?mission= JSON.
+
+    Product path (``?call_id=``): fail closed if binding missing — never invent
+    daily_check / IMVERA_DEV_FAMILY / mission=None. Lab-only ``?mission=`` JSON
+    remains when no product call_id is supplied.
+    """
     from packages.dialogue_engine.mission import CallMission
 
     # Same create_call_record_store() as voice_service → shared PG when IMVERA_PG_URL set.
@@ -49,10 +63,11 @@ def _resolve_product_mission(websocket: WebSocket, fs_uuid: str):
     product_call_id = websocket.query_params.get("call_id") or websocket.query_params.get(
         "imvera_call_id"
     )
-    binding = registry.resolve(call_id=product_call_id, fs_uuid=fs_uuid)
-    if binding is not None:
-        if product_call_id:
-            registry.bind_fs_uuid(binding.call_id, fs_uuid)
+    if product_call_id:
+        binding = registry.resolve(call_id=product_call_id, fs_uuid=fs_uuid)
+        if binding is None:
+            raise ProductBindingMissing(product_call_id, fs_uuid)
+        registry.bind_fs_uuid(binding.call_id, fs_uuid)
         mission_obj = None
         if binding.mission:
             mission_obj = CallMission.model_validate(binding.mission)
@@ -65,12 +80,12 @@ def _resolve_product_mission(websocket: WebSocket, fs_uuid: str):
         import json as _json
 
         mission_obj = CallMission.model_validate(_json.loads(mission_raw))
-        call_id = product_call_id or f"fs-{fs_uuid[:8]}"
+        call_id = f"fs-{fs_uuid[:8]}"
         family_id = os.environ.get("IMVERA_DEV_FAMILY_ID", "fam-voice")
         elder = os.environ.get("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
         return call_id, family_id, elder, mission_obj
 
-    call_id = product_call_id or f"fs-{fs_uuid[:8]}"
+    call_id = f"fs-{fs_uuid[:8]}"
     elder = os.environ.get("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
     family_id = os.environ.get("IMVERA_DEV_FAMILY_ID", "fam-voice")
     return call_id, family_id, elder, None
@@ -98,7 +113,17 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
         log.error("callactor.ws.rejected fs_uuid=%s blockers=%s", fs_uuid, blockers)
         return
 
-    call_id, family_id, elder, mission_obj = _resolve_product_mission(websocket, fs_uuid)
+    try:
+        call_id, family_id, elder, mission_obj = _resolve_product_mission(websocket, fs_uuid)
+    except ProductBindingMissing as exc:
+        log.error(
+            "callactor.binding.missing call_id=%s fs_uuid=%s — rejecting WS, no CallActor",
+            exc.call_id,
+            exc.fs_uuid,
+        )
+        await websocket.close(code=1008, reason="product CallBinding not found")
+        return
+
     stt, tts, llm = _gateway_urls()
     capture_sr, playback_sr = bridge_audio_rates()
     output_frame_bytes = playback_sr * FRAME_MS // 1000 * 2
