@@ -58,6 +58,13 @@ def best_question_need(state: EngineState, ep: IssueEpisode):
 
     if episode_is_resolved(ep):
         return None
+
+    # Non-health / household issues: one generic actionable follow-up only.
+    if getattr(ep, "kind", None) == "other":
+        if ep.known_attributes.get("needs_help"):
+            return None
+        return QuestionNeed.for_attribute("needs_help")
+
     pending = state.pending_episode_attribute
     if pending:
         need = QuestionNeed.for_attribute(pending)
@@ -94,6 +101,10 @@ def best_attribute_to_ask(state: EngineState, ep: IssueEpisode) -> str | None:
 
     if episode_is_resolved(ep):
         return None
+    if getattr(ep, "kind", None) == "other":
+        if ep.known_attributes.get("needs_help"):
+            return None
+        return "needs_help"
     pending = state.pending_episode_attribute
     if pending and not attribute_need_satisfied(ep, pending):
         return pending

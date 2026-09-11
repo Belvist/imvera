@@ -132,6 +132,9 @@ class SuspendedObligation(BaseModel):
     attribute: str | None = None
     slot: str | None = None
     intent: str | None = None
+    goal_id: str | None = None
+    reason: str | None = None
+    resume_policy: str | None = None
 
     model_config = {"frozen": True}
 

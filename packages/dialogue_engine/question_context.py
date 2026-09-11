@@ -26,6 +26,7 @@ _QUESTION_NEEDS: dict[str, tuple[str, ...]] = {
     "current": ("current", "status"),
     "concern": ("concern",),
     "pain_night": ("pain_night",),
+    "needs_help": ("needs_help",),
 }
 
 
@@ -135,6 +136,8 @@ def episode_obligations_satisfied(ep: IssueEpisode) -> bool:
         if ep.body_site == "живот" and "current" not in ep.known_attributes:
             return False
         return True
+    if ep.kind == "other":
+        return bool(ep.known_attributes.get("needs_help"))
     return bool(ep.known_attributes) or ep.kind == "sleep_problem"
 
 

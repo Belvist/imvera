@@ -65,7 +65,13 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
     ack = plan.acknowledge or _acknowledge_fills(state, facts)
     question = plan.mandatory_question
 
-    if plan.answer_user_question:
+    if plan.answer_user_question and plan.mandatory_question:
+        question = f"{plan.answer_user_question.strip()} {plan.mandatory_question.strip()}"
+        # Keep mission ask intent so Question.goal_id binds correctly.
+        if not plan.intent or plan.intent == "answer_user_question":
+            plan.intent = "ask_mission_goal" if plan.slot else "answer_user_question"
+        plan.marks_question = True
+    elif plan.answer_user_question:
         question = plan.answer_user_question
         plan.intent = plan.intent or "answer_user_question"
     elif plan.question_needs and not question:

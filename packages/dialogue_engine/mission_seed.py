@@ -38,10 +38,12 @@ def _seed_goal(state: EngineState, gdef: GoalDefinition, *, source: str) -> None
             goal_id=gdef.goal_id,
             status=SlotStatus.OPEN,
             lifecycle=GoalLifecycle.AVAILABLE,
+            max_attempts=int(gdef.max_attempts),
             source=source,
         )
     else:
         existing.goal_id = gdef.goal_id
+        existing.max_attempts = int(gdef.max_attempts)
         if not existing.source:
             existing.source = source
         if existing.lifecycle == GoalLifecycle.UNSEEN:

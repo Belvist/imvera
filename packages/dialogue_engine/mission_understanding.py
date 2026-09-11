@@ -13,8 +13,9 @@ from typing import Protocol
 from pydantic import BaseModel
 
 from packages.contracts.semantic import IssueMention
-from packages.dialogue_engine.mission import CallMission, GoalAnswerCandidate
+from packages.dialogue_engine.mission import CallMission, GoalAnswerCandidate, GoalDispositionCandidate
 from packages.dialogue_engine.semantic_kernel.types import Observation
+
 
 # Bare polarity only — no domain / mission verb dictionaries.
 # Refusal phrases ("не хочу" / "не надо") are NOT factual "no".
@@ -23,12 +24,31 @@ _BARE_NO = re.compile(r"(?i)^\s*(нет)\s*[.!]?\s*$")
 _BARE_UNKNOWN = re.compile(r"(?i)^\s*(не\s+знаю|не\s+помню)\s*[.!]?\s*$")
 
 
+class MissionUnderstandingContext(BaseModel):
+    """Read-only projection for understanding — not a state store."""
+
+    mission_id: str = ""
+    goal_ids: tuple[str, ...] = ()
+    goal_lifecycles: tuple[tuple[str, str], ...] = ()
+    grounded_answers: tuple[tuple[str, str, str], ...] = ()  # id, value, evidence
+    delivered_goal_id: str | None = None
+    delivered_question_text: str | None = None
+    delivered_question_phase: str | None = None
+    suspended_goal_id: str | None = None
+    open_episode_summaries: tuple[str, ...] = ()
+
+    model_config = {"frozen": True}
+
+
 class MissionUnderstandingRequest(BaseModel):
     text: str
     utterance_id: str
     mission: CallMission
     active_goal_id: str | None = None
     delivered_question_text: str | None = None
+    delivered_goal_id: str | None = None
+    delivered_question_phase: str | None = None
+    context: MissionUnderstandingContext | None = None
 
     model_config = {"frozen": True}
 
@@ -37,6 +57,7 @@ class StructuredMissionResult(BaseModel):
     """Schema shared by fake test providers and future production semantic model."""
 
     goal_answers: tuple[GoalAnswerCandidate, ...] = ()
+    goal_dispositions: tuple[GoalDispositionCandidate, ...] = ()
     observations: tuple[Observation, ...] = ()
     issue_mentions: tuple[IssueMention, ...] = ()
     user_question: str | None = None
@@ -51,14 +72,26 @@ class MissionUnderstandingProvider(Protocol):
 
 
 class FastPathMissionProvider:
-    """Universal contextual answers only: bare yes/no/unknown → DELIVERED goal."""
+    """Bare yes/no/unknown only — and only for a really DELIVERED goal question."""
 
     def understand(self, request: MissionUnderstandingRequest) -> StructuredMissionResult:
         text = (request.text or "").strip()
-        if not text or not request.active_goal_id:
+        goal_id = request.delivered_goal_id or request.active_goal_id
+        if not text or not goal_id:
+            return StructuredMissionResult()
+        phase = (request.delivered_question_phase or "").upper()
+        if phase and phase != "DELIVERED":
+            return StructuredMissionResult()
+        if request.context is not None:
+            if request.context.delivered_goal_id != goal_id:
+                return StructuredMissionResult()
+            if (request.context.delivered_question_phase or "").upper() != "DELIVERED":
+                return StructuredMissionResult()
+        elif not request.delivered_goal_id:
+            # Without explicit delivered goal, refuse fast-path binding.
             return StructuredMissionResult()
         gdef = next(
-            (g for g in request.mission.goals if g.goal_id == request.active_goal_id),
+            (g for g in request.mission.goals if g.goal_id == goal_id),
             None,
         )
         if gdef is None or gdef.answer_type not in {"enum", "bool"}:
@@ -77,7 +110,7 @@ class FastPathMissionProvider:
         return StructuredMissionResult(
             goal_answers=(
                 GoalAnswerCandidate(
-                    goal_id=request.active_goal_id,
+                    goal_id=goal_id,
                     value=value,
                     confidence=0.95,
                     evidence=evidence,
@@ -92,7 +125,7 @@ _provider: MissionUnderstandingProvider | None = None
 def set_mission_understanding_provider(
     provider: MissionUnderstandingProvider | None,
 ) -> None:
-    """Install provider for process (tests / future production wiring)."""
+    """Test/process hook only — production DI is CallSession/DialogueEngine provider arg."""
     global _provider
     _provider = provider
 
@@ -106,7 +139,11 @@ def understand_mission(
     *,
     provider: MissionUnderstandingProvider | None = None,
 ) -> StructuredMissionResult:
-    """Run provider. Never writes EngineState. May return multiple goal_answers."""
+    """Run provider. Never writes EngineState. May return multiple goal_answers.
+
+    Prefer explicit ``provider`` from CallSession/DialogueEngine. Process-global
+    ``_provider`` is a temporary test hook, not production DI.
+    """
     active = provider if provider is not None else get_mission_understanding_provider()
     result = active.understand(request)
     # Defensive: drop empty / incomplete candidates at boundary (engine still validates).

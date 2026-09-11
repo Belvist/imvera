@@ -22,6 +22,7 @@ class GoalDefinition(BaseModel):
     priority: int = 100
     answer_type: Literal["enum", "free_text", "bool"] = "enum"
     allowed_values: tuple[str, ...] = ("yes", "no", "unknown")
+    max_attempts: int = 2
     source: str = "mission"
 
     model_config = {"frozen": True}
@@ -84,6 +85,18 @@ class GoalAnswerCandidate(BaseModel):
 
     goal_id: str
     value: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence: str = ""
+    is_correction: bool = False
+
+    model_config = {"frozen": True}
+
+
+class GoalDispositionCandidate(BaseModel):
+    """User declines / N/A / unclear about a goal — not a factual yes/no answer."""
+
+    goal_id: str
+    disposition: Literal["declined", "not_applicable", "unclear"]
     confidence: float = Field(ge=0.0, le=1.0)
     evidence: str = ""
 
