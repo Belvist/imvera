@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from threading import Lock
+from typing import Any
 
 from packages.contracts.core import (
     CallObservation,
@@ -14,6 +15,8 @@ from packages.contracts.enums import FsmState
 from packages.contracts.events import CallEvent
 from packages.dialogue.facts import FactRecord
 
+PRODUCT_BINDING_META_KEY = "product_call_binding"
+
 
 def _family_mismatch_result() -> PersistResult:
     return PersistResult(
@@ -24,13 +27,25 @@ def _family_mismatch_result() -> PersistResult:
 
 
 class InMemoryCallRecordStore(CallRecordStore):
-    def __init__(self) -> None:
+    def __init__(self, *, shared: dict[str, Any] | None = None) -> None:
+        """If ``shared`` is provided, multiple store instances share the same dicts.
+
+        Use this to simulate two processes without Python module globals.
+        Production uses PostgresCallRecordStore with the same DSN instead.
+        """
         self._lock = Lock()
-        self._events: dict[str, list[CallEvent]] = {}
-        self._observations: dict[str, list[CallObservation]] = {}
-        self._results: dict[str, CallResultSnapshot] = {}
-        self._idempotency: set[str] = set()
-        self._finalized_calls: set[str] = set()
+        if shared is None:
+            self._events: dict[str, list[CallEvent]] = {}
+            self._observations: dict[str, list[CallObservation]] = {}
+            self._results: dict[str, CallResultSnapshot] = {}
+            self._idempotency: set[str] = set()
+            self._finalized_calls: set[str] = set()
+        else:
+            self._events = shared.setdefault("events", {})
+            self._observations = shared.setdefault("observations", {})
+            self._results = shared.setdefault("results", {})
+            self._idempotency = shared.setdefault("idempotency", set())
+            self._finalized_calls = shared.setdefault("finalized_calls", set())
 
     def ensure_call(self, call_id: str, family_id: str) -> PersistResult:
         with self._lock:
@@ -178,6 +193,72 @@ class InMemoryCallRecordStore(CallRecordStore):
                 update={"delivery_stage": DeliveryStage.PERSISTED}
             )
             return PersistResult(ok=True, delivery_stage=DeliveryStage.PERSISTED)
+
+    def put_call_binding(self, binding: dict[str, Any]) -> PersistResult:
+        call_id = str(binding.get("call_id") or "")
+        family_id = str(binding.get("family_id") or "")
+        if not call_id or not family_id:
+            return PersistResult(
+                ok=False,
+                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                error="call_id and family_id required",
+            )
+        with self._lock:
+            row = self._results.get(call_id)
+            if row is None:
+                row = CallResultSnapshot(
+                    call_id=call_id,
+                    family_id=family_id,
+                    fsm_state=FsmState.CALL_START,
+                    delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                    partial=True,
+                )
+            elif row.family_id != family_id:
+                return _family_mismatch_result()
+            meta = dict(row.metadata)
+            meta[PRODUCT_BINDING_META_KEY] = dict(binding)
+            self._results[call_id] = row.model_copy(update={"metadata": meta})
+            return PersistResult(ok=True, delivery_stage=DeliveryStage.PERSISTED)
+
+    def get_call_binding(self, call_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._results.get(call_id)
+            if row is None:
+                return None
+            raw = row.metadata.get(PRODUCT_BINDING_META_KEY)
+            return dict(raw) if isinstance(raw, dict) else None
+
+    def get_call_binding_by_fs_uuid(self, fs_uuid: str) -> dict[str, Any] | None:
+        if not fs_uuid:
+            return None
+        with self._lock:
+            for row in self._results.values():
+                raw = row.metadata.get(PRODUCT_BINDING_META_KEY)
+                if not isinstance(raw, dict):
+                    continue
+                meta = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
+                if meta.get("fs_uuid") == fs_uuid:
+                    return dict(raw)
+            return None
+
+    def delete_call_binding(self, call_id: str) -> PersistResult:
+        with self._lock:
+            row = self._results.get(call_id)
+            if row is None:
+                return PersistResult(ok=True, delivery_stage=DeliveryStage.OBSERVATION_RECEIVED)
+            meta = dict(row.metadata)
+            meta.pop(PRODUCT_BINDING_META_KEY, None)
+            self._results[call_id] = row.model_copy(update={"metadata": meta})
+            return PersistResult(ok=True, delivery_stage=DeliveryStage.PERSISTED)
+
+    def clear_call_bindings(self) -> None:
+        with self._lock:
+            for call_id, row in list(self._results.items()):
+                meta = dict(row.metadata)
+                if PRODUCT_BINDING_META_KEY not in meta:
+                    continue
+                meta.pop(PRODUCT_BINDING_META_KEY, None)
+                self._results[call_id] = row.model_copy(update={"metadata": meta})
 
 
 def observation_from_fact(

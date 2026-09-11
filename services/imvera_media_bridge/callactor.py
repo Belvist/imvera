@@ -26,7 +26,7 @@ from packages.telephony.freeswitch_bridge import (
 from packages.voice_runtime.codec_output import bridge_audio_rates, resampler_chain_summary
 from packages.telephony.freeswitch_esl import hangup_channel
 from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
-from packages.voice_runtime.call_registry import get_call_registry
+from packages.voice_runtime.call_registry import build_call_registry
 from packages.voice_runtime.trace import record_event
 
 log = logging.getLogger("imvera_media_bridge.callactor")
@@ -41,10 +41,11 @@ def _gateway_urls() -> tuple[str, str, str]:
 
 
 def _resolve_product_mission(websocket: WebSocket, fs_uuid: str):
-    """Prefer durable CallRegistry (POST /v1/calls) over manual ?mission= JSON."""
+    """Prefer shared CallBinding (POST /v1/calls → PG) over manual ?mission= JSON."""
     from packages.dialogue_engine.mission import CallMission
 
-    registry = get_call_registry()
+    # Same create_call_record_store() as voice_service → shared PG when IMVERA_PG_URL set.
+    registry = build_call_registry(create_call_record_store())
     product_call_id = websocket.query_params.get("call_id") or websocket.query_params.get(
         "imvera_call_id"
     )

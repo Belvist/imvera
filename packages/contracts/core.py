@@ -105,3 +105,19 @@ class CallRecordStore(ABC):
         snapshot: CallResultSnapshot,
         family_id: str,
     ) -> PersistResult: ...
+
+    @abstractmethod
+    def put_call_binding(self, binding: dict[str, Any]) -> PersistResult:
+        """Persist product CallBinding into call_results (shared across processes)."""
+
+    @abstractmethod
+    def get_call_binding(self, call_id: str) -> dict[str, Any] | None:
+        """Load product CallBinding by call_id (no family_id required)."""
+
+    @abstractmethod
+    def get_call_binding_by_fs_uuid(self, fs_uuid: str) -> dict[str, Any] | None:
+        """Resolve product CallBinding by FreeSWITCH channel UUID."""
+
+    @abstractmethod
+    def delete_call_binding(self, call_id: str) -> PersistResult:
+        """Remove product CallBinding metadata (row may remain)."""

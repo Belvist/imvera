@@ -19,12 +19,12 @@ from pydantic import BaseModel, Field
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.core import create_call_record_store
 from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
-from packages.voice_runtime.call_registry import CallBinding, get_call_registry
+from packages.voice_runtime.call_registry import CallBinding, build_call_registry
 from services.providers.http_clients import close_shared_async_client, get_shared_async_client
 from packages.voice_runtime.trace import record_event
 
 _store = create_call_record_store()
-_call_registry = get_call_registry()
+_call_registry = build_call_registry(_store)
 
 
 @dataclass
@@ -160,7 +160,7 @@ async def create_call(body: CreateCallRequest) -> dict[str, Any]:
     elif isinstance(body.mission, dict):
         mission_id = str(body.mission.get("mission_id") or "")
 
-    # Durable binding survives _sessions.pop on stop — used by /result + FS bridge.
+    # Durable binding in shared CallRecordStore (PG in prod) — survives process boundary.
     _call_registry.register(
         CallBinding(
             call_id=call_id,
@@ -180,6 +180,9 @@ async def create_call(body: CreateCallRequest) -> dict[str, Any]:
         from packages.telephony.product_originate import originate_product_call
 
         originate = await originate_product_call(call_id=call_id)
+        fs_uuid = originate.get("fs_uuid")
+        if isinstance(fs_uuid, str) and fs_uuid:
+            _call_registry.bind_fs_uuid(call_id, fs_uuid)
         return {
             "call_id": call_id,
             "transport": body.transport,
@@ -298,7 +301,7 @@ def call_result(
     call_id: str,
     family_id: str | None = None,
 ) -> dict[str, Any]:
-    """Resolve family via query, durable CallRegistry, or live session — never wrong default."""
+    """Resolve family via query, shared CallBinding store, or live session — never wrong default."""
     resolved = family_id
     if not resolved:
         session = _sessions.get(call_id)

@@ -27,14 +27,15 @@ from packages.dialogue_engine.semantic_kernel.observation_memory import (
     classify_target_presence,
 )
 from packages.dialogue_engine.semantic_kernel.types import Observation, SubjectKind
-from packages.dialogue_engine.state import GoalLifecycle, Question, QuestionPhase
+from packages.dialogue_engine.state import GoalLifecycle, OpeningState, Question, QuestionPhase
 from packages.dialogue_engine.turn_understanding import RichUserTurn, payload_to_rich_turn
 from packages.telephony.product_originate import (
     build_stream_start_command,
     media_bridge_ws_url,
+    originate_product_call,
 )
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks, build_call_actor
-from packages.voice_runtime.call_registry import CallBinding, get_call_registry
+from packages.voice_runtime.call_registry import CallBinding, build_call_registry
 
 
 def _unseen_mission() -> CallMission:
@@ -347,17 +348,75 @@ def test_mission_status_rules_and_grounded_evidence(monkeypatch: pytest.MonkeyPa
     "text,expected",
     [
         ("сейчас", None),
+        ("я сейчас", None),
+        ("подождите", None),
+        ("секундочку", None),
+        ("минутку", None),
         ("сейчас её нет", "unavailable"),
+        ("её сейчас нет", "unavailable"),
         ("сейчас она спит", "unavailable"),
         ("она не может подойти", "unavailable"),
         ("сейчас передам", "confirmed"),
         ("передаю трубку", "confirmed"),
-        ("минутку, позову", "confirmed"),
+        ("сейчас дам трубку", "confirmed"),
+        ("минутку, сейчас позову", "confirmed"),
+        ("минутку, передам", "confirmed"),
+        ("минутку, позову", None),
         ("сейчас её нет, но сейчас передам", "unavailable"),
     ],
 )
 def test_classify_target_presence(text: str, expected: str | None) -> None:
     assert classify_target_presence(text) == expected
+
+
+def test_third_party_unknown_preserves_obligation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unknown wait phrases must keep third_party and re-ask target person — no mission goal."""
+    monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "1")
+    monkeypatch.setenv("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1")
+    eng = DialogueEngine(call_id="tp-unknown", mission=_unseen_mission())
+    eng.state.target_presence = "third_party"
+    eng.state.elder_display_name = "Анне Петровне"
+    eng.state.target_display_name = "Анне Петровне"
+    eng.state.delivered_question = Question(
+        question_id="q-tp",
+        slot="target_presence",
+        text="Могу я поговорить с Анне Петровне?",
+        phase=QuestionPhase.DELIVERED,
+        intent="ask_target_person",
+    )
+    eng.state.opening_state = OpeningState.DELIVERED
+    eng.state.first_user_turn_received = True
+    effects = eng.on_user_turn(
+        "u-wait",
+        "подождите",
+        rich_turn=RichUserTurn(
+            utterance_id="u-wait",
+            raw_text="подождите",
+            dialogue_act="other",
+            control="none",
+            answers_pending_question=False,
+            needs_clarification=False,
+        ),
+    )
+    assert eng.state.target_presence == "third_party"
+    speak = next((e for e in effects if getattr(e, "kind", None) == "speak"), None)
+    assert speak is not None
+    assert speak.intent == "ask_target_person"
+    assert speak.slot == "target_presence"
+    # Mission goal must not be asked while still in target-presence obligation.
+    assert "parcel" not in (speak.text or "").lower()
+    assert "посыл" not in (speak.text or "").lower()
+    assert all(
+        g.lifecycle
+        in (
+            GoalLifecycle.UNSEEN,
+            GoalLifecycle.AVAILABLE,
+            GoalLifecycle.ACTIVE,
+        )
+        for g in eng.state.goals.values()
+    )
 
 
 def test_third_party_unavailable_outcomes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -416,8 +475,7 @@ def test_result_lookup_after_session_pop_uses_registry(
     from services.voice_service import main as vs
 
     store = InMemoryCallRecordStore()
-    registry = get_call_registry()
-    registry.clear()
+    registry = build_call_registry(store)
     monkeypatch.setattr(vs, "_store", store)
     monkeypatch.setattr(vs, "_call_registry", registry)
     monkeypatch.setattr(vs, "_sessions", {})
@@ -476,7 +534,7 @@ def test_result_lookup_after_session_pop_uses_registry(
     session.state.call_finalized = False
     ok, err = session._finalize_call_if_needed()
     assert ok, err
-    # Simulate stop_call popping live session — only registry + store remain.
+    # Simulate stop_call popping live session — only shared store binding remains.
     assert call_id not in vs._sessions
 
     client = TestClient(vs.app)
@@ -485,6 +543,43 @@ def test_result_lookup_after_session_pop_uses_registry(
     body = resp.json()
     assert body["family_id"] == family_id
     assert body["mission_result"]["mission_id"] == "repair-safety"
+
+
+def test_call_binding_separate_store_instances_share_persistence() -> None:
+    """Simulate voice_service vs media_bridge: two store instances, no Python globals."""
+    shared: dict = {}
+    store_a = InMemoryCallRecordStore(shared=shared)
+    store_b = InMemoryCallRecordStore(shared=shared)
+    assert store_a is not store_b
+    assert store_a._results is store_b._results
+
+    mission = _unseen_mission()
+    reg_a = build_call_registry(store_a)
+    reg_b = build_call_registry(store_b)
+    assert reg_a is not reg_b
+
+    call_id = "call-cross-proc"
+    reg_a.register(
+        CallBinding(
+            call_id=call_id,
+            family_id="fam-shared",
+            person_id="p1",
+            elder_name="Анне Петровне",
+            transport="freeswitch",
+            mission=mission.model_dump(mode="json"),
+            mission_id=mission.mission_id,
+        )
+    )
+    # Resolve via the OTHER process's registry/store instance.
+    resolved = reg_b.resolve(call_id=call_id)
+    assert resolved is not None
+    assert resolved.family_id == "fam-shared"
+    assert resolved.mission_id == "repair-check-381"
+    assert resolved.mission is not None
+    goals = resolved.mission.get("goals") or []
+    goal_ids = {g.get("goal_id") for g in goals if isinstance(g, dict)}
+    assert "parcel_received_9182" in goal_ids
+    assert "worker_visited" in goal_ids
 
 
 # ---------------------------------------------------------------------------
@@ -500,19 +595,28 @@ def test_product_api_freeswitch_handoff_same_mission(
     from services.imvera_media_bridge import callactor as ca
     from services.voice_service import main as vs
 
-    registry = get_call_registry()
-    registry.clear()
+    shared: dict = {}
+    store = InMemoryCallRecordStore(shared=shared)
+    registry = build_call_registry(store)
     monkeypatch.setattr(vs, "_call_registry", registry)
     monkeypatch.setattr(vs, "_sessions", {})
-    monkeypatch.setattr(vs, "_store", InMemoryCallRecordStore())
+    monkeypatch.setattr(vs, "_store", store)
+    monkeypatch.setattr(ca, "create_call_record_store", lambda: InMemoryCallRecordStore(shared=shared))
 
     async def fake_originate(*, call_id: str, **_k):
         return {
             "ok": True,
             "call_id": call_id,
+            "fs_uuid": "fs-uuid-test",
             "ws_url": media_bridge_ws_url(call_id, fs_uuid="fs-uuid-test"),
             "destination": "user/zoiper",
             "dial_string": f"{{imvera_call_id={call_id}}}user/zoiper &park()",
+            "commands": [
+                f"originate {{imvera_call_id={call_id}}}user/zoiper &park()",
+                "uuid_setvar fs-uuid-test STREAM_PLAYBACK 1",
+                build_stream_start_command("fs-uuid-test", call_id),
+            ],
+            "stream_started": True,
         }
 
     monkeypatch.setattr(
@@ -551,10 +655,43 @@ def test_product_api_freeswitch_handoff_same_mission(
     assert family == "fam-fs"
     assert mission_obj is not None
     assert mission_obj.mission_id == "repair-check-381"
-    # Stream URL embeds product call_id (not only manual ?mission= JSON).
     cmd = build_stream_start_command("fs-uuid-test", call_id)
-    assert f"call_id={call_id}" in cmd or f"call_id={call_id}" in media_bridge_ws_url(
-        call_id, fs_uuid="fs-uuid-test"
+    assert f"call_id={call_id}" in cmd
+
+
+def test_originate_attaches_audio_stream_with_product_call_id() -> None:
+    """Integration-level mocked ESL: originate → answer → uuid_audio_stream with same call_id."""
+    call_id = "call-esl-stream-1"
+    commands: list[str] = []
+
+    async def fake_esl(command: str, *, timeout_s: float = 3.0) -> str:
+        commands.append(command)
+        if command.startswith("originate "):
+            return "+OK 11111111-2222-3333-4444-555555555555\n"
+        if command.startswith("uuid_setvar "):
+            return "+OK\n"
+        if command.startswith("uuid_audio_stream "):
+            return "+OK\n"
+        return "-ERR unexpected\n"
+
+    result = asyncio.run(originate_product_call(call_id=call_id, api=fake_esl, timeout_s=2.0))
+    assert result["ok"] is True
+    assert result["stream_started"] is True
+    assert result["call_id"] == call_id
+    assert len(commands) >= 3
+    assert commands[0].startswith("originate ")
+    assert "&park()" in commands[0]
+    assert "imvera_call_id=" + call_id in commands[0]
+    assert any(c.startswith("uuid_setvar ") and "STREAM_PLAYBACK" in c for c in commands)
+    stream_cmds = [c for c in commands if c.startswith("uuid_audio_stream ")]
+    assert len(stream_cmds) == 1
+    stream = stream_cmds[0]
+    assert " start " in stream
+    assert f"call_id={call_id}" in stream
+    assert result["fs_uuid"] in stream
+    # Order: originate before stream attach
+    assert commands.index(stream_cmds[0]) > commands.index(
+        next(c for c in commands if c.startswith("originate "))
     )
 
 
@@ -563,11 +700,11 @@ def test_create_call_api_accepts_mission(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1")
     from services.voice_service import main as vs
 
-    registry = get_call_registry()
-    registry.clear()
+    store = InMemoryCallRecordStore()
+    registry = build_call_registry(store)
     monkeypatch.setattr(vs, "_call_registry", registry)
     monkeypatch.setattr(vs, "_sessions", {})
-    monkeypatch.setattr(vs, "_store", InMemoryCallRecordStore())
+    monkeypatch.setattr(vs, "_store", store)
     monkeypatch.setattr(vs, "_max_sessions", 10)
 
     client = TestClient(vs.app)

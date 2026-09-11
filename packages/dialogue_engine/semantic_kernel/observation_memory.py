@@ -690,13 +690,17 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
     # Target presence answers.
     dq = state.delivered_question
     if dq is not None and dq.intent == "ask_target_person":
-        state.target_presence = classify_target_presence(turn.raw_text)
+        classified = classify_target_presence(turn.raw_text)
+        if classified is not None:
+            state.target_presence = classified
+        # else: preserve existing (e.g. third_party) — unknown is not a reset
 
 
 _UNAVAILABLE_PRESENCE = (
     r"нет\s+е[её]",
     r"е[её]\s+нет",
     r"е[её]\s+нету",
+    r"е[её]\s+сейчас\s+нет",
     r"сейчас\s+е[её]\s+нет",
     r"сейчас\s+е[её]\s+нету",
     r"сейчас\s+она\s+спит",
@@ -711,23 +715,21 @@ _UNAVAILABLE_PRESENCE = (
     r"нету\s+дома",
     r"не\s+дома",
 )
+# Confirmed transfer only — explicit handoff phrases. Bare «минутку» / «сейчас» / «позову» are NOT transfer.
 _TRANSFER_PRESENCE = (
     r"сейчас\s+передам",
-    r"сейчас\s+дам",
     r"передаю\s+трубк",
-    r"передаю",
-    r"передам",
-    r"минутку,?\s*позову",
-    r"минутку",
-    r"сейчас\s+позову",
-    r"позову",
+    r"сейчас\s+дам\s+трубк",
+    r"минутку,?\s*сейчас\s+позову",
+    r"минутку,?\s*передам",
 )
 
 
 def classify_target_presence(raw_text: str) -> str | None:
     """Map third-party reply → unavailable | confirmed. Unavailable wins over transfer.
 
-    Bare «сейчас» alone is NOT transfer evidence.
+    Returns None for unknown/wait phrases («подождите», «секундочку», bare «минутку»,
+    «я сейчас») — caller MUST preserve existing target_presence (usually third_party).
     """
     low = (raw_text or "").strip().lower()
     if not low:
