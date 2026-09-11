@@ -517,3 +517,168 @@ def test_no_domain_dictionaries_in_deterministic_mission() -> None:
         "таблет",
     ):
         assert banned not in src, f"domain/mission token leaked: {banned}"
+
+
+# ---------------------------------------------------------------------------
+# P0 predicate-negation / question / uncertainty — mandatory A–I
+# ---------------------------------------------------------------------------
+
+
+def _answers_by_id(result):
+    return {a.goal_id: a for a in result.goal_answers}
+
+
+def test_p0_a_predicate_negation_master_did_not_come() -> None:
+    """A: «мастер не приходил» → worker_visited=no (predicate grounded)."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(_req("мастер не приходил", mission, "worker_visited"))
+    by_id = _answers_by_id(result)
+    assert by_id["worker_visited"].value == "no"
+    assert "не приходил" in by_id["worker_visited"].evidence.casefold()
+
+
+def test_p0_b_tak_i_ne_prihodil_is_no() -> None:
+    """B: «так и не приходил» → worker_visited=no."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(_req("так и не приходил", mission, "worker_visited"))
+    by_id = _answers_by_id(result)
+    assert by_id["worker_visited"].value == "no"
+
+
+def test_p0_c_ne_skazal_must_not_be_worker_no() -> None:
+    """C: «мастер не сказал, когда придёт» must NOT become worker_visited=no."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(
+        _req("мастер не сказал, когда придёт", mission, "worker_visited")
+    )
+    assert not any(
+        a.goal_id == "worker_visited" and a.value == "no" for a in result.goal_answers
+    )
+    assert not any(a.goal_id == "worker_visited" for a in result.goal_answers) or all(
+        a.value != "no" for a in result.goal_answers if a.goal_id == "worker_visited"
+    )
+
+
+def test_p0_d_ne_zvonil_must_not_be_worker_no_or_hangup() -> None:
+    """D: «мастер мне не звонил» must NOT be worker_visited=no or stop_call."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(_req("мастер мне не звонил", mission, "worker_visited"))
+    assert result.control != "stop_call"
+    assert not any(
+        a.goal_id == "worker_visited" and a.value == "no" for a in result.goal_answers
+    )
+
+
+def test_p0_e_kran_ne_pochinili_is_no() -> None:
+    """E: «кран не починили» → repair_completed=no."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(_req("кран не починили", mission, "worker_visited"))
+    by_id = _answers_by_id(result)
+    assert by_id["repair_completed"].value == "no"
+    assert "не починил" in by_id["repair_completed"].evidence.casefold()
+
+
+def test_p0_f_pro_kran_ne_skazali_must_not_be_repair_no() -> None:
+    """F: «про кран мне ничего не сказали» must NOT become repair_completed=no."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(
+        _req("про кран мне ничего не сказали", mission, "worker_visited")
+    )
+    assert not any(
+        a.goal_id == "repair_completed" and a.value == "no"
+        for a in result.goal_answers
+    )
+
+
+def test_p0_g_question_ne_skazal_is_user_question_not_fact() -> None:
+    """G: «Мастер не сказал, когда придёт?» → user_question, no worker fact."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    text = "Мастер не сказал, когда придёт?"
+    result = p.understand(_req(text, mission, "worker_visited"))
+    assert result.user_question is not None
+    assert not any(a.goal_id == "worker_visited" for a in result.goal_answers)
+
+
+def test_p0_h_question_ne_pochinil_not_repair_fact() -> None:
+    """H: «Кран он не починил?» → user_question/unclear, no repair factual."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    text = "Кран он не починил?"
+    result = p.understand(_req(text, mission, "repair_completed"))
+    assert result.user_question is not None
+    assert not any(a.goal_id == "repair_completed" for a in result.goal_answers)
+    assert any(
+        d.goal_id == "repair_completed" and d.disposition == "unclear"
+        for d in result.goal_dispositions
+    )
+
+
+def test_p0_i_mixed_answer_plus_question_and_uncertainty_unclear() -> None:
+    """I: mixed fact+question binds; uncertainty+negation → UNCLEAR not hard no."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+
+    mixed = p.understand(
+        _req("Да, мастер приходил, а кто вы?", mission, "worker_visited")
+    )
+    by_id = _answers_by_id(mixed)
+    assert by_id["worker_visited"].value == "yes"
+    assert mixed.user_question is not None
+
+    uncertain = p.understand(
+        _req("Кажется, кран не починили.", mission, "worker_visited")
+    )
+    assert not any(
+        a.goal_id == "repair_completed" and a.value in {"yes", "no"}
+        for a in uncertain.goal_answers
+    )
+    assert any(
+        d.goal_id == "repair_completed" and d.disposition == "unclear"
+        for d in uncertain.goal_dispositions
+    )
+
+
+def test_p0_near_miss_extra_false_facts_blocked() -> None:
+    """Near-miss phrases of the same bug class must not write false facts."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+
+    # Topic + unrelated negation (wrote / called / explained).
+    for text in (
+        "мастер не написал адрес",
+        "про мастера мне ничего не объяснили",
+        "кран он не показал, где течёт",
+    ):
+        result = p.understand(_req(text, mission, "worker_visited"))
+        assert not any(
+            a.goal_id == "worker_visited" and a.value == "no"
+            for a in result.goal_answers
+        ), text
+        assert not any(
+            a.goal_id == "repair_completed" and a.value == "no"
+            for a in result.goal_answers
+        ), text
+
+    # Uncertainty softens even clear-looking predicate negation.
+    soft = p.understand(
+        _req("Наверное, мастер не приходил", mission, "worker_visited")
+    )
+    assert not any(
+        a.goal_id == "worker_visited" and a.value == "no" for a in soft.goal_answers
+    )
+    assert any(
+        d.goal_id == "worker_visited" and d.disposition == "unclear"
+        for d in soft.goal_dispositions
+    )
+
+    # Bare unknown still maps to unknown (not unclear / not hangup).
+    unk = p.understand(_req("не знаю", mission, "worker_visited"))
+    assert unk.goal_answers[0].value == "unknown"
+    assert unk.control != "stop_call"

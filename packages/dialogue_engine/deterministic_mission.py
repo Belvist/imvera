@@ -4,8 +4,10 @@ Works only from CallMission GoalDefinition data + MissionUnderstandingContext.
 No domain/mission-specific Python dictionaries (plumber/meds/groceries/…).
 
 Enum/bool values require an explicit gate (bare polarity, leading polarity +
-delivered context, answer_aliases, or linguistic negation of the goal
-predicate). Topic mention alone is never affirmative.
+delivered context, answer_aliases, or predicate-grounded negation of stems
+from prompt_hint/description/semantic_hints). Topic mention + any «не» is
+never enough for factual no. Question clauses and uncertainty markers do
+not become hard enum/bool facts (aliases may still bind).
 
 Behaviors inspired by older voice MVP quality (clause split, multi-goal bind,
 evidence spans, clarify-when-ambiguous) — not a port of that engine.
@@ -37,7 +39,6 @@ _LEADING_YES = re.compile(r"(?i)^\s*(да|ага|угу)\s*[,!.]?\s*")
 _LEADING_NO = re.compile(r"(?i)^\s*(нет)\s*[,!.]?\s*")
 _LEADING_UNKNOWN = re.compile(r"(?i)^\s*(не\s+знаю|не\s+помню)\s*[,!.]?\s*")
 _TOKEN = re.compile(r"[а-яёa-z0-9]+", re.I)
-_NEGATION = re.compile(r"(?i)(?<![а-яёa-z])не(?![а-яёa-z])")
 
 # Generic refusal ≠ factual "нет". No domain/topic refusal dictionaries.
 _GENERIC_REFUSAL = re.compile(
@@ -50,8 +51,11 @@ _GENERIC_REFUSAL = re.compile(
     r"\bоткажусь\b"
     r")"
 )
-# Call-level control (not a goal answer).
-_CALL_CONTROL_NO_CALL = re.compile(r"(?i)\bне\s+звон\w*")
+# Call-level control (not a goal answer). Imperative / request only —
+# past-tense narrative «не звонил» must NOT hang up the call.
+_CALL_CONTROL_NO_CALL = re.compile(
+    r"(?i)\bне\s+(?:звоните|звони|звонить|звоню)\b"
+)
 _PAUSE = re.compile(
     r"(?i)\b(подождите|подожди|минуточку|секундочку|погодите)\b"
 )
@@ -310,6 +314,39 @@ def _goal_lexicon(gdef: GoalDefinition) -> frozenset[str]:
     return _content_stems(" ".join(parts))
 
 
+def _one_word_alias_stems(gdef: GoalDefinition) -> frozenset[str]:
+    """Single-token topic aliases — must not alone ground predicate negation."""
+    out: set[str] = set()
+    for alias in gdef.aliases or ():
+        toks = [
+            t.casefold()
+            for t in _TOKEN.findall(alias or "")
+            if t.casefold() not in _STOPWORDS
+            and not t.isdigit()
+            and len(t) >= 2
+        ]
+        if len(toks) == 1:
+            out.add(_stem(toks[0]))
+    return frozenset(out)
+
+
+def _predicate_lexicon(gdef: GoalDefinition) -> frozenset[str]:
+    """Stems that can ground factual polarity for this goal.
+
+    Built only from prompt_hint + description + semantic_hints.
+    One-word topic aliases are stripped even if they also appear there, so
+    topic mention + any ``не`` cannot alone become factual ``no``.
+    """
+    parts = [
+        gdef.prompt_hint or "",
+        gdef.description or "",
+        *gdef.semantic_hints,
+    ]
+    stems = set(_content_stems(" ".join(parts)))
+    stems -= _one_word_alias_stems(gdef)
+    return frozenset(stems)
+
+
 def _score_clause_to_goal(clause: str, gdef: GoalDefinition) -> float:
     lex = _goal_lexicon(gdef)
     if not lex:
@@ -331,15 +368,33 @@ def _score_clause_to_goal(clause: str, gdef: GoalDefinition) -> float:
 
 
 def _negation_near_goal_token(clause: str, gdef: GoalDefinition) -> bool:
-    """True when the clause both matches the goal and carries a negation.
+    """True only when ``не`` negates a goal PREDICATE stem.
 
-    Language-level ``не`` near goal content → polarity no. No domain verb lists.
+    For every word ``не``, inspect the next 1–2 content tokens/stems. Return
+    true only when a negated stem is in the predicate lexicon derived from
+    prompt_hint / description / semantic_hints. Topic alias alone is never
+    enough. No domain verb dictionaries.
     """
-    if not _NEGATION.search(clause or ""):
+    pred = _predicate_lexicon(gdef)
+    if not pred:
         return False
-    if _score_clause_to_goal(clause, gdef) < _MIN_MATCH_SCORE:
+    tokens = list(_TOKEN.finditer(clause or ""))
+    if not tokens:
         return False
-    return True
+    for i, m in enumerate(tokens):
+        if m.group(0).casefold() != "не":
+            continue
+        seen_content = 0
+        for j in range(i + 1, len(tokens)):
+            low = tokens[j].group(0).casefold()
+            if low in _STOPWORDS or low.isdigit() or len(low) < 2:
+                continue
+            if _stem(low) in pred:
+                return True
+            seen_content += 1
+            if seen_content >= 2:
+                break
+    return False
 
 
 def _match_answer_aliases(clause: str, gdef: GoalDefinition) -> str | None:
@@ -451,6 +506,7 @@ def _pick_value_for_clause(
     *,
     inherited_polarity: str | None,
     for_delivered: bool,
+    utterance_uncertain: bool = False,
 ) -> str | None:
     """Enum/bool gates only — never topic-mention → yes.
 
@@ -464,10 +520,14 @@ def _pick_value_for_clause(
 
     allowed = _allowed_for(gdef)
 
-    # C/D — grounded answer_aliases from mission data.
+    # C/D — grounded answer_aliases from mission data (may bind even under uncertainty).
     alias_val = _match_answer_aliases(clause, gdef)
     if alias_val is not None:
         return alias_val if alias_val in allowed else None
+
+    # Question / meta clause must not become a hard enum/bool fact.
+    if _is_user_question(clause) or _is_meta(clause):
+        return None
 
     # A — bare polarity clause.
     bare = _bare_polarity(clause)
@@ -479,8 +539,12 @@ def _pick_value_for_clause(
 
     lead, rest = _leading_polarity(clause)
 
-    # E — unambiguous linguistic negation of the goal predicate.
+    # E — predicate-grounded negation only (not topic + any «не»).
+    # Uncertainty markers (clause or whole utterance) block hard yes/no
+    # unless alias already matched above.
     if _negation_near_goal_token(clause, gdef):
+        if utterance_uncertain or _is_uncertainty(clause):
+            return None
         if "no" in allowed:
             return "no"
         return None
@@ -618,6 +682,7 @@ class DeterministicMissionUnderstandingProvider:
         utterance_polarity = _bare_polarity(text)
         leading_polarity, after_lead = _leading_polarity(text)
         inherited = utterance_polarity or leading_polarity
+        utterance_uncertain = _is_uncertainty(text)
 
         # --- B. First bind answer to DELIVERED goal ---
         if delivered_id and delivered_id in candidates:
@@ -630,6 +695,7 @@ class DeterministicMissionUnderstandingProvider:
                     inherited_polarity=inherited,
                     after_lead=after_lead,
                     is_correction=correction and _was_satisfied(ctx, delivered_id),
+                    utterance_uncertain=utterance_uncertain,
                 )
                 if bound is not None:
                     answers.append(bound)
@@ -691,6 +757,7 @@ class DeterministicMissionUnderstandingProvider:
                 top_gdef,
                 inherited_polarity=None,
                 for_delivered=False,
+                utterance_uncertain=utterance_uncertain,
             )
             if value is None and top_gdef.answer_type == "free_text":
                 value = self._free_text_value(
@@ -765,6 +832,7 @@ class DeterministicMissionUnderstandingProvider:
         inherited_polarity: str | None,
         after_lead: str,
         is_correction: bool,
+        utterance_uncertain: bool = False,
     ) -> tuple[GoalAnswerCandidate | None, GoalDispositionCandidate | None, int | None]:
         # Free-text delivered: filter questions / refusal / control / meta / pause.
         if gdef.answer_type == "free_text":
@@ -830,12 +898,14 @@ class DeterministicMissionUnderstandingProvider:
                 gdef,
                 inherited_polarity=inherited_polarity,
                 for_delivered=True,
+                utterance_uncertain=utterance_uncertain,
             )
             if value is None and inherited_polarity and best_score >= _MIN_MATCH_SCORE:
                 # Leading polarity + matching goal content (gate B).
                 if not _negation_near_goal_token(clause.text, gdef):
-                    if inherited_polarity in _allowed_for(gdef):
-                        value = inherited_polarity
+                    if not (utterance_uncertain or _is_uncertainty(clause.text)):
+                        if inherited_polarity in _allowed_for(gdef):
+                            value = inherited_polarity
             if value is None:
                 # Topic mention without affirmative gate → unclear, not yes.
                 return (
