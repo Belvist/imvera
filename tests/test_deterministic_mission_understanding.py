@@ -369,3 +369,151 @@ def test_need_llm_always_false_when_engine_active() -> None:
     assert "need_llm = (not fastpath_enough)" not in src
     # Engine branch forces False; only legacy non-engine may set True.
     assert "if not self.session.uses_dialogue_engine():" in src
+
+
+def _groceries_mission(*, with_alias: bool) -> CallMission:
+    aliases = (
+        {"no": ("принесла", "принесли", "уже принесла", "дочь уже принесла")}
+        if with_alias
+        else {}
+    )
+    return CallMission(
+        mission_id="groceries-det",
+        goals=(
+            GoalDefinition(
+                goal_id="groceries_help",
+                description="Узнать, нужна ли помощь с продуктами",
+                prompt_hint="Нужна ли сегодня помощь с продуктами?",
+                required=True,
+                priority=10,
+                answer_type="enum",
+                allowed_values=("yes", "no", "unknown"),
+                aliases=("продукты", "продукт"),
+                semantic_hints=("помощь с продуктами",),
+                answer_aliases=aliases,
+            ),
+        ),
+    )
+
+
+def test_a_groceries_topic_mention_without_alias_is_not_yes() -> None:
+    """A: topic mention alone must not SATISFY as yes."""
+    mission = _groceries_mission(with_alias=False)
+    p = DeterministicMissionUnderstandingProvider()
+    text = "продукты дочь уже принесла"
+    result = p.understand(_req(text, mission, "groceries_help"))
+    assert not any(a.value == "yes" for a in result.goal_answers)
+    assert not any(a.goal_id == "groceries_help" for a in result.goal_answers)
+    assert any(d.disposition == "unclear" for d in result.goal_dispositions)
+
+
+def test_b_groceries_with_answer_alias_maps_value() -> None:
+    """B: answer_aliases from GoalDefinition may bind value."""
+    mission = _groceries_mission(with_alias=True)
+    p = DeterministicMissionUnderstandingProvider()
+    text = "продукты дочь уже принесла"
+    result = p.understand(_req(text, mission, "groceries_help"))
+    by_id = {a.goal_id: a for a in result.goal_answers}
+    assert by_id["groceries_help"].value == "no"
+    assert "принесла" in by_id["groceries_help"].evidence.casefold()
+
+
+def test_c_refusal_is_declined_not_factual_no() -> None:
+    """C: generic refusal → declined; bare нет stays factual no."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    refused = p.understand(_req("Не хочу говорить", mission, "worker_visited"))
+    assert refused.goal_answers == ()
+    assert len(refused.goal_dispositions) == 1
+    assert refused.goal_dispositions[0].goal_id == "worker_visited"
+    assert refused.goal_dispositions[0].disposition == "declined"
+
+    bare = p.understand(_req("нет", mission, "worker_visited"))
+    assert bare.goal_answers[0].value == "no"
+
+    control = p.understand(_req("не звоните больше", mission, "worker_visited"))
+    assert control.goal_answers == ()
+    assert control.control == "stop_call"
+
+
+def test_d_correction_reopens_satisfied_goal() -> None:
+    """D: correction marker may reopen SATISFIED; without marker must not."""
+    mission = _repair_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    life = {"worker_visited": "SATISFIED", "repair_completed": "ACTIVE"}
+    ctx = _ctx(mission, delivered="repair_completed", lifecycles=life)
+    # Without marker — do not reopen satisfied worker_visited.
+    no_marker = p.understand(
+        MissionUnderstandingRequest(
+            text="мастер не приходил",
+            utterance_id="u-corr-0",
+            mission=mission,
+            delivered_goal_id="repair_completed",
+            delivered_question_phase=QuestionPhase.DELIVERED.value,
+            context=ctx,
+        )
+    )
+    assert not any(a.goal_id == "worker_visited" for a in no_marker.goal_answers)
+
+    marked = p.understand(
+        MissionUnderstandingRequest(
+            text="На самом деле мастер не приходил",
+            utterance_id="u-corr-1",
+            mission=mission,
+            delivered_goal_id="repair_completed",
+            delivered_question_phase=QuestionPhase.DELIVERED.value,
+            context=ctx,
+        )
+    )
+    by_id = {a.goal_id: a for a in marked.goal_answers}
+    assert "worker_visited" in by_id
+    assert by_id["worker_visited"].value == "no"
+    assert by_id["worker_visited"].is_correction is True
+
+
+def test_e_free_text_rejects_user_question() -> None:
+    """E: free_text must not eat user questions; names still ok; refusal → declined."""
+    mission = CallMission(
+        mission_id="name-check",
+        goals=(
+            GoalDefinition(
+                goal_id="contact_name",
+                prompt_hint="Как вас зовут?",
+                answer_type="free_text",
+                allowed_values=(),
+                priority=10,
+            ),
+        ),
+    )
+    p = DeterministicMissionUnderstandingProvider()
+    q = p.understand(_req("А зачем вы это спрашиваете?", mission, "contact_name"))
+    assert q.goal_answers == ()
+    assert q.user_question is not None
+    assert "зачем" in q.user_question.casefold()
+
+    name = p.understand(_req("Иван Петров", mission, "contact_name"))
+    assert len(name.goal_answers) == 1
+    assert name.goal_answers[0].value == "Иван Петров"
+
+    declined = p.understand(_req("Не хочу говорить", mission, "contact_name"))
+    assert declined.goal_answers == ()
+    assert any(d.disposition == "declined" for d in declined.goal_dispositions)
+
+
+def test_no_domain_dictionaries_in_deterministic_mission() -> None:
+    src = Path("packages/dialogue_engine/deterministic_mission.py").read_text(
+        encoding="utf-8"
+    )
+    for banned in (
+        "оплатил",
+        "приходил",
+        "заплатил",
+        "слома",
+        "еле работает",
+        "utilities_paid",
+        "worker_visited",
+        "groceries_help",
+        "сантехник",
+        "таблет",
+    ):
+        assert banned not in src, f"domain/mission token leaked: {banned}"
