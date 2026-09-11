@@ -40,7 +40,9 @@ def build_freeswitch_voice_lab_env() -> dict[str, str]:
     env.setdefault("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1")
     # Single-writer DialogueEngine for daily-check pilot (must match session.py gate).
     env.setdefault("IMVERA_DIALOGUE_ENGINE", "1")
+    # Product live loop is deterministic — do not enable Qwen interpret.
     env.setdefault("IMVERA_LLM_INTERPRET", "0")
+    env.setdefault("IMVERA_MISSION_LLM_INTERPRET", "0")
     env.setdefault("IMVERA_NEGOTIATED_CODEC", "G722")
     env.setdefault("PYTHONPATH", str(ROOT))
     return env

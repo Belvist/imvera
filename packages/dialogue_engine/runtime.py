@@ -25,19 +25,18 @@ def _flag_on(name: str, default: str) -> bool:
 
 
 def llm_interpret_enabled() -> bool:
-    """Whether CallActor may call HttpLLMProvider.interpret_turn (/v1/interpret).
+    """Whether legacy CallActor may call HttpLLMProvider.interpret_turn.
 
-    Production default: allowed. CallActor still keeps daily_check + FastPath bare
-    answers deterministic; only custom-mission free speech uses the model.
+    Product default: OFF. DialogueEngine product path never calls interpret
+    regardless of these flags (need_llm is always False when engine is active).
 
-    Kill switches:
-    - IMVERA_LLM_INTERPRET=0 — disables interpret entirely
-    - IMVERA_MISSION_LLM_INTERPRET=0 — disables mission free-speech interpret
-      (same effect when engine is on; kept as an explicit mission semantic switch)
+    Opt-in (legacy planner / experiments only):
+    - IMVERA_LLM_INTERPRET=1
+    - and when engine is on, also IMVERA_MISSION_LLM_INTERPRET=1
     """
-    if not _flag_on("IMVERA_LLM_INTERPRET", "1"):
+    if not _flag_on("IMVERA_LLM_INTERPRET", "0"):
         return False
-    if engine_enabled() and not _flag_on("IMVERA_MISSION_LLM_INTERPRET", "1"):
+    if engine_enabled() and not _flag_on("IMVERA_MISSION_LLM_INTERPRET", "0"):
         return False
     return True
 
@@ -80,9 +79,9 @@ def runtime_truth() -> dict[str, Any]:
         "IMVERA_VOICE_DIRECT_WELLNESS_OPENING": os.environ.get(
             "IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1"
         ),
-        "IMVERA_LLM_INTERPRET": os.environ.get("IMVERA_LLM_INTERPRET", "1"),
+        "IMVERA_LLM_INTERPRET": os.environ.get("IMVERA_LLM_INTERPRET", "0"),
         "IMVERA_MISSION_LLM_INTERPRET": os.environ.get(
-            "IMVERA_MISSION_LLM_INTERPRET", "1"
+            "IMVERA_MISSION_LLM_INTERPRET", "0"
         ),
         "dialogue.llm_interpret.enabled": llm_interpret_enabled(),
     }

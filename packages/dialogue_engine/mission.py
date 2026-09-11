@@ -24,6 +24,11 @@ class GoalDefinition(BaseModel):
     allowed_values: tuple[str, ...] = ("yes", "no", "unknown")
     max_attempts: int = 2
     source: str = "mission"
+    # Data-driven matching only — never hard-code domain verbs in Python.
+    aliases: tuple[str, ...] = ()
+    semantic_hints: tuple[str, ...] = ()
+    # Map allowed value → utterance phrases that mean that value for this goal.
+    answer_aliases: dict[str, tuple[str, ...]] = Field(default_factory=dict)
 
     model_config = {"frozen": True}
 

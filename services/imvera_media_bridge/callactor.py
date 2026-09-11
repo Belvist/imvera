@@ -92,10 +92,11 @@ def _resolve_product_mission(websocket: WebSocket, fs_uuid: str):
 
 
 async def inference_blockers() -> list[str]:
-    stt, tts, llm = _gateway_urls()
+    """Product CallActor readiness: STT + TTS required; LLM is not required."""
+    stt, tts, _llm = _gateway_urls()
     blockers: list[str] = []
     async with httpx.AsyncClient(timeout=2.0) as client:
-        for name, base in (("stt", stt), ("tts", tts), ("llm", llm)):
+        for name, base in (("stt", stt), ("tts", tts)):
             try:
                 response = await client.get(f"{base.rstrip('/')}/health/ready")
                 if response.status_code != 200:

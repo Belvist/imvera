@@ -89,47 +89,33 @@ async def _noop(*_a, **_k):
 # ---------------------------------------------------------------------------
 
 
-def test_llm_interpret_enabled_by_default_with_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_llm_interpret_disabled_by_default_with_engine(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "1")
     monkeypatch.delenv("IMVERA_LLM_INTERPRET", raising=False)
     monkeypatch.delenv("IMVERA_MISSION_LLM_INTERPRET", raising=False)
-    assert llm_interpret_enabled() is True
+    assert llm_interpret_enabled() is False
+    monkeypatch.setenv("IMVERA_LLM_INTERPRET", "1")
     monkeypatch.setenv("IMVERA_MISSION_LLM_INTERPRET", "0")
     assert llm_interpret_enabled() is False
     monkeypatch.setenv("IMVERA_MISSION_LLM_INTERPRET", "1")
     monkeypatch.setenv("IMVERA_LLM_INTERPRET", "0")
     assert llm_interpret_enabled() is False
+    monkeypatch.setenv("IMVERA_LLM_INTERPRET", "1")
+    monkeypatch.setenv("IMVERA_MISSION_LLM_INTERPRET", "1")
+    assert llm_interpret_enabled() is True
 
 
-def test_call_actor_custom_free_speech_calls_interpret_once(
+def test_call_actor_custom_free_speech_never_calls_interpret(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "1")
     monkeypatch.setenv("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1")
-    monkeypatch.delenv("IMVERA_LLM_INTERPRET", raising=False)
-    monkeypatch.delenv("IMVERA_MISSION_LLM_INTERPRET", raising=False)
+    monkeypatch.setenv("IMVERA_LLM_INTERPRET", "0")
+    monkeypatch.setenv("IMVERA_MISSION_LLM_INTERPRET", "0")
 
     mission = _repair_mission()
     store = InMemoryCallRecordStore()
-    interpret = AsyncMock(
-        return_value=SimpleNamespace(
-            payload=SemanticPayload(
-                dialogue_act="answer",
-                control="none",
-                consent_answer="not_applicable",
-                answers_pending_question=True,
-                needs_clarification=False,
-                goal_answers=(
-                    GoalAnswerSemantic(
-                        goal_id="worker_visited",
-                        value="yes",
-                        confidence=0.9,
-                        evidence="мастер утром был",
-                    ),
-                ),
-            )
-        )
-    )
+    interpret = AsyncMock(side_effect=AssertionError("LLM interpret must not run"))
 
     async def stt_free(_pcm, *_a, **_k):
         return SimpleNamespace(
@@ -164,7 +150,8 @@ def test_call_actor_custom_free_speech_calls_interpret_once(
         eng.on_playout_completed(speak.generation, speak.question_id)
 
     asyncio.run(actor._handle_utterance(b"pcm-free", 1))
-    assert interpret.await_count == 1
+    assert interpret.await_count == 0
+    assert eng.state.goals["worker_visited"].lifecycle.value == "SATISFIED"
 
 
 def test_call_actor_custom_bare_yes_skips_llm(monkeypatch: pytest.MonkeyPatch) -> None:

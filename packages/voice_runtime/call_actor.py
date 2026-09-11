@@ -1868,23 +1868,6 @@ class CallActor:
             use_rich_deterministic = (
                 self.session.uses_dialogue_engine() and rich_turn is not None
             )
-            custom_mission = bool(
-                self.session._engine
-                and (self.session._engine.state.mission_preset or "") != "daily_check"
-                and self.session._engine.state.mission_goal_ids
-            )
-            # Custom missions: FastPath/bare polarity may skip LLM; free speech must not.
-            fastpath_enough = False
-            if custom_mission and rich_turn is not None:
-                # Heuristic: only bare yes/no/unknown without issues/questions/corrections.
-                t = text.strip()
-                fastpath_enough = bool(
-                    re.match(r"(?i)^\s*(да|ага|угу|нет|не\s+знаю|не\s+помню)\s*[.!]?\s*$", t)
-                    and not rich_turn.issue_mentions
-                    and not rich_turn.user_question
-                    and not rich_turn.correction
-                    and rich_turn.control in ("none", "", None)
-                )
             kernel_has_meaning = bool(
                 kernel_result
                 and (
@@ -1927,19 +1910,18 @@ class CallActor:
             llm_request_id = f"llm-{uuid.uuid4().hex[:8]}"
             self._active_llm_request_id = llm_request_id
             semantic_payload = None
+            # Product DialogueEngine path: NEVER call /v1/interpret — deterministic
+            # SemanticKernel + MissionUnderstandingProvider only (incl. custom mission).
             need_llm = False
-            if custom_mission:
-                # Bare yes/no/unknown stays FastPath; free speech → /v1/interpret.
-                need_llm = (not fastpath_enough) and llm_interpret_enabled()
-            elif self.session.uses_dialogue_engine():
-                # daily_check / engine path: deterministic rich / FastPath only.
-                need_llm = False
-            elif not fast_confident and not use_rich_deterministic and llm_interpret_enabled():
-                need_llm = True
+            if not self.session.uses_dialogue_engine():
+                if (
+                    not fast_confident
+                    and not use_rich_deterministic
+                    and llm_interpret_enabled()
+                ):
+                    need_llm = True
             try:
                 if need_llm:
-                    from packages.dialogue_engine.mission_result import mission_context_for_llm
-
                     ctx = build_turn_context(
                         self.session.state,
                         turn_id=turn_id,
@@ -1948,9 +1930,6 @@ class CallActor:
                         asr_quality=stt_result.asr_quality,
                         delivered_phrases=tuple(self._delivered_phrases[-6:]),
                     )
-                    if custom_mission and self.session._engine is not None:
-                        mission_ctx = mission_context_for_llm(self.session._engine.state)
-                        ctx = ctx.model_copy(update={"mission": mission_ctx})
                     try:
                         semantic_payload = await self.llm.interpret_turn(
                             ctx,

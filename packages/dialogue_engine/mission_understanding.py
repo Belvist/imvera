@@ -1,7 +1,7 @@
 """Mission understanding boundary — candidates only, no EngineState writes.
 
-Production semantic model plugs in via MissionUnderstandingProvider.
-Slice 1 default: FastPath only for bare да/нет/не знаю to a DELIVERED goal.
+Production default: DeterministicMissionUnderstandingProvider (CallMission data +
+context). FastPathMissionProvider remains for bare-polarity unit tests / DI.
 Domain/mission-specific regex dictionaries are forbidden here.
 """
 
@@ -54,7 +54,7 @@ class MissionUnderstandingRequest(BaseModel):
 
 
 class StructuredMissionResult(BaseModel):
-    """Schema shared by fake test providers and future production semantic model."""
+    """Schema shared by fake test providers and production semantic model."""
 
     goal_answers: tuple[GoalAnswerCandidate, ...] = ()
     goal_dispositions: tuple[GoalDispositionCandidate, ...] = ()
@@ -131,7 +131,14 @@ def set_mission_understanding_provider(
 
 
 def get_mission_understanding_provider() -> MissionUnderstandingProvider:
-    return _provider if _provider is not None else FastPathMissionProvider()
+    """Production default: deterministic mission understanding (no LLM)."""
+    if _provider is not None:
+        return _provider
+    from packages.dialogue_engine.deterministic_mission import (
+        DeterministicMissionUnderstandingProvider,
+    )
+
+    return DeterministicMissionUnderstandingProvider()
 
 
 def understand_mission(
