@@ -279,6 +279,16 @@ def route_schedule_next_action(
     legacy: LegacyScheduler,
 ) -> ResponsePlan:
     """Single routing entry for conversation scheduler decisions."""
+    from packages.dialogue_engine.mission_flow import is_custom_mission
+
+    # Custom CallMission must never enter frozen ActionPolicy soft/policy path.
+    if is_custom_mission(state):
+        _bump(state, "mode_legacy")
+        _bump(state, "custom_mission_bypass_v8")
+        plan = legacy(state, turn_context)
+        _bump(state, "legacy_invocations")
+        return plan
+
     mode = action_policy_mode()
     _bump(state, f"mode_{mode}")
 

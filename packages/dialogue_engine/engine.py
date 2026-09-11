@@ -46,6 +46,7 @@ class DialogueEngine:
         elder_display_name: str = "Анной Петровной",
         prior_call_context: dict[str, str] | None = None,
         mission: CallMission | None = None,
+        mission_understanding_provider: object | None = None,
     ) -> None:
         from packages.dialogue_engine.mission_seed import apply_mission_to_state, resolve_mission
 
@@ -57,10 +58,22 @@ class DialogueEngine:
             follow_up_opening=bool(prior_call_context),
         )
         apply_mission_to_state(self.state, self.mission)
+        self.mission_understanding_provider = mission_understanding_provider
         self._outbox = EffectOutbox(call_id=call_id)
         self._dispatcher = EffectDispatcher(self._outbox)
         self._started = False
         self._completed_playout_generations: set[int] = set()
+
+    def build_rich_turn(self, text: str, *, utterance_id: str) -> RichUserTurn:
+        """Build RichUserTurn using this engine's state + optional provider DI."""
+        from packages.dialogue_engine.turn_understanding import build_rich_turn_from_text
+
+        return build_rich_turn_from_text(
+            text,
+            utterance_id=utterance_id,
+            engine_state=self.state,
+            mission_provider=self.mission_understanding_provider,
+        )
 
     @property
     def outbox(self) -> EffectOutbox:

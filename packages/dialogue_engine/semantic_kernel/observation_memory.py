@@ -559,28 +559,43 @@ def atomic_semantic_apply(state: EngineState, turn: RichUserTurn) -> None:
 
 
 def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
-    """Satisfy GoalState only after deterministic grounding validation."""
+    """Satisfy/decline GoalState only after deterministic grounding validation."""
     from packages.contracts.enums import SlotStatus
-    from packages.dialogue_engine.mission_grounding import filter_grounded_goal_answers
+    from packages.dialogue_engine.mission_grounding import (
+        filter_grounded_dispositions,
+        filter_grounded_goal_answers,
+    )
     from packages.dialogue_engine.mission_seed import mission_from_state
     from packages.dialogue_engine.state import GoalLifecycle
 
-    answers = getattr(turn, "goal_answers", ()) or ()
-    if not answers:
-        return
     mission = mission_from_state(state)
+    satisfied = {
+        gid
+        for gid, g in state.goals.items()
+        if g.lifecycle == GoalLifecycle.SATISFIED
+    }
+    answers = getattr(turn, "goal_answers", ()) or ()
     grounded = filter_grounded_goal_answers(
         answers,
         mission=mission,
         utterance=turn.raw_text,
+        existing_satisfied=satisfied,
     )
     for ans in grounded:
         goal = state.goals.get(ans.goal_id)
         if goal is None:
             continue
-        if goal.lifecycle == GoalLifecycle.SATISFIED:
+        if goal.lifecycle == GoalLifecycle.SATISFIED and not ans.is_correction:
             continue
         evidence_id = f"ev-{turn.utterance_id}-{ans.goal_id}"
+        if ans.is_correction and goal.lifecycle == GoalLifecycle.SATISFIED:
+            # Supersede prior goal observation values.
+            store_pre: dict[str, Observation] = dict(state.observations)  # type: ignore[arg-type]
+            for eid in list(goal.evidence_ids):
+                prev = store_pre.get(eid)
+                if prev is not None and prev.goal_id == ans.goal_id:
+                    store_pre[eid] = prev.model_copy(update={"status": "superseded"})
+            state.observations = store_pre  # type: ignore[assignment]
         goal.answer = ans.value
         if evidence_id not in goal.evidence_ids:
             goal.evidence_ids.append(evidence_id)
@@ -606,6 +621,54 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
         if ans.goal_id in state.slots:
             state.slots[ans.goal_id] = SlotStatus.FILLED
             state.slot_values[ans.goal_id] = ans.value
+
+    dispositions = filter_grounded_dispositions(
+        getattr(turn, "goal_dispositions", ()) or (),
+        mission=mission,
+        utterance=turn.raw_text,
+    )
+    for disp in dispositions:
+        goal = state.goals.get(disp.goal_id)
+        if goal is None or goal.lifecycle == GoalLifecycle.SATISFIED:
+            continue
+        if disp.disposition == "declined":
+            goal.lifecycle = GoalLifecycle.DECLINED
+            goal.status = SlotStatus.DECLINED
+        elif disp.disposition == "not_applicable":
+            goal.lifecycle = GoalLifecycle.NOT_APPLICABLE
+        else:
+            goal.lifecycle = GoalLifecycle.UNCLEAR
+        evidence_id = f"ev-disp-{turn.utterance_id}-{disp.goal_id}"
+        if evidence_id not in goal.evidence_ids:
+            goal.evidence_ids.append(evidence_id)
+
+    # Non-health needs_help answers from free text on pending attribute.
+    if state.pending_episode_attribute == "needs_help" and state.active_episode_id:
+        ep = state.issue_episodes.get(state.active_episode_id)
+        if ep is not None and ep.kind == "other":
+            low = turn.raw_text.lower()
+            if any(
+                tok in low
+                for tok in (
+                    "справл",
+                    "сам",
+                    "не надо",
+                    "не нужн",
+                    "пока",
+                    "нужна",
+                    "нужно",
+                    "помо",
+                )
+            ):
+                value = "self_ok"
+                if any(tok in low for tok in ("нужна", "нужно", "помог", "помош")):
+                    value = "needs_help"
+                if any(tok in low for tok in ("справл", "сам", "не надо", "не нужн")):
+                    value = "self_ok"
+                ep.known_attributes["needs_help"] = value
+                ep.status = "resolved"
+                state.pending_episode_attribute = None
+
 
 
 

@@ -57,6 +57,7 @@ from packages.dialogue_engine.state import (
     BackgroundGoalCoverage,
     CheckPath,
     EngineState,
+    GoalLifecycle,
     OpeningState,
     Question,
     QuestionPhase,
@@ -146,6 +147,41 @@ def _on_call_started(state: EngineState) -> tuple[EngineState, list[Effect]]:
         return state, []
     if state.first_user_turn_received:
         return state, []
+    from packages.dialogue_engine.mission_flow import (
+        is_custom_mission,
+        next_askable_goal,
+        opening_custom_greeting,
+    )
+
+    if is_custom_mission(state):
+        gdef = next_askable_goal(state)
+        greeting = opening_custom_greeting(state.elder_display_name)
+        if gdef is None:
+            state.fsm_state = FsmState.DAILY_CHECK
+            state.opening_state = OpeningState.PLAYING
+            state.opening_play_count += 1
+            return _emit_speak(
+                state,
+                text=greeting,
+                intent="opening_mission",
+                slot=None,
+                marks_question=False,
+            )
+        runtime = state.ensure_goal(gdef.goal_id)
+        runtime.lifecycle = GoalLifecycle.ACTIVE
+        text = f"{greeting} {gdef.prompt_hint}".strip()
+        state.fsm_state = FsmState.DAILY_CHECK
+        state.opening_state = OpeningState.PLAYING
+        state.opening_play_count += 1
+        return _emit_speak(
+            state,
+            text=text,
+            intent="ask_mission_goal",
+            slot=gdef.goal_id,
+            marks_question=True,
+            goal_id=gdef.goal_id,
+        )
+
     state.fsm_state = FsmState.DAILY_CHECK
     state.opening_state = OpeningState.PLAYING
     state.opening_play_count += 1
@@ -168,18 +204,21 @@ def _emit_speak(
     intent: str,
     slot: str | None,
     marks_question: bool,
+    goal_id: str | None = None,
 ) -> tuple[EngineState, list[Effect]]:
     gen_id = state.next_generation_id()
     gen = state.active_playout_generation + 1
     state.active_playout_generation = gen
     if marks_question and slot and not reserve_question(state, slot, gen_id):
         return _close_partial(state)
+    resolved_goal = goal_id or (slot if intent == "ask_mission_goal" else None)
     q = Question(
         question_id=gen_id,
         slot=slot or "",
         text=text,
         phase=QuestionPhase.PLANNED,
         intent=intent,
+        goal_id=resolved_goal,
     )
     state.planned_question = q if marks_question else None
     state.playing_question = q if marks_question else None
@@ -385,12 +424,19 @@ def _emit_from_plan(
     text = composed_text(rendered)
     if not text.strip():
         return state, []
+    goal_id = None
+    if rendered.marks_question and rendered.slot:
+        if rendered.intent in {"ask_mission_goal", "resume_mission_goal"} or (
+            rendered.slot in (state.mission_goal_ids or ())
+        ):
+            goal_id = rendered.slot
     return _emit_speak(
         state,
         text=text,
         intent=rendered.intent or "rich_policy",
         slot=rendered.slot,
         marks_question=rendered.marks_question,
+        goal_id=goal_id,
     )
 
 
@@ -443,6 +489,10 @@ def _apply_rich_turn(
     if turn.dialogue_act == "repair" or _is_repair_text(user_text):
         state.processing_turn_id = None
         state.processing_effect_id = None
+        from packages.dialogue_engine.mission_flow import is_custom_mission
+
+        if is_custom_mission(state):
+            return _schedule_advance(state, turn=turn, user_text=user_text, answer_slot=answer_slot)
         return _speak_repair(state, answer_slot or "wellness")
 
     if turn.dialogue_act == "backchannel":
@@ -546,12 +596,18 @@ def _apply_rich_turn(
             state.processing_turn_id = None
             state.processing_effect_id = None
             state.bump_revision()
+            goal_id = None
+            if decision.intent in {"ask_mission_goal", "resume_mission_goal"} or (
+                decision.slot and decision.slot in (state.mission_goal_ids or ())
+            ):
+                goal_id = decision.slot
             return _emit_speak(
                 state,
                 text=decision.text,
                 intent=decision.intent or "rich_policy",
                 slot=decision.slot or answer_slot or "wellness",
                 marks_question=decision.marks_question,
+                goal_id=goal_id,
             )
 
     if turn.needs_clarification:
@@ -1377,6 +1433,7 @@ def _speak_repair(
         text=text,
         phase=QuestionPhase.PLANNED,
         intent="repair_repeat",
+        goal_id=delivered.goal_id if delivered else None,
     )
     state.active_playout = q
     return state, [

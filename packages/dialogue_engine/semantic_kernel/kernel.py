@@ -154,6 +154,7 @@ def kernel_to_rich_turn(
     *,
     answer_slot: str | None = None,
     engine_state=None,
+    mission_provider=None,
 ):
     from packages.dialogue_engine.turn_understanding import RichUserTurn
     from packages.voice_perception.post_stt_gate import filter_phantom_generic_issues
@@ -198,7 +199,9 @@ def kernel_to_rich_turn(
     )
     from packages.dialogue_engine.turn_understanding import attach_mission_understanding
 
-    return attach_mission_understanding(turn, engine_state=engine_state)
+    return attach_mission_understanding(
+        turn, engine_state=engine_state, provider=mission_provider
+    )
 
 
 def clarify_text(result: SemanticKernelResult) -> str:

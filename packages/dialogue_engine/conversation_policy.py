@@ -207,6 +207,11 @@ def episode_question_for_attribute(ep, attribute: str) -> tuple[str, str]:
         )
     if attribute == "concern":
         return questions.probe_question("concern"), "probe_concern"
+    if attribute == "needs_help":
+        return (
+            "С этим сейчас нужна помощь близких или вы пока справляетесь?",
+            f"episode_{ep.episode_id}_needs_help",
+        )
     return "Расскажите, пожалуйста, чуть подробнее.", "episode_followup"
 
 
@@ -472,6 +477,13 @@ def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
 
 def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
     """Canonical legacy scheduler — mutates EngineState; owns real ResponsePlan."""
+    from packages.dialogue_engine.mission_flow import is_custom_mission, schedule_custom_mission
+
+    if is_custom_mission(state):
+        custom = schedule_custom_mission(state, turn_context)
+        if custom is not None:
+            return custom
+
     turn = turn_context.turn
     filled = turn_context.newly_filled_slots
     clarify = turn_context.clarify

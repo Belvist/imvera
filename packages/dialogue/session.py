@@ -71,6 +71,7 @@ class CallSession:
         store: CallRecordStore | None = None,
         interpreter: Interpreter | None = None,
         mission: CallMission | None = None,
+        mission_understanding_provider: object | None = None,
     ) -> None:
         if not family_id:
             raise ValueError("family_id is required for product calls")
@@ -83,6 +84,7 @@ class CallSession:
                 "Refusing silent legacy Planner fallback."
             )
         self.mission = resolved_mission
+        self.mission_understanding_provider = mission_understanding_provider
         self.state = DialogueState(
             call_id=call_id,
             elder_display_name=elder_display_name,
@@ -125,6 +127,7 @@ class CallSession:
                 elder_display_name=elder_display_name,
                 prior_call_context=prior,
                 mission=resolved_mission,
+                mission_understanding_provider=mission_understanding_provider,
             )
             _log.info(
                 "DialogueEngine.on_session call_id=%s mode=single_writer mission=%s",

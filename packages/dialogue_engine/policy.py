@@ -132,3 +132,12 @@ def mark_question_delivered(state: EngineState, slot: str, question_id: str) -> 
         return
     goal.delivered_attempts += 1
     goal.reserved_question_id = None
+    from packages.dialogue_engine.state import GoalLifecycle
+
+    if goal.lifecycle in {
+        GoalLifecycle.AVAILABLE,
+        GoalLifecycle.UNSEEN,
+        GoalLifecycle.ACTIVE,
+        GoalLifecycle.ASKED,
+    }:
+        goal.lifecycle = GoalLifecycle.ANSWER_PENDING

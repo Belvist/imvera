@@ -73,17 +73,66 @@ def validate_goal_answer_candidate(
     return True, "ok"
 
 
+def validate_goal_disposition_candidate(
+    candidate,
+    *,
+    mission: CallMission,
+    utterance: str,
+) -> tuple[bool, str]:
+    from packages.dialogue_engine.mission import GoalDispositionCandidate
+
+    if not isinstance(candidate, GoalDispositionCandidate):
+        return False, "not_disposition"
+    if not candidate.goal_id:
+        return False, "missing_goal_id"
+    if definition_by_id(mission, candidate.goal_id) is None:
+        return False, "unknown_goal_id"
+    if candidate.disposition not in {"declined", "not_applicable", "unclear"}:
+        return False, "invalid_disposition"
+    evidence = (candidate.evidence or "").strip()
+    if not evidence:
+        return False, "missing_evidence"
+    if not evidence_grounded_in_utterance(evidence, utterance):
+        return False, "evidence_not_grounded"
+    return True, "ok"
+
+
 def filter_grounded_goal_answers(
     candidates: tuple[GoalAnswerCandidate, ...] | list[GoalAnswerCandidate],
     *,
     mission: CallMission,
     utterance: str,
+    existing_satisfied: set[str] | None = None,
 ) -> tuple[GoalAnswerCandidate, ...]:
     """Keep only engine-authoritative candidates. Multiple answers allowed."""
     out: list[GoalAnswerCandidate] = []
     seen: set[str] = set()
+    satisfied = existing_satisfied or set()
     for cand in candidates:
         ok, _reason = validate_goal_answer_candidate(
+            cand, mission=mission, utterance=utterance
+        )
+        if not ok:
+            continue
+        if cand.goal_id in satisfied and not cand.is_correction:
+            continue
+        if cand.goal_id in seen and not cand.is_correction:
+            continue
+        seen.add(cand.goal_id)
+        out.append(cand)
+    return tuple(out)
+
+
+def filter_grounded_dispositions(
+    candidates: tuple | list,
+    *,
+    mission: CallMission,
+    utterance: str,
+) -> tuple:
+    out = []
+    seen: set[str] = set()
+    for cand in candidates or ():
+        ok, _ = validate_goal_disposition_candidate(
             cand, mission=mission, utterance=utterance
         )
         if not ok:
