@@ -92,6 +92,7 @@ class Observation(BaseModel):
     normalized_value: str = ""
     body_site: str | None = None
     issue_normalized: str = ""
+    goal_id: str | None = None
     subject: SubjectKind = SubjectKind.SPEAKER
     temporal: TemporalFrame = Field(default_factory=TemporalFrame)
     confidence: float = 1.0

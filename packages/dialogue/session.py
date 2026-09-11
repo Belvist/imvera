@@ -21,6 +21,11 @@ from packages.dialogue.transition_store import DialogueTransitionStore
 from packages.dialogue.validator import Validator
 from packages.dialogue_engine.effects import EndCallEffect, SpeakEffect, TimerEffect
 from packages.dialogue_engine.engine import DialogueEngine
+from packages.dialogue_engine.mission import (
+    CallMission,
+    CustomMissionRequiresDialogueEngine,
+    daily_check_mission,
+)
 from packages.dialogue_engine.runtime import dialogue_engine_active, log_runtime_truth
 from packages.safety import SafetyEngine
 
@@ -65,9 +70,19 @@ class CallSession:
         family_id: str = "",
         store: CallRecordStore | None = None,
         interpreter: Interpreter | None = None,
+        mission: CallMission | None = None,
     ) -> None:
         if not family_id:
             raise ValueError("family_id is required for product calls")
+        resolved_mission = mission if mission is not None else daily_check_mission()
+        # H: custom mission must never silently fall back to legacy Planner.
+        if resolved_mission.is_custom and not dialogue_engine_active():
+            raise CustomMissionRequiresDialogueEngine(
+                "Custom CallMission requires DialogueEngine "
+                "(IMVERA_DIALOGUE_ENGINE + direct wellness opening). "
+                "Refusing silent legacy Planner fallback."
+            )
+        self.mission = resolved_mission
         self.state = DialogueState(
             call_id=call_id,
             elder_display_name=elder_display_name,
@@ -109,10 +124,17 @@ class CallSession:
                 call_id=call_id,
                 elder_display_name=elder_display_name,
                 prior_call_context=prior,
+                mission=resolved_mission,
             )
             _log.info(
-                "DialogueEngine.on_session call_id=%s mode=single_writer",
+                "DialogueEngine.on_session call_id=%s mode=single_writer mission=%s",
                 call_id,
+                resolved_mission.mission_id,
+            )
+        elif resolved_mission.is_custom:
+            # Defense in depth — should already have raised above.
+            raise CustomMissionRequiresDialogueEngine(
+                "Custom CallMission constructed without DialogueEngine"
             )
 
     def uses_dialogue_engine(self) -> bool:

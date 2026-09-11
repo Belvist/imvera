@@ -502,11 +502,17 @@ def atomic_semantic_apply(state: EngineState, turn: RichUserTurn) -> None:
         if obs.status == "superseded":
             continue
         store[obs.observation_id] = obs
+    # Side observations from mission understanding (problems / other-person plans).
+    for obs in turn.observations:
+        if obs.observation_id not in store and obs.status != "superseded":
+            store[obs.observation_id] = obs
     state.observations = store  # type: ignore[assignment]
 
     if turn.kernel_corrections:
         apply_corrections(state, turn.kernel_corrections, bound)
     _apply_bound_observations_to_episodes(state, bound)
+    _apply_mission_goal_answers(state, turn)
+
     # Same-turn temporal for a new issue: same clause, or sole episode if temporal
     # is not a foreign sleep/topic narrative (e.g. "проснулся в четыре" ≠ throat onset).
     grounded = extract_grounded_onset_value(turn.raw_text)
@@ -550,6 +556,56 @@ def atomic_semantic_apply(state: EngineState, turn: RichUserTurn) -> None:
                 if state.pending_episode_attribute in ("onset", "duration"):
                     state.pending_episode_attribute = None
                 break
+
+
+def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
+    """Satisfy GoalState only after deterministic grounding validation."""
+    from packages.contracts.enums import SlotStatus
+    from packages.dialogue_engine.mission_grounding import filter_grounded_goal_answers
+    from packages.dialogue_engine.mission_seed import mission_from_state
+    from packages.dialogue_engine.state import GoalLifecycle
+
+    answers = getattr(turn, "goal_answers", ()) or ()
+    if not answers:
+        return
+    mission = mission_from_state(state)
+    grounded = filter_grounded_goal_answers(
+        answers,
+        mission=mission,
+        utterance=turn.raw_text,
+    )
+    for ans in grounded:
+        goal = state.goals.get(ans.goal_id)
+        if goal is None:
+            continue
+        if goal.lifecycle == GoalLifecycle.SATISFIED:
+            continue
+        evidence_id = f"ev-{turn.utterance_id}-{ans.goal_id}"
+        goal.answer = ans.value
+        if evidence_id not in goal.evidence_ids:
+            goal.evidence_ids.append(evidence_id)
+        goal.lifecycle = GoalLifecycle.SATISFIED
+        goal.status = SlotStatus.FILLED
+        obs_id = f"obs-goal-{ans.goal_id}-{turn.utterance_id}"
+        store: dict[str, Observation] = dict(state.observations)  # type: ignore[arg-type]
+        store[obs_id] = Observation(
+            observation_id=obs_id,
+            attribute=ans.goal_id,
+            value=ans.value,
+            normalized_value=str(ans.value).lower(),
+            goal_id=ans.goal_id,
+            subject=SubjectKind.SPEAKER,
+            confidence=float(ans.confidence),
+            source_turn_id=turn.utterance_id,
+            evidence=ans.evidence,
+            status="confirmed",
+        )
+        state.observations = store  # type: ignore[assignment]
+        if obs_id not in goal.evidence_ids:
+            goal.evidence_ids.append(obs_id)
+        if ans.goal_id in state.slots:
+            state.slots[ans.goal_id] = SlotStatus.FILLED
+            state.slot_values[ans.goal_id] = ans.value
 
 
 
