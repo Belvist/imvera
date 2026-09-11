@@ -90,6 +90,16 @@ class EffectFailed(DialogueEvent):
     revision: int = 0
 
 
+class SafetyInterrupt(DialogueEvent):
+    """SafetyEngine detector → DialogueEngine conversational owner."""
+
+    kind: Literal["safety_interrupt"] = "safety_interrupt"
+    level: Literal["RED", "YELLOW"] = "RED"
+    quote: str = ""
+    episode_id: str | None = None
+    revision: int = 0
+
+
 class BotOpeningDelivered(DialogueEvent):
     kind: Literal["bot_opening_delivered"] = "bot_opening_delivered"
     question_id: str = "opening-1"

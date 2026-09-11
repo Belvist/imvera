@@ -129,7 +129,8 @@ def capture_mission_suspend(state: EngineState) -> SuspendedObligation | None:
 
 
 def household_help_plan(state: EngineState, *, acknowledge: str = "") -> ResponsePlan:
-    state.pending_episode_attribute = "needs_help"
+    # Commit pending_episode_attribute only after delivery.
+    state.pending_episode_attribute_planned = "needs_help"
     ep = state.active_episode_id
     return ResponsePlan(
         obligation="continue_active_episode",
@@ -155,6 +156,31 @@ def final_open_plan(*, acknowledge: str = "") -> ResponsePlan:
     )
 
 
+def answer_user_question_text(question: str) -> str:
+    """Deterministic meta answers — no freeform promises."""
+    low = (question or "").lower()
+    if any(w in low for w in ("кто ты", "кто вы", "ты кто", "вы кто")):
+        return _IDENTITY
+    if any(w in low for w in ("зачем", "почему спраш", "для чего")):
+        return (
+            "Я собираю сведения для сервиса Амвера, чтобы близкие были в курсе. "
+            "Я не вызываю службы и не обещаю действий."
+        )
+    if any(w in low for w in ("что будет", "информац", "увидит", "переда")):
+        return (
+            "Сведения сохраняются для семьи в сервисе Амвера. "
+            "Я сама никуда не звоню и ничего не обещаю."
+        )
+    if any(w in low for w in ("когда", "ещё позвон", "еще позвон")):
+        return "О следующих звонках решает семья в приложении Амвера."
+    if any(w in low for w in ("что именно", "что вы спраш", "какой вопрос")):
+        return "Я возвращаюсь к вопросу, который ещё не закрыт."
+    return (
+        "Я Вера, голосовой помощник сервиса Амвера. "
+        "Могу ответить только в рамках этого звонка."
+    )
+
+
 def identity_answer() -> str:
     return _IDENTITY
 
@@ -175,6 +201,49 @@ def schedule_custom_mission(state: EngineState, turn_context) -> ResponsePlan | 
 
     turn = turn_context.turn
 
+    # 0) SAFETY always first — RED → one clarification → user answer → close.
+    # Never resume mission goals after RED.
+    if state.safety_mode == "red" or state.risk_handling:
+        user_answer = bool(turn and (getattr(turn, "raw_text", "") or "").strip())
+        if state.safety_clarify_count >= 2 or (
+            state.safety_clarify_count >= 1 and user_answer
+        ):
+            state.call_closed = True
+            state.closing_reason = "safety_red"
+            state.suspended_obligation = None
+            state.pending_resume_goal_id = None
+            return ResponsePlan(
+                obligation=ConversationObligation.SUMMARY_CLOSE,
+                action="speak",
+                mandatory_question="Поняла. Завершаю звонок.",
+                intent="safety_close",
+                close_reason="safety_red",
+                marks_question=False,
+            )
+        # Clarification spoken / waiting for user — do not resume mission.
+        return ResponsePlan(action="none")
+
+    # 0b) third-party / target presence
+    if state.target_presence == "third_party":
+        name = state.target_display_name or state.elder_display_name
+        return ResponsePlan(
+            obligation="target_presence",
+            action="speak",
+            mandatory_question=f"Могу я поговорить с {name}?",
+            intent="ask_target_person",
+            slot="target_presence",
+            marks_question=True,
+        )
+    if state.target_presence == "unavailable":
+        state.call_closed = True
+        state.closing_reason = "no_answer"
+        return ResponsePlan(
+            obligation=ConversationObligation.SUMMARY_CLOSE,
+            action="close_summary",
+            close_reason="no_answer",
+            marks_question=False,
+        )
+
     # 1) repair
     if turn and turn.dialogue_act == "repair":
         dq = state.delivered_question
@@ -190,13 +259,26 @@ def schedule_custom_mission(state: EngineState, turn_context) -> ResponsePlan | 
 
     # 2) control
     if turn and turn.control not in ("none", "", None):
+        if turn.control == "wrong_person":
+            state.target_presence = "third_party"
+            name = state.target_display_name or state.elder_display_name
+            return ResponsePlan(
+                obligation="target_presence",
+                action="speak",
+                mandatory_question=f"Могу я поговорить с {name}?",
+                intent="ask_target_person",
+                slot="target_presence",
+                marks_question=True,
+            )
         return ResponsePlan(
             obligation=ConversationObligation.CONTROL,
             action="control",
             control=turn.control,
         )
 
-    # Disposition handled in apply; scheduler must not re-ask declined.
+    ans_user = ""
+    if turn and turn.user_question:
+        ans_user = answer_user_question_text(turn.user_question)
 
     # 3) user question without pending answer → answer + resume/next
     if turn and turn.user_question and not turn.answers_pending_question:
@@ -205,35 +287,34 @@ def schedule_custom_mission(state: EngineState, turn_context) -> ResponsePlan | 
             state.suspended_obligation = suspend
         nxt = None
         if state.suspended_obligation and state.suspended_obligation.goal_id:
-            nxt = resume_mission_goal_plan(state, state.suspended_obligation.goal_id)
-            state.suspended_obligation = None
+            gid = state.suspended_obligation.goal_id
+            state.pending_resume_goal_id = gid
+            nxt = resume_mission_goal_plan(state, gid)
+            # Do not clear suspended until delivery.
         if nxt is None:
             gdef = next_askable_goal(state)
             if gdef:
                 nxt = ask_mission_goal_plan(state, gdef)
         if nxt is not None:
-            nxt.answer_user_question = identity_answer()
+            nxt.answer_user_question = ans_user or identity_answer()
             nxt.marks_question = True
             return nxt
         return ResponsePlan(
             obligation=ConversationObligation.ANSWER_USER_QUESTION,
             action="speak",
-            answer_user_question=identity_answer(),
+            answer_user_question=ans_user or identity_answer(),
             intent="answer_user_question",
             marks_question=False,
         )
 
     # 4) resume suspended goal after issue handling
     if state.suspended_obligation and state.suspended_obligation.kind == "goal_question":
-        # If open non-health episode still needs needs_help, ask that first.
         if _open_other_episode_needs_help(state):
-            ack = ""
-            if turn and turn.issue_mentions:
-                ack = "Понимаю."
+            ack = "Понимаю." if turn and turn.issue_mentions else ""
             return household_help_plan(state, acknowledge=ack)
         gid = state.suspended_obligation.goal_id
-        state.suspended_obligation = None
         if gid:
+            state.pending_resume_goal_id = gid
             plan = resume_mission_goal_plan(state, gid)
             if plan:
                 return plan
@@ -249,12 +330,12 @@ def schedule_custom_mission(state: EngineState, turn_context) -> ResponsePlan | 
     if _open_other_episode_needs_help(state):
         return household_help_plan(state)
 
-    # 6) answer + user question already applied goals → next goal with identity if needed
+    # 6) answer + user question → next goal with bounded answer
     if turn and turn.user_question and turn.answers_pending_question:
         gdef = next_askable_goal(state)
         if gdef:
             plan = ask_mission_goal_plan(state, gdef)
-            plan.answer_user_question = identity_answer()
+            plan.answer_user_question = ans_user or identity_answer()
             return plan
 
     # 7) next unresolved mission goal
@@ -262,13 +343,12 @@ def schedule_custom_mission(state: EngineState, turn_context) -> ResponsePlan | 
     if gdef:
         return ask_mission_goal_plan(state, gdef)
 
-    # 8) final open / close
-    if not state.important_to_share_asked:
-        state.important_to_share_asked = True
+    # 8) final open / close — asked flag committed only after delivery
+    if not state.important_to_share_asked and not state.important_to_share_planned:
+        state.important_to_share_planned = True
         return final_open_plan()
 
-    if turn and turn.issue_mentions:
-        # new issue after final open
+    if turn and turn.issue_mentions and state.important_to_share_asked:
         return household_help_plan(state, acknowledge="Хорошо, поняла.")
 
     if state.important_to_share_asked:
@@ -293,6 +373,8 @@ def _open_other_episode_needs_help(state: EngineState) -> bool:
             continue
         if state.pending_episode_attribute == "needs_help" and state.active_episode_id == ep.episode_id:
             return True
+        if state.pending_episode_attribute_planned == "needs_help":
+            return False  # already proposed, waiting delivery
         if not ep.known_attributes.get("needs_help"):
             state.active_episode_id = ep.episode_id
             return True

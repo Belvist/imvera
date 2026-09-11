@@ -642,10 +642,28 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
         if evidence_id not in goal.evidence_ids:
             goal.evidence_ids.append(evidence_id)
 
-    # Non-health needs_help answers from free text on pending attribute.
+    # Non-health needs_help answers from structured episode attributes first.
+    for attr in getattr(turn, "episode_attributes", ()) or ():
+        if getattr(attr, "attribute", None) != "needs_help":
+            continue
+        evidence = (getattr(attr, "evidence", "") or "").strip()
+        if evidence and evidence.casefold() not in turn.raw_text.casefold():
+            continue
+        ep_id = getattr(attr, "episode_id", None) or state.active_episode_id
+        ep = state.issue_episodes.get(ep_id) if ep_id else None
+        if ep is None or ep.kind != "other":
+            continue
+        value = str(getattr(attr, "value", "") or "").strip()
+        if value not in {"self_ok", "needs_help", "unknown"}:
+            continue
+        ep.known_attributes["needs_help"] = value
+        ep.status = "resolved"
+        state.pending_episode_attribute = None
+
+    # Non-health needs_help answers from free text on pending attribute (fallback only).
     if state.pending_episode_attribute == "needs_help" and state.active_episode_id:
         ep = state.issue_episodes.get(state.active_episode_id)
-        if ep is not None and ep.kind == "other":
+        if ep is not None and ep.kind == "other" and "needs_help" not in ep.known_attributes:
             low = turn.raw_text.lower()
             if any(
                 tok in low
@@ -668,6 +686,62 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
                 ep.known_attributes["needs_help"] = value
                 ep.status = "resolved"
                 state.pending_episode_attribute = None
+
+    # Target presence answers.
+    dq = state.delivered_question
+    if dq is not None and dq.intent == "ask_target_person":
+        classified = classify_target_presence(turn.raw_text)
+        if classified is not None:
+            state.target_presence = classified
+        # else: preserve existing (e.g. third_party) — unknown is not a reset
+
+
+_UNAVAILABLE_PRESENCE = (
+    r"нет\s+е[её]",
+    r"е[её]\s+нет",
+    r"е[её]\s+нету",
+    r"е[её]\s+сейчас\s+нет",
+    r"сейчас\s+е[её]\s+нет",
+    r"сейчас\s+е[её]\s+нету",
+    r"сейчас\s+она\s+спит",
+    r"она\s+спит",
+    r"он\s+спит",
+    r"не\s+может\s+подойт",
+    r"она\s+не\s+может",
+    r"он\s+не\s+может",
+    r"ушла",
+    r"уехал",
+    r"нема",
+    r"нету\s+дома",
+    r"не\s+дома",
+)
+# Confirmed transfer only — explicit handoff phrases. Bare «минутку» / «сейчас» / «позову» are NOT transfer.
+_TRANSFER_PRESENCE = (
+    r"сейчас\s+передам",
+    r"передаю\s+трубк",
+    r"сейчас\s+дам\s+трубк",
+    r"минутку,?\s*сейчас\s+позову",
+    r"минутку,?\s*передам",
+)
+
+
+def classify_target_presence(raw_text: str) -> str | None:
+    """Map third-party reply → unavailable | confirmed. Unavailable wins over transfer.
+
+    Returns None for unknown/wait phrases («подождите», «секундочку», bare «минутку»,
+    «я сейчас») — caller MUST preserve existing target_presence (usually third_party).
+    """
+    low = (raw_text or "").strip().lower()
+    if not low:
+        return None
+    if any(re.search(pat, low) for pat in _UNAVAILABLE_PRESENCE):
+        return "unavailable"
+    if any(re.search(pat, low) for pat in _TRANSFER_PRESENCE):
+        return "confirmed"
+    # Bare "нет" after ask_target_person remains unavailable.
+    if re.fullmatch(r"нет[.!]?", low):
+        return "unavailable"
+    return None
 
 
 

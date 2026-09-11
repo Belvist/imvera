@@ -25,6 +25,7 @@ from packages.dialogue_engine.events import (
     PlayoutCancelled,
     PlayoutCompleted,
     PlayoutStarted,
+    SafetyInterrupt,
     SpeakEffectStale,
     TimerExpired,
     UserTurnReceived,
@@ -58,6 +59,7 @@ class DialogueEngine:
             follow_up_opening=bool(prior_call_context),
         )
         apply_mission_to_state(self.state, self.mission)
+        self.state.target_display_name = elder_display_name
         self.mission_understanding_provider = mission_understanding_provider
         self._outbox = EffectOutbox(call_id=call_id)
         self._dispatcher = EffectDispatcher(self._outbox)
@@ -194,6 +196,22 @@ class DialogueEngine:
             )
         )
 
+    def on_safety_interrupt(
+        self,
+        *,
+        quote: str,
+        episode_id: str | None = None,
+        level: str = "RED",
+    ) -> list[Effect]:
+        return self._apply(
+            SafetyInterrupt(
+                level="RED" if level.upper() == "RED" else "YELLOW",
+                quote=quote,
+                episode_id=episode_id,
+                revision=self.state.revision,
+            )
+        )
+
     def on_timer_expired(self, timer_id: str = "") -> list[Effect]:
         return self._apply(TimerExpired(timer_id=timer_id, revision=self.state.revision))
 
@@ -310,6 +328,9 @@ class DialogueEngine:
         legacy.first_user_turn_received = eng.first_user_turn_received
         legacy.opening_delivered = eng.opening_state == OpeningState.DELIVERED
         legacy.opening_play_count = eng.opening_play_count
+        legacy.risk_handling = eng.risk_handling
+        if eng.risk_episode_id:
+            legacy.risk_episode_id = eng.risk_episode_id
 
         for slot, status in eng.slots.items():
             legacy.slots[slot] = status

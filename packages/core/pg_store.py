@@ -17,6 +17,8 @@ from packages.contracts.core import (
 from packages.contracts.enums import FsmState
 from packages.contracts.events import CallEvent
 
+PRODUCT_BINDING_META_KEY = "product_call_binding"
+
 
 def _family_mismatch_result() -> PersistResult:
     return PersistResult(
@@ -254,6 +256,21 @@ class PostgresCallRecordStore(CallRecordStore):
                     row = cur.fetchone()
                     if not row or row[0] != family_id:
                         return None
+                    meta = row[9] or {}
+                    mission_result = None
+                    outcomes = None
+                    if isinstance(meta, dict):
+                        from packages.contracts.mission_result import (
+                            CallOutcomes,
+                            MissionResultSnapshot,
+                        )
+
+                        if meta.get("mission_result"):
+                            mission_result = MissionResultSnapshot.model_validate(
+                                meta["mission_result"]
+                            )
+                        if meta.get("outcomes"):
+                            outcomes = CallOutcomes.model_validate(meta["outcomes"])
                     return CallResultSnapshot(
                         call_id=call_id,
                         family_id=row[0],
@@ -265,7 +282,9 @@ class PostgresCallRecordStore(CallRecordStore):
                         partial=row[6],
                         call_ended=row[7],
                         termination_reason=TerminationReason(row[8]) if row[8] else None,
-                        metadata=row[9] or {},
+                        metadata=meta,
+                        mission_result=mission_result,
+                        outcomes=outcomes,
                     )
         except Exception:
             return None
@@ -338,6 +357,114 @@ class PostgresCallRecordStore(CallRecordStore):
                                 datetime.now(UTC),
                                 snapshot.call_id,
                             ),
+                        )
+            return PersistResult(ok=True, delivery_stage=DeliveryStage.PERSISTED)
+        except Exception as exc:
+            return _persist_error(exc)
+
+    def put_call_binding(self, binding: dict[str, Any]) -> PersistResult:
+        call_id = str(binding.get("call_id") or "")
+        family_id = str(binding.get("family_id") or "")
+        if not call_id or not family_id:
+            return PersistResult(
+                ok=False,
+                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                error="call_id and family_id required",
+            )
+        try:
+            with self._connect() as conn:
+                with conn.transaction():
+                    with conn.cursor() as cur:
+                        if not self._check_family(cur, call_id, family_id):
+                            return _family_mismatch_result()
+                        cur.execute(
+                            "SELECT metadata FROM call_results WHERE call_id = %s",
+                            (call_id,),
+                        )
+                        row = cur.fetchone()
+                        meta = dict(row[0] or {}) if row else {}
+                        meta[PRODUCT_BINDING_META_KEY] = dict(binding)
+                        cur.execute(
+                            """
+                            UPDATE call_results
+                            SET metadata = %s, updated_at = %s
+                            WHERE call_id = %s
+                            """,
+                            (json.dumps(meta), datetime.now(UTC), call_id),
+                        )
+            return PersistResult(ok=True, delivery_stage=DeliveryStage.PERSISTED)
+        except Exception as exc:
+            return _persist_error(exc)
+
+    def get_call_binding(self, call_id: str) -> dict[str, Any] | None:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT metadata FROM call_results WHERE call_id = %s",
+                        (call_id,),
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        return None
+                    meta = row[0] or {}
+                    if not isinstance(meta, dict):
+                        return None
+                    raw = meta.get(PRODUCT_BINDING_META_KEY)
+                    return dict(raw) if isinstance(raw, dict) else None
+        except Exception:
+            return None
+
+    def get_call_binding_by_fs_uuid(self, fs_uuid: str) -> dict[str, Any] | None:
+        if not fs_uuid:
+            return None
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT metadata
+                        FROM call_results
+                        WHERE metadata #>> %s = %s
+                        LIMIT 1
+                        """,
+                        ([PRODUCT_BINDING_META_KEY, "metadata", "fs_uuid"], fs_uuid),
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        return None
+                    meta = row[0] or {}
+                    if not isinstance(meta, dict):
+                        return None
+                    raw = meta.get(PRODUCT_BINDING_META_KEY)
+                    return dict(raw) if isinstance(raw, dict) else None
+        except Exception:
+            return None
+
+    def delete_call_binding(self, call_id: str) -> PersistResult:
+        try:
+            with self._connect() as conn:
+                with conn.transaction():
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT metadata FROM call_results WHERE call_id = %s",
+                            (call_id,),
+                        )
+                        row = cur.fetchone()
+                        if not row:
+                            return PersistResult(
+                                ok=True,
+                                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                            )
+                        meta = dict(row[0] or {})
+                        meta.pop(PRODUCT_BINDING_META_KEY, None)
+                        cur.execute(
+                            """
+                            UPDATE call_results
+                            SET metadata = %s, updated_at = %s
+                            WHERE call_id = %s
+                            """,
+                            (json.dumps(meta), datetime.now(UTC), call_id),
                         )
             return PersistResult(ok=True, delivery_stage=DeliveryStage.PERSISTED)
         except Exception as exc:

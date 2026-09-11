@@ -1817,6 +1817,11 @@ class CallActor:
                     kernel_result,
                     answer_slot=answer_slot,
                     engine_state=engine_state,
+                    mission_provider=(
+                        self.session._engine.mission_understanding_provider
+                        if self.session._engine
+                        else None
+                    ),
                 )
                 kernel_path = f"semantic_kernel_{kernel_result.route}"
                 interpret_path = kernel_path
@@ -1905,8 +1910,18 @@ class CallActor:
             llm_request_id = f"llm-{uuid.uuid4().hex[:8]}"
             self._active_llm_request_id = llm_request_id
             semantic_payload = None
+            # Product DialogueEngine path: NEVER call /v1/interpret — deterministic
+            # SemanticKernel + MissionUnderstandingProvider only (incl. custom mission).
+            need_llm = False
+            if not self.session.uses_dialogue_engine():
+                if (
+                    not fast_confident
+                    and not use_rich_deterministic
+                    and llm_interpret_enabled()
+                ):
+                    need_llm = True
             try:
-                if not fast_confident and not use_rich_deterministic and llm_interpret_enabled():
+                if need_llm:
                     ctx = build_turn_context(
                         self.session.state,
                         turn_id=turn_id,
@@ -2862,12 +2877,22 @@ def build_call_actor(
     media: MediaCallbacks,
     *,
     store: object | None = None,
+    mission: object | None = None,
 ) -> CallActor:
+    from packages.dialogue_engine.mission import CallMission
+
+    resolved_mission: CallMission | None = None
+    if mission is not None:
+        if isinstance(mission, CallMission):
+            resolved_mission = mission
+        elif isinstance(mission, dict):
+            resolved_mission = CallMission.model_validate(mission)
     session = CallSession(
         call_id=call_id,
         family_id=family_id,
         elder_display_name=elder_name,
         store=store,
+        mission=resolved_mission,
     )
     profile_audio = audio_settings()
     profile_limits = {}

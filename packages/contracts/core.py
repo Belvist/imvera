@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field
 
 from packages.contracts.enums import FsmState, PublicCallStatus, RiskLevel
+from packages.contracts.mission_result import CallOutcomes, MissionResultSnapshot
 
 if TYPE_CHECKING:
     from packages.contracts.events import CallEvent
@@ -65,6 +66,8 @@ class CallResultSnapshot(BaseModel):
     call_ended: bool = False
     termination_reason: TerminationReason | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    mission_result: MissionResultSnapshot | None = None
+    outcomes: CallOutcomes | None = None
 
 
 class PersistResult(BaseModel):
@@ -102,3 +105,19 @@ class CallRecordStore(ABC):
         snapshot: CallResultSnapshot,
         family_id: str,
     ) -> PersistResult: ...
+
+    @abstractmethod
+    def put_call_binding(self, binding: dict[str, Any]) -> PersistResult:
+        """Persist product CallBinding into call_results (shared across processes)."""
+
+    @abstractmethod
+    def get_call_binding(self, call_id: str) -> dict[str, Any] | None:
+        """Load product CallBinding by call_id (no family_id required)."""
+
+    @abstractmethod
+    def get_call_binding_by_fs_uuid(self, fs_uuid: str) -> dict[str, Any] | None:
+        """Resolve product CallBinding by FreeSWITCH channel UUID."""
+
+    @abstractmethod
+    def delete_call_binding(self, call_id: str) -> PersistResult:
+        """Remove product CallBinding metadata (row may remain)."""

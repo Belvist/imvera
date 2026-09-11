@@ -84,8 +84,9 @@ def _wait_http(url: str, name: str, timeout_s: float = 120.0) -> bool:
 
 
 def _ensure_mlx_workers() -> int:
-    if is_running("stt") and is_running("tts") and is_running("llm"):
-        for port in (9101, 9102, 9103):
+    """Product CallActor needs STT + TTS only — LLM worker is optional."""
+    if is_running("stt") and is_running("tts"):
+        for port in (9101, 9102):
             try:
                 response = httpx.get(f"http://127.0.0.1:{port}/health/ready", timeout=2.0)
                 if response.status_code != 200:
@@ -93,13 +94,16 @@ def _ensure_mlx_workers() -> int:
             except httpx.HTTPError:
                 break
         else:
-            print("MLX workers already running")
+            print("MLX workers already running (stt+tts; llm not required)")
             return 0
-    print("Starting MLX workers (make voice-up or models_up)...")
+    print("Starting STT+TTS workers (LLM not required for product CallActor)...")
+    env = os.environ.copy()
+    env["IMVERA_MODELS_WORKERS"] = "stt,tts"
     return subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "models_up.py")],
         cwd=ROOT,
         check=False,
+        env=env,
     ).returncode
 
 

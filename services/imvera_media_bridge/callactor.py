@@ -15,6 +15,7 @@ import httpx
 from fastapi import WebSocket
 
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
+from packages.core import create_call_record_store
 from packages.telephony.adapter import InboundMediaFrame
 from packages.voice_runtime.audio import pcm_rms_s16le
 from packages.telephony.freeswitch_bridge import (
@@ -25,10 +26,20 @@ from packages.telephony.freeswitch_bridge import (
 from packages.voice_runtime.codec_output import bridge_audio_rates, resampler_chain_summary
 from packages.telephony.freeswitch_esl import hangup_channel
 from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
+from packages.voice_runtime.call_registry import build_call_registry
 from packages.voice_runtime.trace import record_event
 
 log = logging.getLogger("imvera_media_bridge.callactor")
 ROOT = Path(__file__).resolve().parents[2]
+
+
+class ProductBindingMissing(RuntimeError):
+    """Product ?call_id= present but shared CallBinding not found — fail closed."""
+
+    def __init__(self, call_id: str, fs_uuid: str) -> None:
+        self.call_id = call_id
+        self.fs_uuid = fs_uuid
+        super().__init__(f"CallBinding not found for call_id={call_id} fs_uuid={fs_uuid}")
 
 
 def _gateway_urls() -> tuple[str, str, str]:
@@ -38,11 +49,54 @@ def _gateway_urls() -> tuple[str, str, str]:
     return stt, tts, llm
 
 
+def _resolve_product_mission(websocket: WebSocket, fs_uuid: str):
+    """Prefer shared CallBinding (POST /v1/calls → PG) over manual ?mission= JSON.
+
+    Product path (``?call_id=``): fail closed if binding missing — never invent
+    daily_check / IMVERA_DEV_FAMILY / mission=None. Lab-only ``?mission=`` JSON
+    remains when no product call_id is supplied.
+    """
+    from packages.dialogue_engine.mission import CallMission
+
+    # Same create_call_record_store() as voice_service → shared PG when IMVERA_PG_URL set.
+    registry = build_call_registry(create_call_record_store())
+    product_call_id = websocket.query_params.get("call_id") or websocket.query_params.get(
+        "imvera_call_id"
+    )
+    if product_call_id:
+        binding = registry.resolve(call_id=product_call_id, fs_uuid=fs_uuid)
+        if binding is None:
+            raise ProductBindingMissing(product_call_id, fs_uuid)
+        registry.bind_fs_uuid(binding.call_id, fs_uuid)
+        mission_obj = None
+        if binding.mission:
+            mission_obj = CallMission.model_validate(binding.mission)
+        elder = binding.elder_name or os.environ.get("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
+        return binding.call_id, binding.family_id, elder, mission_obj
+
+    # Lab-only fallback: explicit ?mission= JSON (not the product handoff path).
+    mission_raw = websocket.query_params.get("mission")
+    if mission_raw:
+        import json as _json
+
+        mission_obj = CallMission.model_validate(_json.loads(mission_raw))
+        call_id = f"fs-{fs_uuid[:8]}"
+        family_id = os.environ.get("IMVERA_DEV_FAMILY_ID", "fam-voice")
+        elder = os.environ.get("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
+        return call_id, family_id, elder, mission_obj
+
+    call_id = f"fs-{fs_uuid[:8]}"
+    elder = os.environ.get("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
+    family_id = os.environ.get("IMVERA_DEV_FAMILY_ID", "fam-voice")
+    return call_id, family_id, elder, None
+
+
 async def inference_blockers() -> list[str]:
-    stt, tts, llm = _gateway_urls()
+    """Product CallActor readiness: STT + TTS required; LLM is not required."""
+    stt, tts, _llm = _gateway_urls()
     blockers: list[str] = []
     async with httpx.AsyncClient(timeout=2.0) as client:
-        for name, base in (("stt", stt), ("tts", tts), ("llm", llm)):
+        for name, base in (("stt", stt), ("tts", tts)):
             try:
                 response = await client.get(f"{base.rstrip('/')}/health/ready")
                 if response.status_code != 200:
@@ -60,10 +114,18 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
         log.error("callactor.ws.rejected fs_uuid=%s blockers=%s", fs_uuid, blockers)
         return
 
-    call_id = f"fs-{fs_uuid[:8]}"
+    try:
+        call_id, family_id, elder, mission_obj = _resolve_product_mission(websocket, fs_uuid)
+    except ProductBindingMissing as exc:
+        log.error(
+            "callactor.binding.missing call_id=%s fs_uuid=%s — rejecting WS, no CallActor",
+            exc.call_id,
+            exc.fs_uuid,
+        )
+        await websocket.close(code=1008, reason="product CallBinding not found")
+        return
+
     stt, tts, llm = _gateway_urls()
-    elder = os.environ.get("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
-    family_id = os.environ.get("IMVERA_DEV_FAMILY_ID", "fam-voice")
     capture_sr, playback_sr = bridge_audio_rates()
     output_frame_bytes = playback_sr * FRAME_MS // 1000 * 2
     chain = resampler_chain_summary(
@@ -139,15 +201,21 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
         tts,
         llm,
         MediaCallbacks(send_pcm=send_pcm, flush=flush, hangup=hangup, emit=emit),
+        mission=mission_obj,
+        store=create_call_record_store(),
     )
     actor_holder["actor"] = actor
 
     await websocket.accept()
+    mission_id = ""
+    if mission_obj is not None:
+        mission_id = mission_obj.mission_id
     log.info(
-        "callactor.ws.connected call_id=%s fs_uuid=%s capture_sr=%s playback_sr=%s "
+        "callactor.ws.connected call_id=%s fs_uuid=%s mission_id=%s capture_sr=%s playback_sr=%s "
         "negotiated_codec=%s resampler_hops=%s stt=%s tts=%s llm=%s",
         call_id,
         fs_uuid,
+        mission_id or "-",
         capture_sr,
         playback_sr,
         chain["negotiated_codec"],

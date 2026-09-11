@@ -296,7 +296,9 @@ def test_adversarial_two_goal_answers_same_utterance(
 def test_fast_path_bare_yes_only_for_delivered_goal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Without semantic provider: only bare да/нет/не знаю bind to delivered goal."""
+    """FastPathMissionProvider: only bare да/нет/не знаю bind to delivered goal."""
+    from packages.dialogue_engine.mission_understanding import FastPathMissionProvider
+
     session = _session_with_mission(monkeypatch)
     engine = session._engine
     assert engine is not None
@@ -309,14 +311,21 @@ def test_fast_path_bare_yes_only_for_delivered_goal(
         intent="ask_goal",
     )
     engine.state.goals["utilities_paid"].lifecycle = GoalLifecycle.ASKED
+    fast = FastPathMissionProvider()
 
     rich_long = build_rich_turn_from_text(
-        _UTTERANCE, utterance_id="u-long", engine_state=engine.state
+        _UTTERANCE,
+        utterance_id="u-long",
+        engine_state=engine.state,
+        mission_provider=fast,
     )
     assert rich_long.goal_answers == ()
 
     rich_yes = build_rich_turn_from_text(
-        "Да", utterance_id="u-yes", engine_state=engine.state
+        "Да",
+        utterance_id="u-yes",
+        engine_state=engine.state,
+        mission_provider=fast,
     )
     assert len(rich_yes.goal_answers) == 1
     assert rich_yes.goal_answers[0].goal_id == "utilities_paid"

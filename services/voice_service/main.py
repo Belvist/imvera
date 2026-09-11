@@ -18,11 +18,29 @@ from pydantic import BaseModel, Field
 
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.core import create_call_record_store
+from packages.core.pg_store import PostgresCallRecordStore
 from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
+from packages.voice_runtime.call_registry import CallBinding, build_call_registry
 from services.providers.http_clients import close_shared_async_client, get_shared_async_client
 from packages.voice_runtime.trace import record_event
 
 _store = create_call_record_store()
+_call_registry = build_call_registry(_store)
+
+
+def _telephony_shared_store_ready() -> tuple[bool, str]:
+    """Telephony must not silently use process-local InMemory CallBinding."""
+    if not os.environ.get("IMVERA_PG_URL"):
+        return (
+            False,
+            "IMVERA_PG_URL unset; telephony transport requires shared Postgres CallBinding store",
+        )
+    if not isinstance(_store, PostgresCallRecordStore):
+        return (
+            False,
+            "telephony transport requires PostgresCallRecordStore, not process-local memory",
+        )
+    return True, ""
 
 
 @dataclass
@@ -73,6 +91,15 @@ class CreateCallRequest(BaseModel):
     transport: str = Field(default="browser")
     family_id: str = Field(default="fam-voice")
     elder_name: str = Field(default="")
+    mission: dict[str, Any] | None = None
+
+
+def _parse_mission(raw: dict[str, Any] | None):
+    if not raw:
+        return None
+    from packages.dialogue_engine.mission import CallMission
+
+    return CallMission.model_validate(raw)
 
 
 def _git_sha() -> str:
@@ -138,10 +165,54 @@ def version() -> dict[str, str]:
 
 
 @app.post("/v1/calls")
-async def create_call(body: CreateCallRequest) -> dict[str, str]:
+async def create_call(body: CreateCallRequest) -> dict[str, Any]:
     if len(_sessions) >= _max_sessions:
         raise HTTPException(503, detail="voice session capacity reached")
     call_id = f"call-{uuid.uuid4().hex[:12]}"
+    mission_obj = _parse_mission(body.mission)
+    mission_id = ""
+    if mission_obj is not None:
+        mission_id = mission_obj.mission_id
+    elif isinstance(body.mission, dict):
+        mission_id = str(body.mission.get("mission_id") or "")
+
+    transport = body.transport.strip().lower()
+    if transport in {"freeswitch", "sip", "telephony"}:
+        ready, reason = _telephony_shared_store_ready()
+        if not ready:
+            raise HTTPException(status_code=503, detail=reason)
+
+    # Durable binding in shared CallRecordStore (PG in prod) — survives process boundary.
+    _call_registry.register(
+        CallBinding(
+            call_id=call_id,
+            family_id=body.family_id,
+            person_id=body.person_id,
+            elder_name=body.elder_name,
+            transport=body.transport,
+            mission=body.mission,
+            mission_id=mission_id,
+        )
+    )
+    _store.ensure_call(call_id, body.family_id)
+
+    if transport in {"freeswitch", "sip", "telephony"}:
+        # Single conversation owner: media-bridge CallActor. Do not start a second brain here.
+        from packages.telephony.product_originate import originate_product_call
+
+        originate = await originate_product_call(call_id=call_id)
+        fs_uuid = originate.get("fs_uuid")
+        if isinstance(fs_uuid, str) and fs_uuid:
+            _call_registry.bind_fs_uuid(call_id, fs_uuid)
+        return {
+            "call_id": call_id,
+            "transport": body.transport,
+            "mission_id": mission_id,
+            "telephony": originate,
+            "status": "registered" if originate.get("ok") else "registered_telephony_pending",
+            "owner": "media_bridge_callactor",
+        }
+
     stt_url, tts_url, llm_url = _urls()
     session_holder: VoiceCallSession | None = None
 
@@ -171,6 +242,7 @@ async def create_call(body: CreateCallRequest) -> dict[str, str]:
         llm_url=llm_url,
         media=MediaCallbacks(send_pcm=send_pcm, flush=flush, hangup=hangup, emit=emit),
         store=_store,
+        mission=mission_obj,
     )
     session_holder = VoiceCallSession(
         call_id=call_id,
@@ -182,7 +254,13 @@ async def create_call(body: CreateCallRequest) -> dict[str, str]:
     )
     _sessions[call_id] = session_holder
     actor.start()
-    return {"call_id": call_id, "transport": body.transport}
+    return {
+        "call_id": call_id,
+        "transport": body.transport,
+        "mission_id": mission_id,
+        "telephony": None,
+        "owner": "voice_service_callactor",
+    }
 
 
 @app.get("/v1/calls/{call_id}")
@@ -240,10 +318,24 @@ async def stream_events(call_id: str, after: int = 0) -> StreamingResponse:
 
 
 @app.get("/v1/calls/{call_id}/result")
-def call_result(call_id: str) -> dict[str, Any]:
-    session = _sessions.get(call_id)
-    family_id = session.family_id if session else os.environ.get("IMVERA_DEFAULT_FAMILY", "fam-voice")
-    result = _store.get_call_result(call_id, family_id)
+def call_result(
+    call_id: str,
+    family_id: str | None = None,
+) -> dict[str, Any]:
+    """Resolve family via query, shared CallBinding store, or live session — never wrong default."""
+    resolved = family_id
+    if not resolved:
+        session = _sessions.get(call_id)
+        if session is not None:
+            resolved = session.family_id
+    if not resolved:
+        resolved = _call_registry.family_id_for(call_id)
+    if not resolved:
+        raise HTTPException(
+            404,
+            detail="family_id required: pass ?family_id=... or create call via POST /v1/calls",
+        )
+    result = _store.get_call_result(call_id, resolved)
     if result is None:
         raise HTTPException(404, detail="result not available")
     return result.model_dump(mode="json")

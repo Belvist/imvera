@@ -13,7 +13,18 @@ import yaml
 from scripts.voice_process import ROOT, is_running, start, stop
 
 CFG = ROOT / "config" / "voice-m5.yaml"
-WORKERS = ("stt", "tts", "llm")
+_DEFAULT_WORKERS = ("stt", "tts", "llm")
+
+
+def _workers() -> tuple[str, ...]:
+    """IMVERA_MODELS_WORKERS=stt,tts skips LLM for product FreeSWITCH path."""
+    raw = os.environ.get("IMVERA_MODELS_WORKERS", "").strip()
+    if not raw:
+        return _DEFAULT_WORKERS
+    names = tuple(part.strip().lower() for part in raw.split(",") if part.strip())
+    allowed = set(_DEFAULT_WORKERS)
+    selected = tuple(n for n in names if n in allowed)
+    return selected or _DEFAULT_WORKERS
 
 
 def _load_ports() -> dict[str, int]:
@@ -60,9 +71,12 @@ def _tts_matches_lab_fast(port: int) -> bool:
 
 
 def _all_ready(ports: dict[str, int]) -> bool:
-    if not all(is_running(name) and _worker_ready(ports[name]) for name in WORKERS):
+    workers = _workers()
+    if not all(is_running(name) and _worker_ready(ports[name]) for name in workers):
         return False
-    return _tts_matches_lab_fast(ports["tts"])
+    if "tts" in workers:
+        return _tts_matches_lab_fast(ports["tts"])
+    return True
 
 
 def _ensure_worker(name: str, port: int, env: dict[str, str]) -> bool:
@@ -109,17 +123,23 @@ def main() -> int:
         return 0
 
     env = apply_lab_fast_env(os.environ.copy())
+    workers = _workers()
 
     ok = True
-    for name in WORKERS:
+    for name in workers:
         if not _ensure_worker(name, ports[name], env):
             ok = False
     if not ok:
         return 1
-    print("All inference workers ready.")
-    print(f"IMVERA_STT_URL=http://127.0.0.1:{ports['stt']}")
-    print(f"IMVERA_TTS_URL=http://127.0.0.1:{ports['tts']}")
-    print(f"IMVERA_LLM_URL=http://127.0.0.1:{ports['llm']}")
+    print(f"Inference workers ready: {', '.join(workers)}")
+    if "stt" in workers:
+        print(f"IMVERA_STT_URL=http://127.0.0.1:{ports['stt']}")
+    if "tts" in workers:
+        print(f"IMVERA_TTS_URL=http://127.0.0.1:{ports['tts']}")
+    if "llm" in workers:
+        print(f"IMVERA_LLM_URL=http://127.0.0.1:{ports['llm']}")
+    else:
+        print("IMVERA_LLM_URL=(not started — not required for product CallActor)")
     return 0
 
 

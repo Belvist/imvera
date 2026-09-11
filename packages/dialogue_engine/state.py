@@ -225,6 +225,18 @@ class EngineState(BaseModel):
     )
     important_to_share_asked: bool = False
     important_to_share_resolved: bool = False
+    # Proposed by scheduler; committed only after PlayoutCompleted.
+    important_to_share_planned: bool = False
+    pending_resume_goal_id: str | None = None
+    pending_episode_attribute_planned: str | None = None
+
+    # Conversational safety / target presence (engine-owned when DialogueEngine active).
+    safety_mode: str = "none"  # none | yellow | red
+    safety_clarify_count: int = 0
+    risk_handling: bool = False
+    risk_episode_id: str | None = None
+    target_presence: str = "unknown"  # unknown | confirmed | third_party | unavailable
+    target_display_name: str = ""
 
     # Background goals are optional unless explicitly required (UNSEEN ≠ MUST ASK).
     required_background_goals: set[str] = Field(default_factory=set)

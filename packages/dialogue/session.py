@@ -252,11 +252,35 @@ class CallSession:
         metadata = dict(existing.metadata) if existing else {}
         from packages.dialogue.transition_store import _load_outbox, _state_to_metadata
         from packages.dialogue_engine.check_path import build_call_metadata
+        from packages.dialogue_engine.mission_result import (
+            build_call_outcomes,
+            build_mission_result,
+        )
 
         outbox = _load_outbox(metadata)
         metadata.update(_state_to_metadata(self.state, None, outbox))
+        mission_result = None
+        outcomes = None
         if self._engine is not None:
             metadata.update(build_call_metadata(self._engine.state))
+            mission_result = build_mission_result(self._engine.state)
+            outcomes = build_call_outcomes(
+                self._engine.state,
+                mission_result=mission_result,
+                legacy_public_status=(
+                    self.state.public_status.value
+                    if getattr(self.state, "public_status", None)
+                    else None
+                ),
+            )
+            metadata["mission_result"] = mission_result.model_dump(mode="json")
+            metadata["outcomes"] = outcomes.model_dump(mode="json")
+            # Project custom goal answers into facts for older readers (non-authoritative).
+            for g in mission_result.goals:
+                if g.value is not None:
+                    facts[g.goal_id] = g.value
+                    if g.evidence:
+                        quotes[g.goal_id] = g.evidence[0]
         return CallResultSnapshot(
             call_id=self.state.call_id,
             family_id=self.state.family_id,
@@ -264,10 +288,14 @@ class CallSession:
             facts=facts,
             fact_quotes=quotes,
             observations=list(self._persisted_obs_ids),
-            partial=bool(self.state.mandatory_remaining()),
+            partial=bool(self.state.mandatory_remaining())
+            if self._engine is None or self.mission.is_daily_check
+            else (mission_result.status != "COMPLETED" if mission_result else True),
             call_ended=self.state.call_finalized,
             termination_reason=self.state.termination_reason,
             metadata=metadata,
+            mission_result=mission_result,
+            outcomes=outcomes,
         )
 
     def _finalize_call_if_needed(self) -> tuple[bool, str | None]:
@@ -670,6 +698,28 @@ class CallSession:
             and not self.state.risk_handling
             and self.state.fsm_state not in _RED_INTERRUPT_STATES
         ):
+            if self._engine is not None:
+                # DialogueEngine owns conversational safety when active.
+                self._engine.on_safety_interrupt(
+                    quote=user_text.strip(),
+                    episode_id=self.safety.active_episode_id,
+                    level="RED",
+                )
+                self._engine.sync_to_legacy(self.state)
+                self._append_event(
+                    "RED_SIGNAL",
+                    {"quote": user_text.strip(), "turn_id": next_turn, "owner": "dialogue_engine"},
+                )
+                risk_obs_id, ok, err = self._persist_risk(next_turn, user_text.strip())
+                if not ok:
+                    return self._failed_turn(user_text, interp, contract, err or "risk persist")
+                # Engine already produced SAFETY speech — do not also run mission turn.
+                return self._build_engine_turn_result(
+                    user_text,
+                    interp,
+                    contract,
+                    observation_ids=[risk_obs_id] if risk_obs_id else [],
+                )
             CallFsm.interrupt_red(
                 self.state,
                 source_quote=user_text.strip(),
