@@ -13,9 +13,12 @@ from typing import Protocol
 from pydantic import BaseModel
 
 from packages.contracts.semantic import IssueMention
-from packages.dialogue_engine.mission import CallMission, GoalAnswerCandidate, GoalDispositionCandidate
+from packages.dialogue_engine.mission import (
+    CallMission,
+    GoalAnswerCandidate,
+    GoalDispositionCandidate,
+)
 from packages.dialogue_engine.semantic_kernel.types import Observation
-
 
 # Bare polarity only — no domain / mission verb dictionaries.
 # Refusal phrases ("не хочу" / "не надо") are NOT factual "no".

@@ -144,8 +144,16 @@ def build_call_outcomes(
     if state.closing_reason in {"stop_call", "revoke_consent", "defer"} or (
         state.call_closed and state.closing_reason
     ):
-        call_out = "DECLINED" if "consent" in (state.closing_reason or "") or state.closing_reason == "stop_call" else "COMPLETED"
-    elif state.call_closed or state.fsm_state.value in {"GOODBYE", "SUMMARY", "FINAL_CLASSIFICATION"}:
+        reason = state.closing_reason or ""
+        if "consent" in reason or state.closing_reason == "stop_call":
+            call_out = "DECLINED"
+        else:
+            call_out = "COMPLETED"
+    elif state.call_closed or state.fsm_state.value in {
+        "GOODBYE",
+        "SUMMARY",
+        "FINAL_CLASSIFICATION",
+    }:
         call_out = "COMPLETED"
     else:
         call_out = "TECHNICAL"

@@ -715,7 +715,8 @@ _UNAVAILABLE_PRESENCE = (
     r"нету\s+дома",
     r"не\s+дома",
 )
-# Confirmed transfer only — explicit handoff phrases. Bare «минутку» / «сейчас» / «позову» are NOT transfer.
+# Confirmed transfer only — explicit handoff phrases.
+# Bare «минутку» / «сейчас» / «позову» are NOT transfer.
 _TRANSFER_PRESENCE = (
     r"сейчас\s+передам",
     r"передаю\s+трубк",

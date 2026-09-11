@@ -371,7 +371,10 @@ def _open_other_episode_needs_help(state: EngineState) -> bool:
             continue
         if ep.known_attributes.get("needs_help"):
             continue
-        if state.pending_episode_attribute == "needs_help" and state.active_episode_id == ep.episode_id:
+        if (
+            state.pending_episode_attribute == "needs_help"
+            and state.active_episode_id == ep.episode_id
+        ):
             return True
         if state.pending_episode_attribute_planned == "needs_help":
             return False  # already proposed, waiting delivery
