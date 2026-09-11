@@ -120,74 +120,54 @@ def attach_mission_understanding(
     *,
     engine_state: object | None,
 ) -> RichUserTurn:
-    """Merge generic mission goal_answers + side observations into a RichUserTurn.
-
-    Does not mutate EngineState. Used by production understanding entry points.
-    """
+    """Merge provider StructuredMissionResult into RichUserTurn. No EngineState writes."""
     if engine_state is None or not getattr(engine_state, "mission_catalog", None):
         return turn
     from packages.dialogue_engine.mission_seed import mission_from_state
     from packages.dialogue_engine.mission_understanding import (
-        extract_goal_answers,
-        extract_side_observations,
+        MissionUnderstandingRequest,
+        understand_mission,
     )
 
     mission = mission_from_state(engine_state)  # type: ignore[arg-type]
     if not mission.goals:
         return turn
     active = None
+    delivered_text = None
     if hasattr(engine_state, "answer_context_slot"):
         active = engine_state.answer_context_slot()
-    answers = extract_goal_answers(
-        turn.raw_text,
-        mission=mission,
-        active_goal_id=active,
-        engine_state=engine_state,  # type: ignore[arg-type]
-    )
-    side = extract_side_observations(
-        turn.raw_text,
-        goal_answer_evidence=tuple(a.evidence for a in answers),
+    dq = getattr(engine_state, "delivered_question", None)
+    if dq is not None:
+        delivered_text = getattr(dq, "text", None)
+    result = understand_mission(
+        MissionUnderstandingRequest(
+            text=turn.raw_text,
+            utterance_id=turn.utterance_id,
+            mission=mission,
+            active_goal_id=active,
+            delivered_question_text=delivered_text,
+        )
     )
     observations = tuple(turn.observations) + tuple(
-        o for o in side if o.observation_id not in {x.observation_id for x in turn.observations}
+        o
+        for o in result.observations
+        if o.observation_id not in {x.observation_id for x in turn.observations}
     )
-    # Promote reported_problem observations into issue_mentions for IssueEpisode path.
-    from packages.contracts.semantic import Evidence, IssueMention
-
-    extra_mentions: list[IssueMention] = []
     existing_labels = {m.label.lower() for m in turn.issue_mentions}
-    for obs in side:
-        if obs.attribute != "reported_problem":
-            continue
-        if obs.value.lower() in existing_labels:
-            continue
-        quote = obs.evidence or obs.value
-        start = turn.raw_text.lower().find(quote.lower())
-        if start < 0:
-            start = 0
-        end = min(len(turn.raw_text), start + len(quote))
-        extra_mentions.append(
-            IssueMention(
-                mention_id=f"im-{obs.observation_id[-8:]}",
-                kind="other",
-                label=obs.value,
-                role="primary",
-                body_site=None,
-                temporal_scope="now",
-                status="active",
-                onset=None,
-                severity=None,
-                evidence=Evidence(start=start, end=end, quote=quote),
-            )
-        )
-    mentions = tuple(turn.issue_mentions) + tuple(extra_mentions)
-    return turn.model_copy(
-        update={
-            "goal_answers": answers,
-            "observations": observations,
-            "issue_mentions": mentions,
-        }
+    extra_mentions = tuple(
+        m for m in result.issue_mentions if m.label.lower() not in existing_labels
     )
+    mentions = tuple(turn.issue_mentions) + extra_mentions
+    updates: dict = {
+        "goal_answers": result.goal_answers,
+        "observations": observations,
+        "issue_mentions": mentions,
+    }
+    if result.user_question and not turn.user_question:
+        updates["user_question"] = result.user_question
+    if result.control and result.control != "none" and turn.control in {"", "none"}:
+        updates["control"] = result.control
+    return turn.model_copy(update=updates)
 
 
 def build_rich_turn_from_text(

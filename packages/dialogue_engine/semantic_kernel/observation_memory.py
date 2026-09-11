@@ -559,12 +559,22 @@ def atomic_semantic_apply(state: EngineState, turn: RichUserTurn) -> None:
 
 
 def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
-    """Satisfy mission GoalState from structured goal_answers (canonical apply)."""
+    """Satisfy GoalState only after deterministic grounding validation."""
     from packages.contracts.enums import SlotStatus
+    from packages.dialogue_engine.mission_grounding import filter_grounded_goal_answers
+    from packages.dialogue_engine.mission_seed import mission_from_state
     from packages.dialogue_engine.state import GoalLifecycle
 
     answers = getattr(turn, "goal_answers", ()) or ()
-    for ans in answers:
+    if not answers:
+        return
+    mission = mission_from_state(state)
+    grounded = filter_grounded_goal_answers(
+        answers,
+        mission=mission,
+        utterance=turn.raw_text,
+    )
+    for ans in grounded:
         goal = state.goals.get(ans.goal_id)
         if goal is None:
             continue
@@ -576,25 +586,23 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
             goal.evidence_ids.append(evidence_id)
         goal.lifecycle = GoalLifecycle.SATISFIED
         goal.status = SlotStatus.FILLED
-        # Bind observation with goal_id when evidence present.
-        if ans.evidence:
-            obs_id = f"obs-goal-{ans.goal_id}-{turn.utterance_id}"
-            store: dict[str, Observation] = dict(state.observations)  # type: ignore[arg-type]
-            store[obs_id] = Observation(
-                observation_id=obs_id,
-                attribute=ans.goal_id,
-                value=ans.value,
-                normalized_value=str(ans.value).lower(),
-                goal_id=ans.goal_id,
-                subject=SubjectKind.SPEAKER,
-                confidence=float(ans.confidence),
-                source_turn_id=turn.utterance_id,
-                evidence=ans.evidence,
-                status="confirmed",
-            )
-            state.observations = store  # type: ignore[assignment]
-            if obs_id not in goal.evidence_ids:
-                goal.evidence_ids.append(obs_id)
+        obs_id = f"obs-goal-{ans.goal_id}-{turn.utterance_id}"
+        store: dict[str, Observation] = dict(state.observations)  # type: ignore[arg-type]
+        store[obs_id] = Observation(
+            observation_id=obs_id,
+            attribute=ans.goal_id,
+            value=ans.value,
+            normalized_value=str(ans.value).lower(),
+            goal_id=ans.goal_id,
+            subject=SubjectKind.SPEAKER,
+            confidence=float(ans.confidence),
+            source_turn_id=turn.utterance_id,
+            evidence=ans.evidence,
+            status="confirmed",
+        )
+        state.observations = store  # type: ignore[assignment]
+        if obs_id not in goal.evidence_ids:
+            goal.evidence_ids.append(obs_id)
         if ans.goal_id in state.slots:
             state.slots[ans.goal_id] = SlotStatus.FILLED
             state.slot_values[ans.goal_id] = ans.value
