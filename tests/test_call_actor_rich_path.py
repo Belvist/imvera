@@ -250,7 +250,7 @@ def test_correction_rich_turn_reaches_engine() -> None:
     assert captured[0].correction or captured[0].dialogue_act == "correction"
 
 
-def test_wellness_plus_symptoms_stays_on_fast_contextual_path() -> None:
+def test_wellness_plus_symptoms_stays_on_fast_contextual_path(monkeypatch) -> None:
     """Regression: fs-72b01e3c — deterministic rich path, no LLM on hot path."""
     from packages.dialogue.interpretation import to_turn_interpretation
     from packages.dialogue_engine.context import InterpretContext
@@ -259,12 +259,13 @@ def test_wellness_plus_symptoms_stays_on_fast_contextual_path() -> None:
         extract_issue_mentions,
         should_use_rich_turn,
     )
-    from packages.dialogue_engine.runtime import llm_interpret_enabled
     from packages.dialogue_engine.semantic import semantic_to_interpretation
     from packages.dialogue_engine.topic_tracker import is_topic_slot
     from packages.dialogue_engine.turn_understanding import build_rich_turn_from_text
 
-    assert not llm_interpret_enabled()
+    # daily_check stays deterministic even when mission interpret is allowed.
+    monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "1")
+    monkeypatch.delenv("IMVERA_LLM_INTERPRET", raising=False)
 
     session = _session_at_wellness()
     text = (

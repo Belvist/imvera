@@ -89,7 +89,6 @@ def payload_to_rich_turn(
     raw_text: str,
 ) -> RichUserTurn:
     from packages.dialogue_engine.mission import GoalAnswerCandidate, GoalDispositionCandidate
-    from packages.dialogue_engine.semantic_kernel.types import Observation, SubjectKind
 
     enriched = enrich_payload_issue_mentions(payload, raw_text)
     goal_facts = tuple(enriched.facts) or extract_goal_facts(raw_text)
@@ -114,20 +113,10 @@ def payload_to_rich_turn(
         )
         for d in getattr(enriched, "goal_dispositions", ()) or ()
     )
-    observations = []
-    for note in getattr(enriched, "observation_notes", ()) or ():
-        observations.append(
-            Observation(
-                observation_id=f"obs-note-{utterance_id}-{len(observations)}",
-                attribute="reported_note",
-                value=note,
-                normalized_value=note.lower(),
-                subject=SubjectKind.SPEAKER,
-                confidence=0.85,
-                evidence=note,
-                status="candidate",
-            )
-        )
+    # Do not persist raw observation_notes as SPEAKER facts. A typed
+    # ObservationSemantic contract (subject + evidence ∈ utterance) is required
+    # before atomic apply; until then notes stay ephemeral on the payload only.
+    observations: list = []
     episode_attrs = getattr(enriched, "episode_attributes", ()) or ()
     return RichUserTurn(
         utterance_id=utterance_id,

@@ -128,6 +128,37 @@ _SAFETY_CLOSE = (
 )
 
 
+def _safety_close_after_clarify(state: EngineState) -> tuple[EngineState, list[Effect]]:
+    """RED clarify already delivered; substantive answer → close (no mission resume)."""
+    state.call_closed = True
+    state.closing_reason = "safety_red"
+    state.suspended_obligation = None
+    state.pending_resume_goal_id = None
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    return _emit_speak(
+        state,
+        text=_SAFETY_CLOSE.strip(),
+        intent="safety_close",
+        slot=None,
+        marks_question=False,
+    )
+
+
+def _maybe_handle_safety_continuation(
+    state: EngineState,
+    *,
+    user_text: str,
+) -> tuple[EngineState, list[Effect]] | None:
+    if not (state.safety_mode == "red" or state.risk_handling):
+        return None
+    if state.safety_clarify_count >= 2 or (
+        state.safety_clarify_count >= 1 and (user_text or "").strip()
+    ):
+        return _safety_close_after_clarify(state)
+    return None
+
+
 def _on_safety_interrupt(
     state: EngineState,
     event: SafetyInterrupt,
@@ -145,15 +176,7 @@ def _on_safety_interrupt(
     state.processing_effect_id = None
     state.bump_revision()
     if state.safety_clarify_count >= 2:
-        state.call_closed = True
-        state.closing_reason = "safety_red"
-        return _emit_speak(
-            state,
-            text=_SAFETY_CLOSE,
-            intent="safety_close",
-            slot=None,
-            marks_question=False,
-        )
+        return _safety_close_after_clarify(state)
     state.safety_clarify_count += 1
     return _emit_speak(
         state,
@@ -535,6 +558,10 @@ def _apply_rich_turn(
 ) -> tuple[EngineState, list[Effect]]:
     user_text = turn.raw_text
     answer_slot = state.answer_context_slot()
+
+    safety_done = _maybe_handle_safety_continuation(state, user_text=user_text)
+    if safety_done is not None:
+        return safety_done
 
     if turn.answers_pending_question and state.pending_episode_attribute:
         state.delivered_question = None
@@ -940,6 +967,10 @@ def _apply_semantic(
     answer_slot = state.answer_context_slot()
 
     user_text = semantic.source_quote or semantic.value or ""
+
+    safety_done = _maybe_handle_safety_continuation(state, user_text=user_text)
+    if safety_done is not None:
+        return safety_done
 
     # Explicit farewell closes immediately from any non-terminal state.
     if semantic.act == SemanticAct.GOODBYE_REQUEST or _is_explicit_farewell(user_text):

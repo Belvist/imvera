@@ -1929,7 +1929,11 @@ class CallActor:
             semantic_payload = None
             need_llm = False
             if custom_mission:
+                # Bare yes/no/unknown stays FastPath; free speech → /v1/interpret.
                 need_llm = (not fastpath_enough) and llm_interpret_enabled()
+            elif self.session.uses_dialogue_engine():
+                # daily_check / engine path: deterministic rich / FastPath only.
+                need_llm = False
             elif not fast_confident and not use_rich_deterministic and llm_interpret_enabled():
                 need_llm = True
             try:

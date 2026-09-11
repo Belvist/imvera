@@ -11,14 +11,47 @@ from packages.dialogue_engine.mission_flow import is_custom_mission
 from packages.dialogue_engine.mission_seed import mission_from_state
 from packages.dialogue_engine.state import EngineState, GoalLifecycle
 
-_TERMINAL_OK = frozenset(
+_COMPLETED_OK = frozenset(
     {
-        GoalLifecycle.SATISFIED,
-        GoalLifecycle.DECLINED,
-        GoalLifecycle.SKIPPED,
-        GoalLifecycle.NOT_APPLICABLE,
+        GoalLifecycle.SATISFIED.value,
+        GoalLifecycle.NOT_APPLICABLE.value,
     }
 )
+_PARTIAL_FORCE = frozenset(
+    {
+        GoalLifecycle.SKIPPED.value,
+        GoalLifecycle.UNCLEAR.value,
+        GoalLifecycle.BLOCKED.value,
+    }
+)
+_NOT_STARTED = frozenset(
+    {
+        GoalLifecycle.AVAILABLE.value,
+        GoalLifecycle.UNSEEN.value,
+        GoalLifecycle.ACTIVE.value,
+    }
+)
+
+
+def _grounded_evidence_quotes(state: EngineState, goal) -> list[str]:
+    """Public evidence = grounded quote text only (never synthetic ev-... IDs)."""
+    quotes: list[str] = []
+    seen: set[str] = set()
+    for eid in getattr(goal, "evidence_ids", ()) or ():
+        if not isinstance(eid, str):
+            continue
+        obs = state.observations.get(eid) if hasattr(state.observations, "get") else None
+        if obs is None:
+            continue
+        quote = str(getattr(obs, "evidence", "") or "").strip()
+        if not quote or quote.startswith("ev-"):
+            continue
+        key = quote.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        quotes.append(quote)
+    return quotes
 
 
 def build_mission_result(state: EngineState) -> MissionResultSnapshot:
@@ -26,16 +59,7 @@ def build_mission_result(state: EngineState) -> MissionResultSnapshot:
     goals: list[GoalResultSnapshot] = []
     for gdef in mission.goals:
         g = state.goals.get(gdef.goal_id)
-        evidence: list[str] = []
-        if g is not None:
-            for eid in g.evidence_ids:
-                obs = state.observations.get(eid) if hasattr(state.observations, "get") else None
-                if obs is not None and getattr(obs, "evidence", None):
-                    evidence.append(str(obs.evidence))
-                elif isinstance(eid, str) and eid.startswith("ev-"):
-                    evidence.append(eid)
-            if g.answer and not evidence:
-                evidence.append(str(g.answer))
+        evidence = _grounded_evidence_quotes(state, g) if g is not None else []
         goals.append(
             GoalResultSnapshot(
                 goal_id=gdef.goal_id,
@@ -74,17 +98,34 @@ def _mission_status(state: EngineState, goals: list[GoalResultSnapshot], mission
     required = [g for g, d in zip(goals, mission.goals) if d.required]
     if not required:
         required = goals
+
+    lifecycles = {g.lifecycle for g in required}
+    started = any(
+        g.lifecycle not in _NOT_STARTED or int(g.attempts or 0) > 0 for g in required
+    )
+
+    if state.safety_mode == "red" or state.risk_handling:
+        return "PARTIAL" if started or state.safety_mode == "red" else "PARTIAL"
+
+    if all(g.lifecycle in _NOT_STARTED and int(g.attempts or 0) == 0 for g in required):
+        return "NOT_RUN"
+
     if all(g.lifecycle == GoalLifecycle.DECLINED.value for g in required):
         return "DECLINED"
-    if all(g.lifecycle in {x.value for x in _TERMINAL_OK} for g in required):
-        if any(g.lifecycle == GoalLifecycle.SATISFIED.value for g in required):
-            return "COMPLETED"
+
+    if all(g.lifecycle in _COMPLETED_OK for g in required):
         return "COMPLETED"
-    if any(g.lifecycle == GoalLifecycle.SATISFIED.value for g in required):
+
+    if lifecycles & _PARTIAL_FORCE:
+        return "PARTIAL" if started else "NOT_RUN"
+
+    if GoalLifecycle.SATISFIED.value in lifecycles and GoalLifecycle.DECLINED.value in lifecycles:
         return "PARTIAL"
-    if state.safety_mode == "red" or state.risk_handling:
+
+    if GoalLifecycle.SATISFIED.value in lifecycles:
         return "PARTIAL"
-    return "NOT_RUN" if all(g.lifecycle == GoalLifecycle.AVAILABLE.value for g in goals) else "PARTIAL"
+
+    return "PARTIAL" if started else "NOT_RUN"
 
 
 def build_call_outcomes(

@@ -201,18 +201,26 @@ def schedule_custom_mission(state: EngineState, turn_context) -> ResponsePlan | 
 
     turn = turn_context.turn
 
-    # 0) SAFETY always first
+    # 0) SAFETY always first — RED → one clarification → user answer → close.
+    # Never resume mission goals after RED.
     if state.safety_mode == "red" or state.risk_handling:
-        if state.safety_clarify_count >= 2:
+        user_answer = bool(turn and (getattr(turn, "raw_text", "") or "").strip())
+        if state.safety_clarify_count >= 2 or (
+            state.safety_clarify_count >= 1 and user_answer
+        ):
             state.call_closed = True
             state.closing_reason = "safety_red"
+            state.suspended_obligation = None
+            state.pending_resume_goal_id = None
             return ResponsePlan(
                 obligation=ConversationObligation.SUMMARY_CLOSE,
-                action="close_summary",
+                action="speak",
+                mandatory_question="Поняла. Завершаю звонок.",
+                intent="safety_close",
                 close_reason="safety_red",
                 marks_question=False,
             )
-        # Clarification already spoken via SafetyInterrupt; do not resume mission.
+        # Clarification spoken / waiting for user — do not resume mission.
         return ResponsePlan(action="none")
 
     # 0b) third-party / target presence

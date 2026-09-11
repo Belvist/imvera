@@ -19,10 +19,12 @@ from pydantic import BaseModel, Field
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.core import create_call_record_store
 from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
+from packages.voice_runtime.call_registry import CallBinding, get_call_registry
 from services.providers.http_clients import close_shared_async_client, get_shared_async_client
 from packages.voice_runtime.trace import record_event
 
 _store = create_call_record_store()
+_call_registry = get_call_registry()
 
 
 @dataclass
@@ -147,10 +149,46 @@ def version() -> dict[str, str]:
 
 
 @app.post("/v1/calls")
-async def create_call(body: CreateCallRequest) -> dict[str, str]:
+async def create_call(body: CreateCallRequest) -> dict[str, Any]:
     if len(_sessions) >= _max_sessions:
         raise HTTPException(503, detail="voice session capacity reached")
     call_id = f"call-{uuid.uuid4().hex[:12]}"
+    mission_obj = _parse_mission(body.mission)
+    mission_id = ""
+    if mission_obj is not None:
+        mission_id = mission_obj.mission_id
+    elif isinstance(body.mission, dict):
+        mission_id = str(body.mission.get("mission_id") or "")
+
+    # Durable binding survives _sessions.pop on stop — used by /result + FS bridge.
+    _call_registry.register(
+        CallBinding(
+            call_id=call_id,
+            family_id=body.family_id,
+            person_id=body.person_id,
+            elder_name=body.elder_name,
+            transport=body.transport,
+            mission=body.mission,
+            mission_id=mission_id,
+        )
+    )
+    _store.ensure_call(call_id, body.family_id)
+
+    transport = body.transport.strip().lower()
+    if transport in {"freeswitch", "sip", "telephony"}:
+        # Single conversation owner: media-bridge CallActor. Do not start a second brain here.
+        from packages.telephony.product_originate import originate_product_call
+
+        originate = await originate_product_call(call_id=call_id)
+        return {
+            "call_id": call_id,
+            "transport": body.transport,
+            "mission_id": mission_id,
+            "telephony": originate,
+            "status": "registered" if originate.get("ok") else "registered_telephony_pending",
+            "owner": "media_bridge_callactor",
+        }
+
     stt_url, tts_url, llm_url = _urls()
     session_holder: VoiceCallSession | None = None
 
@@ -180,7 +218,7 @@ async def create_call(body: CreateCallRequest) -> dict[str, str]:
         llm_url=llm_url,
         media=MediaCallbacks(send_pcm=send_pcm, flush=flush, hangup=hangup, emit=emit),
         store=_store,
-        mission=_parse_mission(body.mission),
+        mission=mission_obj,
     )
     session_holder = VoiceCallSession(
         call_id=call_id,
@@ -192,7 +230,13 @@ async def create_call(body: CreateCallRequest) -> dict[str, str]:
     )
     _sessions[call_id] = session_holder
     actor.start()
-    return {"call_id": call_id, "transport": body.transport}
+    return {
+        "call_id": call_id,
+        "transport": body.transport,
+        "mission_id": mission_id,
+        "telephony": None,
+        "owner": "voice_service_callactor",
+    }
 
 
 @app.get("/v1/calls/{call_id}")
@@ -250,10 +294,24 @@ async def stream_events(call_id: str, after: int = 0) -> StreamingResponse:
 
 
 @app.get("/v1/calls/{call_id}/result")
-def call_result(call_id: str) -> dict[str, Any]:
-    session = _sessions.get(call_id)
-    family_id = session.family_id if session else os.environ.get("IMVERA_DEFAULT_FAMILY", "fam-voice")
-    result = _store.get_call_result(call_id, family_id)
+def call_result(
+    call_id: str,
+    family_id: str | None = None,
+) -> dict[str, Any]:
+    """Resolve family via query, durable CallRegistry, or live session — never wrong default."""
+    resolved = family_id
+    if not resolved:
+        session = _sessions.get(call_id)
+        if session is not None:
+            resolved = session.family_id
+    if not resolved:
+        resolved = _call_registry.family_id_for(call_id)
+    if not resolved:
+        raise HTTPException(
+            404,
+            detail="family_id required: pass ?family_id=... or create call via POST /v1/calls",
+        )
+    result = _store.get_call_result(call_id, resolved)
     if result is None:
         raise HTTPException(404, detail="result not available")
     return result.model_dump(mode="json")

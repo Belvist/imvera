@@ -690,11 +690,56 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
     # Target presence answers.
     dq = state.delivered_question
     if dq is not None and dq.intent == "ask_target_person":
-        low = turn.raw_text.lower()
-        if any(w in low for w in ("передаю", "сейчас дам", "минутку", "сейчас")):
-            state.target_presence = "confirmed"
-        elif any(w in low for w in ("нет", "спит", "не может", "ушла", "уехал", "нету", "нема")):
-            state.target_presence = "unavailable"
+        state.target_presence = classify_target_presence(turn.raw_text)
+
+
+_UNAVAILABLE_PRESENCE = (
+    r"нет\s+е[её]",
+    r"е[её]\s+нет",
+    r"е[её]\s+нету",
+    r"сейчас\s+е[её]\s+нет",
+    r"сейчас\s+е[её]\s+нету",
+    r"сейчас\s+она\s+спит",
+    r"она\s+спит",
+    r"он\s+спит",
+    r"не\s+может\s+подойт",
+    r"она\s+не\s+может",
+    r"он\s+не\s+может",
+    r"ушла",
+    r"уехал",
+    r"нема",
+    r"нету\s+дома",
+    r"не\s+дома",
+)
+_TRANSFER_PRESENCE = (
+    r"сейчас\s+передам",
+    r"сейчас\s+дам",
+    r"передаю\s+трубк",
+    r"передаю",
+    r"передам",
+    r"минутку,?\s*позову",
+    r"минутку",
+    r"сейчас\s+позову",
+    r"позову",
+)
+
+
+def classify_target_presence(raw_text: str) -> str | None:
+    """Map third-party reply → unavailable | confirmed. Unavailable wins over transfer.
+
+    Bare «сейчас» alone is NOT transfer evidence.
+    """
+    low = (raw_text or "").strip().lower()
+    if not low:
+        return None
+    if any(re.search(pat, low) for pat in _UNAVAILABLE_PRESENCE):
+        return "unavailable"
+    if any(re.search(pat, low) for pat in _TRANSFER_PRESENCE):
+        return "confirmed"
+    # Bare "нет" after ask_target_person remains unavailable.
+    if re.fullmatch(r"нет[.!]?", low):
+        return "unavailable"
+    return None
 
 
 

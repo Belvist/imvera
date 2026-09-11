@@ -20,15 +20,26 @@ def engine_enabled() -> bool:
     }
 
 
+def _flag_on(name: str, default: str) -> bool:
+    return os.environ.get(name, default).strip().lower() in {"1", "true", "yes"}
+
+
 def llm_interpret_enabled() -> bool:
-    """Hot-path /v1/interpret. Disabled for DialogueEngine — deterministic NLU only."""
-    if engine_enabled():
+    """Whether CallActor may call HttpLLMProvider.interpret_turn (/v1/interpret).
+
+    Production default: allowed. CallActor still keeps daily_check + FastPath bare
+    answers deterministic; only custom-mission free speech uses the model.
+
+    Kill switches:
+    - IMVERA_LLM_INTERPRET=0 — disables interpret entirely
+    - IMVERA_MISSION_LLM_INTERPRET=0 — disables mission free-speech interpret
+      (same effect when engine is on; kept as an explicit mission semantic switch)
+    """
+    if not _flag_on("IMVERA_LLM_INTERPRET", "1"):
         return False
-    return os.environ.get("IMVERA_LLM_INTERPRET", "0").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+    if engine_enabled() and not _flag_on("IMVERA_MISSION_LLM_INTERPRET", "1"):
+        return False
+    return True
 
 
 @lru_cache(maxsize=1)
@@ -69,7 +80,10 @@ def runtime_truth() -> dict[str, Any]:
         "IMVERA_VOICE_DIRECT_WELLNESS_OPENING": os.environ.get(
             "IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1"
         ),
-        "IMVERA_LLM_INTERPRET": os.environ.get("IMVERA_LLM_INTERPRET", "0"),
+        "IMVERA_LLM_INTERPRET": os.environ.get("IMVERA_LLM_INTERPRET", "1"),
+        "IMVERA_MISSION_LLM_INTERPRET": os.environ.get(
+            "IMVERA_MISSION_LLM_INTERPRET", "1"
+        ),
         "dialogue.llm_interpret.enabled": llm_interpret_enabled(),
     }
     truth.update(action_policy_runtime_truth())
