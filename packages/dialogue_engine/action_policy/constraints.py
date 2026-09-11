@@ -96,8 +96,23 @@ def reject_candidate(
         if ep.need_known(action.question_need):
             return _reject(action, "already_known", "requested semantic need already satisfied")
         need = normalize_need(action.question_need)
-        if snapshot.last_question_need and need == snapshot.last_question_need:
-            return _reject(action, "repeat_question", "same semantic question was just asked")
+        delivered = snapshot.last_delivered_question_need or snapshot.last_question_need
+        if delivered and need == delivered:
+            # Hard pending obligation for the same need must remain choosable.
+            # Delivered ≠ answered; pending obligation is a separate lifecycle fact.
+            from packages.dialogue_engine.action_policy.needs import normalize_attribute
+
+            pending_need = normalize_attribute(snapshot.pending_episode_attribute)
+            if not (
+                snapshot.outstanding_pending_obligation()
+                and pending_need
+                and need == pending_need
+            ):
+                return _reject(
+                    action,
+                    "repeat_question",
+                    "same semantic question was just delivered and is not pending",
+                )
         # Optional needs after intentional ITS leave are not currently askable.
         if need and not need_is_currently_askable(snapshot, ep, need, ctx=ctx):
             return _reject(

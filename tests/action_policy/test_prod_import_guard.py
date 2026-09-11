@@ -23,19 +23,24 @@ def _imported_modules(path: Path) -> list[str]:
     return found
 
 
-def _imports_action_policy(path: Path) -> list[str]:
-    return [
-        module
-        for module in _imported_modules(path)
-        if "dialogue_engine.action_policy" in module
-    ]
+def _imports_frozen_action_policy(path: Path) -> list[str]:
+    """Direct imports of frozen action_policy package (shadow module is allowed)."""
+    offenders: list[str] = []
+    for module in _imported_modules(path):
+        if "action_policy_shadow" in module:
+            continue
+        if module == "packages.dialogue_engine.action_policy" or module.startswith(
+            "packages.dialogue_engine.action_policy."
+        ):
+            offenders.append(module)
+    return offenders
 
 
 def test_phase1_has_no_production_imports() -> None:
     offenders = {
         str(path.relative_to(ROOT)): imports
         for path in PROD_FILES
-        if (imports := _imports_action_policy(path))
+        if (imports := _imports_frozen_action_policy(path))
     }
     assert offenders == {}
 

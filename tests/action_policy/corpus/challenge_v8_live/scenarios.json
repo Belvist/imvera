@@ -1,0 +1,334 @@
+[
+  {
+    "id": "v8ch_no_pending_current_killed_by_repeat",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {"episode_id": "ep-1", "kind": "symptom", "known": {"onset": "вчера"}, "status": "open"}
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "current",
+      "delivered_question": {
+        "question_id": "q-cur",
+        "intent": "episode_current_status",
+        "slot": "episode_current_status",
+        "text": "ещё беспокоит?"
+      }
+    },
+    "context": {"raw_text": ""},
+    "acceptable": ["ASK_EPISODE:current"],
+    "forbidden": ["ASK_EPISODE:severity", "IMPORTANT_TO_SHARE", "SUMMARY_CLOSE", "ACK_ONLY"]
+  },
+  {
+    "id": "v8ch_no_pending_severity_survives",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-1",
+          "kind": "symptom",
+          "known": {"onset": "вчера", "current": "active"},
+          "status": "open"
+        }
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "severity"
+    },
+    "context": {"raw_text": ""},
+    "acceptable": ["ASK_EPISODE:severity"],
+    "forbidden": ["IMPORTANT_TO_SHARE", "SUMMARY_CLOSE", "ACK_ONLY"]
+  },
+  {
+    "id": "v8ch_no_pending_temporal_survives",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [{"episode_id": "ep-1", "kind": "symptom", "known": {}, "status": "open"}],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "temporal"
+    },
+    "context": {"raw_text": ""},
+    "acceptable": ["ASK_EPISODE:temporal"],
+    "forbidden": ["IMPORTANT_TO_SHARE", "SUMMARY_CLOSE"]
+  },
+  {
+    "id": "v8ch_no_pending_fi_survives",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-1",
+          "kind": "symptom",
+          "known": {"onset": "вчера", "current": "active", "severity": "лёгкая"},
+          "status": "open"
+        }
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "functional_impact"
+    },
+    "context": {"raw_text": ""},
+    "acceptable": ["ASK_EPISODE:functional_impact"],
+    "forbidden": ["IMPORTANT_TO_SHARE", "SUMMARY_CLOSE", "ACK_ONLY"]
+  },
+  {
+    "id": "v8ch_no_its_over_pending",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {"episode_id": "ep-1", "kind": "symptom", "known": {"onset": "вчера"}, "status": "open"}
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "current"
+    },
+    "context": {"raw_text": "угу"},
+    "acceptable": ["ASK_EPISODE:current"],
+    "forbidden": ["IMPORTANT_TO_SHARE", "SUMMARY_CLOSE"]
+  },
+  {
+    "id": "v8ch_no_summary_over_pending",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "episodes": [
+        {"episode_id": "ep-1", "kind": "symptom", "known": {"onset": "вчера"}, "status": "open"}
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "current"
+    },
+    "context": {"raw_text": "больше ничего"},
+    "acceptable": ["ASK_EPISODE:current"],
+    "forbidden": ["SUMMARY_CLOSE", "ACK_ONLY"]
+  },
+  {
+    "id": "v8ch_safety_over_pending",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {"episode_id": "ep-1", "kind": "symptom", "known": {"onset": "вчера"}, "status": "open"}
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "current"
+    },
+    "context": {"raw_text": "не могу дышать", "turn_risk_level": "urgent"},
+    "acceptable": ["SAFETY"],
+    "forbidden": ["ASK_EPISODE:current", "IMPORTANT_TO_SHARE"]
+  },
+  {
+    "id": "v8ch_repair_preempts",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {"episode_id": "ep-1", "kind": "symptom", "known": {"onset": "вчера"}, "status": "open"}
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "current"
+    },
+    "context": {"raw_text": "повторите", "dialogue_act": "repair"},
+    "acceptable": ["REPAIR"],
+    "forbidden": ["ASK_EPISODE:severity", "SUMMARY_CLOSE"]
+  },
+  {
+    "id": "v8ch_control_defer",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {"episode_id": "ep-1", "kind": "symptom", "known": {"onset": "вчера"}, "status": "open"}
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "current"
+    },
+    "context": {"raw_text": "перезвоните", "control": "defer"},
+    "acceptable": ["CONTROL:defer"],
+    "forbidden": ["ASK_EPISODE:current", "SUMMARY_CLOSE"]
+  },
+  {
+    "id": "v8ch_repeat_blocks_when_not_pending",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {"episode_id": "ep-1", "kind": "symptom", "known": {"onset": "вчера"}, "status": "open"}
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": null,
+      "delivered_question": {
+        "question_id": "q-cur",
+        "intent": "episode_current_status",
+        "slot": "episode_current_status",
+        "text": "ещё беспокоит?"
+      }
+    },
+    "context": {"raw_text": ""},
+    "acceptable": ["ASK_EPISODE:severity", "ASK_EPISODE:functional_impact", "IMPORTANT_TO_SHARE"],
+    "forbidden": ["ASK_EPISODE:current"]
+  },
+  {
+    "id": "v8ch_multi_episode_pending_active",
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-a",
+          "kind": "symptom",
+          "known": {"onset": "вчера", "current": "active"},
+          "status": "open"
+        },
+        {"episode_id": "ep-b", "kind": "symptom", "known": {}, "status": "open"}
+      ],
+      "active_episode_id": "ep-a",
+      "pending_episode_ids": ["ep-b"],
+      "pending_episode_attribute": "severity"
+    },
+    "context": {"raw_text": ""},
+    "acceptable": ["ASK_EPISODE:severity"],
+    "forbidden": ["IMPORTANT_TO_SHARE", "SUMMARY_CLOSE"]
+  },
+  {
+    "id": "v8ch_its_leave_optional_no_restart",
+    "live_state": {
+      "wellness_answered": true,
+      "important_to_share_asked": true,
+      "important_to_share_resolved": true,
+      "episodes": [
+        {
+          "episode_id": "ep-1",
+          "kind": "symptom",
+          "known": {"onset": "вчера", "current": "active", "severity": "лёгкая"},
+          "status": "open"
+        }
+      ],
+      "active_episode_id": "ep-1"
+    },
+    "context": {"raw_text": "больше ничего"},
+    "acceptable": ["SUMMARY_CLOSE"],
+    "forbidden": ["ASK_EPISODE:functional_impact", "ACK_ONLY"]
+  },
+  {
+    "id": "v8ch_other_person_not_interrogated",
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-other",
+          "kind": "symptom",
+          "known": {},
+          "status": "open",
+          "speaker_owned": false
+        }
+      ],
+      "active_episode_id": "ep-other"
+    },
+    "context": {"raw_text": "у мужа болит", "has_new_other_person_issue": true},
+    "acceptable": ["IMPORTANT_TO_SHARE", "ACK_ONLY", "LISTEN_META"],
+    "forbidden": ["ASK_EPISODE:temporal", "ASK_EPISODE:current"]
+  },
+  {
+    "id": "v8ch_new_speaker_issue_opens",
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [{"episode_id": "ep-new", "kind": "symptom", "known": {}, "status": "open"}],
+      "active_episode_id": "ep-new"
+    },
+    "context": {"raw_text": "колено ноет", "has_new_speaker_issue": true, "has_new_issue": true},
+    "acceptable": ["ASK_EPISODE:temporal"],
+    "forbidden": ["IMPORTANT_TO_SHARE", "SUMMARY_CLOSE"]
+  },
+  {
+    "id": "v8ch_goodbye",
+    "p0_like": true,
+    "live_state": {"wellness_answered": true, "episodes": []},
+    "context": {"raw_text": "до свидания", "control": "stop_call"},
+    "acceptable": ["GOODBYE_FINAL"],
+    "forbidden": ["SUMMARY_CLOSE", "IMPORTANT_TO_SHARE"]
+  },
+  {
+    "id": "v8ch_high_burden_transition_without_pending",
+    "live_state": {
+      "wellness_answered": true,
+      "user_burden": 1.0,
+      "questions_asked_this_episode": 2,
+      "episodes": [
+        {"episode_id": "ep-1", "kind": "symptom", "known": {"onset": "вчера"}, "status": "open"}
+      ],
+      "active_episode_id": "ep-1",
+      "delivered_question": {
+        "question_id": "q-t",
+        "intent": "episode_onset",
+        "slot": "episode_onset",
+        "text": "когда началось?"
+      }
+    },
+    "context": {"raw_text": "да"},
+    "acceptable": ["IMPORTANT_TO_SHARE", "ASK_EPISODE:current"],
+    "forbidden": ["ACK_ONLY"]
+  },
+  {
+    "id": "v8ch_timer_internal_pending",
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {"episode_id": "ep-1", "kind": "symptom", "known": {"onset": "вчера"}, "status": "open"}
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "current"
+    },
+    "context": {},
+    "acceptable": ["ASK_EPISODE:current"],
+    "forbidden": ["SUMMARY_CLOSE", "BACKGROUND_GOAL:mood"]
+  },
+  {
+    "id": "v8ch_background_when_no_hard_work",
+    "live_state": {
+      "wellness_answered": false,
+      "required_background_goals": ["wellness"],
+      "episodes": []
+    },
+    "context": {"raw_text": ""},
+    "acceptable": ["BACKGROUND_GOAL:wellness"],
+    "forbidden": ["IMPORTANT_TO_SHARE", "SUMMARY_CLOSE"]
+  },
+  {
+    "id": "v8ch_user_question_preempts",
+    "p0_like": true,
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {"episode_id": "ep-1", "kind": "symptom", "known": {"onset": "вчера"}, "status": "open"}
+      ],
+      "active_episode_id": "ep-1",
+      "pending_episode_attribute": "current"
+    },
+    "context": {"raw_text": "а вы кто?", "user_question": true},
+    "acceptable": ["ANSWER_USER"],
+    "forbidden": ["ASK_EPISODE:severity", "SUMMARY_CLOSE"]
+  },
+  {
+    "id": "v8ch_completed_episode_pending_new",
+    "live_state": {
+      "wellness_answered": true,
+      "episodes": [
+        {
+          "episode_id": "ep-old",
+          "kind": "symptom",
+          "known": {"onset": "давно", "current": "resolved", "severity": "лёгкая"},
+          "status": "open"
+        },
+        {"episode_id": "ep-new", "kind": "symptom", "known": {}, "status": "open"}
+      ],
+      "active_episode_id": "ep-old",
+      "pending_episode_ids": ["ep-new"]
+    },
+    "context": {"raw_text": "ещё плечо", "has_new_speaker_issue": true},
+    "acceptable": ["ASK_EPISODE:temporal"],
+    "forbidden": ["IMPORTANT_TO_SHARE"]
+  }
+]

@@ -470,8 +470,8 @@ def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
     return "Понимаю."
 
 
-def schedule_next_action(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
-    """Canonical scheduler — all next-turn decisions flow through here."""
+def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
+    """Canonical legacy scheduler — mutates EngineState; owns real ResponsePlan."""
     turn = turn_context.turn
     filled = turn_context.newly_filled_slots
     clarify = turn_context.clarify
@@ -685,6 +685,22 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
         intent="clarify_wellness",
         slot="wellness",
         marks_question=True,
+    )
+
+
+def schedule_next_action(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
+    """Thin routing wrapper via DecisionRouter.
+
+    Shadow/soft/policy scope = conversation_scheduler only. Outer guards
+    (safety/control/repair/timer) are owned by the reducer and bypass this path.
+    Exactly one authoritative scheduler mutates/returns per invocation.
+    """
+    from packages.dialogue_engine.decision_router import route_schedule_next_action
+
+    return route_schedule_next_action(
+        state,
+        turn_context,
+        legacy=_schedule_next_action_legacy,
     )
 
 
