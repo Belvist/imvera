@@ -538,6 +538,46 @@ def test_no_domain_regex_dictionary_in_understanding_module() -> None:
         assert banned not in src, f"domain/mission token leaked: {banned}"
 
 
+def test_fast_path_refusal_is_not_factual_no(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """«Не хочу про это говорить» must not SATISFY goal as answer=no."""
+    mission = CallMission(
+        mission_id="eat-check",
+        goals=(
+            GoalDefinition(
+                goal_id="ate_today",
+                prompt_hint="Сегодня удалось поесть?",
+                answer_type="enum",
+                allowed_values=("yes", "no", "unknown"),
+            ),
+        ),
+    )
+    session = _session_with_mission(monkeypatch, mission=mission)
+    engine = session._engine
+    assert engine is not None
+    engine.state.delivered_question = Question(
+        question_id="q-eat",
+        slot="ate_today",
+        goal_id="ate_today",
+        text="Сегодня удалось поесть?",
+        phase=QuestionPhase.DELIVERED,
+        intent="ask_goal",
+    )
+    engine.state.goals["ate_today"].lifecycle = GoalLifecycle.ASKED
+
+    rich = build_rich_turn_from_text(
+        "Не хочу про это говорить.",
+        utterance_id="u-refuse",
+        engine_state=engine.state,
+    )
+    assert rich.goal_answers == ()
+    session.handle_user_text("Не хочу про это говорить.", rich_turn=rich)
+    goal = engine.state.goals["ate_today"]
+    assert goal.lifecycle != GoalLifecycle.SATISFIED
+    assert goal.answer != "no"
+
+
 def test_goal_definition_not_collapsed_into_goal_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

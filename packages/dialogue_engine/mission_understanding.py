@@ -17,8 +17,9 @@ from packages.dialogue_engine.mission import CallMission, GoalAnswerCandidate
 from packages.dialogue_engine.semantic_kernel.types import Observation
 
 # Bare polarity only — no domain / mission verb dictionaries.
-_BARE_YES = re.compile(r"(?i)^\s*(да|ага|угу|конечно)\s*[.!]?\s*$")
-_BARE_NO = re.compile(r"(?i)^\s*(нет|не\s+надо|не\s+хочу)\s*[.!]?\s*$")
+# Refusal phrases ("не хочу" / "не надо") are NOT factual "no".
+_BARE_YES = re.compile(r"(?i)^\s*(да|ага|угу)\s*[.!]?\s*$")
+_BARE_NO = re.compile(r"(?i)^\s*(нет)\s*[.!]?\s*$")
 _BARE_UNKNOWN = re.compile(r"(?i)^\s*(не\s+знаю|не\s+помню)\s*[.!]?\s*$")
 
 
