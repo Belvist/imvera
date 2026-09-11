@@ -642,10 +642,28 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
         if evidence_id not in goal.evidence_ids:
             goal.evidence_ids.append(evidence_id)
 
-    # Non-health needs_help answers from free text on pending attribute.
+    # Non-health needs_help answers from structured episode attributes first.
+    for attr in getattr(turn, "episode_attributes", ()) or ():
+        if getattr(attr, "attribute", None) != "needs_help":
+            continue
+        evidence = (getattr(attr, "evidence", "") or "").strip()
+        if evidence and evidence.casefold() not in turn.raw_text.casefold():
+            continue
+        ep_id = getattr(attr, "episode_id", None) or state.active_episode_id
+        ep = state.issue_episodes.get(ep_id) if ep_id else None
+        if ep is None or ep.kind != "other":
+            continue
+        value = str(getattr(attr, "value", "") or "").strip()
+        if value not in {"self_ok", "needs_help", "unknown"}:
+            continue
+        ep.known_attributes["needs_help"] = value
+        ep.status = "resolved"
+        state.pending_episode_attribute = None
+
+    # Non-health needs_help answers from free text on pending attribute (fallback only).
     if state.pending_episode_attribute == "needs_help" and state.active_episode_id:
         ep = state.issue_episodes.get(state.active_episode_id)
-        if ep is not None and ep.kind == "other":
+        if ep is not None and ep.kind == "other" and "needs_help" not in ep.known_attributes:
             low = turn.raw_text.lower()
             if any(
                 tok in low
@@ -668,6 +686,15 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
                 ep.known_attributes["needs_help"] = value
                 ep.status = "resolved"
                 state.pending_episode_attribute = None
+
+    # Target presence answers.
+    dq = state.delivered_question
+    if dq is not None and dq.intent == "ask_target_person":
+        low = turn.raw_text.lower()
+        if any(w in low for w in ("передаю", "сейчас дам", "минутку", "сейчас")):
+            state.target_presence = "confirmed"
+        elif any(w in low for w in ("нет", "спит", "не может", "ушла", "уехал", "нету", "нема")):
+            state.target_presence = "unavailable"
 
 
 

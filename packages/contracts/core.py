@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field
 
 from packages.contracts.enums import FsmState, PublicCallStatus, RiskLevel
+from packages.contracts.mission_result import CallOutcomes, MissionResultSnapshot
 
 if TYPE_CHECKING:
     from packages.contracts.events import CallEvent
@@ -65,6 +66,8 @@ class CallResultSnapshot(BaseModel):
     call_ended: bool = False
     termination_reason: TerminationReason | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    mission_result: MissionResultSnapshot | None = None
+    outcomes: CallOutcomes | None = None
 
 
 class PersistResult(BaseModel):

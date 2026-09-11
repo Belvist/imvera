@@ -44,6 +44,7 @@ class RichUserTurn(BaseModel):
     goal_dispositions: tuple = ()
     issue_mentions: tuple[IssueMention, ...] = ()
     risk_candidates: tuple[RiskCandidate, ...] = ()
+    episode_attributes: tuple = ()
 
     correction: bool = False
 
@@ -87,10 +88,47 @@ def payload_to_rich_turn(
     utterance_id: str,
     raw_text: str,
 ) -> RichUserTurn:
+    from packages.dialogue_engine.mission import GoalAnswerCandidate, GoalDispositionCandidate
+    from packages.dialogue_engine.semantic_kernel.types import Observation, SubjectKind
+
     enriched = enrich_payload_issue_mentions(payload, raw_text)
     goal_facts = tuple(enriched.facts) or extract_goal_facts(raw_text)
     correction = enriched.dialogue_act == "correction" or detect_correction(raw_text)
     user_q = enriched.user_question or detect_user_question(raw_text)
+    goal_answers = tuple(
+        GoalAnswerCandidate(
+            goal_id=a.goal_id,
+            value=a.value,
+            confidence=a.confidence,
+            evidence=a.evidence,
+            is_correction=a.is_correction,
+        )
+        for a in getattr(enriched, "goal_answers", ()) or ()
+    )
+    goal_dispositions = tuple(
+        GoalDispositionCandidate(
+            goal_id=d.goal_id,
+            disposition=d.disposition,
+            confidence=d.confidence,
+            evidence=d.evidence,
+        )
+        for d in getattr(enriched, "goal_dispositions", ()) or ()
+    )
+    observations = []
+    for note in getattr(enriched, "observation_notes", ()) or ():
+        observations.append(
+            Observation(
+                observation_id=f"obs-note-{utterance_id}-{len(observations)}",
+                attribute="reported_note",
+                value=note,
+                normalized_value=note.lower(),
+                subject=SubjectKind.SPEAKER,
+                confidence=0.85,
+                evidence=note,
+                status="candidate",
+            )
+        )
+    episode_attrs = getattr(enriched, "episode_attributes", ()) or ()
     return RichUserTurn(
         utterance_id=utterance_id,
         raw_text=raw_text,
@@ -101,9 +139,13 @@ def payload_to_rich_turn(
         needs_clarification=enriched.needs_clarification,
         user_question=user_q,
         goal_facts=goal_facts,
+        goal_answers=goal_answers,
+        goal_dispositions=goal_dispositions,
         issue_mentions=tuple(enriched.issue_mentions),
         risk_candidates=tuple(enriched.risk_candidates),
         correction=correction,
+        observations=tuple(observations),
+        episode_attributes=tuple(episode_attrs),
     )
 
 

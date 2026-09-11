@@ -16,12 +16,16 @@ from packages.contracts.interpretation import TurnInterpretation as LegacyTurnIn
 
 __all__ = [
     "ConfirmedFact",
+    "EpisodeAttributeCandidate",
     "Evidence",
     "FactCandidate",
+    "GoalAnswerSemantic",
+    "GoalDispositionSemantic",
     "InterpretationProvider",
     "IssueMention",
     "LegacyFactCandidate",
     "LegacyTurnInterpretation",
+    "MissionContextSnapshot",
     "RiskCandidate",
     "RiskEpisodeContext",
     "SemanticPayload",
@@ -97,6 +101,42 @@ class IssueMention(StrictModel):
     evidence: Evidence
 
 
+class GoalAnswerSemantic(StrictModel):
+    goal_id: str = Field(min_length=1)
+    value: str = Field(min_length=1)
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence: str = Field(min_length=1)
+    is_correction: bool = False
+
+
+class GoalDispositionSemantic(StrictModel):
+    goal_id: str = Field(min_length=1)
+    disposition: Literal["declined", "not_applicable", "unclear"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence: str = Field(min_length=1)
+
+
+class EpisodeAttributeCandidate(StrictModel):
+    attribute: str = Field(min_length=1)
+    value: str = Field(min_length=1)
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence: str = Field(min_length=1)
+    episode_id: str | None = None
+
+
+class MissionContextSnapshot(StrictModel):
+    """Read-only mission projection for LLM interpret — not a state store."""
+
+    mission_id: str = ""
+    goal_definitions: tuple[dict, ...] = ()
+    goal_lifecycles: tuple[tuple[str, str], ...] = ()
+    grounded_answers: tuple[tuple[str, str], ...] = ()
+    delivered_goal_id: str | None = None
+    delivered_question: str | None = None
+    suspended_goal_id: str | None = None
+    open_issue_summaries: tuple[str, ...] = ()
+
+
 class SemanticPayload(StrictModel):
     dialogue_act: Literal[
         "answer",
@@ -116,6 +156,10 @@ class SemanticPayload(StrictModel):
     answers_pending_question: bool
     needs_clarification: bool
     user_question: str | None = None
+    goal_answers: tuple[GoalAnswerSemantic, ...] = ()
+    goal_dispositions: tuple[GoalDispositionSemantic, ...] = ()
+    episode_attributes: tuple[EpisodeAttributeCandidate, ...] = ()
+    observation_notes: tuple[str, ...] = ()
 
 
 ActiveQuestionKind = Literal[
@@ -126,6 +170,7 @@ ActiveQuestionKind = Literal[
     "risk",
     "clarify",
     "goodbye",
+    "mission_goal",
     "none",
 ]
 
@@ -144,6 +189,7 @@ class TurnContext(StrictModel):
     confirmed_facts: tuple[ConfirmedFact, ...] = ()
     risk_episodes: tuple[RiskEpisodeContext, ...] = ()
     delivered_assistant_phrases: tuple[str, ...] = ()
+    mission: MissionContextSnapshot | None = None
 
 
 class TurnInterpretation(StrictModel):

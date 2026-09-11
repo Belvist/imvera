@@ -64,6 +64,15 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
     stt, tts, llm = _gateway_urls()
     elder = os.environ.get("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
     family_id = os.environ.get("IMVERA_DEV_FAMILY_ID", "fam-voice")
+    # Lab/FS: mission may arrive via query (?mission=<json>) — not env for product API.
+    mission_raw = websocket.query_params.get("mission")
+    mission_obj = None
+    if mission_raw:
+        import json as _json
+
+        from packages.dialogue_engine.mission import CallMission
+
+        mission_obj = CallMission.model_validate(_json.loads(mission_raw))
     capture_sr, playback_sr = bridge_audio_rates()
     output_frame_bytes = playback_sr * FRAME_MS // 1000 * 2
     chain = resampler_chain_summary(
@@ -139,6 +148,7 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
         tts,
         llm,
         MediaCallbacks(send_pcm=send_pcm, flush=flush, hangup=hangup, emit=emit),
+        mission=mission_obj,
     )
     actor_holder["actor"] = actor
 

@@ -33,6 +33,7 @@ from packages.dialogue_engine.events import (
     PlayoutCancelled,
     PlayoutCompleted,
     PlayoutStarted,
+    SafetyInterrupt,
     SpeakEffectStale,
     TimerExpired,
     UserTurnReceived,
@@ -114,7 +115,53 @@ def reduce(
         return _on_speak_effect_stale(state, event)
     if isinstance(event, EffectFailed):
         return _on_effect_failed(state, event)
+    if isinstance(event, SafetyInterrupt):
+        return _on_safety_interrupt(state, event)
     return state, []
+
+
+_SAFETY_RED_PROMPT = (
+    "Расскажите, что произошло? Правильно ли я понимаю ситуацию?"
+)
+_SAFETY_CLOSE = (
+    "Поняла. Завершаю звонок. "
+)
+
+
+def _on_safety_interrupt(
+    state: EngineState,
+    event: SafetyInterrupt,
+) -> tuple[EngineState, list[Effect]]:
+    from packages.dialogue_engine.mission_flow import capture_mission_suspend
+
+    suspend = capture_mission_suspend(state)
+    if suspend:
+        state.suspended_obligation = suspend
+    state.safety_mode = "red" if event.level == "RED" else "yellow"
+    state.risk_handling = True
+    state.risk_episode_id = event.episode_id
+    state.fsm_state = FsmState.RED_SIGNAL
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.bump_revision()
+    if state.safety_clarify_count >= 2:
+        state.call_closed = True
+        state.closing_reason = "safety_red"
+        return _emit_speak(
+            state,
+            text=_SAFETY_CLOSE,
+            intent="safety_close",
+            slot=None,
+            marks_question=False,
+        )
+    state.safety_clarify_count += 1
+    return _emit_speak(
+        state,
+        text=_SAFETY_RED_PROMPT,
+        intent="safety_clarify",
+        slot="safety",
+        marks_question=True,
+    )
 
 
 def _tag_effects(effects: list[Effect], state: EngineState) -> list[Effect]:
@@ -273,6 +320,18 @@ def _on_playout_completed(
         state.active_playout = None
         if q.intent == "opening_wellness":
             state.opening_state = OpeningState.DELIVERED
+        if q.intent == "mission_final_open" or q.slot == "mission_final_open":
+            state.important_to_share_asked = True
+            state.important_to_share_planned = False
+        if q.intent in {"ask_mission_goal", "resume_mission_goal"} and state.pending_resume_goal_id:
+            if (q.goal_id or q.slot) == state.pending_resume_goal_id:
+                state.pending_resume_goal_id = None
+                state.suspended_obligation = None
+        if q.intent == "episode_needs_help" or (
+            state.pending_episode_attribute_planned == "needs_help"
+        ):
+            state.pending_episode_attribute = "needs_help"
+            state.pending_episode_attribute_planned = None
         if q.slot:
             mark_question_delivered(state, q.slot, q.question_id)
         state.bump_revision()
@@ -320,10 +379,17 @@ def _on_playout_cancelled(
     if event.generation != state.active_playout_generation:
         return state, []
     if state.playing_question:
-        release_reservation(state, state.playing_question.slot)
-        state.playing_question = state.playing_question.model_copy(
-            update={"phase": QuestionPhase.CANCELLED}
-        )
+        q = state.playing_question
+        release_reservation(state, q.slot)
+        # Cancel before delivery: roll back planned-only mutations.
+        if q.intent == "mission_final_open" or q.slot == "mission_final_open":
+            state.important_to_share_planned = False
+        if q.intent == "episode_needs_help":
+            state.pending_episode_attribute_planned = None
+        if state.pending_resume_goal_id and (q.goal_id or q.slot) == state.pending_resume_goal_id:
+            state.pending_resume_goal_id = None
+            # keep suspended_obligation so resume can retry
+        state.playing_question = q.model_copy(update={"phase": QuestionPhase.CANCELLED})
         state.playing_question = None
         state.planned_question = None
     if state.active_playout:

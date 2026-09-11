@@ -73,6 +73,15 @@ class CreateCallRequest(BaseModel):
     transport: str = Field(default="browser")
     family_id: str = Field(default="fam-voice")
     elder_name: str = Field(default="")
+    mission: dict[str, Any] | None = None
+
+
+def _parse_mission(raw: dict[str, Any] | None):
+    if not raw:
+        return None
+    from packages.dialogue_engine.mission import CallMission
+
+    return CallMission.model_validate(raw)
 
 
 def _git_sha() -> str:
@@ -171,6 +180,7 @@ async def create_call(body: CreateCallRequest) -> dict[str, str]:
         llm_url=llm_url,
         media=MediaCallbacks(send_pcm=send_pcm, flush=flush, hangup=hangup, emit=emit),
         store=_store,
+        mission=_parse_mission(body.mission),
     )
     session_holder = VoiceCallSession(
         call_id=call_id,

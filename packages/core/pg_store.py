@@ -254,6 +254,21 @@ class PostgresCallRecordStore(CallRecordStore):
                     row = cur.fetchone()
                     if not row or row[0] != family_id:
                         return None
+                    meta = row[9] or {}
+                    mission_result = None
+                    outcomes = None
+                    if isinstance(meta, dict):
+                        from packages.contracts.mission_result import (
+                            CallOutcomes,
+                            MissionResultSnapshot,
+                        )
+
+                        if meta.get("mission_result"):
+                            mission_result = MissionResultSnapshot.model_validate(
+                                meta["mission_result"]
+                            )
+                        if meta.get("outcomes"):
+                            outcomes = CallOutcomes.model_validate(meta["outcomes"])
                     return CallResultSnapshot(
                         call_id=call_id,
                         family_id=row[0],
@@ -265,7 +280,9 @@ class PostgresCallRecordStore(CallRecordStore):
                         partial=row[6],
                         call_ended=row[7],
                         termination_reason=TerminationReason(row[8]) if row[8] else None,
-                        metadata=row[9] or {},
+                        metadata=meta,
+                        mission_result=mission_result,
+                        outcomes=outcomes,
                     )
         except Exception:
             return None
