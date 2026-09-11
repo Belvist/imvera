@@ -17,10 +17,14 @@ EslApi = Callable[..., Awaitable[str]]
 
 
 def media_bridge_ws_url(call_id: str, *, fs_uuid: str = "${uuid}") -> str:
-    """WS URL that carries product call_id so the bridge loads the SAME mission."""
+    """WS URL that carries product call_id so the bridge loads the SAME mission.
+
+    FreeSWITCH runs in Docker; 127.0.0.1 from the container is not the Mac host.
+    Default must reach the host media-bridge (:9210).
+    """
     base = os.environ.get(
         "IMVERA_MEDIA_BRIDGE_WS",
-        "ws://127.0.0.1:9210/stream",
+        "ws://host.docker.internal:9210/stream",
     ).rstrip("/")
     return f"{base}/{fs_uuid}?call_id={quote(call_id, safe='')}"
 
@@ -42,11 +46,22 @@ def _parse_originate_uuid(reply: str, fallback: str) -> str:
     return fallback
 
 
+def _originate_timeout_s(explicit: float | None = None) -> float:
+    if explicit is not None:
+        return explicit
+    raw = os.environ.get("IMVERA_FS_ORIGINATE_TIMEOUT_S", "25")
+    try:
+        value = float(raw)
+    except ValueError:
+        return 25.0
+    return value if value > 0 else 25.0
+
+
 async def originate_product_call(
     *,
     call_id: str,
     destination: str | None = None,
-    timeout_s: float = 8.0,
+    timeout_s: float | None = None,
     api: EslApi | None = None,
 ) -> dict[str, Any]:
     """Originate destination, wait for answer, then attach uuid_audio_stream.
@@ -60,6 +75,7 @@ async def originate_product_call(
       3) api uuid_audio_stream <fs_uuid> start ws://.../stream/<fs_uuid>?call_id=<product_call_id> ...
     """
     esl = api or freeswitch_api
+    timeout_s = _originate_timeout_s(timeout_s)
     dest = destination or os.environ.get("IMVERA_FS_ORIGINATE_DEST", "user/zoiper")
     fs_uuid = str(uuid.uuid4())
     ws = media_bridge_ws_url(call_id, fs_uuid=fs_uuid)
@@ -78,7 +94,7 @@ async def originate_product_call(
             "ok": False,
             "call_id": call_id,
             "fs_uuid": fs_uuid,
-            "error": str(exc),
+            "error": str(exc) or type(exc).__name__,
             "ws_url": ws,
             "destination": dest,
             "dial_string": dial_string,
@@ -131,7 +147,7 @@ async def originate_product_call(
             "stream_started": False,
         }
 
-    stream_ok = "+OK" in stream_reply or "-ERR" not in stream_reply.upper()
+    stream_ok = "+OK" in (stream_reply or "")
     return {
         "ok": stream_ok,
         "call_id": call_id,

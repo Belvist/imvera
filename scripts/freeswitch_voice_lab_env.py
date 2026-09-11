@@ -32,7 +32,12 @@ def build_freeswitch_voice_lab_env() -> dict[str, str]:
     env.setdefault("IMVERA_ELDER_DISPLAY_NAME", "Даниил")
     env.setdefault("IMVERA_MEDIA_BRIDGE_MODE", "callactor")
     env.setdefault("IMVERA_MEDIA_BRIDGE_PORT", "9210")
+    env.setdefault(
+        "IMVERA_MEDIA_BRIDGE_WS",
+        "ws://host.docker.internal:9210/stream",
+    )
     env.setdefault("IMVERA_TELEPHONY_STREAM", "1")
+    env.setdefault("IMVERA_FS_ORIGINATE_TIMEOUT_S", "25")
     # Live TTS opening on phone — cached 24k→16k via JSON playback can clip «IMVERA».
     env.setdefault("IMVERA_OPENING_CACHE", "0")
     # Product opening: «Здравствуйте. Это сервис Амвера. <name>, Как вы себя чувствуете?»
