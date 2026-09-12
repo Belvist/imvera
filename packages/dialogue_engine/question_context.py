@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+# Include полегче / полегче-forms: bare \bлегче\b does not match inside «полегче».
 _RESOLVED_UTTERANCE = re.compile(
     r"\b("
     r"не\s+болит|уже\s+не\s+бол|боль\s+прошл\w*|всё\s+прошл\w*|все\s+прошл\w*|"
-    r"прошл\w*|легче|лучше|получше|уже\s+почти\s+не"
+    r"прошл\w*|полегче|получше|легче|лучше|уже\s+почти\s+не|почти\s+прошл\w*"
     r")\b",
     re.I,
 )
@@ -131,6 +132,10 @@ def episode_obligations_satisfied(ep: IssueEpisode) -> bool:
         )
         if not temporal_ok:
             return False
+        label = ep.primary_label.lower()
+        # Headache: current/trend is required before severity (MVP severity_trend).
+        if "голов" in label and not attribute_need_satisfied(ep, "current"):
+            return False
         if _needs_severity(ep) and "severity" not in ep.known_attributes:
             return False
         if ep.body_site == "живот" and "current" not in ep.known_attributes:
@@ -138,7 +143,17 @@ def episode_obligations_satisfied(ep: IssueEpisode) -> bool:
         return True
     if ep.kind == "other":
         return bool(ep.known_attributes.get("needs_help"))
-    return bool(ep.known_attributes) or ep.kind == "sleep_problem"
+    if ep.kind == "sleep_problem":
+        # «Плохо спал» already carries quality — one soft follow-up max, or done.
+        if attribute_need_satisfied(ep, "quality") or attribute_need_satisfied(
+            ep, "pattern"
+        ):
+            return True
+        label = ep.primary_label.lower()
+        if any(x in label for x in ("плох", "бессон", "не спал")):
+            return True
+        return False
+    return bool(ep.known_attributes)
 
 
 def question_context_from_state(state: EngineState) -> QuestionContext | None:

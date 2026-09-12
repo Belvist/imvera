@@ -262,19 +262,26 @@ def test_live_colloquial_fast_path(text: str, slot: str) -> None:
 
 
 def test_full_daily_check_to_goodbye() -> None:
+    """Summary is terminal (MVP NORMAL_CLOSE): speak once + EndCall, no second goodbye."""
     r = _runner()
     result = r.run(
         [
             CallStarted(),
             "Хорошо.",
             "Нет.",
-            "до свидания",
         ]
     )
     intents = [e.intent for e in result.speak_effects]
     assert "important_to_share" in intents
     assert "summary" in intents
-    # Explicit farewell closes immediately — no double confirm.
-    assert "goodbye_final" in intents
     assert "goodbye_confirm" not in intents
     assert result.state.call_closed
+    assert result.state.summary_spoken
+    from packages.dialogue_engine.effects import EndCallEffect
+
+    assert any(isinstance(e, EndCallEffect) for e in result.effects)
+    # Further farewell after hangup must be ignored (no loop).
+    before = len(result.effects)
+    again = r.run(["до свидания"])
+    assert len(r.effects) == before
+    assert again.speak_effects == []

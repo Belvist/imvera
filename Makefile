@@ -283,6 +283,10 @@ test-dialogue-live:
 dialogue-smoke:
 	@$(PYTHON) scripts/dialogue_product_smoke.py
 
+dialogue-text-soak:
+	@echo "LAYER: text-only DialogueEngine soak — no TTS/SIP (default 100)"
+	@$(PYTHON) scripts/dialogue_text_soak.py --n $${IMVERA_TEXT_SOAK_N:-100}
+
 test-dialogue-e2e:
 	$(PYTHON) -m pytest tests/test_integrity.py tests/test_product_dialogue.py tests/test_investor_dialogue.py -q
 

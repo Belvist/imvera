@@ -17,6 +17,8 @@
     <extension name="imvera_zoiper_lab">
       <condition field="destination_number" expression="^7000$">
         <action application="answer"/>
+        <action application="set" data="rtp_auto_adjust=true"/>
+        <action application="set" data="sip_nat_detected=false"/>
         <action application="log" data="INFO IMVERA Zoiper CallActor ${uuid}"/>
         <action application="set" data="STREAM_PLAYBACK=1"/>
         <action application="set" data="imvera_ws_url=$${imvera_media_bridge_ws}/${uuid}"/>

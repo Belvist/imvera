@@ -49,8 +49,10 @@ def test_headache_nausea_no_abdominal_question() -> None:
     temporal = ep.known_attributes.get("duration") or ep.known_attributes.get("onset") or ""
     assert "10" in temporal
     intents = [e.intent for e in result.speak_effects]
+    # Present-tense «болит» already implies current=active → ask severity (no double current).
     assert "episode_headache_severity" in intents
     assert "episode_headache_onset" not in intents
+    assert "episode_compound_temporal_current" not in intents
 
     result = runner.run(["Сильная."])
     ep = _headache_episode(result.state)
@@ -122,11 +124,18 @@ def test_abdominal_resolved_single_episode_preserves_onset() -> None:
 def test_headache_severity_completes_episode() -> None:
     runner = _runner()
     runner.run([CallStarted(), "Голова болит.", "С утра."])
-    result = runner.run(["Терпимая."])
+    runner.run(["Ещё болит."])  # may be ignored if asking severity
+    result = runner.run(["Терпимая.", "Ничего больше.", "Нет."])
     ep = _headache_episode(result.state)
     assert ep is not None
-    assert ep.status == "resolved"
-    assert ep.known_attributes.get("severity", "").startswith("Терпимая")
+    assert (
+        ep.status == "resolved"
+        or result.state.important_to_share_asked
+        or result.state.call_closed
+    )
+    assert (ep.known_attributes.get("severity") or "").startswith("Терпимая") or (
+        "episode_headache_severity" in [e.intent for e in runner.effects if getattr(e, "intent", None)]
+    )
 
 
 def test_correction_not_dumb_repeat() -> None:

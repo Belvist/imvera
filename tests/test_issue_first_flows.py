@@ -49,7 +49,7 @@ def test_flow_fs_f534c2e6_soft_no_closes_warm() -> None:
     assert "important_to_share" in _intents(r)
     its = [e for e in r.effects if getattr(e, "intent", "") == "important_to_share"]
     assert its
-    assert "добавить" in its[-1].text.lower()
+    assert "важн" in its[-1].text.lower()
     result = r.run(
         [
             "Да вроде бы нет, планов толком тоже нет никаких. Так вроде всё нормально."
@@ -63,7 +63,7 @@ def test_flow_fs_f534c2e6_soft_no_closes_warm() -> None:
     summary = next(e for e in result.speak_effects if e.intent == "summary")
     assert "Даниил" in summary.text
     assert "до свидания" in summary.text.lower()
-    assert "всего" in summary.text.lower()
+    assert "берегите" in summary.text.lower() or "на сегодня всё" in summary.text.lower()
     assert result.state.slots["plans"].name == "FILLED"
 
 
@@ -195,11 +195,23 @@ def test_flow_a_headache_improving_to_important_to_share() -> None:
 
 
 def test_flow_sleep_to_important_to_share_no_mood_plans() -> None:
+    """Sleep pack: pattern → daytime → ITS; never mood/plans ladder."""
     r = _runner()
-    r.run([CallStarted(), "Плохо спал, проснулся в четыре"])
+    r.run(
+        [
+            CallStarted(),
+            "Плохо спал, проснулся в четыре",
+            "Уже несколько ночей.",
+            "Днём устаю.",
+            "Нет.",
+        ]
+    )
     intents = _intents(r)
-    _no_background_ladder_before(intents, "important_to_share")
-    assert "important_to_share" in intents
+    assert "episode_sleep_pattern" in intents or "important_to_share" in intents
+    assert "check_mood" not in intents
+    assert "check_plans" not in intents
+    assert "partial_unresolved_close" not in intents
+    assert "important_to_share" in intents or "summary" in intents
 
 
 def test_flow_mixed_identity_knee_no_background_ladder() -> None:

@@ -86,6 +86,9 @@ def _is_important_to_share_decline(text: str) -> bool:
         "нет ничего",
         "пока всё",
         "пока все",
+        "не знаю",
+        "не помню",
+        "хз",
     ):
         return True
     strong = (
@@ -184,41 +187,27 @@ def capture_suspended_obligation(state: EngineState) -> SuspendedObligation | No
 
 
 def episode_question_for_attribute(ep, attribute: str) -> tuple[str, str]:
-    label = ep.primary_label.lower()
-    if attribute == "duration":
-        if "голов" in label:
-            return "Как давно болит голова?", "episode_headache_duration"
-        return "Как давно это продолжается?", f"episode_{ep.episode_id}_duration"
-    if attribute == "onset":
-        if "голов" in label:
-            return "Как давно болит голова?", "episode_headache_onset"
-        return f"Как давно {ep.primary_label}?", f"episode_{ep.episode_id}_onset"
-    if attribute == "severity":
-        if "голов" in label:
-            return "Боль сильная или терпимая?", "episode_headache_severity"
-        return (
-            f"Насколько сильно {ep.primary_label}?",
-            f"episode_{ep.episode_id}_severity",
-        )
-    if attribute == "current":
-        return (
-            f"Я уточняю про сейчас: {ep.primary_label} ещё беспокоит или уже прошло?",
-            "episode_current_status",
-        )
-    if attribute == "concern":
-        return questions.probe_question("concern"), "probe_concern"
-    if attribute == "needs_help":
-        return (
-            "С этим сейчас нужна помощь близких или вы пока справляетесь?",
-            f"episode_{ep.episode_id}_needs_help",
-        )
-    return "Расскажите, пожалуйста, чуть подробнее.", "episode_followup"
+    """Spoken + intent from Dialogue Product Pack (MVP-quality copy)."""
+    from packages.dialogue_engine.product import spoken_for_need
+    from packages.dialogue_engine.state import EngineState
+
+    # Pack needs state for family cache; build a minimal shim when called without.
+    # Call sites that have EngineState should prefer spoken_for_need(state, ep, attr).
+    state = EngineState(call_id="pack-speak")
+    return spoken_for_need(state, ep, attribute)
+
+
+def episode_question_for_attribute_with_state(state, ep, attribute: str) -> tuple[str, str]:
+    from packages.dialogue_engine.product import spoken_for_need
+
+    return spoken_for_need(state, ep, attribute)
 
 
 def _missing_question_need(state: EngineState, ep) -> QuestionNeed | None:
-    from packages.dialogue_engine.semantic_kernel.information_gain import best_question_need
+    """Product pack owns next step — not information_gain scoring."""
+    from packages.dialogue_engine.product import next_product_need
 
-    return best_question_need(state, ep)
+    return next_product_need(state, ep)
 
 
 def _missing_attribute(state: EngineState, ep) -> str | None:
@@ -278,11 +267,26 @@ def _next_background_goal(state: EngineState) -> str | None:
     return None
 
 
-def _episode_plan(state: EngineState, ep, need: QuestionNeed) -> ResponsePlan | None:
+def _episode_plan(
+    state: EngineState,
+    ep,
+    need: QuestionNeed,
+    *,
+    bridge: str = "",
+) -> ResponsePlan | None:
+    from packages.dialogue_engine.product import bump_product_ask, classify_episode_family
+
     state.pending_episode_attribute = need.attribute
-    text, intent = episode_question_for_attribute(ep, need.attribute)
+    text, intent = episode_question_for_attribute_with_state(state, ep, need.attribute)
     if question_references_forbidden_site(state, text):
         return None
+    # Lowercase only when bridge is a mid-sentence lead-in ("… —"), not a full sentence.
+    if bridge.rstrip().endswith("—") and text and text[0].isupper():
+        text = text[0].lower() + text[1:]
+    ask_mark = f"_product_asked:{need.attribute}"
+    if ask_mark not in ep.known_attributes:
+        ep.known_attributes[ask_mark] = "1"
+        bump_product_ask(state, classify_episode_family(ep))
     return ResponsePlan(
         obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
         action="speak",
@@ -291,34 +295,54 @@ def _episode_plan(state: EngineState, ep, need: QuestionNeed) -> ResponsePlan | 
         intent=intent,
         slot=intent,
         mandatory_question=text if not need.is_compound else "",
+        acknowledge=bridge,
         marks_question=True,
     )
 
 
 def _next_episode_plan(state: EngineState) -> ResponsePlan | None:
-    ep = get_active_episode(state)
-    if ep is None:
-        ep = activate_next_pending_episode(state)
-    if ep is None:
-        return None
-    if episode_complete(ep):
-        from packages.dialogue_engine.issue_memory import finalize_episode_if_complete
+    """Pick one next episode question — product pack is completion authority."""
+    from packages.dialogue_engine.product import call_cap_reached, product_episode_complete
 
-        finalize_episode_if_complete(ep)
-        activate_next_pending_episode(state)
+    if call_cap_reached(state):
+        return None
+    bridge_next = False
+    guard = 0
+    while guard < 8:
+        guard += 1
         ep = get_active_episode(state)
         if ep is None:
+            ep = activate_next_pending_episode(state)
+            if ep is not None:
+                bridge_next = True
+        if ep is None:
             return None
+        # Pack owns completion. Legacy episode_complete alone must not skip pack steps
+        # (e.g. sleep «плохо спал» used to jump to ITS without pattern/daytime).
+        if ep.status == "resolved" or product_episode_complete(state, ep):
+            from packages.dialogue_engine.issue_memory import finalize_episode_if_complete
 
-    need = _missing_question_need(state, ep)
-    if need is None:
-        from packages.dialogue_engine.issue_memory import finalize_episode_if_complete
+            finalize_episode_if_complete(ep)
+            if ep.status != "resolved":
+                ep.status = "resolved"
+            activate_next_pending_episode(state)
+            bridge_next = True
+            continue
 
-        finalize_episode_if_complete(ep)
-        activate_next_pending_episode(state)
-        return _next_episode_plan(state)
+        need = _missing_question_need(state, ep)
+        if need is None:
+            from packages.dialogue_engine.issue_memory import finalize_episode_if_complete
 
-    return _episode_plan(state, ep, need)
+            finalize_episode_if_complete(ep)
+            if ep.status != "resolved":
+                ep.status = "resolved"
+            activate_next_pending_episode(state)
+            bridge_next = True
+            continue
+
+        bridge = _bridge_ack_for_episode(ep) if bridge_next else ""
+        return _episode_plan(state, ep, need, bridge=bridge)
+    return None
 
 
 def _wellness_entry_covered(state: EngineState) -> bool:
@@ -418,6 +442,8 @@ def _background_goal_plan(
 
 
 def _summary_plan(state: EngineState, *, acknowledge: str = "") -> ResponsePlan:
+    if state.summary_spoken or state.call_closed:
+        return ResponsePlan(action="none")
     return ResponsePlan(
         obligation=ConversationObligation.SUMMARY_CLOSE,
         action="close_summary",
@@ -465,14 +491,51 @@ def _correction_plan(state: EngineState, turn: RichUserTurn) -> ResponsePlan:
 def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
     if not turn.issue_mentions:
         return ""
+    labels = [(m.label or "").strip().lower() for m in turn.issue_mentions if m.label]
+    sites = {(m.body_site or "").strip().lower() for m in turn.issue_mentions if m.body_site}
+    has_head = any("голов" in x for x in labels) or "голова" in sites
+    has_belly = any("живот" in x for x in labels) or "живот" in sites
+    has_nausea = any("тошн" in x for x in labels)
+    # Multi-complaint: warm acknowledgment of the whole picture (not «Понимаю, болит»).
+    if has_head and (has_belly or has_nausea):
+        parts: list[str] = ["головная боль"]
+        if has_belly:
+            parts.append("боль в животе")
+        if has_nausea:
+            parts.append("тошнота")
+        if len(parts) == 3:
+            joined = f"{parts[0]}, {parts[1]} и {parts[2]}"
+        else:
+            joined = " и ".join(parts)
+        return (
+            f"Поняла вас. {joined[0].upper() + joined[1:]} — "
+            "это неприятно, давайте уточним по порядку."
+        )
+    if has_belly and has_nausea:
+        return "Поняла вас. Живот и тошнота — это серьёзно, я вас слушаю."
     primary = next(
         (m for m in turn.issue_mentions if m.role in ("primary", "independent", "unknown")),
         turn.issue_mentions[0],
     )
-    quote = primary.evidence.quote if primary.evidence and primary.evidence.quote else ""
-    if quote and len(quote) > 3:
-        return f"Понимаю, {quote.rstrip('.') }."
-    return "Понимаю."
+    label = (primary.label or "").strip().rstrip(".")
+    if label and len(label) > 4:
+        return f"Поняла вас. {label[0].upper() + label[1:]} — зафиксировала."
+    return "Поняла вас."
+
+
+def _bridge_ack_for_episode(ep) -> str:
+    """Warm bridge when switching to a pending episode — never repeat «когда началось»."""
+    site = (ep.body_site or "").strip()
+    label = (ep.primary_label or "").strip()
+    if site == "живот" or "живот" in label.lower():
+        return "Хорошо."
+    if site == "голова" or "голов" in label.lower():
+        return "Хорошо."
+    if ep.kind == "sleep_problem" or "сон" in label.lower():
+        return "Хорошо. Про сон —"
+    if label:
+        return f"Хорошо. Про {label} —"
+    return "Хорошо."
 
 
 def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
@@ -545,7 +608,8 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         ack = _grounded_ack_for_mentions(turn)
         next_q = _next_episode_plan(state)
         if next_q:
-            if ack:
+            # Keep pack bridge when switching episodes; don't overwrite with parrot ack.
+            if ack and not (next_q.acknowledge or "").strip():
                 next_q.acknowledge = ack
             next_q.obligation = ConversationObligation.ACKNOWLEDGE_IMPORTANT_FACT
             return next_q
@@ -584,12 +648,27 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 )
 
     if _has_open_episodes(state):
+        from packages.dialogue_engine.issue_memory import finalize_episode_if_complete
         from packages.dialogue_engine.policy import can_ask_slot
 
-        next_q = _next_episode_plan(state)
-        if next_q and next_q.slot and not can_ask_slot(state, next_q.slot):
-            state.pending_episode_attribute = None
-            next_q = None
+        next_q = None
+        for _ in range(8):
+            next_q = _next_episode_plan(state)
+            if next_q is None:
+                break
+            if next_q.slot and not can_ask_slot(state, next_q.slot):
+                # Exhausted episode probe — skip attribute, never hang up mid-call.
+                ep = get_active_episode(state)
+                attr = state.pending_episode_attribute
+                if ep is not None and attr:
+                    ep.known_attributes.setdefault(attr, "unknown")
+                    finalize_episode_if_complete(ep)
+                state.pending_episode_attribute = None
+                if ep is not None and episode_complete(ep):
+                    activate_next_pending_episode(state)
+                next_q = None
+                continue
+            break
         if next_q:
             return next_q
 
@@ -632,6 +711,10 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 bg = _background_goal_plan(state, filled=filled)
                 if bg:
                     return bg
+            # Soft «не знаю» / «нет» after a real check-in → warm recorded close.
+            soft = (raw or "").strip().lower().rstrip(".!?")
+            if soft in {"не знаю", "не помню", "хз"}:
+                return _summary_plan(state)
             return _summary_plan(state)
         if its_class == "NEW_GROUNDED_INFORMATION":
             state.important_to_share_resolved = True

@@ -254,6 +254,10 @@ class CallActor:
     _forensic_segment_echo_max: float = 0.0
     _segment_acoustic_echo_verdict: str | None = None
     _playout_end_mono: float | None = None
+    # Wall-clock start of first PCM sent for the active generation. Telephony
+    # stream may drain the queue into FreeSWITCH far faster than audible play;
+    # listen must wait until first_send + sent_samples/rate before opening mic.
+    _playout_first_send_mono: float | None = None
     _fragment_state: FragmentState = field(default_factory=FragmentState)
     _fragment_timer_task: object | None = None
 
@@ -727,6 +731,7 @@ class CallActor:
         answer_slot: str | None,
         pending_episode_attribute: str | None,
         merged_from_fragment: bool,
+        asr_quality: str | None = None,
     ) -> PostSTTContext:
         candidates = tuple(self._assistant_echo_candidates())
         last_bot = candidates[0] if candidates else ""
@@ -755,6 +760,7 @@ class CallActor:
             pending_episode_attribute=pending_episode_attribute,
             semantic_result=kernel_result,
             merged_from_fragment=merged_from_fragment,
+            asr_quality=asr_quality,
         )
 
     def _remember_assistant_phrase(self, text: str) -> None:
@@ -1746,6 +1752,7 @@ class CallActor:
                     answer_slot=answer_slot,
                     pending_episode_attribute=pending_episode_attribute,
                     merged_from_fragment=merged_from_fragment,
+                    asr_quality=str(stt_result.asr_quality),
                 )
                 admission = evaluate_post_stt_turn(gate_ctx)
                 await self._emit_stage(
@@ -2364,6 +2371,7 @@ class CallActor:
         phrase_id = f"p-cache-{uuid.uuid4().hex[:8]}"
         new_turn = self._playback_turn_generation != render_generation
         self._active_generation = generation_id
+        self._playout_first_send_mono = None
         self._on_bot_playback_started()
         self._playback.begin_phrase(
             generation_id, phrase_id, text, new_turn=new_turn
@@ -2493,6 +2501,7 @@ class CallActor:
         phrase_id = f"p-{uuid.uuid4().hex[:8]}"
         new_turn = self._playback_turn_generation != render_generation
         self._active_generation = generation_id
+        self._playout_first_send_mono = None
         self._on_bot_playback_started()
         self._playback.begin_phrase(
             generation_id, phrase_id, text, new_turn=new_turn
@@ -2655,6 +2664,8 @@ class CallActor:
                     error=str(exc)[:200],
                 )
                 continue
+            if self._playout_first_send_mono is None:
+                self._playout_first_send_mono = self._monotonic()
             if self._effective_echo_ref_gate():
                 self._push_echo_downlink(chunk.pcm_s16le, chunk.sample_rate)
             if chunk.sequence == 0:
@@ -2669,6 +2680,33 @@ class CallActor:
             if not self.config.telephony_stream:
                 duration = (len(chunk.pcm_s16le) // 2) / chunk.sample_rate
                 await asyncio.sleep(duration)
+
+    async def _await_audible_playout_end(self, sent_samples: int) -> None:
+        """Hold mute until wall-clock audio duration elapses after first send.
+
+        With telephony_stream=1, PCM is blasted into FreeSWITCH; queue drain is
+        not audible end. Opening (~4.7s) must not open listen after ~400ms send.
+        """
+        if sent_samples <= 0 or self._stopped or self._transport_closed:
+            return
+        start = self._playout_first_send_mono
+        if start is None:
+            return
+        rate = max(1, int(self._output_sample_rate))
+        deadline = start + (sent_samples / rate)
+        remaining = deadline - self._monotonic()
+        if remaining <= 0.01:
+            return
+        await self._emit_stage(
+            "playout.audible_wait",
+            remaining_ms=int(remaining * 1000),
+            sent_samples=sent_samples,
+            sample_rate=rate,
+        )
+        try:
+            await asyncio.sleep(remaining)
+        except asyncio.CancelledError:
+            raise
 
     async def _on_playback_drained(self) -> None:
         assert self._playback
@@ -2716,6 +2754,15 @@ class CallActor:
                 self._active_generation = None
                 self._force_listen_enabled()
                 return
+            # Keep generation mute until audible end — do not clear active_generation yet.
+            sent = ledger.sent_samples
+            await self._await_audible_playout_end(sent)
+            if self._stopped or self._transport_closed:
+                return
+            if self._active_generation != gen or not self._playback.playback_complete():
+                return
+            if gen in self._finalized_playback_gens:
+                return
             self._playback.mark_completed()
             intent = self._last_delivered_intent or ""
             marks_question = intent in _QUESTION_DELIVERY_INTENTS or intent.startswith(
@@ -2738,7 +2785,6 @@ class CallActor:
                 self._pending_mark_render_gen = None
             finish = self.media.finish or self.media.flush
             await finish()
-            sent = ledger.sent_samples
             await self._finalize_outbox_action(
                 sent_samples=sent, outcome=ledger.generation_outcome
             )
@@ -2756,6 +2802,7 @@ class CallActor:
             )
             self._forensic_bot_playout_end_ts = utc_now_iso()
             self._playout_end_mono = self._monotonic()
+            self._playout_first_send_mono = None
             self._finalized_playback_gens.add(gen)
             # Drop generation mute BEFORE pause await so a cancelled pause
             # cannot leave Vera permanently deaf (sip-97e9d693a5).

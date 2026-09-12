@@ -72,8 +72,8 @@ def test_wrong_person_final_emits_hangup_after_playout() -> None:
     result = runner.run([CallStarted(), _control_turn("wrong_person", "не туда попали")])
     speak = result.speak_effects[-1]
     assert speak.intent == "wrong_person_final"
-    effects = _playout_hangup_after_final(runner, speak)
-    assert any(isinstance(e, EndCallEffect) for e in effects)
+    # ScenarioRunner completes hangup playout → EndCall already in result.effects
+    assert any(isinstance(e, EndCallEffect) for e in result.effects)
 
 
 def test_defer_closes_call() -> None:
@@ -89,8 +89,7 @@ def test_defer_final_emits_hangup_after_playout() -> None:
     result = runner.run([CallStarted(), _control_turn("defer", "позже поговорим")])
     speak = result.speak_effects[-1]
     assert speak.intent == "defer_final"
-    effects = _playout_hangup_after_final(runner, speak)
-    assert any(isinstance(e, EndCallEffect) for e in effects)
+    assert any(isinstance(e, EndCallEffect) for e in result.effects)
 
 
 def test_revoke_consent_closes_call() -> None:
@@ -110,8 +109,7 @@ def test_revoke_consent_final_emits_hangup_after_playout() -> None:
     )
     speak = result.speak_effects[-1]
     assert speak.intent == "revoke_consent_final"
-    effects = _playout_hangup_after_final(runner, speak)
-    assert any(isinstance(e, EndCallEffect) for e in effects)
+    assert any(isinstance(e, EndCallEffect) for e in result.effects)
 
 
 def test_pause_sets_wait_timer() -> None:

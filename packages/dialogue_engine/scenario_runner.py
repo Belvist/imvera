@@ -174,10 +174,27 @@ class ScenarioRunner:
         self._auto_deliver(effects)
 
     def _auto_deliver(self, effects: list) -> None:
+        # Hangup intents must complete playout or EndCall never fires (live CallActor
+        # always sends PlayoutCompleted; tests must mirror that for terminal speech).
+        _HANGUP_INTENTS = frozenset(
+            {
+                "summary",
+                "goodbye_final",
+                "partial_unresolved_close",
+                "urgent_close",
+                "wrong_person_final",
+                "defer_final",
+                "revoke_consent_final",
+            }
+        )
         for effect in effects:
             if not isinstance(effect, SpeakEffect):
                 continue
-            if effect.marks_question or effect.intent == "opening_wellness":
+            if (
+                effect.marks_question
+                or effect.intent == "opening_wellness"
+                or effect.intent in _HANGUP_INTENTS
+            ):
                 self.state, extra = reduce(
                     self.state,
                     PlayoutCompleted(

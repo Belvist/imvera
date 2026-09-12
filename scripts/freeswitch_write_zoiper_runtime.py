@@ -48,10 +48,12 @@ def write_zoiper_runtime_config(media_host: str | None = None) -> Path:
                 '    <param name="sip-ip" value="0.0.0.0"/>',
                 f'    <param name="ext-rtp-ip" value="{host}"/>',
                 f'    <param name="ext-sip-ip" value="{host}"/>',
-                '    <param name="NDLB-received-in-nat-reg-contact" value="true"/>',
-                '    <param name="aggressive-nat-detection" value="true"/>',
-                '    <param name="inbound-codec-prefs" value="G722,PCMU,PCMA"/>',
-                '    <param name="outbound-codec-prefs" value="G722,PCMU,PCMA"/>',
+                # Same-LAN Zoiper lab: do NOT rewrite Contact to WAN "received"
+                # IP (breaks answer/RTP — Contact becomes 185.x and 7000 hangs).
+                '    <param name="NDLB-received-in-nat-reg-contact" value="false"/>',
+                '    <param name="aggressive-nat-detection" value="false"/>',
+                '    <param name="inbound-codec-prefs" value="PCMU,PCMA"/>',
+                '    <param name="outbound-codec-prefs" value="PCMU,PCMA"/>',
                 "  </settings>",
                 "</profile>",
                 "",

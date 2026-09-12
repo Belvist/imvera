@@ -79,6 +79,7 @@ _STANDARD_CHECK_SLOTS = frozenset({"wellness", "mood", "sleep", "plans"})
 
 _CONTROL_HANGUP_INTENTS = frozenset(
     {
+        "summary",
         "goodbye_final",
         "partial_unresolved_close",
         "urgent_close",
@@ -280,6 +281,25 @@ def _emit_speak(
     gen = state.active_playout_generation + 1
     state.active_playout_generation = gen
     if marks_question and slot and not reserve_question(state, slot, gen_id):
+        # Episode probes must never kill the call when attempts are exhausted.
+        if slot.startswith("episode_"):
+            from packages.dialogue_engine.issue_memory import (
+                activate_next_pending_episode,
+                episode_complete,
+                finalize_episode_if_complete,
+                get_active_episode,
+            )
+
+            ep = get_active_episode(state)
+            attr = state.pending_episode_attribute
+            if ep is not None and attr:
+                ep.known_attributes.setdefault(attr, "unknown")
+                finalize_episode_if_complete(ep)
+            state.pending_episode_attribute = None
+            state.waiting_on_slot = None
+            if ep is not None and episode_complete(ep):
+                activate_next_pending_episode(state)
+            return _schedule_advance(state)
         return _close_partial(state)
     resolved_goal = goal_id or (slot if intent == "ask_mission_goal" else None)
     q = Question(
@@ -1342,8 +1362,17 @@ def _speak_probe(
 
 
 def _emit_summary(state: EngineState, *, acknowledge: str = "") -> tuple[EngineState, list[Effect]]:
+    """Terminal close speech — same contract as MVP NORMAL_CLOSE: speak once, then hang up.
+
+    Must set call_closed before speak so later user turns are ignored and
+    PlayoutCompleted emits EndCallEffect (intent in _CONTROL_HANGUP_INTENTS).
+    """
+    if state.call_closed and state.summary_spoken:
+        return state, []
     state.fsm_state = FsmState.SUMMARY
     state.summary_spoken = True
+    state.call_closed = True
+    state.closing_reason = state.closing_reason or "complete"
     state.bump_revision()
     return _emit_speak(
         state,

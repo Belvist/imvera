@@ -27,6 +27,7 @@ def _ctx(
     echo_tail: bool = False,
     ms_since: int | None = 2000,
     merged: bool = False,
+    asr_quality: str | None = None,
 ) -> PostSTTContext:
     kernel = interpret(user, utterance_id="u-test")
     return PostSTTContext(
@@ -41,6 +42,7 @@ def _ctx(
         pending_episode_attribute=pending_attr,
         semantic_result=kernel,
         merged_from_fragment=merged,
+        asr_quality=asr_quality,
     )
 
 
@@ -150,4 +152,40 @@ def test_valid_short_answers_never_held(answer: str) -> None:
 def test_conversation_complaint_accepted() -> None:
     user = "Почему вы так долго отвечаете?"
     decision = evaluate_post_stt_turn(_ctx(user, "Как давно тошнит?"))
+    assert decision.verdict == TurnAdmissionVerdict.ACCEPT
+
+
+def test_fs_bf61f52b_low_da_near_opening_dropped() -> None:
+    """Regression: LOW 'Да' right after opening must not default_accept."""
+    bot = (
+        "Здравствуйте! Это Вера из сервиса заботы о близких. "
+        "Как вы себя сегодня чувствуете?"
+    )
+    decision = evaluate_post_stt_turn(
+        _ctx(
+            "Да",
+            bot,
+            pending_attr="wellness",
+            ms_since=50,
+            asr_quality="LOW",
+        ),
+    )
+    assert decision.verdict == TurnAdmissionVerdict.DROP_ECHO
+    assert decision.reason == "low_quality_bare_polarity_near_playout"
+
+
+def test_good_da_after_guard_still_accepted() -> None:
+    bot = "Как вы себя сегодня чувствуете?"
+    decision = evaluate_post_stt_turn(
+        _ctx("Да", bot, pending_attr="wellness", ms_since=2000, asr_quality="GOOD"),
+    )
+    assert decision.verdict == TurnAdmissionVerdict.ACCEPT
+
+
+def test_low_da_far_after_playout_still_accepted() -> None:
+    """Quiet real answer after settle window must still pass."""
+    bot = "Как вы себя сегодня чувствуете?"
+    decision = evaluate_post_stt_turn(
+        _ctx("Да", bot, pending_attr="wellness", ms_since=2500, asr_quality="LOW"),
+    )
     assert decision.verdict == TurnAdmissionVerdict.ACCEPT

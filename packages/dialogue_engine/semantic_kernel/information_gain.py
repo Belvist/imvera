@@ -29,16 +29,28 @@ def attribute_information_gain(
         score += 0.5
     if attribute == "severity":
         if "голов" in ep.primary_label.lower():
-            if not attribute_need_satisfied(ep, "duration"):
+            # MVP parity: never ask severity before current/trend once temporal exists.
+            if not attribute_need_satisfied(ep, "duration") and not attribute_need_satisfied(
+                ep, "onset"
+            ):
+                return -1.0
+            if not attribute_need_satisfied(ep, "current"):
                 return -1.0
             score += 0.3
         else:
             score += 0.1
     if attribute == "current":
-        if ep.known_attributes.get("onset") and "вчера" in ep.known_attributes["onset"].lower():
-            score += 0.5
+        temporal = (
+            ep.known_attributes.get("onset") or ep.known_attributes.get("duration") or ""
+        )
+        if temporal:
+            score += 0.55
+        if "вчера" in temporal.lower() or "утр" in temporal.lower():
+            score += 0.15
     improving = ep.known_attributes.get("status", "")
-    if improving and any(w in improving.lower() for w in ("лучше", "прошл", "почти")):
+    if improving and any(
+        w in improving.lower() for w in ("лучше", "прошл", "почти", "полегч")
+    ):
         score -= 0.6
     asked = state.pending_episode_attribute == attribute
     if asked:
@@ -47,50 +59,10 @@ def attribute_information_gain(
 
 
 def best_question_need(state: EngineState, ep: IssueEpisode):
-    """Return single or compound QuestionNeed for the highest-gain gap."""
-    from packages.dialogue_engine.issue_memory import _needs_severity
-    from packages.dialogue_engine.question_context import (
-        QuestionNeed,
-        attribute_need_satisfied,
-        episode_is_resolved,
-        question_need_satisfied,
-    )
+    """Delegate to Dialogue Product Pack — scoring is no longer the owner."""
+    from packages.dialogue_engine.product import next_product_need
 
-    if episode_is_resolved(ep):
-        return None
-
-    # Non-health / household issues: one generic actionable follow-up only.
-    if getattr(ep, "kind", None) == "other":
-        if ep.known_attributes.get("needs_help"):
-            return None
-        return QuestionNeed.for_attribute("needs_help")
-
-    pending = state.pending_episode_attribute
-    if pending:
-        need = QuestionNeed.for_attribute(pending)
-        if not question_need_satisfied(ep, need):
-            return need
-
-    onset_ok = (
-        attribute_need_satisfied(ep, "onset") or attribute_need_satisfied(ep, "duration")
-    )
-    current_ok = attribute_need_satisfied(ep, "current")
-    label = ep.primary_label.lower()
-    is_abdominal = ep.body_site == "живот" or "живот" in label
-
-    if not onset_ok and not current_ok and is_abdominal:
-        return QuestionNeed.compound("onset", "current")
-    if not onset_ok and not current_ok and "голов" in label:
-        return QuestionNeed.compound("duration", "current")
-
-    attr = best_attribute_to_ask(state, ep)
-    if attr:
-        return QuestionNeed.for_attribute(attr)
-    if not current_ok and is_abdominal:
-        return QuestionNeed.for_attribute("current")
-    if _needs_severity(ep) and "severity" not in ep.known_attributes:
-        return QuestionNeed.for_attribute("severity")
-    return None
+    return next_product_need(state, ep)
 
 
 def best_attribute_to_ask(state: EngineState, ep: IssueEpisode) -> str | None:
@@ -114,7 +86,8 @@ def best_attribute_to_ask(state: EngineState, ep: IssueEpisode) -> str | None:
     if ep.body_site == "живот" or "живот" in label:
         ordered = ("onset", "current", "severity")
     elif "голов" in label:
-        ordered = ("duration", "severity", "current")
+        # MVP: onset/duration → current/trend → severity (not severity before «а сейчас»).
+        ordered = ("duration", "current", "severity")
     else:
         ordered = ("onset", "severity", "current")
     scored = [(a, attribute_information_gain(state, ep, a)) for a in ordered]

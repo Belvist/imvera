@@ -70,7 +70,8 @@ _URGENT_CLOSE = (
 )
 _ANSWER_WAIT_MS = 7000
 _IMPORTANT_TO_SHARE_QUESTION = (
-    "Спасибо за разговор. Хотите ещё что-то добавить?"
+    "Хорошо. Есть ли сейчас ещё что-то важное в вашем самочувствии "
+    "или дома, на что мне стоит обратить внимание?"
 )
 # Phone-spoken brand. Latin «IMVERA» is skipped/garbled by Russian Silero TTS.
 # Pronunciation: Амвера (not «им вера»).
@@ -81,27 +82,81 @@ def service_spoken_name() -> str:
     return _SERVICE_SPOKEN_NAME
 
 
+def concern_summary_phrase(state: EngineState) -> str:
+    """Short spoken list of what Vera heard — for warmer goodbye."""
+    bits: list[str] = []
+    seen: set[str] = set()
+    for ep in state.issue_episodes.values():
+        label = (ep.primary_label or "").strip().lower()
+        site = (ep.body_site or "").strip().lower()
+        key = site or label
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        if site == "голова" or "голов" in label:
+            bits.append("головная боль")
+        elif site == "живот" or "живот" in label:
+            bits.append("боль в животе")
+        elif "тошн" in label:
+            bits.append("тошнота")
+        elif ep.kind == "sleep_problem" or "сон" in label or "спал" in label:
+            bits.append("плохой сон")
+        elif label:
+            bits.append(label)
+        for m in ep.mentions:
+            ml = (m.label or "").lower()
+            if "тошн" in ml and "тошнота" not in bits:
+                bits.append("тошнота")
+    if not bits:
+        return ""
+    if len(bits) == 1:
+        return bits[0]
+    if len(bits) == 2:
+        return f"{bits[0]} и {bits[1]}"
+    return f"{', '.join(bits[:-1])} и {bits[-1]}"
+
+
 def summary_close_speech(
     state: EngineState,
     *,
     acknowledge: str = "",
 ) -> str:
-    """Warm terminal close — never bare «Спасибо за разговор.»"""
+    """Warm terminal close — MVP tone: записала + На сегодня всё + Берегите себя."""
     name = (state.elder_display_name or "").strip()
-    if name:
-        core = f"Всё, спасибо, {name}. Всего вам хорошего. До свидания."
-    else:
-        core = _SUMMARY_TEXT
+    concerns = concern_summary_phrase(state)
+    ack = acknowledge.strip()
     next_hint = (state.prior_call_context or {}).get("next_call_spoken", "").strip()
-    if next_hint:
+
+    if concerns:
         if name:
             core = (
-                f"Всё, спасибо, {name}. {next_hint} "
-                "Всего вам хорошего. До свидания."
+                f"Спасибо, {name}. Я записала: сегодня беспокоили {concerns}. "
+                "На сегодня всё. Берегите себя. До свидания."
             )
         else:
-            core = f"Всё, спасибо. {next_hint} Всего вам хорошего. До свидания."
-    ack = acknowledge.strip()
+            core = (
+                f"Спасибо. Я записала: сегодня беспокоили {concerns}. "
+                "На сегодня всё. Берегите себя. До свидания."
+            )
+    elif name:
+        core = (
+            f"Спасибо, {name}. На сегодня всё. "
+            "Берегите себя. До свидания."
+        )
+    else:
+        core = "Спасибо. На сегодня всё. Берегите себя. До свидания."
+
+    if next_hint and "записала" not in core.lower():
+        if name:
+            core = (
+                f"Спасибо, {name}. {next_hint} "
+                "На сегодня всё. Берегите себя. До свидания."
+            )
+        else:
+            core = (
+                f"Спасибо. {next_hint} "
+                "На сегодня всё. Берегите себя. До свидания."
+            )
     if ack:
         return f"{ack} {core}"
     return core
@@ -175,11 +230,11 @@ def opening_speech(elder_display_name: str, prior_context: dict[str, str] | None
     brand = _SERVICE_SPOKEN_NAME
     follow = prior_followup_question(prior_context or {})
     if follow:
-        return f"Здравствуйте. Это сервис {brand}. {name}, {follow}"
-    return (
-        f"Здравствуйте. Это сервис {brand}. {name}, "
-        f"{_SLOT_QUESTIONS['wellness']}"
-    )
+        q = follow[0].lower() + follow[1:] if follow and follow[0].isupper() else follow
+        return f"Здравствуйте. Это сервис {brand}. {name}, {q}"
+    wellness = _SLOT_QUESTIONS["wellness"]
+    wellness = wellness[0].lower() + wellness[1:] if wellness else wellness
+    return f"Здравствуйте. Это сервис {brand}. {name}, {wellness}"
 
 
 def slot_question(

@@ -145,7 +145,9 @@ def _compound_question_text(ep, need: QuestionNeed) -> str:
 
 
 def _question_for_need(state: EngineState, plan: ResponsePlan, need: QuestionNeed) -> str:
-    from packages.dialogue_engine.conversation_policy import episode_question_for_attribute
+    from packages.dialogue_engine.conversation_policy import (
+        episode_question_for_attribute_with_state,
+    )
 
     ep = state.issue_episodes.get(plan.episode_id) if plan.episode_id else None
     if need.is_compound:
@@ -155,7 +157,9 @@ def _question_for_need(state: EngineState, plan: ResponsePlan, need: QuestionNee
         plan.marks_question = True
         return text
     if ep is not None:
-        text, intent = episode_question_for_attribute(ep, need.attribute)
+        text, intent = episode_question_for_attribute_with_state(
+            state, ep, need.attribute
+        )
         plan.intent = intent
         plan.slot = intent
         plan.marks_question = True

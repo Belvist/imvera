@@ -213,6 +213,10 @@ class EngineState(BaseModel):
     suspended_obligation: SuspendedObligation | None = None
     pending_episode_attribute: str | None = None
 
+    # Dialogue Product Pack counters (caps: ≤2 asks/family, ≤6 content asks/call).
+    product_asks_by_family: dict[str, int] = Field(default_factory=dict)
+    product_content_asks: int = 0
+
     observations: dict[str, object] = Field(default_factory=dict)
 
     background_goal_status: dict[str, str] = Field(

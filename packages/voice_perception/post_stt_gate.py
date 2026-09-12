@@ -48,6 +48,24 @@ _VALID_SHORT_ANSWERS = frozenset(
     }
 )
 
+# Bare polarity only — HIGH-risk for echo/bleed phantoms (fs-bf61f52b: LOW "Да").
+_BARE_POLARITY = frozenset(
+    {
+        "да",
+        "нет",
+        "ага",
+        "угу",
+        "неа",
+        "да да",
+        "нет нет",
+        "ну да",
+        "ну нет",
+    }
+)
+
+# Guard after claimed playout end: LOW bare polarity is treated as phantom.
+_LOW_POLARITY_GUARD_MS = 1500
+
 _FRAGMENT_STARTERS = re.compile(
     r"^(но|а|и|ну|же|ли|если|потому что|и ещё|и еще|а ещё|а еще|"
     r"только|хотя|даже|ну я|я же|ну вот|в общем|короче)(\s|$|\.\.\.|…)",
@@ -89,6 +107,7 @@ class PostSTTContext:
     pending_episode_attribute: str | None = None
     semantic_result: SemanticKernelResult | None = None
     merged_from_fragment: bool = False
+    asr_quality: str | None = None
 
 
 @dataclass(frozen=True)
@@ -273,6 +292,34 @@ def _near_exact_reproduction(match: EchoTextMatch) -> bool:
     )
 
 
+def _is_bare_polarity(user_text: str) -> bool:
+    return normalize_speech_text(user_text) in _BARE_POLARITY
+
+
+def _asr_quality_weak(quality: str | None) -> bool:
+    if not quality:
+        return False
+    q = quality.strip().upper()
+    return q in {"LOW", "UNUSABLE", "ASRQUALITY.LOW", "ASRQUALITY.UNUSABLE"}
+
+
+def _near_playout_guard(ctx: PostSTTContext) -> bool:
+    if ctx.playback_active or ctx.echo_tail_active:
+        return True
+    if ctx.milliseconds_since_playout_end is None:
+        return False
+    return ctx.milliseconds_since_playout_end < _LOW_POLARITY_GUARD_MS
+
+
+def _low_quality_bare_polarity_phantom(ctx: PostSTTContext) -> bool:
+    """fs-bf61f52b: LOW 'Да' accepted via default_accept while opening still audible."""
+    if not _asr_quality_weak(ctx.asr_quality):
+        return False
+    if not _is_bare_polarity(ctx.user_text):
+        return False
+    return _near_playout_guard(ctx)
+
+
 def evaluate_post_stt_turn(ctx: PostSTTContext) -> TurnAdmissionDecision:
     """Admission order: empty → fragment → semantic relevance → acoustic echo → accept."""
     novelty = analyze_semantic_novelty(
@@ -303,6 +350,18 @@ def evaluate_post_stt_turn(ctx: PostSTTContext) -> TurnAdmissionDecision:
             verdict=TurnAdmissionVerdict.HOLD_FRAGMENT,
             confidence=0.85,
             reason="incomplete_fragment",
+            echo_match=echo_match,
+            text_similarity=metrics,
+            acoustic_score=ctx.acoustic_echo_score,
+            semantic_novelty=_novelty_payload(novelty),
+            fragment=fragment_info,
+        )
+
+    if _low_quality_bare_polarity_phantom(ctx):
+        return TurnAdmissionDecision(
+            verdict=TurnAdmissionVerdict.DROP_ECHO,
+            confidence=0.9,
+            reason="low_quality_bare_polarity_near_playout",
             echo_match=echo_match,
             text_similarity=metrics,
             acoustic_score=ctx.acoustic_echo_score,

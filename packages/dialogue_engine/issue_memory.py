@@ -132,8 +132,13 @@ def _episode_from_mention(mention: IssueMention, turn_id: str) -> IssueEpisode:
         attrs["onset"] = mention.onset
     if mention.severity:
         attrs["severity"] = mention.severity
-    if mention.status in ("improving", "resolved"):
-        attrs["current"] = mention.status
+    current = _infer_current_from_mention(mention)
+    if current:
+        attrs["current"] = current
+    if mention.kind == "sleep_problem":
+        label = (mention.label or "").lower()
+        if any(x in label for x in ("плох", "бессон", "не спал")):
+            attrs["quality"] = "poor"
     return IssueEpisode(
         episode_id=_new_episode_id(),
         primary_label=mention.label,
@@ -146,6 +151,30 @@ def _episode_from_mention(mention: IssueMention, turn_id: str) -> IssueEpisode:
     )
 
 
+_PRESENT_SYMPTOM = re.compile(
+    r"\b(болит|ноет|давит|ломит|кружит|тошнит)\b",
+    re.I,
+)
+_PAST_SYMPTOM = re.compile(
+    r"\b(болел[аио]?|ныл[аио]?|давил[аио]?|тошнил[аио]?)\b",
+    re.I,
+)
+
+
+def _infer_current_from_mention(mention: IssueMention) -> str | None:
+    """Present-tense complaint ⇒ current=active; past-only ⇒ ask trend later."""
+    if mention.status in ("improving", "resolved"):
+        return mention.status
+    quote = f"{getattr(mention.evidence, 'quote', '') or ''} {mention.label or ''}"
+    if _PRESENT_SYMPTOM.search(quote):
+        return "active"
+    if _PAST_SYMPTOM.search(quote):
+        return None
+    if mention.status == "active":
+        return "active"
+    return None
+
+
 def _merge_mention(episode: IssueEpisode, mention: IssueMention, turn_id: str) -> None:
     episode.mentions.append(mention)
     if turn_id not in episode.evidence_turn_ids:
@@ -154,8 +183,13 @@ def _merge_mention(episode: IssueEpisode, mention: IssueMention, turn_id: str) -
         episode.known_attributes["onset"] = mention.onset
     if mention.severity:
         episode.known_attributes["severity"] = mention.severity
-    if mention.status in ("improving", "resolved"):
-        episode.known_attributes["current"] = mention.status
+    current = _infer_current_from_mention(mention)
+    if current:
+        episode.known_attributes["current"] = current
+    if mention.kind == "sleep_problem":
+        label = (mention.label or "").lower()
+        if any(x in label for x in ("плох", "бессон", "не спал")):
+            episode.known_attributes.setdefault("quality", "poor")
 
 
 def _find_episode_for_mention(state: EngineState, mention: IssueMention) -> str | None:
@@ -171,6 +205,14 @@ def _find_episode_for_mention(state: EngineState, mention: IssueMention) -> str 
 _ASSOCIATED_SECONDARY_LABELS = frozenset(
     {"тошнота", "тошнит", "головокружение", "слабость", "усталость"}
 )
+
+
+def _headache_episode_id(state: EngineState) -> str | None:
+    for ep_id, ep in state.issue_episodes.items():
+        label = (ep.primary_label or "").lower()
+        if ep.body_site == "голова" or "голов" in label:
+            return ep_id
+    return None
 
 
 def _dedupe_primary_mentions(mentions: tuple[IssueMention, ...]) -> tuple[IssueMention, ...]:
@@ -193,13 +235,26 @@ def _dedupe_primary_mentions(mentions: tuple[IssueMention, ...]) -> tuple[IssueM
 
 
 def finalize_episode_if_complete(ep: IssueEpisode) -> None:
-    """Close episode when obligations are met so it cannot be re-activated."""
-    from packages.dialogue_engine.question_context import (
-        episode_is_resolved,
-        episode_obligations_satisfied,
-    )
+    """Close episode when product pack obligations are met so it cannot be re-activated."""
+    from packages.dialogue_engine.question_context import episode_is_resolved
+    from packages.dialogue_engine.state import EngineState
 
-    if episode_obligations_satisfied(ep) and not episode_is_resolved(ep):
+    if episode_is_resolved(ep):
+        return
+    family = ep.known_attributes.get("_product_family")
+    if family:
+        shim = EngineState(call_id="finalize")
+        shim.issue_episodes = {ep.episode_id: ep}
+        from packages.dialogue_engine.product.planner import product_episode_complete
+
+        # Attach episode as active so pending checks don't block falsely.
+        shim.active_episode_id = ep.episode_id
+        if product_episode_complete(shim, ep):
+            ep.status = "resolved"
+        return
+    from packages.dialogue_engine.question_context import episode_obligations_satisfied
+
+    if episode_obligations_satisfied(ep):
         ep.status = "resolved"
 
 
@@ -331,6 +386,34 @@ def filter_rich_turn_mentions(state: EngineState, turn: RichUserTurn) -> RichUse
             return turn.model_copy(update={"issue_mentions": ()})
     if not turn.issue_mentions:
         return turn
+
+    active = get_active_episode(state)
+    # Sleep pack: daytime fatigue answers belong to sleep episode, not new «устаю».
+    if active is not None and (
+        active.kind == "sleep_problem"
+        or "сон" in (active.primary_label or "").lower()
+        or "спал" in (active.primary_label or "").lower()
+    ):
+        fatigue_labels = ("устал", "устаю", "усталость", "сонлив", "слаб")
+        kept: list[IssueMention] = []
+        absorbed = False
+        for mention in turn.issue_mentions:
+            label = (mention.label or "").lower()
+            if any(tok in label for tok in fatigue_labels) or mention.kind == "sleep_problem":
+                if state.pending_episode_attribute == "daytime_impact" or not active.known_attributes.get(
+                    "daytime_impact"
+                ):
+                    active.known_attributes["daytime_impact"] = turn.raw_text.strip()
+                    if state.pending_episode_attribute == "daytime_impact":
+                        state.pending_episode_attribute = None
+                    absorbed = True
+                continue
+            kept.append(mention)
+        if absorbed or len(kept) != len(turn.issue_mentions):
+            turn = turn.model_copy(update={"issue_mentions": tuple(kept)})
+            if not turn.issue_mentions:
+                return turn
+
     if state.pending_episode_attribute and state.active_episode_id:
         filtered = [
             m
@@ -407,6 +490,33 @@ def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
         if len(filtered_dim) != len(turn.issue_mentions):
             turn = turn.model_copy(update={"issue_mentions": tuple(filtered_dim)})
 
+    # While answering a pending episode attribute: keep focus. Secondary
+    # symptoms (тошнота…) attach to the answered/headache episode; new body
+    # sites may queue as pending — never steal active mid-answer.
+    if (
+        answered_episode_id
+        and answered_attribute
+        and turn.issue_mentions
+    ):
+        kept_mentions: list[IssueMention] = []
+        for mention in turn.issue_mentions:
+            label = (mention.label or "").strip().lower()
+            if _find_episode_for_mention(state, mention):
+                kept_mentions.append(mention)
+                continue
+            if mention.role == "associated" or label in _ASSOCIATED_SECONDARY_LABELS:
+                target_id = _headache_episode_id(state) or answered_episode_id
+                target = state.issue_episodes.get(target_id)
+                if target is not None:
+                    assoc = mention.model_copy(update={"role": "associated"})
+                    _merge_mention(target, assoc, turn.utterance_id)
+                continue
+            if mention.body_site or (
+                label and label not in {"болит", "боль", "ноет", "ломит", "давит"}
+            ):
+                kept_mentions.append(mention)
+        turn = turn.model_copy(update={"issue_mentions": tuple(kept_mentions)})
+
     if not turn.issue_mentions:
         if answered_episode_id and answered_attribute:
             _fill_pending_attribute_for_episode(
@@ -441,17 +551,29 @@ def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
         defer_focus = bool(
             is_topic_slot(state.answer_context_slot()) and state.active_topic is not None
         )
-        if defer_focus:
+        hold_focus = bool(answered_episode_id)
+        if defer_focus or hold_focus:
+            focus_id = answered_episode_id if hold_focus else state.active_episode_id
             for ep_id in created:
                 ep = state.issue_episodes[ep_id]
                 if _episode_handled_by_topic_flow(state, ep):
                     continue
+                if focus_id and ep_id == focus_id:
+                    continue
                 if ep_id not in state.pending_episode_ids:
                     state.pending_episode_ids.append(ep_id)
+            if hold_focus and answered_episode_id:
+                state.active_episode_id = answered_episode_id
+                if answered_episode_id in state.pending_episode_ids:
+                    state.pending_episode_ids = [
+                        eid
+                        for eid in state.pending_episode_ids
+                        if eid != answered_episode_id
+                    ]
+            result.activated = state.active_episode_id
         else:
             if (
-                answered_episode_id
-                and state.active_episode_id
+                state.active_episode_id
                 and state.active_episode_id not in created
                 and state.active_episode_id not in state.pending_episode_ids
             ):
@@ -511,11 +633,18 @@ def _fill_pending_attribute_for_episode(
         if state.active_episode_id == episode_id:
             activate_next_pending_episode(state)
         return
+    # «Не знаю» / «не помню» = valid skip for this attribute — never hang the call.
+    if _UNKNOWN_ATTRIBUTE_ANSWER.search(_norm(turn.raw_text)):
+        ep.known_attributes[attribute] = "unknown"
+        _maybe_clear_pending_attribute(state, episode_id, attribute)
+        finalize_episode_if_complete(ep)
+        return
     exclude = _mention_exclusion_clauses(turn)
     if attribute == "onset":
         value = extract_grounded_onset_value(turn.raw_text, exclude_clauses=exclude)
         if value:
             ep.known_attributes["onset"] = value
+            _maybe_infer_current_active_from_temporal_answer(ep, turn.raw_text)
             _maybe_clear_pending_attribute(state, episode_id, attribute)
             finalize_episode_if_complete(ep)
         return
@@ -530,6 +659,7 @@ def _fill_pending_attribute_for_episode(
         value = extract_grounded_onset_value(turn.raw_text, exclude_clauses=exclude)
         if value:
             ep.known_attributes["duration"] = value
+            _maybe_infer_current_active_from_temporal_answer(ep, turn.raw_text)
             _maybe_clear_pending_attribute(state, episode_id, attribute)
             finalize_episode_if_complete(ep)
         return
@@ -544,6 +674,34 @@ def _fill_pending_attribute_for_episode(
         else:
             ep.known_attributes["current"] = turn.raw_text.strip()
         _maybe_clear_pending_attribute(state, episode_id, attribute)
+        return
+    if attribute in {"pattern", "quality", "daytime_impact", "intake", "barrier",
+                     "intensity", "social_context", "status_today", "associated"} and raw:
+        ep.known_attributes[attribute] = turn.raw_text.strip()
+        _maybe_clear_pending_attribute(state, episode_id, attribute)
+        finalize_episode_if_complete(ep)
+        return
+    if attribute == "needs_help" and raw:
+        if any(x in raw for x in ("не нуж", "сам", "сама", "справля", "нет", "неа")):
+            ep.known_attributes["needs_help"] = "self_ok"
+        elif any(x in raw for x in ("нужн", "помо", "да", "хочу")):
+            ep.known_attributes["needs_help"] = "needs_help"
+        else:
+            ep.known_attributes["needs_help"] = turn.raw_text.strip()
+        _maybe_clear_pending_attribute(state, episode_id, attribute)
+        finalize_episode_if_complete(ep)
+        return
+
+
+def _maybe_infer_current_active_from_temporal_answer(ep: IssueEpisode, text: str) -> None:
+    """Temporal-only answer to when/current compound ⇒ still active unless improved."""
+    from packages.dialogue_engine.question_context import utterance_indicates_resolved
+
+    if ep.known_attributes.get("current"):
+        return
+    if utterance_indicates_resolved(text):
+        return
+    ep.known_attributes["current"] = "active"
 
 
 def _fill_pending_attribute_from_answer(state: EngineState, turn: RichUserTurn) -> None:
