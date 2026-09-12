@@ -11,7 +11,8 @@
     <param name="sip-ip" value="auto"/>
     <param name="ext-rtp-ip" value="auto"/>
     <param name="ext-sip-ip" value="auto"/>
-    <param name="inbound-codec-prefs" value="PCMU,PCMA"/>
-    <param name="outbound-codec-prefs" value="PCMU,PCMA"/>
+    <!-- Zoiper lab: G722 wideband first (HD), G711 fallback for PSTN-like legs. -->
+    <param name="inbound-codec-prefs" value="G722,PCMU,PCMA"/>
+    <param name="outbound-codec-prefs" value="G722,PCMU,PCMA"/>
   </settings>
 </profile>
