@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch Zoiper 5 macOS — FreeSWITCH P0-A (REGISTER, PCMU, :5060, LAN IP)."""
+"""Patch Zoiper 5 macOS — FreeSWITCH voice lab (REGISTER, G722 wideband, :5060, LAN IP)."""
 
 from __future__ import annotations
 
@@ -15,8 +15,10 @@ ZOIPER_CONFIG = Path.home() / "Library" / "Zoiper5" / "Config.xml"
 CODEC_PCMU = "0"
 CODEC_PCMA = "6"
 CODEC_G722 = "7"
-NARROWBAND_ENABLE = {CODEC_PCMU, CODEC_PCMA}
-NARROWBAND_DISABLE = {"1", "16", CODEC_G722}
+# Lab prefers G722 wideband (HD); G711 stays enabled as fallback.
+WIDEBAND_PREFER = {CODEC_G722}
+FALLBACK_ENABLE = {CODEC_PCMU, CODEC_PCMA}
+NARROWBAND_DISABLE = {"1", "16"}  # GSM, G.729
 
 
 def _zoiper_running() -> bool:
@@ -61,13 +63,21 @@ def _patch_account_codecs(account: ET.Element) -> list[str]:
         cid = cid_el.text.strip()
         enabled_el = codec.find("enabled")
         priority_el = codec.find("priority")
-        if cid in NARROWBAND_ENABLE:
+        if cid in WIDEBAND_PREFER:
             if enabled_el is not None and enabled_el.text != "true":
                 enabled_el.text = "true"
-                changes.append(f"enabled codec_id={cid} (G.711)")
-            if priority_el is not None and cid == CODEC_PCMU and priority_el.text != "1":
+                changes.append("enabled G.722 (codec_id=7)")
+            if priority_el is not None and priority_el.text != "1":
                 priority_el.text = "1"
-                changes.append("PCMU priority → 1")
+                changes.append("G.722 priority → 1")
+        elif cid in FALLBACK_ENABLE:
+            if enabled_el is not None and enabled_el.text != "true":
+                enabled_el.text = "true"
+                changes.append(f"enabled codec_id={cid} (G.711 fallback)")
+            if priority_el is not None and priority_el.text == "1" and cid != CODEC_G722:
+                # Keep fallback below G722: bump priority number (lower = more preferred).
+                priority_el.text = "4" if cid == CODEC_PCMU else "5"
+                changes.append(f"codec_id={cid} priority → {priority_el.text} (fallback)")
         elif cid in NARROWBAND_DISABLE:
             if enabled_el is not None and enabled_el.text != "false":
                 enabled_el.text = "false"
