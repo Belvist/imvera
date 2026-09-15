@@ -158,8 +158,15 @@ class InMemoryCallRecordStore(CallRecordStore):
         family_id: str,
         *,
         exclude_call_id: str | None = None,
+        elder_display_name: str | None = None,
     ) -> CallResultSnapshot | None:
-        """Most recent finalized call for a family — used for cross-call follow-up."""
+        """Most recent finalized call — scoped to the PERSON, not the family.
+
+        elder_display_name=None keeps legacy family-wide behavior (tests);
+        production passes the elder so подопечные never inherit each
+        other's facts (reviewer item 3). Snapshots written before scoping
+        (no elder key) still match anyone — legacy compat, documented.
+        """
         with self._lock:
             candidates: list[CallResultSnapshot] = []
             for call_id, row in self._results.items():
@@ -169,6 +176,9 @@ class InMemoryCallRecordStore(CallRecordStore):
                     continue
                 if not row.call_ended:
                     continue
+                if elder_display_name is not None and "elder_display_name" in row.metadata:
+                    if row.metadata.get("elder_display_name") != elder_display_name:
+                        continue
                 candidates.append(row)
             if not candidates:
                 return None

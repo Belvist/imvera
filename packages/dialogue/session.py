@@ -116,6 +116,7 @@ class CallSession:
                 snap = self.store.get_latest_family_snapshot(
                     family_id,
                     exclude_call_id=call_id,
+                    elder_display_name=elder_display_name,
                 )
                 if snap is not None:
                     prior.update(snap.facts)
@@ -261,6 +262,9 @@ class CallSession:
 
         outbox = _load_outbox(metadata)
         metadata.update(_state_to_metadata(self.state, None, outbox))
+        # Scope prior-call context to the person, not the family: another
+        # подопечный must never inherit these facts (reviewer item 3).
+        metadata["elder_display_name"] = self.state.elder_display_name
         mission_result = None
         outcomes = None
         if self._engine is not None:

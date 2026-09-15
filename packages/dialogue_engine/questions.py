@@ -97,12 +97,21 @@ def concern_summary_phrase(state: EngineState) -> str:
         {"болит", "боль", "ноет", "ломит", "давит", "беспокоит", "побаливает"}
     )
     for ep in eps:
+        # Someone else's complaint is not the speaker's symptom list.
+        if (ep.subject or "unknown") == "other_person":
+            continue
         label = (ep.primary_label or "").strip().lower()
         site = (ep.body_site or "").strip().lower()
+        # Same-site dupes («голова болела» + «головная боль») list once.
+        site_key = site or None
+        if site_key and site_key in seen:
+            continue
         key = site or label
         if not key or key in seen:
             continue
         seen.add(key)
+        if site_key:
+            seen.add(site_key)
         if not site and label in _BARE_VERBS and _sited:
             continue
         if "круж" in label or ep.kind == "dizziness":

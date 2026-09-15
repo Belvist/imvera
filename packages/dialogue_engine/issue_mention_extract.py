@@ -8,12 +8,18 @@ import uuid
 from packages.contracts.semantic import Evidence, FactCandidate, IssueMention
 
 _PAIN_VERB = re.compile(
-    r"\b(бол\w*|приболел\w*|заболел\w*|разболел\w*|поболел\w*|"
+    r"\b(бол(?!ее(?:\b|-))\w*|зноби\w*|озноб\w*|морози\w*|приболел\w*|заболел\w*|разболел\w*|поболел\w*|"
     r"побал\w*|побалива\w*|поныва\w*|ноет\w*|беспоко\w*|давит\w*|ломит\w*|"
     r"прихватило|схватило|вступило)\b",
     re.I,
 )
-_CORRECTION = re.compile(r"\b(я\s+же\s+говорил\w*|говорил\w*\s+же)\b", re.I)
+_CORRECTION = re.compile(
+    r"\b(я\s+же\s+говорил\w*|говорил\w*\s+же|"
+    r"(?:нет,?\s+)?я\s+про\s+(?:мужа|жену|сына|дочь|мать|отца|соседа|соседку)|"
+    r"это\s+у\s+(?:мужа|жены|сына|дочери|матери|отца|соседа|соседки)|"
+    r"не\s+у\s+меня|не\s+я\s+болею)\b",
+    re.I,
+)
 _REPAIR_HEARING = re.compile(r"\b(алло|слыш\w*|повтор\w*)\b", re.I)
 _USER_QUESTION = re.compile(
     r"(кто\s+вы|хто\s+(это|там|звонит)|зачем\s+звон|почему\s+звон|"
@@ -197,6 +203,20 @@ def extract_goal_facts(
     if not raw:
         return ()
     n = raw.lower().replace("ё", "е")
+    # Subject guard: someone else's complaint («у мужа голова болит») yields
+    # NO speaker facts — not wellness, mood, or sleep (reviewer item 2).
+    # Mixed turns («а у меня живот») carry speaker markers and proceed.
+    from packages.dialogue_engine.semantic_kernel.lexicon import (
+        OTHER_PERSON_MARKERS,
+    )
+
+    _low = n
+    _has_other = any(m in _low for m in OTHER_PERSON_MARKERS)
+    _has_speaker = bool(
+        re.search(r"\b(я|мне|меня|мной|у\s+меня|мною|сам|сама)\b", _low)
+    )
+    if _has_other and not _has_speaker:
+        return ()
     facts: list[FactCandidate] = []
     full_evidence = _evidence(raw, 0, len(raw))
     seen: set[str] = set()
@@ -306,7 +326,7 @@ def detect_user_question(text: str) -> str | None:
 
 
 _SYMPTOM_SIGNAL = re.compile(
-    r"\b(бол\w*|приболел\w*|заболел\w*|разболел\w*|поболел\w*|побалива\w*|поныва\w*|прихватило|прихватыва\w*|схватило|схватыва\w*|вступило|давит\w*|тяжел\w*|тошн\w*|одыш\w*|затрудн\w*|не\s+мог\w*)\b",
+    r"\b(бол(?!ее(?:\b|-))\w*|зноби\w*|озноб\w*|морози\w*|приболел\w*|заболел\w*|разболел\w*|поболел\w*|побалива\w*|поныва\w*|прихватило|прихватыва\w*|схватило|схватыва\w*|вступило|давит\w*|тяжел\w*|тошн\w*|одыш\w*|затрудн\w*|не\s+мог\w*)\b",
     re.I,
 )
 

@@ -59,6 +59,11 @@ def fill_from_semantic(
         for slot, cand in semantic.slots.items():
             if state.slots.get(slot) != SlotStatus.OPEN:
                 continue
+            if slot in ("wellness", "mood", "sleep") and _is_other_person_only(
+                semantic.source_quote
+            ):
+                # Someone else's complaint is not the speaker's fact.
+                continue
             apply_slot_answer(
                 state,
                 slot,
@@ -74,6 +79,10 @@ def fill_from_semantic(
     slot = semantic.target_slot
     if not slot or state.slots.get(slot) != SlotStatus.OPEN:
         return []
+    if slot in ("wellness", "mood", "sleep") and _is_other_person_only(
+        semantic.source_quote
+    ):
+        return []
     apply_slot_answer(
         state,
         slot,
@@ -85,6 +94,22 @@ def fill_from_semantic(
         correction=semantic.correction,
     )
     return [slot]
+
+
+def _is_other_person_only(text: str) -> bool:
+    """Someone else's complaint without any speaker signal."""
+    import re
+
+    from packages.dialogue_engine.semantic_kernel.lexicon import (
+        OTHER_PERSON_MARKERS,
+    )
+
+    low = (text or "").lower().replace("ё", "е")
+    if not any(m in low for m in OTHER_PERSON_MARKERS):
+        return False
+    return not bool(
+        re.search(r"\b(я|мне|меня|мной|у\s+меня|мною|сам|сама)\b", low)
+    )
 
 
 def may_close_partial(state: EngineState, slot: str) -> bool:

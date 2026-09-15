@@ -233,6 +233,9 @@ def _missing_question_need(state: EngineState, ep) -> QuestionNeed | None:
     """Product pack owns next step — not information_gain scoring."""
     from packages.dialogue_engine.product import next_product_need
 
+    # Other person's episode: no speaker-directed probes from ANY path.
+    if getattr(ep, "subject", "unknown") == "other_person":
+        return None
     return next_product_need(state, ep)
 
 
@@ -256,14 +259,16 @@ def _all_episodes_resolved(state: EngineState) -> bool:
 
 
 def _has_open_episodes(state: EngineState) -> bool:
-    if state.active_episode_id:
-        ep = state.issue_episodes.get(state.active_episode_id)
-        if ep and ep.status != "resolved":
-            return True
-    for eid in state.pending_episode_ids:
-        ep = state.issue_episodes.get(eid)
-        if ep and ep.status != "resolved":
-            return True
+    # Other person's episodes never block the speaker's flow (recorded only).
+    def _open(eid: str | None) -> bool:
+        ep = state.issue_episodes.get(eid or "")
+        return bool(
+            ep and ep.status != "resolved" and ep.subject != "other_person"
+        )
+
+    if _open(state.active_episode_id):
+        return True
+    return any(_open(eid) for eid in state.pending_episode_ids)
     return False
 
 
@@ -340,6 +345,8 @@ def _sync_background_coverage_from_fills(state: EngineState, filled: tuple[str, 
 
 
 def _next_background_goal(state: EngineState) -> str | None:
+    if not _routine_ladder_allowed(state):
+        return None
     from packages.dialogue_engine.policy import can_ask_slot
 
     order = ("mood", "sleep", "plans")
@@ -412,6 +419,12 @@ def _next_episode_plan(state: EngineState) -> ResponsePlan | None:
             return None
         # Pack owns completion. Legacy episode_complete alone must not skip pack steps
         # (e.g. sleep «плохо спал» used to jump to ITS without pattern/daytime).
+        # Other person's complaint: recorded, never interrogated — advance
+        # past it without speaker-directed probes (reviewer item 2).
+        if ep.subject == "other_person":
+            activate_next_pending_episode(state)
+            bridge_next = True
+            continue
         if ep.status == "resolved" or product_episode_complete(state, ep):
             from packages.dialogue_engine.issue_memory import finalize_episode_if_complete
 
@@ -996,6 +1009,17 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         )
         if _concern_bits.strip() and state.red_state_pending:
             state.red_state_pending = False
+        # Restated complaint re-opens a declined concern («я же говорю,
+        # ...плохо мне» after «поел» declined it — live fs-a1dca80c): one
+        # sharper probe instead of sliding silently into the ladder.
+        _declined = state.observations.get("concern_declined") == "1"
+        if _declined and turn is not None:
+            from packages.dialogue_engine.check_path import _looks_like_complaint
+
+            if _looks_like_complaint(turn.raw_text or ""):
+                state.observations.pop("concern_declined", None)
+                state.concern_probe_count = max(state.concern_probe_count, 1)
+                _declined = False
         # Movie/news defuse (live: «умираю» from a film): strong non-medical
         # context + no symptom anywhere → not a medical red. Clear pending,
         # note the mood, rejoin the normal flow (asked, not assumed).
@@ -1018,25 +1042,65 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     _defuse_red_state(state, "defused-mood")
         # Read AFTER defuse (it may have withdrawn the red wellness record).
         _well = state.slot_records.get("wellness")
-        # Red-state pending alone suffices: the cry itself («умираю») may
-        # carry no polarity entry, but WHAT is still unknown.
+        _well_text = ""
+        if _well is not None:
+            _well_text = (_well.source_text or state.slot_values.get("wellness", "") or "")
+        # Ambivalent/uncertain wellness that still names feeling bad
+        # («нормально, но плохо», live fs-a1dca80c went to food!) counts as
+        # negative for probing: polarity alone misses it on the live path.
+        _bad_markers = re.search(
+            r"(плох|бол|тошн|кружи|дурно|мутит|тяжел|скверно|отвратительн|"
+            r"паршив|хреново|фигово|дерьмово|гнусно|мерзко|погано|кошмарно|"
+            r"не\s+очень|так\s+себе)",
+            _well_text.lower(),
+        )
         _negative_no_concern = (
             _well is not None
-            and _well.polarity == "negative"
+            and (
+                _well.polarity == "negative"
+                or (_well.polarity == "uncertain" and _bad_markers)
+            )
             and not _concern_bits.strip()
+            and not _declined
         ) or (state.red_state_pending and not _concern_bits.strip())
         if _negative_no_concern and (
             state.check_path != CheckPath.URGENT or state.red_state_pending
         ):
             if state.concern_probe_count >= 2:
                 # Twice vague on red — escalate unspecified, honestly marked.
-                state.observations["concern_status"] = "unspecified"
+                # BUT a calm substantive non-complaint («Пойдёт.») declines
+                # the concern instead (live fs-a1dca80c); only refusal/vent
+                # («Отстань», hostile, debris) escalates from here.
+                _force = True
+                if turn is not None:
+                    from packages.dialogue_engine.check_path import _looks_like_complaint
+                    from packages.dialogue_engine.reluctance import (
+                        _DONT_KNOW,
+                        _FINISH_NOW,
+                        _IRRITATION,
+                    )
+
+                    _raw = turn.raw_text or ""
+                    _cant_say = _DONT_KNOW.match(_raw.strip()) or re.search(
+                        r"не\s+могу\s+сказать", _raw, re.I
+                    )
+                    if (
+                        not _looks_like_complaint(_raw)
+                        and not _FINISH_NOW.search(_raw)
+                        and not _IRRITATION.search(_raw)
+                        and not _cant_say
+                    ):
+                        _force = False
+                if _force:
+                    state.observations["concern_status"] = "unspecified"
+                    state.red_state_pending = False
+                    return ResponsePlan(
+                        obligation=ConversationObligation.SAFETY,
+                        action="close_urgent",
+                    )
+                state.observations["concern_declined"] = "1"
                 state.red_state_pending = False
-                return ResponsePlan(
-                    obligation=ConversationObligation.SAFETY,
-                    action="close_urgent",
-                )
-            if state.concern_probe_count == 1:
+            elif state.concern_probe_count == 1:
                 state.concern_probe_count = 2
                 return ResponsePlan(
                     obligation=ConversationObligation.NEVER_SILENT,
@@ -1051,15 +1115,16 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     slot=None,
                     marks_question=True,
                 )
-            state.concern_probe_count = 1
-            return ResponsePlan(
-                obligation=ConversationObligation.NEVER_SILENT,
-                action="speak",
-                mandatory_question=questions.probe_question("concern"),
-                intent="probe_concern",
-                slot="wellness",
-                marks_question=True,
-            )
+            else:
+                state.concern_probe_count = 1
+                return ResponsePlan(
+                    obligation=ConversationObligation.NEVER_SILENT,
+                    action="speak",
+                    mandatory_question=questions.probe_question("concern"),
+                    intent="probe_concern",
+                    slot="wellness",
+                    marks_question=True,
+                )
 
     # Adaptive coverage (not a questionnaire): when nothing acute is open
     # but the minimum (3 exchanges / 3 domains) is unmet, ask ONE next
@@ -1084,6 +1149,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             coverage_ladder_enabled()
             and not coverage_met(state)
             and not call_cap_reached(state)
+            and _routine_ladder_allowed(state)
         ):
             # No re-ask of debris: garbage moves on uncovered (asked-once is
             # strict — repeats are nagging, live fe57cba6/e2c73edf/780904ae).
@@ -1194,6 +1260,35 @@ _TOPIC_HINTS = (
     (("спал", "сон", "выспал"), ("спал", "спали", "выспал")),
     (("настроен", "тревожит", "беспокоит"), ("настроен", "тревожит")),
 )
+
+
+def _routine_ladder_allowed(state: EngineState) -> bool:
+    """Bulletproof guard AT the point of asking: routine questions (food /
+    meds / mood / sleep) only on explicitly positive wellness.
+
+    The probe net above should intercept first, but live fs-e8164316 proved
+    a path exists where it doesn't fire — this guard closes it regardless
+    of polarity bookkeeping on any entry path.
+    """
+    if state.red_state_pending:
+        return False
+    _well = state.slot_records.get("wellness")
+    if _well is None:
+        return True
+    if _well.polarity == "positive":
+        return True
+    if _well.polarity == "negative":
+        return False
+    # Uncertain/None: allow only when the text carries no bad markers.
+    _text = (
+        _well.source_text or state.slot_values.get("wellness", "") or ""
+    ).lower()
+    return not re.search(
+        r"(плох|бол|тошн|кружи|дурно|мутит|тяжел|скверно|отвратительн|"
+        r"паршив|хреново|фигово|дерьмово|гнусно|мерзко|погано|кошмарно|"
+        r"не\s+очень|так\s+себе)",
+        _text,
+    )
 
 
 def _history_about(state: EngineState, user_question: str) -> str:

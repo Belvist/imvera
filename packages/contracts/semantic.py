@@ -99,6 +99,9 @@ class IssueMention(StrictModel):
     onset: str | None = None
     severity: str | None = None
     evidence: Evidence
+    # SubjectKind value (speaker | other_person | unknown). Unknown default —
+    # legacy-sourced mentions resolve it in merge; never assume speaker.
+    subject: str = "unknown"
 
 
 class GoalAnswerSemantic(StrictModel):

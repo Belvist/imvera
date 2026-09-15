@@ -156,7 +156,7 @@ def _clause_has_sleep(n: str) -> bool:
 def _clause_has_abdominal(n: str) -> bool:
     if not any(m in n for m in _ABDOMINAL_MARKERS):
         return False
-    if re.search(r"\b(бол|ноет|беспоко|побалив)\w*", n):
+    if re.search(r"\b(бол(?!ее(?:\b|-))|ноет|беспоко|побалив)\w*", n):
         return True
     return bool(re.search(r"\bиз[\s-]*за\b", n.replace("-", " ")))
 
@@ -172,10 +172,10 @@ def detect_families_in_clause(clause: str) -> list[str]:
     if _clause_has_abdominal(n):
         found.append(TopicFamily.ABDOMINAL_PAIN)
     if any(m in n for m in _HEADACHE_MARKERS) and re.search(
-        r"\b(бол|ноет|давит)\w*", n
+        r"\b(бол(?!ее(?:\b|-))|ноет|давит)\w*", n
     ):
         found.append(TopicFamily.HEADACHE)
-    if _LIMB_MARKERS.search(n) and re.search(r"\b(бол|ноет|ломит)\w*", n):
+    if _LIMB_MARKERS.search(n) and re.search(r"\b(бол(?!ее(?:\b|-))|ноет|ломит)\w*", n):
         found.append(TopicFamily.LIMB_PAIN)
     if any(m in n for m in _MOOD_MARKERS):
         found.append(TopicFamily.MOOD)

@@ -30,7 +30,7 @@ _URGENT = re.compile(
     r"очень\s+сильн\w*|ужасн\w*\s+боль|"
     r"вызов\w*\s+скор\w*|вызови(те)?\s+скор\w*|инфаркт|инсульт|"
     r"сердечн\w*\s+приступ|сердц\w*\s+давит|давит\w*\s+сердц\w*|"
-    r"бол\w*\s+в\s+груд\w*)\b",
+    r"бол(?!ее(?:\b|-))\w*\s+в\s+груд\w*)\b",
     re.I,
 )
 _DURATION_HINT = re.compile(
@@ -133,7 +133,7 @@ _URGENT_ACTION = re.compile(
     r"упал\w*|упан\w*|упа[рл]\w*|пада\w*|пад[ао]\b|\bпад\b|не\s+могу\s+встать|"
     r"вызов\w*\s+скор\w*|вызови(те)?\s+скор\w*|инфаркт|инсульт|"
     r"сердечн\w*\s+приступ|сердц\w*\s+давит|давит\w*\s+сердц\w*|"
-    r"бол\w*\s+в\s+груд\w*)\b",
+    r"бол(?!ее(?:\b|-))\w*\s+в\s+груд\w*)\b",
     re.I,
 )
 # Red state without a concrete complaint («умираю», «мне конец», «ужасно») —
@@ -266,6 +266,13 @@ def _register_probe(phase: str, handler: Callable[[EngineState, str], ProbeStep]
 def _probe_concern(state: EngineState, text: str) -> ProbeStep:
     from packages.dialogue_engine.state import CheckPath
 
+    # A non-complaint answer («поел», «нормально») DECLINES the concern —
+    # never record food as WHAT hurts, never start a duration probe on it
+    # (live fs-a1dca80c: «поел» → «как давно продолжается?»).
+    if not _looks_like_complaint(text):
+        state.probe_phase = None
+        state.observations["concern_declined"] = "1"
+        return ProbeStep(action=ProbeAction.CONTINUE_LADDER)
     state.wellness_concern = text
     if is_urgent_concern(text):
         state.check_path = CheckPath.URGENT
@@ -273,6 +280,22 @@ def _probe_concern(state: EngineState, text: str) -> ProbeStep:
         return ProbeStep(action=ProbeAction.URGENT_CLOSE)
     state.probe_phase = "duration"
     return ProbeStep(action=ProbeAction.SPEAK_PROBE, probe_phase="duration")
+
+
+def _looks_like_complaint(text: str) -> bool:
+    t = (text or "").lower()
+    if is_urgent_concern(text):
+        return True
+    return bool(
+        re.search(
+            r"(плох|бол(?!ее(?:\b|-))|тошн|кружи|дурно|мутит|тяжел|температур|давлен|"
+            r"отвратительн|паршив|хреново|фигово|дерьмово|гнусно|мерзко|"
+            r"погано|кошмарно|"
+            r"слабость|болит|ноет|ломит|давит|тошнит|знобит|озноб|"
+            r"беспокоит|тревожит|мешает|не\s+могу|плохо\s+себя)",
+            t,
+        )
+    )
 
 
 def _probe_duration(state: EngineState, text: str) -> ProbeStep:

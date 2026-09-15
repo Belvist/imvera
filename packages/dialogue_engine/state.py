@@ -115,6 +115,10 @@ class IssueEpisode(BaseModel):
     primary_label: str
     kind: str
     body_site: str | None = None
+    # Whose complaint (SubjectKind value): speaker | other_person | unknown.
+    # Single source of truth — no parallel notations. unknown is preserved
+    # (never defaulted to speaker); merge never downgrades a known subject.
+    subject: str = "unknown"
 
     mentions: list[IssueMention] = Field(default_factory=list)
     evidence_turn_ids: list[str] = Field(default_factory=list)

@@ -815,6 +815,7 @@ def observations_to_issue_mentions(
                 onset=obs.temporal.onset or obs.temporal.duration,
                 severity=severity,
                 evidence=Evidence(start=start, end=end, quote=raw_text[start:end] or obs.evidence),
+                subject=str(getattr(obs.subject, "value", obs.subject) or "unknown"),
             )
         )
     return tuple(mentions)
@@ -823,8 +824,49 @@ def observations_to_issue_mentions(
 def merge_legacy_mentions(
     kernel_mentions: tuple[IssueMention, ...],
     legacy_mentions: tuple[IssueMention, ...],
+    raw_text: str = "",
 ) -> tuple[IssueMention, ...]:
-    """Legacy may only fill gaps — kernel meaning always wins."""
+    """Legacy may only fill gaps — kernel meaning always wins.
+
+    Legacy mentions are subject-BLIND: resolve each one's clause and drop
+    OTHER_PERSON symptoms (a husband's complaint must never become the
+    speaker's episode). unknown is preserved, never defaulted.
+    """
+    from packages.dialogue_engine.semantic_kernel.subject_resolver import (
+        _subject_for_clause,
+    )
+
+    def _legacy_subject(m: IssueMention) -> str:
+        existing = (getattr(m, "subject", "") or "").strip().lower()
+        if existing and existing != "unknown":
+            return existing
+        quote = ""
+        try:
+            quote = (m.evidence.quote or "") if m.evidence else ""
+        except Exception:  # noqa: BLE001
+            quote = ""
+        anchor = quote.strip().lower() or (m.label or "").strip().lower()
+        if raw_text and anchor:
+            pos = raw_text.lower().find(anchor[:24])
+            clause = raw_text[max(0, pos - 40):pos + 60] if pos >= 0 else anchor
+        else:
+            clause = anchor
+        try:
+            return str(_subject_for_clause(clause, has_issue=True).value)
+        except Exception:  # noqa: BLE001
+            return "unknown"
+
+    resolved_legacy: list[IssueMention] = []
+    for legacy in legacy_mentions:
+        subj = _legacy_subject(legacy)
+        try:
+            legacy = legacy.model_copy(update={"subject": subj})
+        except Exception:  # noqa: BLE001
+            pass
+        if subj == "other_person" and legacy.kind == "symptom":
+            continue
+        resolved_legacy.append(legacy)
+    legacy_mentions = tuple(resolved_legacy)
     if not legacy_mentions:
         return kernel_mentions
     if not kernel_mentions:

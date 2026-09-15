@@ -163,7 +163,7 @@ def kernel_to_rich_turn(
     from packages.dialogue_engine.issue_mention_extract import extract_issue_mentions
 
     legacy = extract_issue_mentions(result.raw_text)
-    mentions = merge_legacy_mentions(mentions, legacy)
+    mentions = merge_legacy_mentions(mentions, legacy, result.raw_text)
     if engine_state is not None:
         mentions = filter_phantom_generic_issues(
             mentions,
@@ -213,7 +213,10 @@ def kernel_to_rich_turn(
 
             if tinyllm.enabled():
                 tiny_route = tinyllm.classify(
-                    result.raw_text, pending_question=answer_slot
+                    result.raw_text, pending_question=answer_slot,
+                    # Remaps ACT on this vote: require high confidence
+                    # (route group-fold is only 0.62 mean).
+                    min_proba=0.8,
                 )
         except Exception:  # noqa: BLE001 — assist must never break NLU
             tiny_route = None

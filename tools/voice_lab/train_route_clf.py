@@ -112,24 +112,39 @@ def build_rows(seed: int = 7) -> list[tuple[str, str]]:
 def train(out: Path = MODEL_PATH) -> Path:
     from sklearn.feature_extraction.text import HashingVectorizer
     from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import GroupKFold
     from sklearn.pipeline import make_pipeline
 
+    from tools.voice_lab.families import family_of, group_report
+
     rows = build_rows()
-    cut = int(len(rows) * 0.85)
-    train_rows, held = rows[:cut], rows[cut:]
-    clf = make_pipeline(
+    groups = [family_of(t) for t, _ in rows]
+    print(f"families: {group_report(groups)}")
+    X = [t for t, _ in rows]
+    y = [lab for _, lab in rows]
+    base = make_pipeline(
         HashingVectorizer(
             n_features=2**12, ngram_range=(1, 2), alternate_sign=False
         ),
         LogisticRegression(max_iter=500, C=4.0),
     )
-    clf.fit([t for t, _ in train_rows], [lab for _, lab in train_rows])
-    good = sum(1 for t, lab in held if clf.predict([t])[0] == lab)
+    import numpy as np
+    from sklearn.base import clone
+
+    gkf = GroupKFold(n_splits=5)
+    fold_acc: list[float] = []
+    for train_idx, test_idx in gkf.split(X, y, groups):
+        clf = clone(base)
+        clf.fit([X[i] for i in train_idx], [y[i] for i in train_idx])
+        pred = clf.predict([X[i] for i in test_idx])
+        fold_acc.append(float(np.mean([p == y[i] for p, i in zip(pred, test_idx)])))
+    print(f"group5fold: {[round(a, 3) for a in fold_acc]} mean={float(np.mean(fold_acc)):.3f}")
+    clf = base
+    clf.fit(X, y)
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "wb") as f:
         pickle.dump(clf, f)
-    print(f"train={len(train_rows)} held={len(held)} held_acc={good/len(held):.3f}")
-    print(f"model bytes={out.stat().st_size}")
+    print(f"train={len(rows)} model bytes={out.stat().st_size}")
     return out
 
 

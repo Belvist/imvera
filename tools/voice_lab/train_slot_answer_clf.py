@@ -89,6 +89,16 @@ SEED_ROWS: list[tuple[str, str, str]] = [
     ("severity", "ну такое", "garbage"), ("severity", "э-э", "garbage"),
     ("duration", "ага", "garbage"), ("duration", "поднял", "garbage"),
     # --- LIVE_QUOTES: append every anchor-miss with its true label ---
+    ("onset", "э-э.", "garbage"),
+    ("severity", "э-э. э-э.", "garbage"),
+    ("onset", "ну.", "garbage"),
+    ("onset", "началось, когда покушал.", "garbage"),
+    ("severity", "вот э-э.", "garbage"),
+    ("severity", "э-э. вот", "garbage"),
+    ("severity", "э-э. э-э.", "garbage"),
+    ("severity", "э-э.", "garbage"),
+    ("onset", "э-э.", "garbage"),
+    ("severity", "э-э.", "garbage"),
     ("onset", "когда с работы пришла", "answer"),
     ("onset", "раньше началось это", "answer"),
     ("onset", "началось это буквально три часа назад", "answer"),
@@ -170,24 +180,54 @@ def _features(slot: str, text: str) -> str:
 def train(out: Path = MODEL_PATH) -> Path:
     from sklearn.feature_extraction.text import HashingVectorizer
     from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import GroupKFold
     from sklearn.pipeline import make_pipeline
 
+    from tools.voice_lab.families import family_of, group_report
+
     rows = build_rows()
-    cut = int(len(rows) * 0.85)
-    train_rows, held = rows[:cut], rows[cut:]
-    clf = make_pipeline(
+    groups = [family_of(t, s) for s, t, _ in rows]
+    print(f"families: {group_report(groups)}")
+    # Honest estimate: 5-fold GroupKFold by family (no variant leakage),
+    # plus a learning curve (reviewer: sufficiency by curve, not by 300).
+    X = [_features(s, t) for s, t, _ in rows]
+    y = [lab for _, _, lab in rows]
+    base = make_pipeline(
         HashingVectorizer(n_features=2**12, ngram_range=(1, 2), alternate_sign=False),
         LogisticRegression(max_iter=500, C=4.0),
     )
-    clf.fit([_features(s, t) for s, t, _ in train_rows],
-            [lab for _, _, lab in train_rows])
-    good = sum(1 for s, t, lab in held if clf.predict([_features(s, t)])[0] == lab)
+    import numpy as np
+
+    gkf = GroupKFold(n_splits=5)
+    fold_acc: list[float] = []
+    for train_idx, test_idx in gkf.split(X, y, groups):
+        clf = _clone(base)
+        clf.fit([X[i] for i in train_idx], [y[i] for i in train_idx])
+        pred = clf.predict([X[i] for i in test_idx])
+        fold_acc.append(float(np.mean([p == y[i] for p, i in zip(pred, test_idx)])))
+    print(f"group5fold: {[round(a, 3) for a in fold_acc]} mean={float(np.mean(fold_acc)):.3f}")
+    for frac in (0.2, 0.4, 0.6, 0.8, 1.0):
+        accs: list[float] = []
+        for train_idx, test_idx in gkf.split(X, y, groups):
+            cut = max(1, int(len(train_idx) * frac))
+            clf = _clone(base)
+            clf.fit([X[i] for i in train_idx[:cut]], [y[i] for i in train_idx[:cut]])
+            pred = clf.predict([X[i] for i in test_idx])
+            accs.append(float(np.mean([p == y[i] for p, i in zip(pred, test_idx)])))
+        print(f"  curve@{frac:.1f}: {float(np.mean(accs)):.3f}")
+    clf = base
+    clf.fit(X, y)
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "wb") as f:
         pickle.dump(clf, f)
-    print(f"train={len(train_rows)} held={len(held)} held_acc={good/len(held):.3f}")
-    print(f"model bytes={out.stat().st_size}")
+    print(f"train={len(rows)} model bytes={out.stat().st_size}")
     return out
+
+
+def _clone(pipe):  # sklearn Clone without importing clone at top
+    from sklearn.base import clone
+
+    return clone(pipe)
 
 
 def main() -> int:

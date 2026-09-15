@@ -85,8 +85,13 @@ def classify(
     *,
     pending_question: str | None,
     timeout_s: float | None = None,
+    min_proba: float = 0.0,
 ) -> str | None:
-    """Return a route from ROUTES, or None on any failure/timeout."""
+    """Return a route from ROUTES, or None on any failure/timeout.
+
+    min_proba gates the sklearn backend (group-fold honesty: 0.62 mean —
+    remaps require >= 0.8; advisory votes may use 0.0).
+    """
     mid = model_id()
     if not mid:
         return None
@@ -97,7 +102,11 @@ def classify(
         # sklearn backend: microseconds, no timeout needed.
         try:
             clf = _load_clf()
-            pred = clf.predict([user_text.lower()])[0]
+            proba = clf.predict_proba([user_text.lower()])[0]
+            best = max(range(len(proba)), key=lambda i: proba[i])
+            if proba[best] < max(min_proba, 0.0):
+                return None
+            pred = clf.classes_[best]
             return pred if pred in ROUTES else None
         except Exception:  # noqa: BLE001 — fail open to deterministic
             return None

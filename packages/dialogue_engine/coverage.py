@@ -164,8 +164,8 @@ def domain_question(domain: str, *, variant: int = 0) -> tuple[str, str, str]:
         return (texts[variant % len(texts)], "background_medication", "background_medication")
     if domain == "nutrition":
         texts = (
-            "Сегодня удалось хоть немного поесть и попить?",
             "А покушать сегодня уже успели?",
+            "Как сегодня с едой — нормально поели?",
         )
         return (texts[variant % len(texts)], "background_nutrition", "background_nutrition")
     return ("Как вы себя чувствуете?", "check_wellness", "wellness")

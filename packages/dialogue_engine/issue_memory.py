@@ -172,6 +172,7 @@ def _episode_from_mention(mention: IssueMention, turn_id: str) -> IssueEpisode:
         primary_label=mention.label,
         kind=mention.kind,
         body_site=mention.body_site,
+        subject=(getattr(mention, "subject", "") or "unknown").strip().lower() or "unknown",
         mentions=[mention],
         evidence_turn_ids=[turn_id],
         known_attributes=attrs,
@@ -207,6 +208,10 @@ def _merge_mention(episode: IssueEpisode, mention: IssueMention, turn_id: str) -
     episode.mentions.append(mention)
     if turn_id not in episode.evidence_turn_ids:
         episode.evidence_turn_ids.append(turn_id)
+    # Subject: merge never downgrades a known subject to unknown.
+    _msub = (getattr(mention, "subject", "") or "").strip().lower()
+    if _msub in ("speaker", "other_person") and episode.subject == "unknown":
+        episode.subject = _msub
     if mention.onset:
         episode.known_attributes["onset"] = mention.onset
     if mention.severity:
@@ -640,6 +645,24 @@ def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
 
 
 def _apply_correction(state: EngineState, turn: RichUserTurn) -> None:
+    # Subject correction («нет, я про мужа», «это у мужа, не у меня»):
+    # reassign the active episode to the other person and stop probing
+    # the speaker about someone else's pain.
+    try:
+        from packages.dialogue_engine.semantic_kernel.subject_resolver import (
+            OTHER_PERSON_MARKERS,
+        )
+
+        _low = (turn.raw_text or "").lower()
+        if any(m in _low for m in OTHER_PERSON_MARKERS):
+            _ep = get_active_episode(state)
+            if _ep is not None:
+                _ep.subject = "other_person"
+                if state.pending_episode_attribute:
+                    state.pending_episode_attribute = None
+                return
+    except Exception:  # noqa: BLE001 — corrections must never break ingest
+        pass
     for mention in turn.issue_mentions:
         ep_id = _find_episode_for_mention(state, mention)
         if ep_id:

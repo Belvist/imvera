@@ -637,6 +637,12 @@ def _apply_goal_facts(state: EngineState, turn: RichUserTurn) -> list[str]:
     for fact in turn.goal_facts:
         if state.slots.get(fact.field) != SlotStatus.OPEN:
             continue
+        if fact.field in ("wellness", "mood", "sleep"):
+            from packages.dialogue_engine.policy import _is_other_person_only
+
+            if _is_other_person_only(turn.raw_text):
+                # Someone else's complaint is not the speaker's fact.
+                continue
         quote = fact.evidence.quote if fact.evidence else turn.raw_text
         polarity = None
         if fact.field in ("wellness", "mood"):
