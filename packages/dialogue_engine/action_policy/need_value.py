@@ -142,6 +142,17 @@ def need_information_value(
 ) -> float:
     base = INFORMATION_VALUE.get(need, 0.4)
     if core_needs_satisfied(ep) and need in ("severity", "functional_impact"):
+        # Fresh temporal probe just delivered (e.g. duration answered this
+        # turn): the severity follow-up is the expected flow — keep full value
+        # so the transition heuristic does not cut probing short (fs-77afbbf1).
+        # Stale core (no recent temporal question, e.g. dev_two_dims_finish)
+        # keeps the devaluation so ITS can win.
+        if (
+            need == "severity"
+            and not ep.severity_known
+            and last_question_need == "temporal"
+        ):
+            return base
         return base * 0.35
     if (
         need == "current"

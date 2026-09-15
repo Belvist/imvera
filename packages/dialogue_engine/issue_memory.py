@@ -22,14 +22,38 @@ _UNKNOWN_ATTRIBUTE_ANSWER = re.compile(
     re.I,
 )
 _TEMPORAL_ANCHOR = re.compile(
-    r"\b(давно|дня|дней|недел\w*|месяц\w*|час\w*|утр\w*|вчерашн\w*|вчера|сегодня|"
+    r"\b(давно|раньше|дня|дней|недел\w*|месяц\w*|час\w*|минут\w*|минуту|полчаса|"
+    r"утр\w*|вчерашн\w*|вчера|сегодня|сейчас|уже|назад|только\s+что|"
+    r"понедельн\w*|вторник\w*|сред\w*|четверг\w*|пятниц\w*|суббот\w*|воскресен\w*|"
     r"второй\s+день|третий\s+день|пару\s+дней|несколько|с\s+утра|"
     r"со?\s+вчерашн\w*|уже\s+\w+\s+дн|в\s+четыре|в\s+\d+|"
-    r"с\s+десят\w*|с\s+\d+)\b",
+    r"с\s+десят\w*|с\s+\d+|\bч\b|\bмин\b|\b\d{1,2}:\d{2}\b|"
+    r"(в|на|к|с)\s+(час|два|две|три|четыре|пять|шесть|семь|восемь|девять|десять|"
+    r"одиннадцать|двенадцать)(\s+(часов|часа|утра|дня|вечера|ночи))?)\b",
+    re.I,
+)
+# Event-anchored onset answers: "после того как покушал", "после еды/обеда",
+# "как покушал, так и заболело". A meal/event anchor IS a grounded temporal
+# answer to "когда началось" — the engine must accept it, not only
+# "утром/вечером". Bare meal verbs without после/как stay ungrounded.
+_AFTER_EVENT_ANCHOR = re.compile(
+    r"после\s+(того\s+как\b|еды\b|еду\b|обед\w*|ужин\w*|завтрак\w*|"
+    r"при[её]м\w*\s+пищи|таблет\w*|лекарств\w*|прогул\w*|работы\b|"
+    r"сна\b|покушал\w*|поел\w*)|"
+    r"\bкак\s+(покушал\w*|поел\w*|пообедал\w*|поужинал\w*|позавтракал\w*|"
+    r"приш[её]л\w*|проснул\w*|встал\w*)",
     re.I,
 )
 _SEVERITY_ANCHOR = re.compile(
-    r"\b(сильн\w*|терпим\w*|слаб\w*|невыносим\w*)\b",
+    r"\b(сильн\w*|терпим\w*|слаб\w*|невыносим\w*|пойд[её]т|сойд[её]т)\b",
+    re.I,
+)
+# Explicit skip of the temporal probe («давай дальше», «пропусти») — not an
+# answer, but a refusal to date the symptom. Counts double toward the
+# anti-loop divert so a single skip moves on instead of re-asking.
+_SKIP_TEMPORAL = re.compile(
+    r"\b(дальше|давай\s+дальше|пропусти|пропустим|"
+    r"следующий\s+вопрос|не\s+важно|неважно|не\s+помню\s+когда)\b",
     re.I,
 )
 
@@ -77,7 +101,11 @@ def extract_grounded_onset_value(
         n = _norm(text)
         if _UNKNOWN_ATTRIBUTE_ANSWER.search(n):
             continue
-        if _TEMPORAL_ANCHOR.search(n) or _DURATION_MARKERS.search(n):
+        if (
+            _TEMPORAL_ANCHOR.search(n)
+            or _DURATION_MARKERS.search(n)
+            or _AFTER_EVENT_ANCHOR.search(n)
+        ):
             if len(clauses) == 1:
                 return raw_text.strip().rstrip(",;")
             return text.rstrip(",;")
@@ -194,10 +222,28 @@ def _merge_mention(episode: IssueEpisode, mention: IssueMention, turn_id: str) -
 
 def _find_episode_for_mention(state: EngineState, mention: IssueMention) -> str | None:
     key = (mention.body_site or mention.label).lower()
+    label = (mention.label or "").lower()
+    site = (mention.body_site or "").lower()
+    # Prefer the active episode on site match: answering a pending probe by
+    # restating the symptom («В 8:00 начала болеть голова») must fill the
+    # pending attribute, never spawn a duplicate (live fs-07799215).
+    active = state.issue_episodes.get(state.active_episode_id or "")
+    if active is not None:
+        if site and (
+            (active.body_site or "").lower() == site
+            or site in (active.primary_label or "").lower()
+        ):
+            return active.episode_id
+        if not site and active.primary_label.lower() == label:
+            return active.episode_id
     for ep_id, ep in state.issue_episodes.items():
         if ep.body_site and ep.body_site.lower() == key:
             return ep_id
         if ep.primary_label.lower() == mention.label.lower():
+            return ep_id
+        # Cross-form site match: «Голова болеть» (site голова) attaches to
+        # «голова болит», «живот приболел» to «живот болит».
+        if site and site in (ep.primary_label or "").lower():
             return ep_id
     return None
 
@@ -305,15 +351,13 @@ def _group_episode_mentions(
 
 
 def _background_slot_issue_override(turn: RichUserTurn, answer_slot: str) -> bool:
-    """Keep issue mentions that should redirect focus (e.g. headache at sleep slot)."""
+    """Keep issue mentions that should redirect focus (spec: a new complaint
+    inside any background answer switches to the symptom — never swallowed
+    by the mood/sleep/plans slot)."""
     if not turn.issue_mentions:
         return False
     for mention in turn.issue_mentions:
-        label = (mention.label or "").lower()
-        if mention.kind == "symptom" and (
-            "голов" in label
-            or mention.body_site in ("голова", "живот", "горло")
-        ):
+        if mention.kind == "symptom":
             return True
         if answer_slot == "sleep" and mention.kind == "sleep_problem":
             return False
@@ -400,9 +444,8 @@ def filter_rich_turn_mentions(state: EngineState, turn: RichUserTurn) -> RichUse
         for mention in turn.issue_mentions:
             label = (mention.label or "").lower()
             if any(tok in label for tok in fatigue_labels) or mention.kind == "sleep_problem":
-                if state.pending_episode_attribute == "daytime_impact" or not active.known_attributes.get(
-                    "daytime_impact"
-                ):
+                pending_daytime = state.pending_episode_attribute == "daytime_impact"
+                if pending_daytime or not active.known_attributes.get("daytime_impact"):
                     active.known_attributes["daytime_impact"] = turn.raw_text.strip()
                     if state.pending_episode_attribute == "daytime_impact":
                         state.pending_episode_attribute = None
@@ -633,20 +676,38 @@ def _fill_pending_attribute_for_episode(
         if state.active_episode_id == episode_id:
             activate_next_pending_episode(state)
         return
-    # «Не знаю» / «не помню» = valid skip for this attribute — never hang the call.
-    if _UNKNOWN_ATTRIBUTE_ANSWER.search(_norm(turn.raw_text)):
-        ep.known_attributes[attribute] = "unknown"
-        _maybe_clear_pending_attribute(state, episode_id, attribute)
-        finalize_episode_if_complete(ep)
-        return
+    # «Не знаю» / «не помню» is not an answer: no write, no pending change
+    # (frozen: onset stays None and pending stays open). Falls through to the
+    # per-attribute extractors below, which write only grounded values.
     exclude = _mention_exclusion_clauses(turn)
     if attribute == "onset":
         value = extract_grounded_onset_value(turn.raw_text, exclude_clauses=exclude)
         if value:
             ep.known_attributes["onset"] = value
+            state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
             _maybe_infer_current_active_from_temporal_answer(ep, turn.raw_text)
             _maybe_clear_pending_attribute(state, episode_id, attribute)
             finalize_episode_if_complete(ep)
+        else:
+            # Second tier BEFORE counting ungrounded: the classifier boundary
+            # generalizes to unseen paraphrases (no per-incident regex).
+            if _second_tier_judgement(state, ep, episode_id, attribute, turn):
+                return
+            # Anti-loop: 2 ungrounded answers in a row → drop temporal pending
+            # (no fabrication) so the next turn asks severity/current, not the
+            # same «когда началось» a 3rd time (live c436546b/87312170/a8964347).
+            # Explicit «дальше/пропусти» counts double: one skip moves on.
+            key = f"episode_{attribute}_ungrounded"
+            step = 2 if _SKIP_TEMPORAL.search(turn.raw_text) else 1
+            count = state.slot_unclear_counts.get(key, 0) + step
+            state.slot_unclear_counts[key] = count
+            if count >= 2:
+                state.slot_unclear_counts.pop(key, None)
+                _maybe_clear_pending_attribute(state, episode_id, attribute)
+                if step >= 2:
+                    # Honest skip telemetry so the scheduler does not re-ask
+                    # onset on the very next turn (live fs-16d22975 «Дальше»).
+                    _mark_temporal_asked(state, ep)
         return
     if attribute == "severity":
         value = extract_grounded_severity_value(turn.raw_text, exclude_clauses=exclude)
@@ -654,14 +715,29 @@ def _fill_pending_attribute_for_episode(
             ep.known_attributes["severity"] = value
             _maybe_clear_pending_attribute(state, episode_id, attribute)
             finalize_episode_if_complete(ep)
+        else:
+            _second_tier_judgement(state, ep, episode_id, attribute, turn)
         return
     if attribute == "duration":
         value = extract_grounded_onset_value(turn.raw_text, exclude_clauses=exclude)
         if value:
             ep.known_attributes["duration"] = value
+            state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
             _maybe_infer_current_active_from_temporal_answer(ep, turn.raw_text)
             _maybe_clear_pending_attribute(state, episode_id, attribute)
             finalize_episode_if_complete(ep)
+        else:
+            if _second_tier_judgement(state, ep, episode_id, attribute, turn):
+                return
+            key = f"episode_{attribute}_ungrounded"
+            step = 2 if _SKIP_TEMPORAL.search(turn.raw_text) else 1
+            count = state.slot_unclear_counts.get(key, 0) + step
+            state.slot_unclear_counts[key] = count
+            if count >= 2:
+                state.slot_unclear_counts.pop(key, None)
+                _maybe_clear_pending_attribute(state, episode_id, attribute)
+                if step >= 2:
+                    _mark_temporal_asked(state, ep)
         return
     raw = turn.raw_text.strip().lower()
     if attribute == "current" and raw:
@@ -691,6 +767,101 @@ def _fill_pending_attribute_for_episode(
         _maybe_clear_pending_attribute(state, episode_id, attribute)
         finalize_episode_if_complete(ep)
         return
+
+
+def _second_tier_judgement(
+    state: EngineState,
+    ep: IssueEpisode,
+    episode_id: str,
+    attribute: str,
+    turn: RichUserTurn,
+) -> bool:
+    """Slot-classifier second tier (pilot only) when anchors miss.
+
+    answer → record the user's OWN words (capped), advance. skip → skip
+    markers, advance, no value. garbage/None → False (existing path runs).
+    This is the anti-patch mechanism: unseen paraphrases generalize via the
+    boundary instead of per-incident regex.
+    """
+    from packages.dialogue_engine.slotclf import judge
+
+    # Tier 1.5 — personal memory (this client's trusted resolutions only).
+    client_id = getattr(state, "client_id", "")
+    if client_id:
+        from packages.dialogue_engine.caller_memory import resolve as _mem_resolve
+
+        _mem = _mem_resolve(client_id, attribute, turn.raw_text)
+        if _mem == "answer":
+            ep.known_attributes[attribute] = turn.raw_text.strip()[:80]
+            state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
+            if attribute in ("onset", "duration"):
+                _maybe_infer_current_active_from_temporal_answer(ep, turn.raw_text)
+            _maybe_clear_pending_attribute(state, episode_id, attribute)
+            finalize_episode_if_complete(ep)
+            return True
+        if _mem == "skip":
+            key = f"episode_{attribute}_ungrounded"
+            state.slot_unclear_counts[key] = (
+                state.slot_unclear_counts.get(key, 0) + 2
+            )
+            state.slot_unclear_counts.pop(key, None)
+            _maybe_clear_pending_attribute(state, episode_id, attribute)
+            if attribute in ("onset", "duration"):
+                _mark_temporal_asked(state, ep)
+            return True
+
+    verdict = judge(attribute, turn.raw_text)
+    if verdict == "answer":
+        if client_id:
+            # Learn in process: high-confidence global resolution becomes a
+            # personal hypothesis (trusted after 3 consistent hits).
+            from packages.dialogue_engine.caller_memory import record as _mem_record
+            from packages.dialogue_engine.slotclf import judge_proba
+
+            if (judge_proba(attribute, turn.raw_text) or 0.0) >= 0.8:
+                _mem_record(client_id, attribute, turn.raw_text, "answer")
+        ep.known_attributes[attribute] = turn.raw_text.strip()[:80]
+        state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
+        if attribute in ("onset", "duration"):
+            _maybe_infer_current_active_from_temporal_answer(ep, turn.raw_text)
+        _maybe_clear_pending_attribute(state, episode_id, attribute)
+        finalize_episode_if_complete(ep)
+        return True
+    if verdict == "skip":
+        if client_id:
+            from packages.dialogue_engine.caller_memory import record as _mem_record
+            from packages.dialogue_engine.slotclf import judge_proba
+
+            if (judge_proba(attribute, turn.raw_text) or 0.0) >= 0.8:
+                _mem_record(client_id, attribute, turn.raw_text, "skip")
+        key = f"episode_{attribute}_ungrounded"
+        count = state.slot_unclear_counts.get(key, 0) + 2
+        state.slot_unclear_counts[key] = count
+        if count >= 2:
+            state.slot_unclear_counts.pop(key, None)
+            _maybe_clear_pending_attribute(state, episode_id, attribute)
+            if attribute in ("onset", "duration"):
+                _mark_temporal_asked(state, ep)
+        return True
+    return False
+
+
+def _mark_temporal_asked(state: EngineState, ep: IssueEpisode) -> None:
+    """Honest ask telemetry after an explicit temporal skip (no values)."""
+    from packages.dialogue_engine.product import bump_product_ask, classify_episode_family
+
+    try:
+        family = classify_episode_family(ep)
+        for attr in ("onset", "duration"):
+            mark = f"_product_asked:{attr}"
+            if mark not in ep.known_attributes:
+                ep.known_attributes[mark] = "1"
+                bump_product_ask(state, family)
+        # Explicit refusal to date the symptom — the planner must advance
+        # to severity/current, never re-ask onset (no value fabricated).
+        ep.known_attributes["_temporal_skipped"] = "1"
+    except Exception:  # noqa: BLE001 — telemetry must never break dialogue
+        pass
 
 
 def _maybe_infer_current_active_from_temporal_answer(ep: IssueEpisode, text: str) -> None:

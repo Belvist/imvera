@@ -48,6 +48,12 @@ def build_freeswitch_voice_lab_env() -> dict[str, str]:
     # Product live loop is deterministic — do not enable Qwen interpret.
     env.setdefault("IMVERA_LLM_INTERPRET", "0")
     env.setdefault("IMVERA_MISSION_LLM_INTERPRET", "0")
+    # Pilot 2026-09-13 (user directive): adaptive 5-domain coverage ladder +
+    # reluctance early close (IMVERA_COVERAGE_LADDER=1) and tiny advisory
+    # classifier route_clf (231KB sklearn, <1ms; deterministic RED/decline
+    # checks always first; +1 bounded vote, never closes alone).
+    env.setdefault("IMVERA_COVERAGE_LADDER", "1")
+    env.setdefault("IMVERA_TINYLLM_MODEL", "route_clf")
     env.setdefault("IMVERA_NEGOTIATED_CODEC", "G722")
     env.setdefault("PYTHONPATH", str(ROOT))
     return env

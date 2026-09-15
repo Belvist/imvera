@@ -11,6 +11,9 @@ from packages.dialogue_engine.check_path import (
     advance_probe_phase,
     apply_wellness_branch,
     classify_wellness_path,
+    is_urgent_action,
+    is_urgent_concern,
+    is_urgent_state,
 )
 from packages.dialogue_engine.conversation_policy import (
     TurnContext,
@@ -79,7 +82,6 @@ _STANDARD_CHECK_SLOTS = frozenset({"wellness", "mood", "sleep", "plans"})
 
 _CONTROL_HANGUP_INTENTS = frozenset(
     {
-        "summary",
         "goodbye_final",
         "partial_unresolved_close",
         "urgent_close",
@@ -268,6 +270,74 @@ def _on_call_started(state: EngineState) -> tuple[EngineState, list[Effect]]:
     )
 
 
+def _note_temporal_emit(state: EngineState, slot: str | None, intent: str) -> bool:
+    """Count a spoken temporal probe; True when the loop must break.
+
+    Shared by _emit_speak and _speak_repair (the only two SpeakEffect
+    builders): the same onset/duration question must never go out 3x in a
+    row. On the 3rd repeat temporal pending is dropped (no fabrication),
+    ask-caps are marked honestly, and the caller must _schedule_advance.
+    """
+    blob = f"{slot or ''} {intent or ''}".lower()
+    tkey: str | None = None
+    if "duration" in blob:
+        tkey = "temporal_duration"
+    elif "onset" in blob:
+        tkey = "temporal_onset"
+    if tkey is None:
+        state.slot_unclear_counts.pop("emit_temporal_last", None)
+        state.slot_unclear_counts.pop("emit_temporal_onset_run", None)
+        state.slot_unclear_counts.pop("emit_temporal_duration_run", None)
+        return False
+    last = state.slot_unclear_counts.get("emit_temporal_last")
+    if last == tkey:
+        run = state.slot_unclear_counts.get(f"emit_{tkey}_run", 0) + 1
+    else:
+        other = "temporal_duration" if tkey == "temporal_onset" else "temporal_onset"
+        state.slot_unclear_counts.pop(f"emit_{other}_run", None)
+        run = 1
+    state.slot_unclear_counts["emit_temporal_last"] = tkey
+    state.slot_unclear_counts[f"emit_{tkey}_run"] = run
+    if run < 3:
+        return False
+    state.slot_unclear_counts.pop(f"emit_{tkey}_run", None)
+    state.slot_unclear_counts.pop("emit_temporal_last", None)
+    dropped = (
+        state.pending_episode_attribute
+        if state.pending_episode_attribute in ("onset", "duration")
+        else None
+    )
+    if dropped:
+        state.pending_episode_attribute = None
+    if state.probe_phase in ("duration", "concern"):
+        state.probe_phase = None
+    # Persist the skip honestly: 3 spoken asks with no grounded answer.
+    # Mark temporal steps asked + bump pack caps (honest ask telemetry).
+    # No attribute values fabricated. Caller decides the next speech:
+    # _speak_repair → bare repair (pending kept elsewhere), _emit_speak →
+    # advance when the episode completes without onset, else honest
+    # exhaustion via _close_partial (urgent guard inside escalates red).
+    try:
+        from packages.dialogue_engine.issue_memory import get_active_episode
+        from packages.dialogue_engine.product import (
+            bump_product_ask,
+            classify_episode_family,
+        )
+
+        _ep = get_active_episode(state)
+        if _ep is not None:
+            _fam = classify_episode_family(_ep)
+            for _attr in ("onset", "duration"):
+                _mark = f"_product_asked:{_attr}"
+                if _mark not in _ep.known_attributes:
+                    _ep.known_attributes[_mark] = "1"
+                    bump_product_ask(state, _fam)
+            _ep.known_attributes["_temporal_skipped"] = "1"
+    except Exception:  # noqa: BLE001 — guard must never break speech
+        pass
+    return True
+
+
 def _emit_speak(
     state: EngineState,
     *,
@@ -277,11 +347,44 @@ def _emit_speak(
     marks_question: bool,
     goal_id: str | None = None,
 ) -> tuple[EngineState, list[Effect]]:
+    # Anti-loop: same onset/duration probe must never go out 3x in a row
+    # (fuzz I3; live question_back/vague/garbage while temporal pending).
+    if _note_temporal_emit(state, slot, intent):
+        # 3rd repeat: honest exhaustion (frozen semantics). An episode that
+        # completes without onset advances; otherwise partial close —
+        # _close_partial escalates to urgent when red evidence exists.
+        from packages.dialogue_engine.issue_memory import (
+            activate_next_pending_episode as _activate_next,
+        )
+        from packages.dialogue_engine.issue_memory import (
+            episode_complete as _ep_complete,
+        )
+        from packages.dialogue_engine.issue_memory import (
+            finalize_episode_if_complete as _finalize,
+        )
+        from packages.dialogue_engine.issue_memory import (
+            get_active_episode as _get_ep,
+        )
+
+        _ep2 = _get_ep(state)
+        if _ep2 is not None:
+            _finalize(_ep2)
+        state.waiting_on_slot = None
+        if _ep2 is not None and _ep_complete(_ep2):
+            _activate_next(state)
+            return _schedule_advance(state)
+        return _close_partial(state)
+    # Asked-history for «а что ты спрашивал?» (cap 20, questions only).
+    if marks_question and text.strip():
+        state.asked_history.append(text.strip())
+        del state.asked_history[:-20]
     gen_id = state.next_generation_id()
     gen = state.active_playout_generation + 1
     state.active_playout_generation = gen
     if marks_question and slot and not reserve_question(state, slot, gen_id):
-        # Episode probes must never kill the call when attempts are exhausted.
+        # Exhausted episode probes fall back to the frozen partial-close path.
+        # Never fabricate attribute values: "unknown" is not an answer and
+        # must not be written into known_attributes (noise != answer).
         if slot.startswith("episode_"):
             from packages.dialogue_engine.issue_memory import (
                 activate_next_pending_episode,
@@ -291,15 +394,13 @@ def _emit_speak(
             )
 
             ep = get_active_episode(state)
-            attr = state.pending_episode_attribute
-            if ep is not None and attr:
-                ep.known_attributes.setdefault(attr, "unknown")
+            if ep is not None:
                 finalize_episode_if_complete(ep)
             state.pending_episode_attribute = None
             state.waiting_on_slot = None
             if ep is not None and episode_complete(ep):
                 activate_next_pending_episode(state)
-            return _schedule_advance(state)
+                return _schedule_advance(state)
         return _close_partial(state)
     resolved_goal = goal_id or (slot if intent == "ask_mission_goal" else None)
     q = Question(
@@ -445,7 +546,19 @@ def _on_user_turn(
     state: EngineState,
     event: UserTurnReceived,
 ) -> tuple[EngineState, list[Effect]]:
+    # Post-close emergency (trailing audio after a close): re-open as urgent
+    # instead of swallowing — a choking caller must escalate even if the
+    # call was already closed (stress: emergency after partial close).
     if state.call_closed:
+        _raw = ""
+        if event.rich_turn is not None:
+            _raw = event.rich_turn.raw_text
+        elif event.text:
+            _raw = event.text
+        if _raw and is_urgent_action(_raw):
+            state.call_closed = False
+            state.closing_reason = None
+            return _emit_urgent_close(state, user_text=_raw)
         return state, []
     if _stale(state, event.revision):
         return state, []
@@ -466,9 +579,39 @@ def _on_user_turn(
     if event.rich_turn is not None:
         state.processing_turn_id = event.turn_id
         state.processing_effect_id = event.effect_id or None
+        # Safety first: emergency verbs hijack any dialogue state — never
+        # probe or partially close a possible emergency (live fs-41e2a57b).
+        if is_urgent_action(event.rich_turn.raw_text):
+            return _emit_urgent_close(state, user_text=event.rich_turn.raw_text)
+        if is_urgent_state(event.rich_turn.raw_text):
+            # Red state: escalate at once only when we know WHAT hurts;
+            # otherwise record the negative fact and clarify first (asked,
+            # never assumed) — the probe ladder below asks WHAT.
+            if _concern_established(state, event.rich_turn.raw_text):
+                return _emit_urgent_close(state, user_text=event.rich_turn.raw_text)
+            _record_negative_wellness(
+                state, event.rich_turn.raw_text, record_concern=False
+            )
+            state.red_state_pending = True
+            state.check_path = CheckPath.URGENT
         return _apply_rich_turn(state, event.rich_turn)
     if event.semantic is None:
         return state, []
+    # Same safety hijack for the semantic (non-rich) path.
+    if is_urgent_action(event.text):
+        state.processing_turn_id = event.turn_id
+        state.processing_effect_id = event.effect_id or None
+        return _emit_urgent_close(state, user_text=event.text)
+    if is_urgent_state(event.text):
+        if _concern_established(state, event.text):
+            state.processing_turn_id = event.turn_id
+            state.processing_effect_id = event.effect_id or None
+            return _emit_urgent_close(state, user_text=event.text)
+        state.processing_turn_id = event.turn_id
+        state.processing_effect_id = event.effect_id or None
+        _record_negative_wellness(state, event.text, record_concern=False)
+        state.red_state_pending = True
+        state.check_path = CheckPath.URGENT
     state.processing_turn_id = event.turn_id
     state.processing_effect_id = event.effect_id or None
     return _apply_semantic(state, event.semantic)
@@ -1362,17 +1505,22 @@ def _speak_probe(
 
 
 def _emit_summary(state: EngineState, *, acknowledge: str = "") -> tuple[EngineState, list[Effect]]:
-    """Terminal close speech — same contract as MVP NORMAL_CLOSE: speak once, then hang up.
+    """Close summary — NOT terminal by itself (frozen contract).
 
-    Must set call_closed before speak so later user turns are ignored and
-    PlayoutCompleted emits EndCallEffect (intent in _CONTROL_HANGUP_INTENTS).
+    Summary delivery must leave the call open so the elder's farewell turn
+    reaches goodbye_final (corpus: summary → user goodbye → goodbye_final).
+    Only goodbye_final / partial / urgent intents hang up.
+    Anti-stall: a second summary with nothing new closes via goodbye_final
+    instead of repeating «На сегодня всё» forever (stress: 25-turn chats
+    re-summarizing debris). New symptoms never reach here (episode plans
+    take priority in the scheduler).
     """
     if state.call_closed and state.summary_spoken:
         return state, []
+    if state.summary_spoken:
+        return _emit_goodbye_final(state)
     state.fsm_state = FsmState.SUMMARY
     state.summary_spoken = True
-    state.call_closed = True
-    state.closing_reason = state.closing_reason or "complete"
     state.bump_revision()
     return _emit_speak(
         state,
@@ -1383,7 +1531,68 @@ def _emit_summary(state: EngineState, *, acknowledge: str = "") -> tuple[EngineS
     )
 
 
-def _emit_urgent_close(state: EngineState) -> tuple[EngineState, list[Effect]]:
+def _record_negative_wellness(
+    state: EngineState, user_text: str, *, record_concern: bool = True
+) -> bool:
+    """Grounded negative wellness evidence (never a fabrication).
+
+    Returns True when recorded. Shared by urgent close and the red-state
+    clarify path: «мне плохо, я умираю» is a negative fact even before we
+    know WHAT hurts. record_concern=False keeps wellness_concern empty so
+    the probe ladder still asks WHAT (the raw red cry is not a complaint).
+    """
+    if not user_text or state.slots.get("wellness") != SlotStatus.OPEN:
+        return False
+    from packages.dialogue_engine.check_path import is_urgent_state
+    from packages.dialogue_engine.fast_interpreter import _detect_polarity
+
+    # Red-state cries («умираю») are negative facts even though no polarity
+    # list contains them.
+    if _detect_polarity(user_text) != "negative" and not is_urgent_state(user_text):
+        return False
+    apply_slot_answer(
+        state,
+        "wellness",
+        user_text.strip(),
+        turn_id=state.processing_turn_id or "",
+        source_text=user_text.strip(),
+        polarity="negative",
+        confidence=0.9,
+    )
+    if record_concern and not state.wellness_concern:
+        state.wellness_concern = user_text.strip()
+    return True
+
+
+def _concern_established(state: EngineState, raw_text: str = "") -> bool:
+    """Do we know WHAT hurts (site/symptom on record or in this turn)?"""
+    if state.wellness_concern and state.wellness_concern.strip():
+        return True
+    if state.observations.get("important_to_share"):
+        return True
+    if any(ep.status != "resolved" for ep in state.issue_episodes.values()):
+        return True
+    if raw_text:
+        from packages.dialogue_engine.check_path import _PAIN
+
+        if _PAIN.search(raw_text):
+            return True
+    return False
+
+
+def _emit_urgent_close(
+    state: EngineState, *, user_text: str | None = None
+) -> tuple[EngineState, list[Effect]]:
+    # Urgent close owns the URGENT check path (frozen gate: emergency never
+    # probes, never partially closes). Record the path explicitly so
+    # check_path reflects reality even when the hijack fires before the
+    # wellness branch runs (live fs-41e2a57b).
+    state.check_path = CheckPath.URGENT
+    # Preserve genuine evidence: an explicit "мне плохо" alongside the
+    # emergency is a grounded negative wellness fact, not a fabrication.
+    # Record it so the family summary keeps what Vera actually heard.
+    if user_text:
+        _record_negative_wellness(state, user_text)
     state.fsm_state = FsmState.SUMMARY
     state.summary_spoken = True
     state.call_closed = True
@@ -1548,11 +1757,22 @@ def _speak_repair(
 
     question_text = delivered.text if delivered else repair_question_text(state, slot)
     text = questions.repair_response(question_text)
+    repair_slot = ctx.slot if ctx and ctx.slot else slot
+    # Repair re-speaks the pending probe out loud — it counts toward the
+    # temporal anti-loop like any other emission (fuzz I3). On the 3rd
+    # repeat do NOT re-ask the probe: short bare repair, pending kept.
+    if _note_temporal_emit(state, repair_slot, "repair_repeat"):
+        return _emit_speak(
+            state,
+            text="Да, слышу. Повторите, пожалуйста.",
+            intent="repair_repeat_bare",
+            slot=None,
+            marks_question=False,
+        )
     state.bump_revision()
     gen_id = state.next_generation_id()
     gen = state.active_playout_generation + 1
     state.active_playout_generation = gen
-    repair_slot = ctx.slot if ctx and ctx.slot else slot
     q = Question(
         question_id=delivered.question_id if delivered else gen_id,
         slot=repair_slot,
@@ -1577,9 +1797,49 @@ def _speak_repair(
     ]
 
 
+def _has_urgent_evidence(state: EngineState) -> bool:
+    """True when any recorded concern already carries emergency lexicon.
+
+    Guards _close_partial: emergency must never be abandoned via partial
+    (live fs-41e2a57b, fuzz I4). A defused red-state (movie/news context,
+    investigated) is NOT evidence — never escalate on it.
+    """
+    if str(state.observations.get("concern_status") or "").startswith("defused"):
+        return False
+    bits: list[str] = []
+    if state.wellness_concern:
+        bits.append(state.wellness_concern)
+    if state.wellness_duration:
+        bits.append(state.wellness_duration)
+    for key in ("important_to_share", "wellness_concern"):
+        val = state.observations.get(key)
+        if val:
+            bits.append(str(val))
+    for slot in ("wellness", "mood"):
+        val = state.slot_values.get(slot)
+        if val:
+            bits.append(str(val))
+    for ep in state.issue_episodes.values():
+        if ep.primary_label:
+            bits.append(ep.primary_label)
+        for attr in ("onset", "duration", "severity", "current"):
+            val = ep.known_attributes.get(attr)
+            if val:
+                bits.append(str(val))
+    return any(is_urgent_concern(b) for b in bits if b)
+
+
 def _close_partial(state: EngineState) -> tuple[EngineState, list[Effect]]:
     if state.playing_question or state.planned_question:
         return state, []
+    # While clarifying WHAT is red, the probe ladder owns the turn — never
+    # cut it off with a close (partial text is wrong on red, and the urgent
+    # verdict belongs to the ladder's third step, honestly marked).
+    if state.red_state_pending:
+        return _schedule_advance(state)
+    # Emergency evidence must never be abandoned via partial — escalate.
+    if _has_urgent_evidence(state):
+        return _emit_urgent_close(state)
     state.call_closed = True
     state.closing_reason = "partial_unresolved"
     state.fsm_state = FsmState.FINAL_CLASSIFICATION
@@ -1681,6 +1941,15 @@ def _handle_closing_turn(
 ) -> tuple[EngineState, list[Effect]] | None:
     if semantic.act == SemanticAct.REPAIR_REQUEST:
         return None
+    if (
+        semantic.act == SemanticAct.BACKCHANNEL
+        and state.summary_spoken
+        and state.fsm_state == FsmState.SUMMARY
+        and not state.call_closed
+    ):
+        # Closing acknowledgment: "ага" after summary answers no question,
+        # but acknowledges the close (fuzz I1: must not go silent here).
+        return _emit_goodbye_final(state)
     if semantic.act == SemanticAct.BACKCHANNEL and not state.awaiting_goodbye_confirm:
         return None
     if semantic.act == SemanticAct.UNCLEAR and not state.awaiting_goodbye_confirm:

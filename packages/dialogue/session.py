@@ -125,6 +125,8 @@ class CallSession:
             self._engine = DialogueEngine(
                 call_id=call_id,
                 elder_display_name=elder_display_name,
+                # Stable per-client key for phrase memory (empty = disabled).
+                client_id=f"{family_id}:{elder_display_name}",
                 prior_call_context=prior,
                 mission=resolved_mission,
                 mission_understanding_provider=mission_understanding_provider,

@@ -69,8 +69,11 @@ _URGENT_CLOSE = (
     "Спасибо за разговор. До свидания."
 )
 _ANSWER_WAIT_MS = 7000
+# Neutral by default: the legacy "Хорошо." prefix lied after "Пло."/UNCLEAR
+# (wellness OPEN, live fs-41e2a57b). Positive ack lives in wellness_ack();
+# the ITS transition itself must never assert a polarity it did not measure.
 _IMPORTANT_TO_SHARE_QUESTION = (
-    "Хорошо. Есть ли сейчас ещё что-то важное в вашем самочувствии "
+    "Поняла вас. Есть ли сейчас ещё что-то важное в вашем самочувствии "
     "или дома, на что мне стоит обратить внимание?"
 )
 # Phone-spoken brand. Latin «IMVERA» is skipped/garbled by Russian Silero TTS.
@@ -86,14 +89,25 @@ def concern_summary_phrase(state: EngineState) -> str:
     """Short spoken list of what Vera heard — for warmer goodbye."""
     bits: list[str] = []
     seen: set[str] = set()
-    for ep in state.issue_episodes.values():
+    eps = list(state.issue_episodes.values())
+    # Bare-verb labels («болит», «беспокоит» from STT debris) are dropped
+    # when a sited episode says the same thing (live fe57cba6 listed both).
+    _sited = any((ep.body_site or "").strip() for ep in eps)
+    _BARE_VERBS = frozenset(
+        {"болит", "боль", "ноет", "ломит", "давит", "беспокоит", "побаливает"}
+    )
+    for ep in eps:
         label = (ep.primary_label or "").strip().lower()
         site = (ep.body_site or "").strip().lower()
         key = site or label
         if not key or key in seen:
             continue
         seen.add(key)
-        if site == "голова" or "голов" in label:
+        if not site and label in _BARE_VERBS and _sited:
+            continue
+        if "круж" in label or ep.kind == "dizziness":
+            bits.append("головокружение")
+        elif site == "голова" or "голов" in label:
             bits.append("головная боль")
         elif site == "живот" or "живот" in label:
             bits.append("боль в животе")

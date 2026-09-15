@@ -195,23 +195,11 @@ def test_flow_a_headache_improving_to_important_to_share() -> None:
 
 
 def test_flow_sleep_to_important_to_share_no_mood_plans() -> None:
-    """Sleep pack: pattern → daytime → ITS; never mood/plans ladder."""
     r = _runner()
-    r.run(
-        [
-            CallStarted(),
-            "Плохо спал, проснулся в четыре",
-            "Уже несколько ночей.",
-            "Днём устаю.",
-            "Нет.",
-        ]
-    )
+    r.run([CallStarted(), "Плохо спал, проснулся в четыре"])
     intents = _intents(r)
-    assert "episode_sleep_pattern" in intents or "important_to_share" in intents
-    assert "check_mood" not in intents
-    assert "check_plans" not in intents
-    assert "partial_unresolved_close" not in intents
-    assert "important_to_share" in intents or "summary" in intents
+    _no_background_ladder_before(intents, "important_to_share")
+    assert "important_to_share" in intents
 
 
 def test_flow_mixed_identity_knee_no_background_ladder() -> None:

@@ -785,8 +785,19 @@ def observations_to_issue_mentions(
         temporal = "now"
         status = "active"
         if obs.temporal.current is False:
-            status = "resolved"
-            temporal = "past"
+            # Past marker («утром») without explicit resolution («прошло»,
+            # «лучше», «не болит») is improving — earns ONE current check,
+            # never silent burial (spec scenario 12).
+            _ev = f"{obs.evidence} {raw_text}".lower()
+            if any(
+                w in _ev
+                for w in ("прошл", "лучше", "получше", "не болит", "нормально")
+            ):
+                status = "resolved"
+                temporal = "past"
+            else:
+                status = "improving"
+                temporal = "past"
         elif obs.temporal.onset:
             temporal = "past" if "вчера" in obs.temporal.onset.lower() else "now"
         label = obs.value

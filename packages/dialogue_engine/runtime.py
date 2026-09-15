@@ -41,6 +41,16 @@ def llm_interpret_enabled() -> bool:
     return True
 
 
+def coverage_ladder_enabled() -> bool:
+    """Adaptive 5-domain coverage + reluctance early close (ADR-014 exception).
+
+    Default OFF (frozen short-call shapes). Explicit opt-in for pilot:
+    IMVERA_COVERAGE_LADDER=1. Owner: user directive 2026-09-13; gates must
+    pass identically with the flag OFF.
+    """
+    return _flag_on("IMVERA_COVERAGE_LADDER", "0")
+
+
 @lru_cache(maxsize=1)
 def git_sha_short() -> str:
     root = Path(__file__).resolve().parents[2]

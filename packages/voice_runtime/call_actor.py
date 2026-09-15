@@ -56,6 +56,7 @@ from packages.voice_runtime.agent_debug_log import agent_debug_log
 from packages.voice_runtime.audio import AudioEnvelope, StatefulResampler, pcm_rms_s16le
 from packages.voice_runtime.audio_audit import audio_audit_enabled
 from packages.voice_runtime.audio_ring import AudioRingBuffer
+from packages.voice_runtime.call_timeline import CallTimeline
 from packages.voice_runtime.echo_ref_gate import (
     EchoVerdict,
     echo_ref_gate_enabled,
@@ -246,6 +247,13 @@ class CallActor:
     _listen_blocked_bytes: int = 0
     _debug_uplink_tick: int = 0
     _media_health: MediaHealthTracker = field(default_factory=MediaHealthTracker)
+    _timeline: CallTimeline | None = None
+
+    def _tl(self) -> CallTimeline:
+        """Latency timeline (observability only — never affects behavior)."""
+        if self._timeline is None:
+            self._timeline = CallTimeline(call_id=self.call_id)
+        return self._timeline
     _audio_echo_drop_logged: int = 0
     _forensic_bot_playout_end_ts: str | None = None
     _forensic_listen_open_ts: str | None = None
@@ -426,6 +434,7 @@ class CallActor:
             self._playback_task = asyncio.create_task(self._playback_pump())
         if self.media.prime_downlink:
             await self.media.prime_downlink()
+        self._tl().mark("answer")
         if self._pending_open:
             await self._deliver_session_turn(self._pending_open)
             self._pending_open = None
@@ -478,6 +487,11 @@ class CallActor:
     async def _finalize_disconnect(self) -> None:
         if self.session.state.call_finalized:
             return
+        try:
+            self._tl().mark("hangup")
+            await self._emit_stage("timeline", **self._tl().to_payload())
+        except Exception:  # noqa: BLE001 — observability never breaks teardown
+            pass
         if not self.session.state.final_action_done:
             self.session.state.final_action_done = True
             self.session.state.termination_reason = TerminationReason.DISCONNECTED
@@ -789,6 +803,7 @@ class CallActor:
 
     def _on_bot_playback_started(self) -> None:
         intent = self._last_delivered_intent or ""
+        self._tl().mark("playout")
         self._ensure_perception().on_playback_started(intent)
 
     async def _await_echo_tail(self) -> None:
@@ -882,6 +897,7 @@ class CallActor:
             self._ensure_perception().consume_blocked_preroll()
         if started:
             self._forensic_vad_start_ts = utc_now_iso()
+            self._tl().mark("vad_start")
             self._forensic_segment_echo_max = 0.0
             self._segment_acoustic_echo_verdict = None
             self._turn_manager.on_vad_speech_started(self._monotonic())
@@ -949,6 +965,7 @@ class CallActor:
                 segment_rms = built.segment_rms
                 silence_tail_ms = built.silence_tail_ms
             self._forensic_vad_end_ts = utc_now_iso()
+            self._tl().mark("vad_end")
             await self._emit_stage(
                 "audio.speech_ended",
                 pcm_bytes=len(pcm_out),
@@ -1161,6 +1178,8 @@ class CallActor:
 
     def note_capture_ingress(self, nbytes: int, rms: float) -> None:
         self._media_health.note_capture_frame(nbytes, rms, now=self._monotonic())
+        if rms > 50.0:
+            self._tl().mark("first_inbound_pcm")
 
     async def _emit_media_pipeline_summary(self, reason: str) -> None:
         health = self._media_health.evaluate(now=self._monotonic())
@@ -1672,6 +1691,7 @@ class CallActor:
             await self._emit_stage(
                 "stt.final", utterance_id=utterance_id, text_len=len(text)
             )
+            self._tl().mark("stt_final")
             if not raw_text:
                 await self._emit_stage(
                     "stt.empty",
@@ -2155,6 +2175,7 @@ class CallActor:
             await self._speak_validated_proposal(sub, fx.text, render_generation)
 
     async def _deliver_session_turn(self, result: SessionTurnResult) -> None:
+        self._tl().mark("decision")
         if result.proposal.intent == "wait_for_continuation":
             if self.session.uses_dialogue_engine() and result.timer_effect is not None:
                 await self._schedule_engine_timer(result.timer_effect)
@@ -2677,6 +2698,7 @@ class CallActor:
                     generation_id=chunk.generation_id,
                     samples=len(chunk.pcm_s16le) // 2,
                 )
+                self._tl().mark("tts_first_pcm")
             if not self.config.telephony_stream:
                 duration = (len(chunk.pcm_s16le) // 2) / chunk.sample_rate
                 await asyncio.sleep(duration)

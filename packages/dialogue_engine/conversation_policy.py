@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -156,8 +157,12 @@ def _classify_important_to_share_answer(
             return "USER_QUESTION_OR_META"
         if turn.issue_mentions or turn.goal_facts or turn.correction:
             return "NEW_GROUNDED_INFORMATION"
+        if _mentions_medication(raw or ""):
+            return "NEW_GROUNDED_INFORMATION"
         if turn.dialogue_act in ("unclear", "backchannel"):
             return "UNCLEAR"
+    if _mentions_medication(raw or ""):
+        return "NEW_GROUNDED_INFORMATION"
     # Meaningful text without grounded extraction → not a share note.
     return "UNCLEAR"
 
@@ -165,6 +170,27 @@ def _classify_important_to_share_answer(
 _ITS_META_LISTEN = (
     "Я вас слушаю. Если хотите, можете сказать, что ещё для вас сейчас важно."
 )
+
+
+_MEDICATION_RE = None
+
+
+def _mentions_medication(raw: str) -> bool:
+    """Tablets/meds mention is grounded family info (live fs-a7bffaf1).
+
+    Medication is a frozen ProductFamily (status_today) with spoken text in
+    the pack — losing it into UNCLEAR listen-water + partial is abandonment.
+    """
+    global _MEDICATION_RE
+    if _MEDICATION_RE is None:
+        import re as _re
+
+        _MEDICATION_RE = _re.compile(
+            r"(таблет|лекар|препарат|медикамент|капл\w*\s+в\s+глаза|"
+            r"покапа\w*\s+в\s+глаза)",
+            _re.I,
+        )
+    return bool(_MEDICATION_RE.search(raw or ""))
 
 
 def capture_suspended_obligation(state: EngineState) -> SuspendedObligation | None:
@@ -241,8 +267,70 @@ def _has_open_episodes(state: EngineState) -> bool:
     return False
 
 
+def _is_coverage_debris(turn: RichUserTurn, domain: str | None = None) -> bool:
+    """STT debris / off-topic one-liners carry nothing to record.
+
+    Slot-aware: food/med verbs («успели», «принял», «поела») and yes/no are
+    valid answers on nutrition/medication slots (live 780904ae «Успел.»).
+    """
+    if turn.goal_facts:
+        return False
+    text = (turn.raw_text or "").strip()
+    if not text:
+        return True
+    low = text.lower().rstrip(".!?")
+    if low in {"да", "нет", "неа"}:
+        return False
+    if domain in ("nutrition", "medication"):
+        from packages.dialogue_engine.reluctance import _SHORT_CONTENT_VERBS
+
+        if _SHORT_CONTENT_VERBS.search(text):
+            return False
+    from packages.dialogue_engine.coverage import (
+        _MEDICATION_MARKERS,
+        _MOOD_MARKERS,
+        _NUTRITION_MARKERS,
+        _SLEEP_MARKERS,
+    )
+    from packages.dialogue_engine.fast_interpreter import _detect_polarity
+    from packages.dialogue_engine.issue_memory import (
+        extract_grounded_onset_value,
+        extract_grounded_severity_value,
+    )
+
+    try:
+        if _detect_polarity(text) in ("positive", "negative"):
+            return False
+    except Exception:  # noqa: BLE001
+        pass
+    if (
+        _MEDICATION_MARKERS.search(text)
+        or _NUTRITION_MARKERS.search(text)
+        or _SLEEP_MARKERS.search(text)
+        or _MOOD_MARKERS.search(text)
+    ):
+        return False
+    if (
+        extract_grounded_onset_value(text) is not None
+        or extract_grounded_severity_value(text) is not None
+    ):
+        return False
+    return len(text.split()) <= 4
+
+
 def _mark_slot_coverage(state: EngineState, slot: str, coverage: BackgroundGoalCoverage) -> None:
     state.set_background_goal_coverage(slot, coverage)
+
+
+def _medication_today_text(state: EngineState) -> str:
+    import zlib
+
+    from packages.dialogue_engine.coverage import MEDICATION_TODAY_TEXTS
+
+    idx = zlib.crc32(((state.call_id or "") + ":meds").encode()) % len(
+        MEDICATION_TODAY_TEXTS
+    )
+    return MEDICATION_TODAY_TEXTS[idx]
 
 
 def _sync_background_coverage_from_fills(state: EngineState, filled: tuple[str, ...]) -> None:
@@ -258,6 +346,11 @@ def _next_background_goal(state: EngineState) -> str | None:
     if state.slots.get("wellness") == SlotStatus.OPEN:
         order = ("wellness", "mood", "sleep", "plans")
     for slot in order:
+        # Coverage filler already asked once — never re-ask declined (no quiz).
+        if slot == "mood" and "mood" in state.coverage_asked_domains:
+            continue
+        if slot == "sleep" and "sleep" in state.coverage_asked_domains:
+            continue
         if not state.background_goal_needs_attention(slot):
             continue
         if not can_ask_slot(state, slot):
@@ -372,6 +465,8 @@ def _important_to_share_plan(state: EngineState) -> ResponsePlan | None:
         return None
     if _has_open_episodes(state):
         return None
+    if state.red_state_pending:
+        return None
     if not _wellness_entry_covered(state):
         return None
     state.important_to_share_asked = True
@@ -442,8 +537,6 @@ def _background_goal_plan(
 
 
 def _summary_plan(state: EngineState, *, acknowledge: str = "") -> ResponsePlan:
-    if state.summary_spoken or state.call_closed:
-        return ResponsePlan(action="none")
     return ResponsePlan(
         obligation=ConversationObligation.SUMMARY_CLOSE,
         action="close_summary",
@@ -513,10 +606,18 @@ def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
         )
     if has_belly and has_nausea:
         return "Поняла вас. Живот и тошнота — это серьёзно, я вас слушаю."
-    primary = next(
-        (m for m in turn.issue_mentions if m.role in ("primary", "independent", "unknown")),
-        turn.issue_mentions[0],
-    )
+    _sited = [
+        m
+        for m in turn.issue_mentions
+        if m.role in ("primary", "independent", "unknown")
+        and (m.body_site or "").strip()
+    ]
+    _any_primary = [
+        m
+        for m in turn.issue_mentions
+        if m.role in ("primary", "independent", "unknown")
+    ]
+    primary = next(iter(_sited or _any_primary or turn.issue_mentions))
     label = (primary.label or "").strip().rstrip(".")
     if label and len(label) > 4:
         return f"Поняла вас. {label[0].upper() + label[1:]} — зафиксировала."
@@ -572,6 +673,68 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             action="control",
             control=turn.control,
         )
+
+    # Reluctance: client signals they are done — warm early close with what
+    # is recorded, instead of squeezing (never on URGENT path).
+    # ADR-014 exception, flagged: IMVERA_COVERAGE_LADDER=1.
+    # First: a first answer that contributed NOTHING (no fill, no facts,
+    # no mentions — «Непонятно.», debris) must clarify wellness itself,
+    # never slide into the ladder with health unknown (live fs-d99db688).
+    # Once per call, pilot-flagged.
+    if (
+        turn is not None
+        and state.check_path != CheckPath.URGENT
+        and not _has_open_episodes(state)
+        and state.slots.get("wellness") == SlotStatus.OPEN
+        and state.first_user_turn_received
+        and not state.wellness_clarify_asked
+        and not turn.issue_mentions
+        and not turn.goal_facts
+        and not turn.user_question
+        and turn.control in ("none", "")
+    ):
+        from packages.dialogue_engine.runtime import coverage_ladder_enabled as _ladder
+
+        if _ladder():
+            state.wellness_clarify_asked = True
+            return ResponsePlan(
+                obligation=ConversationObligation.NEVER_SILENT,
+                action="speak",
+                mandatory_question=(
+                    "Простите, не расслышала. Как вы себя чувствуете — "
+                    "хорошо или не очень?"
+                ),
+                intent="clarify_wellness",
+                slot="wellness",
+                marks_question=True,
+            )
+    if turn is not None and state.check_path != CheckPath.URGENT:
+        from packages.dialogue_engine.reluctance import note_reluctance, wants_early_close
+        from packages.dialogue_engine.runtime import coverage_ladder_enabled
+
+        note_reluctance(
+            state,
+            turn,
+            answer_slot=state.answer_context_slot(),
+            cooperative_fill=bool(filled),
+        )
+        # Never soothe-close while clarifying red («Отстань» on «умираю»
+        # escalates via the probe ladder, not a warm summary).
+        if state.red_state_pending:
+            pass
+        elif (
+            coverage_ladder_enabled()
+            and wants_early_close(state)
+            and not _has_open_episodes(state)
+        ):
+            return _summary_plan(state)
+        elif (
+            coverage_ladder_enabled()
+            and wants_early_close(state)
+            and state.reluctance_score >= 10
+        ):
+            # Explicit finish-now: close even with open threads, facts kept.
+            return _summary_plan(state)
 
     if turn and turn.user_question and not turn.answers_pending_question:
         suspend = capture_suspended_obligation(state)
@@ -658,10 +821,9 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 break
             if next_q.slot and not can_ask_slot(state, next_q.slot):
                 # Exhausted episode probe — skip attribute, never hang up mid-call.
+                # Never fabricate values ("unknown" is not an answer).
                 ep = get_active_episode(state)
-                attr = state.pending_episode_attribute
-                if ep is not None and attr:
-                    ep.known_attributes.setdefault(attr, "unknown")
+                if ep is not None:
                     finalize_episode_if_complete(ep)
                 state.pending_episode_attribute = None
                 if ep is not None and episode_complete(ep):
@@ -675,11 +837,62 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
     if turn and turn.dialogue_act == "backchannel":
         return ResponsePlan(action="none")
 
-    if state.check_path == CheckPath.URGENT:
+    if state.check_path == CheckPath.URGENT and not state.red_state_pending:
         return ResponsePlan(
             obligation=ConversationObligation.SAFETY,
             action="close_urgent",
         )
+
+    # Coverage filler answers are fact-checks: any substantive reply
+    # (yes/no included) covers the domain and is recorded verbatim.
+    # Acute content (symptoms/questions/controls) takes over instead.
+    # Debris («поэтому», «со мной замуж») is NEVER recorded as coverage:
+    # one re-ask of the same domain, then move on uncovered (live fs-5324e8b6
+    # slid down the ladder on garbage). Medication screener is conditional:
+    # no_meds/already_took close the domain at once; takes_meds earns ONE
+    # «сегодня приняли?» followup.
+    if state.pending_coverage_domain and turn is not None:
+        _pcd = state.pending_coverage_domain
+        if (
+            turn.issue_mentions
+            or turn.user_question
+            or turn.control not in ("none", "")
+            or turn.correction
+        ):
+            state.pending_coverage_domain = None
+        elif turn.dialogue_act != "repair" and (turn.raw_text or "").strip():
+            # Domain understanding first (medication screen knows «не каждый
+            # день» is meaningful), debris detection only for the rest.
+            if _pcd == "medication" and not state.medication_asked:
+                from packages.dialogue_engine.coverage import classify_medication_screen
+
+                _screen = classify_medication_screen(turn.raw_text)
+                if _screen == "takes_meds":
+                    state.medication_asked = True
+                    return ResponsePlan(
+                        obligation=ConversationObligation.BACKGROUND_GOAL,
+                        action="speak",
+                        mandatory_question=_medication_today_text(state),
+                        intent="background_medication_today",
+                        slot="background_medication",
+                        marks_question=True,
+                    )
+                if _screen in ("no_meds", "already_took", "refused"):
+                    # refused (spec 9): topic dropped, no re-ask, move on.
+                    state.observations[f"coverage_{_pcd}"] = turn.raw_text.strip()
+                    state.pending_coverage_domain = None
+                elif _is_coverage_debris(turn, _pcd):
+                    state.pending_coverage_domain = None
+                else:
+                    state.observations[f"coverage_{_pcd}"] = turn.raw_text.strip()
+                    state.pending_coverage_domain = None
+            elif _is_coverage_debris(turn, _pcd):
+                # Debris is NEVER recorded as coverage: drop pending and move
+                # on uncovered (strict asked-once, no nagging repeats).
+                state.pending_coverage_domain = None
+            else:
+                state.observations[f"coverage_{_pcd}"] = turn.raw_text.strip()
+                state.pending_coverage_domain = None
 
     probe = _probe_plan(state, clarify=clarify)
     if probe:
@@ -734,6 +947,21 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     )
                 return _summary_plan(state)
             _record_important_share(state, raw)
+            # Frozen MEDICATION family: mention → one status_today followup
+            # (pack text exists). Do not swallow into summary/partial.
+            if _mentions_medication(raw or "") and not state.medication_asked:
+                state.medication_asked = True
+                return ResponsePlan(
+                    obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
+                    action="speak",
+                    mandatory_question=(
+                        "Поняла. Вы сегодня приняли лекарство, "
+                        "которое обычно должны принять?"
+                    ),
+                    intent="medication_status_today",
+                    slot="important_to_share",
+                    marks_question=True,
+                )
             if state.mandatory_background_goals:
                 bg = _background_goal_plan(state, filled=filled)
                 if bg:
@@ -749,6 +977,133 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 slot="important_to_share",
                 marks_question=True,
             )
+
+    # Safety net (path-independent): negative wellness with no concern on
+    # record and nothing acute open MUST probe the concern first — routine
+    # ladder (meds/food) may never precede it (live fs-5324e8b6 asked meds
+    # right after «Плохо.»). Ladder: probe → options → urgent-unspecified.
+    # A twice-vague critical caller escalates with concern unknown (never a
+    # «не получилось узнать» partial on red). Runs also on URGENT check path
+    # while red_state_pending (clarifying WHAT before the close).
+    if not _has_open_episodes(state) and not state.important_to_share_asked:
+        _concern_bits = " ".join(
+            x
+            for x in [
+                state.wellness_concern or "",
+                state.observations.get("important_to_share") or "",
+            ]
+            if x
+        )
+        if _concern_bits.strip() and state.red_state_pending:
+            state.red_state_pending = False
+        # Movie/news defuse (live: «умираю» from a film): strong non-medical
+        # context + no symptom anywhere → not a medical red. Clear pending,
+        # note the mood, rejoin the normal flow (asked, not assumed).
+        if state.red_state_pending and turn is not None and not _has_open_episodes(state):
+            from packages.dialogue_engine.coverage import _MOOD_MARKERS
+
+            _raw_low = (turn.raw_text or "").lower()
+            if re.search(
+                r"\b(фильм\w*|кино|передач\w*|сериал\w*|новост\w*)\b", _raw_low
+            ) and not turn.issue_mentions:
+                from packages.dialogue_engine.check_path import _PAIN
+
+                if not _PAIN.search(turn.raw_text or "") and not _MOOD_MARKERS.search(
+                    turn.raw_text or ""
+                ):
+                    _defuse_red_state(
+                        state, "defused-non-medical"
+                    )
+                elif _MOOD_MARKERS.search(turn.raw_text or ""):
+                    _defuse_red_state(state, "defused-mood")
+        # Read AFTER defuse (it may have withdrawn the red wellness record).
+        _well = state.slot_records.get("wellness")
+        # Red-state pending alone suffices: the cry itself («умираю») may
+        # carry no polarity entry, but WHAT is still unknown.
+        _negative_no_concern = (
+            _well is not None
+            and _well.polarity == "negative"
+            and not _concern_bits.strip()
+        ) or (state.red_state_pending and not _concern_bits.strip())
+        if _negative_no_concern and (
+            state.check_path != CheckPath.URGENT or state.red_state_pending
+        ):
+            if state.concern_probe_count >= 2:
+                # Twice vague on red — escalate unspecified, honestly marked.
+                state.observations["concern_status"] = "unspecified"
+                state.red_state_pending = False
+                return ResponsePlan(
+                    obligation=ConversationObligation.SAFETY,
+                    action="close_urgent",
+                )
+            if state.concern_probe_count == 1:
+                state.concern_probe_count = 2
+                return ResponsePlan(
+                    obligation=ConversationObligation.NEVER_SILENT,
+                    action="speak",
+                    mandatory_question=(
+                        "Скажите, что болит — голова, сердце, "
+                        "живот? Или что случилось?"
+                    ),
+                    intent="probe_concern_options",
+                    # slot=None: the per-slot reserve cap already spent two
+                    # wellness asks; this ladder is slot-independent anyway.
+                    slot=None,
+                    marks_question=True,
+                )
+            state.concern_probe_count = 1
+            return ResponsePlan(
+                obligation=ConversationObligation.NEVER_SILENT,
+                action="speak",
+                mandatory_question=questions.probe_question("concern"),
+                intent="probe_concern",
+                slot="wellness",
+                marks_question=True,
+            )
+
+    # Adaptive coverage (not a questionnaire): when nothing acute is open
+    # but the minimum (3 exchanges / 3 domains) is unmet, ask ONE next
+    # uncovered baseline domain — volunteered topics are never re-asked,
+    # declined ones are never repeated. Tired clients skip straight to ITS.
+    # ADR-014 exception, flagged: IMVERA_COVERAGE_LADDER=1 (default frozen).
+    if (
+        not _has_open_episodes(state)
+        and state.check_path != CheckPath.URGENT
+        and state.reluctance_score < 2
+        and not state.red_state_pending
+    ):
+        from packages.dialogue_engine.coverage import (
+            coverage_met,
+            domain_question,
+            next_uncovered_domain,
+        )
+        from packages.dialogue_engine.product import call_cap_reached
+        from packages.dialogue_engine.runtime import coverage_ladder_enabled
+
+        if (
+            coverage_ladder_enabled()
+            and not coverage_met(state)
+            and not call_cap_reached(state)
+        ):
+            # No re-ask of debris: garbage moves on uncovered (asked-once is
+            # strict — repeats are nagging, live fe57cba6/e2c73edf/780904ae).
+            # Repair («Что?») still re-speaks via _speak_repair, not here.
+            _domain = next_uncovered_domain(state)
+            if _domain is not None:
+                import zlib
+
+                state.coverage_asked_domains.add(_domain)
+                state.pending_coverage_domain = _domain
+                _variant = zlib.crc32((state.call_id or "").encode()) % 2
+                _text, _intent, _slot = domain_question(_domain, variant=_variant)
+                return ResponsePlan(
+                    obligation=ConversationObligation.BACKGROUND_GOAL,
+                    action="speak",
+                    mandatory_question=_text,
+                    intent=_intent,
+                    slot=_slot,
+                    marks_question=True,
+                )
 
     its = _important_to_share_plan(state)
     if its:
@@ -792,11 +1147,76 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
     """
     from packages.dialogue_engine.decision_router import route_schedule_next_action
 
-    return route_schedule_next_action(
+    plan = route_schedule_next_action(
         state,
         turn_context,
         legacy=_schedule_next_action_legacy,
     )
+    # «А что ты спрашивал?» — answer with the last asked question, then
+    # continue the plan (never steamroll a question-back into summary).
+    # Topic-aware: «...про лекарства?» quotes the meds question, not just
+    # the latest one (live 6298a1a3).
+    turn = turn_context.turn
+    if (
+        plan.action == "speak"
+        and turn is not None
+        and turn.user_question
+        and _asks_what_was_asked(turn.user_question)
+        and state.asked_history
+    ):
+        plan.answer_user_question = (
+            f"Я спрашивала: «{_history_about(state, turn.user_question)}»."
+        )
+    return plan
+
+
+def _defuse_red_state(state: EngineState, marker: str) -> None:
+    """Roll back a false red alarm (movie/news context, investigated).
+
+    The red cry referred to fiction, not health: clear pending, downgrade
+    the check path, and withdraw the poisoned wellness record (explicitly
+    marked, never silently). Without this, every later close escalates on
+    stale «умираю» evidence.
+    """
+    from packages.contracts.enums import SlotStatus
+
+    state.red_state_pending = False
+    state.observations["concern_status"] = marker
+    state.check_path = CheckPath.STANDARD
+    state.slots["wellness"] = SlotStatus.OPEN
+    state.slot_records.pop("wellness", None)
+    state.slot_values.pop("wellness", None)
+
+
+_TOPIC_HINTS = (
+    (("лекарств", "таблет", "препарат"), ("лекарств", "таблет", "приняли", "принимаете")),
+    (("поесть", "покушать", "попить", "еда", "аппетит"), ("поесть", "покушать", "попить")),
+    (("спал", "сон", "выспал"), ("спал", "спали", "выспал")),
+    (("настроен", "тревожит", "беспокоит"), ("настроен", "тревожит")),
+)
+
+
+def _history_about(state: EngineState, user_question: str) -> str:
+    low = (user_question or "").lower()
+    for synonyms, markers in _TOPIC_HINTS:
+        if any(s in low for s in synonyms):
+            for past in reversed(state.asked_history):
+                pl = past.lower()
+                if any(m in pl for m in markers):
+                    return past
+    return state.asked_history[-1]
+
+
+_ASKED_ABOUT_ASKED = re.compile(
+    r"(что\s+ты\s+спрашивал\w*|что\s+вы\s+спрашивали|"
+    r"о\s+ч[её]м\s+ты\s+спрашивал\w*|что\s+ты\s+сейчас\s+спросил\w*|"
+    r"что\s+за\s+вопрос)",
+    re.I,
+)
+
+
+def _asks_what_was_asked(user_question: str) -> bool:
+    return bool(_ASKED_ABOUT_ASKED.search(user_question or ""))
 
 
 def resume_episode_obligation(state: EngineState) -> PolicyDecision | None:

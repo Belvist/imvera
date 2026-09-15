@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState
 
 _PAIN = re.compile(
-    r"\b(болит|боль|болел\w*|болела|голова|головн\w*|живот|спина|сустав|"
+    r"\b(болит|боль|болел\w*|болела|приболел\w*|заболел\w*|разболел\w*|поболел\w*|побалива\w*|поныва\w*|прихватило|схватило|вступило|голова|головн\w*|живот|спина|сустав|"
     r"давлен\w*|температур\w*|кашел\w*|тошн\w*|слабост\w*|одышк\w*)\b",
     re.I,
 )
@@ -22,15 +22,25 @@ _SYMPTOM_DETAIL = re.compile(
     re.I,
 )
 _URGENT = re.compile(
-    r"\b(скор\w*|срочн\w*|помогите|спасите|не\s+могу\s+дышать|"
-    r"кровь|потеря\w*\s+сознан|очень\s+сильн\w*|ужасн\w*\s+боль|"
-    r"вызов\w*\s+скор\w*|инфаркт|инсульт|сердечн\w*\s+приступ)\b",
+    r"\b(скор(ую|ая|ой)\b|срочн\w*|помогите|спасите|не\s+могу\s+дышать|"
+    r"задыха\w*|удуш\w*|"
+    r"кровь|потеря\w*\s+сознан|теря\w*\s+сознан|"
+    r"упал\w*|падаю|падают|не\s+могу\s+встать|"
+    r"умира\w*|умр\w*|"
+    r"очень\s+сильн\w*|ужасн\w*\s+боль|"
+    r"вызов\w*\s+скор\w*|вызови(те)?\s+скор\w*|инфаркт|инсульт|"
+    r"сердечн\w*\s+приступ|сердц\w*\s+давит|давит\w*\s+сердц\w*|"
+    r"бол\w*\s+в\s+груд\w*)\b",
     re.I,
 )
 _DURATION_HINT = re.compile(
-    r"\b(давно|дня|дней|недел|месяц|час|утр|вчера|сегодня|"
+    r"\b(давно|раньше|дня|дней|недел|месяц|час|утр|вчера|сегодня|"
+    r"сейчас|уже|назад|только\s+что|"
+    r"понедельн\w*|вторник\w*|сред\w*|четверг\w*|пятниц\w*|суббот\w*|воскресен\w*|"
     r"второй\s+день|третий\s+день|пару\s+дней|несколько|с\s+утра|"
-    r"уже\s+\w+\s+дн)\b",
+    r"уже\s+\w+\s+дн|\b\d{1,2}:\d{2}\b|"
+    r"(в|на|к|с)\s+(час|два|две|три|четыре|пять|шесть|семь|восемь|девять|десять|"
+    r"одиннадцать|двенадцать)(\s+(часов|часа|утра|дня|вечера|ночи))?)\b",
     re.I,
 )
 _SYMPTOM_HEAD = re.compile(r"\b(голов\w*|головн\w*\s+бол\w*)\b", re.I)
@@ -90,8 +100,66 @@ def wellness_already_describes_concern(text: str) -> bool:
     return has_symptom_detail(normalized)
 
 
+# Phonetic tolerance for the safety lexicon (STT slurs vowels/nasals:
+# «умираю»→«унираю»/«умилаю»). Rule: FIRST letter literal (onsets are
+# reliable; fuzzifying it matches «вода» for «пада»), the tail uses
+# confusion classes. Short stems keep \b anchors against «задание».
+_FUZZ = {
+    "м": "[мн]", "н": "[мн]",
+    "о": "[оа]", "а": "[оа]",
+    "и": "[иеы]", "е": "[иеы]", "ы": "[иеы]",
+    "г": "[гк]", "к": "[гк]", "д": "[дт]", "т": "[дт]",
+    "б": "[бп]", "п": "[бп]", "в": "[вф]", "ф": "[вф]",
+    "з": "[зс]", "с": "[зс]", "ж": "[жш]", "ш": "[жш]",
+    "р": "[рл]", "л": "[рл]",
+}
+
+
+def _fz(word: str) -> str:
+    """First letter literal + confusion classes for the tail."""
+    return word[0] + "".join(_FUZZ.get(c, c) for c in word[1:])
+
+
+# Immediate red action — never clarify first (falling, choking, blood,
+# explicit help call, chest pain/pressure, can't get up, stroke/heart signs).
+# Stems are truncation-tolerant (STT cuts «задыхаюсь»→«зады.»): short
+# distinctive prefixes included deliberately; the set stays semantic
+# (fall/choke/die/blood/help), never generic pain.
+_URGENT_ACTION = re.compile(
+    r"\b(скор(ую|ая|ой)\b|срочн\w*|помогите|спасите|не\s+могу\s+дышать|"
+    + _fz("задыха")
+    + r"\w*|зад[аы]\b|удуш\w*|"
+    r"кровь|кро[вф]ь|потеря\w*\s+сознан|теря\w*\s+сознан|"
+    r"упал\w*|упан\w*|упа[рл]\w*|пада\w*|пад[ао]\b|\bпад\b|не\s+могу\s+встать|"
+    r"вызов\w*\s+скор\w*|вызови(те)?\s+скор\w*|инфаркт|инсульт|"
+    r"сердечн\w*\s+приступ|сердц\w*\s+давит|давит\w*\s+сердц\w*|"
+    r"бол\w*\s+в\s+груд\w*)\b",
+    re.I,
+)
+# Red state without a concrete complaint («умираю», «мне конец», «ужасно») —
+# clarify WHAT happened first, then escalate (asked, never assumed).
+_URGENT_STATE = re.compile(
+    r"\b("
+    + _fz("умира")
+    + r"\w*|умир\w*|у[мн][иеы]р\b|\bуми\b|умр\w*|помираю|мне\s+конец|очень\s+плохо|"
+    r"очень\s+сильн\w*|ужасн\w*(\s+боль)?|кошмар\w*|мне\s+плохо\s+совсем)\b",
+    re.I,
+)
+
+
 def is_urgent_concern(text: str) -> bool:
-    return bool(_URGENT.search(text or ""))
+    """Any red signal (action or state) — compatibility entry point."""
+    return is_urgent_action(text) or is_urgent_state(text)
+
+
+def is_urgent_action(text: str) -> bool:
+    return bool(_URGENT_ACTION.search(text or ""))
+
+
+def is_urgent_state(text: str) -> bool:
+    if is_urgent_action(text):
+        return False
+    return bool(_URGENT_STATE.search(text or ""))
 
 
 def looks_like_duration_answer(text: str) -> bool:
@@ -232,6 +300,13 @@ def _probe_duration(state: EngineState, text: str) -> ProbeStep:
 
 
 def _probe_pain_night(state: EngineState, text: str) -> ProbeStep:
+    from packages.dialogue_engine.state import CheckPath
+
+    # Emergency verbs hijack any probe phase — never ask plans on red signal.
+    if is_urgent_concern(text) or is_urgent_concern(state.wellness_concern):
+        state.check_path = CheckPath.URGENT
+        state.probe_phase = None
+        return ProbeStep(action=ProbeAction.URGENT_CLOSE)
     state.pain_at_night = text
     state.probe_phase = None
     return ProbeStep(action=ProbeAction.SPEAK_PLANS)

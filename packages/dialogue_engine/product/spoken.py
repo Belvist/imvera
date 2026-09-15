@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from packages.dialogue_engine.state import IssueEpisode
 
 IMPORTANT_TO_SHARE_QUESTION = (
-    "Хорошо. Есть ли сейчас ещё что-то важное в вашем самочувствии "
+    "Поняла вас. Есть ли сейчас ещё что-то важное в вашем самочувствии "
     "или дома, на что мне стоит обратить внимание?"
 )
 

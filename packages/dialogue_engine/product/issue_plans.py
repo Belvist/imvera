@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -28,6 +29,10 @@ class ProductFamily(StrEnum):
     MOOD = "mood"
     MEDICATION = "medication"
     OTHER = "other"
+    # Health-kind symptom without a dedicated family (e.g. throat): generic
+    # temporal plan. Must NOT fall into OTHER/needs_help-only — temporal
+    # reference answers ("это вчера началось") belong on onset/duration.
+    GENERIC_SYMPTOM = "generic_symptom"
 
 
 # Ordered dimensions to ask (skip when already known / unknown / resolved).
@@ -43,6 +48,7 @@ FAMILY_PLANS: dict[ProductFamily, tuple[str, ...]] = {
     ProductFamily.MOOD: ("intensity", "social_context"),
     ProductFamily.MEDICATION: ("status_today",),
     ProductFamily.OTHER: ("needs_help",),
+    ProductFamily.GENERIC_SYMPTOM: ("onset", "current"),
 }
 
 
@@ -90,10 +96,19 @@ def classify_episode_family(ep: IssueEpisode) -> ProductFamily:
         return ProductFamily.LIMB_PAIN
     if any(x in label for x in ("таблет", "лекар", "препарат")):
         return ProductFamily.MEDICATION
-    if any(x in label for x in ("ел", "ела", "пил", "пила", "аппетит", "голод", "есть")):
+    # Food intake cues must be word-shaped («поел», «аппетит»), never raw
+    # substrings: «приболело» contains «ело» and is pain, not food
+    # (live fs-fe48f985: throat episode misrouted to nutrition intake).
+    if re.search(
+        r"\b(поел\w*|поела|покушал\w*|пообедал\w*|поужинал\w*|позавтракал\w*|"
+        r"попил\w*|аппетит\w*|голод\w*|есть\s+не\s+могу|не\s+ем)\b",
+        label,
+    ):
         return ProductFamily.NUTRITION
     if any(x in label for x in ("груст", "одинок", "тревож", "настроен")):
         return ProductFamily.MOOD
     if kind == "other":
         return ProductFamily.OTHER
-    return ProductFamily.OTHER
+    # Health-kind episode (symptom, etc.) with no dedicated family:
+    # generic symptom plan, never needs_help-only.
+    return ProductFamily.GENERIC_SYMPTOM

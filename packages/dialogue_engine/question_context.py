@@ -104,6 +104,13 @@ def episode_is_resolved(ep: IssueEpisode) -> bool:
         return True
     current = ep.known_attributes.get("current")
     if current and current_value_indicates_resolved(str(current)):
+        # Inferred «improving» (past marker, now unknown) resolves only
+        # AFTER the episode was actually asked once — a never-asked past
+        # pain earns ONE current check (spec scenario 12), never burial.
+        if str(current).strip().lower() == "improving" and not any(
+            k.startswith("_product_asked:") for k in ep.known_attributes
+        ):
+            return False
         return True
     return False
 
@@ -134,11 +141,15 @@ def episode_obligations_satisfied(ep: IssueEpisode) -> bool:
             return False
         label = ep.primary_label.lower()
         # Headache: current/trend is required before severity (MVP severity_trend).
-        if "голов" in label and not attribute_need_satisfied(ep, "current"):
+        # «improving» is an inference, not an answer — it must NOT satisfy
+        # the current obligation (spec 12: one «сейчас ещё беспокоит?» check).
+        _cur = ep.known_attributes.get("current")
+        _cur_real = bool(_cur) and _cur != "improving"
+        if "голов" in label and not _cur_real:
             return False
         if _needs_severity(ep) and "severity" not in ep.known_attributes:
             return False
-        if ep.body_site == "живот" and "current" not in ep.known_attributes:
+        if ep.body_site == "живот" and not _cur_real:
             return False
         return True
     if ep.kind == "other":

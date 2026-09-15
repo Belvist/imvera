@@ -142,6 +142,9 @@ class SuspendedObligation(BaseModel):
 class EngineState(BaseModel):
     call_id: str
     elder_display_name: str = "Анной Петровной"
+    # Stable client key for per-client phrase memory (caller number / elder
+    # id from telephony). "" = unknown → memory disabled (call-scoped).
+    client_id: str = ""
     revision: int = 0
 
     fsm_state: FsmState = FsmState.CALL_START
@@ -229,6 +232,27 @@ class EngineState(BaseModel):
     )
     important_to_share_asked: bool = False
     important_to_share_resolved: bool = False
+    # Frozen MEDICATION followup asked once per call (pack status_today).
+    medication_asked: bool = False
+    # Reluctance: client signals they are done (short answers, irritation,
+    # explicit finish). >=3 → warm early close instead of squeezing.
+    reluctance_score: int = 0
+    # Coverage filler domains already asked once (never re-ask declined).
+    coverage_asked_domains: set[str] = Field(default_factory=set)
+    # Baseline filler awaiting an answer (medication/nutrition/mood/sleep).
+    pending_coverage_domain: str | None = None
+    # Coverage domains already re-asked once after debris (no third ask).
+    coverage_reasked_domains: set[str] = Field(default_factory=set)
+    # Asked-question history (spoken question texts, cap 20) — answers
+    # «а что ты спрашивал?» and never-repeat audits. Not state for logic.
+    asked_history: list[str] = Field(default_factory=list)
+    # Wellness clarify asked once after a mute/garbled first answer.
+    wellness_clarify_asked: bool = False
+    # Red state («умираю» without a site): concern still being clarified —
+    # escalate after the second vague answer even with nothing concrete.
+    red_state_pending: bool = False
+    # Concern probes asked on negative wellness without complaint.
+    concern_probe_count: int = 0
     # Proposed by scheduler; committed only after PlayoutCompleted.
     important_to_share_planned: bool = False
     pending_resume_goal_id: str | None = None

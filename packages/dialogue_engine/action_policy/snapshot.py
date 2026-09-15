@@ -203,12 +203,6 @@ class PolicySnapshot:
             return False
         if all(ep.resolving for ep in owned):
             return True
-        if need_value.has_hard_blocking_episode_work(self, ctx=ctx):
-            return need_value.transition_preferred(
-                self,
-                answer_pending=ctx.answers_pending_question,
-                ctx=ctx,
-            )
         currently_askable = any(
             need_value.need_is_currently_askable(self, ep, need, ctx=ctx)
             for ep in self.episode_decision_queue()
@@ -216,6 +210,17 @@ class PolicySnapshot:
         )
         if not currently_askable:
             return True
+        # Fresh speaker issue this turn: probe it before any transition.
+        # (Mirrors the ITS hard block on new speaker issues — transitioning
+        # while a brand-new episode is unprobed drops the lead, fs-1f6d3000.)
+        if ctx.has_new_speaker_issue:
+            return False
+        if need_value.has_hard_blocking_episode_work(self, ctx=ctx):
+            return need_value.transition_preferred(
+                self,
+                answer_pending=ctx.answers_pending_question,
+                ctx=ctx,
+            )
         return need_value.transition_preferred(
             self,
             answer_pending=ctx.answers_pending_question,

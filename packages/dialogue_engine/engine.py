@@ -45,6 +45,7 @@ class DialogueEngine:
         *,
         call_id: str,
         elder_display_name: str = "Анной Петровной",
+        client_id: str = "",
         prior_call_context: dict[str, str] | None = None,
         mission: CallMission | None = None,
         mission_understanding_provider: object | None = None,
@@ -55,6 +56,7 @@ class DialogueEngine:
         self.state = EngineState(
             call_id=call_id,
             elder_display_name=elder_display_name,
+            client_id=client_id,
             prior_call_context=dict(prior_call_context or {}),
             follow_up_opening=bool(prior_call_context),
         )

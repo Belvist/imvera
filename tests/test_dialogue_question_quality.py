@@ -23,7 +23,7 @@ def _vera(r: ScenarioRunner) -> list[tuple[str, str]]:
 
 
 def test_active_headache_no_double_current_ask() -> None:
-    """«Голова болит» → когда → severity → associated; never compound «а сейчас»."""
+    """«Голова болит» → когда → severity → ITS → summary; never compound «а сейчас»."""
     r = _runner()
     r.run(
         [
@@ -42,7 +42,10 @@ def test_active_headache_no_double_current_ask() -> None:
         "давно" in t.lower() or "когда" in t.lower() for _, t in _vera(r)
     )
     assert "episode_headache_severity" in intents
-    assert "episode_headache_associated" in intents
+    # Frozen contract: unmentioned associated symptoms are not probed.
+    assert "episode_headache_associated" not in intents
+    assert "important_to_share" in intents
+    assert "summary" in intents
     ep = next(iter(r.state.issue_episodes.values()))
     assert ep.known_attributes.get("current") == "active"
     assert ep.status == "resolved" or r.state.call_closed or r.state.important_to_share_asked

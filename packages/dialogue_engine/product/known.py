@@ -81,7 +81,11 @@ def severity_known_on_episode(ep: IssueEpisode) -> bool:
 
 
 def current_known_on_episode(ep: IssueEpisode) -> bool:
-    return _meaningful(_attr(ep, "current"))
+    # Inferred «improving» is not knowledge — one real current check owed.
+    val = _attr(ep, "current")
+    if isinstance(val, str) and val.strip().lower() == "improving":
+        return False
+    return _meaningful(val)
 
 
 def nausea_mentioned_on_episode(ep: IssueEpisode) -> bool:

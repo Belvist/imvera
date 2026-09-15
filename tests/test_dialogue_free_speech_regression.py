@@ -124,18 +124,11 @@ def test_abdominal_resolved_single_episode_preserves_onset() -> None:
 def test_headache_severity_completes_episode() -> None:
     runner = _runner()
     runner.run([CallStarted(), "Голова болит.", "С утра."])
-    runner.run(["Ещё болит."])  # may be ignored if asking severity
-    result = runner.run(["Терпимая.", "Ничего больше.", "Нет."])
+    result = runner.run(["Терпимая."])
     ep = _headache_episode(result.state)
     assert ep is not None
-    assert (
-        ep.status == "resolved"
-        or result.state.important_to_share_asked
-        or result.state.call_closed
-    )
-    assert (ep.known_attributes.get("severity") or "").startswith("Терпимая") or (
-        "episode_headache_severity" in [e.intent for e in runner.effects if getattr(e, "intent", None)]
-    )
+    assert ep.status == "resolved"
+    assert ep.known_attributes.get("severity", "").startswith("Терпимая")
 
 
 def test_correction_not_dumb_repeat() -> None:

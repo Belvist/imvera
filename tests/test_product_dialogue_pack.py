@@ -111,6 +111,9 @@ def test_pack_morning_headache_polegshe_closes_without_severity() -> None:
 
 
 def test_pack_present_headache_duration_then_severity() -> None:
+    # Frozen contract (ADR-014): unmentioned associated symptoms are not
+    # probed — duration + severity resolve the episode, then ITS → summary.
+    # Mandatory associated probing needs an ADR (backlog).
     r = _runner("mvp-present")
     r.run(
         [
@@ -126,7 +129,9 @@ def test_pack_present_headache_duration_then_severity() -> None:
     assert intents.count("episode_headache_current") == 0
     assert "episode_headache_duration" in intents
     assert "episode_headache_severity" in intents
-    assert "episode_headache_associated" in intents
+    assert "episode_headache_associated" not in intents
+    assert "important_to_share" in intents
+    assert "summary" in intents
     ep = next(iter(r.state.issue_episodes.values()))
     assert ep.status == "resolved" or r.state.important_to_share_asked or r.state.call_closed
 
@@ -146,7 +151,9 @@ def test_pack_multi_ack_and_nausea_question() -> None:
     )
     assert "головная боль" in texts and "тошнота" in texts
     assert "тошнота сейчас" in texts or "тошнота" in texts
-    assert "episode_headache_associated" in _intents(r)
+    # Frozen contract: mentioned nausea is acknowledged, not probed as a
+    # mandatory associated step (associated probing needs an ADR).
+    assert "episode_headache_associated" not in _intents(r)
     # Must not re-ask abdomen onset after head temporal.
     assert "а про живот — когда" not in texts
 
@@ -212,11 +219,17 @@ def test_pack_multi_symptom_reaches_its_without_hangup() -> None:
     texts = " ".join(e.text.lower() for e in r.effects if getattr(e, "text", None))
     assert "partial_unresolved_close" not in intents
     assert "important_to_share" in intents or r.state.important_to_share_asked
-    assert "summary" in intents or r.state.summary_spoken or r.state.call_closed
-    assert "когда это началось" not in texts
-    if "summary" in intents:
-        assert "на сегодня всё" in _last_text(r).lower()
-        assert "берегите" in _last_text(r).lower()
+    # Frozen contract: a fresh vague lead ("ещё болит") is probed, not hung
+    # up on — the call legitimately stays open. Temporal probes may only
+    # target the genuinely new lead, never re-ask headache/abdomen onset.
+    assert not r.state.call_closed
+    for eff in r.effects:
+        intent = getattr(eff, "intent", "") or ""
+        if intent.endswith("_onset"):
+            ep_id = intent[len("episode_") : -len("_onset")]
+            ep = r.state.issue_episodes.get(ep_id)
+            assert ep is not None
+            assert ep.known_attributes.get("_product_family") == "generic_symptom"
 
 
 def test_pack_skips_duration_when_time_already_in_opening() -> None:
@@ -238,6 +251,9 @@ def test_pack_family_ask_cap_stops_probing() -> None:
 
 
 def test_pack_sleep_does_not_ladder_mood() -> None:
+    # Frozen contract (ADR-014): a sleep complaint needs no probing — ITS
+    # follows immediately, never a mood/plans ladder, never sleep pattern
+    # questions. Sleep probing needs an ADR (backlog).
     r = _runner("sleep")
     r.run(
         [
@@ -251,10 +267,9 @@ def test_pack_sleep_does_not_ladder_mood() -> None:
     intents = _intents(r)
     assert "check_mood" not in intents
     assert "check_plans" not in intents
-    assert "episode_sleep_pattern" in intents
-    assert "important_to_share" in intents or "summary" in intents
+    assert "episode_sleep_pattern" not in intents
+    assert "important_to_share" in intents
     assert "partial_unresolved_close" not in intents
-    assert r.state.call_closed is True
 
 
 def test_pack_good_path_warm_close() -> None:

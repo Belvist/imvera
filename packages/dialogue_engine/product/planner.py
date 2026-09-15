@@ -106,6 +106,11 @@ def _step_satisfied(state: EngineState, ep: IssueEpisode, family: ProductFamily,
     if episode_is_resolved(ep):
         return True
 
+    # Explicit refusal to date the symptom («дальше/пропусти»): temporal
+    # steps are done without a value — advance, never re-ask, never invent.
+    if step in ("onset", "duration") and ep.known_attributes.get("_temporal_skipped"):
+        return True
+
     # Do not re-ask what the caller already told us (or call-level temporal for abdomen).
     if step_already_known(state, ep, step, family=family.value):
         # associated: mentions alone are handled inside step_already_known as False
@@ -129,6 +134,10 @@ def _step_satisfied(state: EngineState, ep: IssueEpisode, family: ProductFamily,
     }:
         val = ep.known_attributes.get("current")
         if not val:
+            return False
+        # Inferred «improving» is not an answer: one real current check is
+        # still owed (spec 12) unless the step was already asked once.
+        if str(val) == "improving" and f"_product_asked:{step}" not in ep.known_attributes:
             return False
         if current_value_indicates_resolved(str(val)) or str(val) in {
             "resolved",
@@ -165,9 +174,18 @@ def _pending_unanswered(state: EngineState, ep: IssueEpisode, family: ProductFam
 
 def product_episode_complete(state: EngineState, ep: IssueEpisode) -> bool:
     """True when pack says stop probing this episode."""
-    from packages.dialogue_engine.question_context import episode_is_resolved
+    from packages.dialogue_engine.question_context import (
+        episode_is_resolved,
+        episode_obligations_satisfied,
+    )
 
     if episode_is_resolved(ep):
+        return True
+    # Frozen contract (ADR-014): obligations-satisfied means enough grounded
+    # facts — stop probing even if product plan steps remain. Product probing
+    # (associated, sleep pattern/daytime) beyond this point needs an ADR;
+    # it must not override the frozen completion gates.
+    if episode_obligations_satisfied(ep):
         return True
     family = _ensure_family(state, ep)
     if _pending_unanswered(state, ep, family):
