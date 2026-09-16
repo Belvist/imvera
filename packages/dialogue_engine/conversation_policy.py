@@ -1048,6 +1048,9 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         # Ambivalent/uncertain wellness that still names feeling bad
         # («нормально, но плохо», live fs-a1dca80c went to food!) counts as
         # negative for probing: polarity alone misses it on the live path.
+        # Uncertain-middle («более-менее», «так себе», «средне») names no
+        # disease but proves no absence of complaints → probe concern first,
+        # never the routine ladder.
         _bad_markers = re.search(
             r"(плох|бол|тошн|кружи|дурно|мутит|тяжел|скверно|отвратительн|"
             r"паршив|хреново|фигово|дерьмово|гнусно|мерзко|погано|кошмарно|"
@@ -1058,7 +1061,8 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             _well is not None
             and (
                 _well.polarity == "negative"
-                or (_well.polarity == "uncertain" and _bad_markers)
+                or _well.polarity == "uncertain"
+                or (_well.polarity is None and _bad_markers)
             )
             and not _concern_bits.strip()
             and not _declined
@@ -1268,18 +1272,22 @@ def _routine_ladder_allowed(state: EngineState) -> bool:
 
     The probe net above should intercept first, but live fs-e8164316 proved
     a path exists where it doesn't fire — this guard closes it regardless
-    of polarity bookkeeping on any entry path.
+    of polarity bookkeeping on any entry path. Closed by default: missing
+    record (garbage rejected, question still OPEN) never allows the ladder.
+    Uncertain-middle («более-менее») also blocks — it needs a concern probe.
     """
     if state.red_state_pending:
         return False
     _well = state.slot_records.get("wellness")
     if _well is None:
-        return True
+        return False
     if _well.polarity == "positive":
         return True
     if _well.polarity == "negative":
         return False
-    # Uncertain/None: allow only when the text carries no bad markers.
+    if _well.polarity == "uncertain":
+        return False
+    # None: allow only when the text carries no bad markers.
     _text = (
         _well.source_text or state.slot_values.get("wellness", "") or ""
     ).lower()

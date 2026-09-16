@@ -1,4 +1,228 @@
-# Current task — словарь умирает: approve-конвейер вместо дописывания (2026-09-15)
+# Current task — реальный soak: 100 звонков подряд + нагрузка (2026-09-15)
+
+**Outcome:** новый `tools/voice_lab/load_soak.py` (реактивный драйвер, 12 персон,
+CallSession+DialogueEngine, миссия+валидатор): 100/100 подряд, 0 исключений,
+p50 0.13мс / p95 0.25мс хода (текстовый путь; SLO 1000/2000 — с запасом ×100).
+Параллель 8×100: 100/100, p95 16мс. Аудио-петля настоящая: TTS→PCM→STT(gigaam)
+вернул текст 1-в-1, GOOD. STT — узкое место (p50 280мс x1 → 1057мс x4, 0 ошибок).
+
+## CHANGED
+
+- `tools/voice_lab/load_soak.py` (new): `--calls/--parallel/--run-id`,
+  артефакты `.run/load_soak/<id>/{summary.json,calls.jsonl}`.
+
+## VERIFIED
+
+```bash
+python3 tools/voice_lab/load_soak.py --calls 100            # 100/100, consec 100, p50 0.13ms p95 0.25ms
+python3 tools/voice_lab/load_soak.py --calls 100 --parallel 8  # 100/100, p95 16ms, 0 исключений
+python3 tools/voice_lab/parallel_load_probe.py --levels 1 2 4 # TTS p95 ≤118ms; STT p50 280→1057ms, 0×503
+# аудио-петля: TTS «Как вы себя чувствуете?» → STT text 1-в-1, GOOD, gigaam:v3
+```
+
+## NOT VERIFIED
+
+- SIP/телефония (gate 1): бинарник FS есть, процесс НЕ запущен, транка нет.
+  След: `make voice-up`, затем `make test-sip` (нужен Asterisk + Zoiper, звонок 7000).
+- Живой PSTN-звонок; barge-in по времени; полный e2e с аудиохвостами.
+- Предсущий спор corpus-gate `good-self_correction-00` («Плохо… хотя нет, хорошо»:
+  движок probe, корпус ждёт ITS — и на чистом HEAD так же; движок тут скорее прав
+  по уроку fs-a1dca80c; решение за владельцем ожиданий, гейт не ослаблял).
+
+## REMAINING RISKS
+
+- Холодный unpickle `slot_answer_clf` ~919мс один раз за процесс (замерено
+  изолированно) — съедает бюджет одного хода; warm 0.2мс. Рекомендация: греть
+  модель на старте бриджа.
+- RSS 23→189МБ разово (кэши; 10 и 100 звонков — одинаково, течи нет).
+- STT деградирует ×4 под параллелью — запас SLO тает на 8+ параллельных.
+
+## NEXT GATE
+
+- `make voice-up` + `make test-sip` (7000) руками; затем живой пилотный звонок.
+- Греть clf на старте (одна строка, отдельным ченджем).
+
+---
+
+# Previous — wellness учится без словаря: judge + tier-2 (2026-09-15)
+
+**Outcome:** новые формулировки больше не требуют правок кода. Граница
+answer/skip/garbage для `wellness` выучена в существующем `slot_answer_clf`
+(610 строк, GroupKFold mean=0.843, кривая 0.669→0.843 — растёт, данных ещё
+надо). Детерминизм — владелец якорей и полярности; модель — только второй
+ярус на промахах якорей, за тем же флагом. «Ни шатко ни валко / кое-как /
+помаленьку / более или менее» (не было ни в regex, ни в обучении частично) →
+probe без единого нового слова. «Не знаю» на wellness больше не закрывает
+слот (был тем же классом бага, починен тут же).
+
+## CHANGED
+
+- `train_slot_answer_clf.py` — слот `wellness`: ~50 SEED + preload
+  (answer/skip/garbage; «не знаю»=garbage для wellness, чужое-only=garbage);
+  интернет в веса НЕ пошёл (спайк: internet-only 0.43 — доменный сдвиг вредит).
+- `models/slot_answer_clf.pkl` — переобучена (gitignored-артефакт; на деплое
+  `python3 tools/voice_lab/train_slot_answer_clf.py`). Mean 0.843 (было 0.883
+  на 4 слотах — стало труднее, честно).
+- `deterministic_mission._free_text_value` — tier-2: промах якорей →
+  `judge("wellness")==answer` принимает свои слова; skip/garbage/abstain →
+  переспрос. Флаг выкл → judge=None → старое поведение.
+- `observation_memory` writer — polarity None + judge answer → `uncertain`
+  (только wellness; probe, никогда лесенка).
+- `contextual_interpreter` — `_UNCERTAIN` («не знаю») на wellness → UNCLEAR.
+- `add_quote.py` — `--slot` принимает `wellness` (конвейер открыт).
+- `tests/test_wellness_answer_judge.py` (24, с флагом внутри),
+  `tests/test_wellness_grounding.py` (11, таблица репортера end-to-end).
+
+## VERIFIED
+
+```bash
+pytest tests/test_wellness_answer_judge.py tests/test_wellness_grounding.py # 35 passed
+pytest tests/ # 1320 passed, 17 failed — те же 17 pre-existing a7f19fb
+fuzz --n 1000 --seed 7/42 (ladder) # 0 failures оба
+ambiguity_bench # acc=1.00; understanding_eval 3/0/1/0 == HEAD; ruff clean
+```
+
+## NOT VERIFIED
+
+- Живой звонок с этим билдом (бридж не перезапускался).
+- Новинка «бодрячком» → probe (безопасная перестраховка вместо еды; точнее
+  станет с полярностной головой — следующий шаг, не этот).
+- Деплой: pkl собирается локально, в git его нет — manuals step выше.
+
+## REMAINING RISKS / LESSONS
+
+- Дисциплина флагов: `test_issue_first_flows` написаны под выкл-флаг
+  (frozen-порядок ITS сразу); глобальный вкл-флаг «ломает» их и на чистом HEAD
+  (проверено матрицей) — это не регрессия. Пилотный порядок: positive →
+  лесенка → ITS позже (проверено 3 хода). Гейты гонять в условиях каждого теста.
+- Предобученный judge на незнакомом слоте отвечал answer всему (p 0.96 мусору)
+  — зафиксировано red-тестом до обучения; новым слотам — только с данными.
+
+## NEXT GATE
+
+- Звонок-пилот на этом билде + сбор 50–100 живых wellness-ответов в
+  LIVE_QUOTES через обновлённый `add_quote --slot wellness`.
+- Затем: полярностная голова (positive/negative/uncertain) вместо
+  fallback-uncertain.
+
+---
+
+# Previous — интернет + наши для wellness: замер покрытия (2026-09-15)
+
+**Outcome:** интернет даёт широту, но не закрывает наши средние и субъект.
+Без единого regex: общее (хорошо/плохо) покрыто везде, «так себе / ни шатко
+ни валко / средненько / у мужа плохо» — нули везде. Спайк-классификатор:
+internet-only held_acc=0.43, internet+ours=0.57 на 7 held-out uncertain.
+Вывод: смешивать да, но экзамен только на наших; mixed-субъект — отдельным
+слоем (срез клауз), не одной меткой.
+
+## CHANGED
+
+- Ничего в проде. Спайк только в `/tmp` + кэш HF. Репо-артефактов нет.
+
+## VERIFIED
+
+```bash
+# покрытие фраз (substrings, norm): rusentiment 21268, medterm 3049, paraphraser 14454 текста
+хорошо 199/12/2; плохо 105/49/17; более-менее 2/0/0; так себе 0/0/0
+ни шатко ни валко 0/0/0; средненько 0/0/0; у мужа плохо 0/0/0; абракадабра 0/0/0
+# спайк TF-IDF char_wb(3,5)+LogReg: internet 22456 → 0.43; +17 наших → 0.57 (7 held-out)
+```
+
+## NOT VERIFIED
+
+- Полное обучение wellness-judge, порог 0.6, карантин — не запускал.
+- Живой звонок; прод-билд не трогал.
+
+## REMAINING RISKS
+
+- Маппинг neutral→uncertain шумный; medterm тянет в negative («более-менее» → negative).
+- Mixed «у мужа плохо, а у меня более-менее» одной меткой не решается — нужен
+  срез клауз + per-clause полярность (у нас уже есть в детерминированном слое).
+
+## NEXT GATE
+
+- Собрать 50–100 наших ответов wellness с метками
+  positive/negative/uncertain/garbage + subject, прогнать understanding_eval
+  held-out. Только потом включать judge в прод-путь за флагом.
+
+---
+
+# Previous — разрыв «поняла→записала→следующий вопрос» закрыт на участке wellness (2026-09-15)
+
+**Outcome:** таблица репортера больше не воспроизводится. Один полный участок
+wellness доведён до обоснованного следующего действия: единая запись состояния,
+мусор не закрывает вопрос, uncertain-middle идёт в probe, субъект и контекст
+учитываются. Словарь не дописывался (только закрытый класс «более-менее» →
+uncertain).
+
+| Ответ на «Как вы себя чувствуете?» | Было (a7f19fb) | Стало |
+| ---------------------------------- | -------------- | ----- |
+| «по состоянию мне более-менее» | еда | «Что именно беспокоит?» (probe_concern) |
+| «мне так себе» | еда | «Что именно беспокоит?» |
+| «плохо» | еда | «Что именно беспокоит?» |
+| «абракадабра» | еда, слот FILLED | переспрос wellness, слот OPEN |
+| «хорошо» | еда | еда (positive, без изменений) |
+| «у мужа плохо» | ITS, слот OPEN* | переспрос wellness, слот OPEN, чужое не пишется в своё |
+| «у мужа плохо, а у меня более-менее» | еда целым текстом | probe, value «у меня более-менее» (speaker-only) |
+
+\* «у мужа плохо» раньше давало ITS из-за грязного goal_facts; теперь чисто.
+
+## CHANGED
+
+- `observation_memory._apply_mission_goal_answers` — пишет `slot_records[goal]`
+  с полярностью (`_detect_polarity`), иначе `slots FILLED / record None`
+  открывал лесенку (корень №2 репортера).
+- `deterministic_mission` — wellness free_text delivered: speaker-only срез
+  (`_wellness_speaker_text`), grounded-гейт (`_wellness_grounded`: полярность /
+  жалоба / факт), мусор → None (не закрывает); evidence = speaker-значение.
+- `fast_interpreter._detect_polarity` + `extract_goal_facts` — «более-менее» /
+  «более менее» → uncertain; «мне так себе» → uncertain-факт (единая запись).
+- `conversation_policy._routine_ladder_allowed` — `None → False` (закрыт по
+  умолчанию, как в докстринге «только явно positive»); `uncertain → False`.
+- `conversation_policy` safety-net — `negative/uncertain/None+bad` → probe
+  до лесенки (uncertain-middle тоже расследуется).
+- `contextual_interpreter` + `turn_understanding` + `issue_mention_extract` —
+  чужое-only не создаёт speaker-фактов; mixed оценивает speaker-клаузы.
+
+## VERIFIED
+
+```bash
+# таблица репортера + 3 краевых (см. Outcome) — ScenarioRunner + mission_seed
+IMVERA_COVERAGE_LADDER=1 pytest tests/test_critical_ladder.py tests/test_issue_first_flows.py tests/test_medication_neutral.py tests/test_subject_preservation.py -q # 40 passed
+python3 -m pytest tests/ -q -p no:cacheprovider # 1285 passed, 17 failed — те же 17 pre-existing чистого a7f19fb (проверено stash), регрессий 0
+IMVERA_COVERAGE_LADDER=1 python3 scripts/dialogue_behavior_fuzz.py --n 1000 --seed 7  # 0 failures
+IMVERA_COVERAGE_LADDER=1 python3 scripts/dialogue_behavior_fuzz.py --n 1000 --seed 42 # 0 failures
+python3 tools/voice_lab/ambiguity_bench.py # deterministic acc=1.00 p50=0.1ms
+ruff check 7 изменённых файлов # clean
+```
+
+## NOT VERIFIED
+
+- Живой звонок с этим билдом (бридж не перезапускался в этой сессии).
+- «не знаю» на wellness всё ещё закрывает слот и идёт в еду — так было и на
+  чистом a7f19fb (legacy `_UNCERTAIN → ANSWER uncertain`), оставлено вне скоупа,
+  чтобы не расширять замороженные ворота; отдельная задача.
+- ML-оценка понимания на held-out формулировках/контекстах (следующий шаг по
+  письму репортера: размеченные примеры → метрика, а не список слов).
+
+## REMAINING RISKS
+
+- Текст probe «Что именно беспокоит?» вместо предложенного «Есть что-то, что
+  сейчас беспокоит?» — интент тот же (`probe_concern`), формулировку можно
+  смягчить отдельно без логики.
+- «пойдёт» дополнительно ставит plans FILLED (было и до фикса) — план-утечка
+  вне wellness-скоупа, не трогал.
+
+## NEXT GATE
+
+- Ревьюер подтверждает probe-формулировку для uncertain-middle.
+- Затем: разметка новых разговоров → understanding_eval на неиспользованных
+  формулировках/контекстах (сон/боль/муж) как метрика понимания.
+
+---
+
+# Previous — словарь умирает: approve-конвейер вместо дописывания (2026-09-15)
 
 **Outcome:** ответ на «как заменить словарь»: закрытые классы — списки (конечны,
 это нормально), открытое понимание — граница + конвейер. Карантин теперь с

@@ -211,6 +211,16 @@ def interpret_structured(text: str, ctx: InterpretContext) -> StructuredMeaning:
 
     if _UNCERTAIN.match(core):
         slot = ctx.answer_slot or "wellness"
+        if slot == "wellness":
+            # "не знаю" is not a valid wellness answer (judge: garbage).
+            # Closing the entry slot on it slides to food without knowing
+            # anything — re-ask instead. Other slots keep skip semantics.
+            return StructuredMeaning(
+                act=SemanticAct.UNCLEAR.value,
+                answers_to=slot,
+                raw_text=raw,
+                confidence=0.2,
+            )
         return StructuredMeaning(
             act=SemanticAct.ANSWER.value,
             answers_to=slot,
@@ -218,6 +228,19 @@ def interpret_structured(text: str, ctx: InterpretContext) -> StructuredMeaning:
             raw_text=raw,
             confidence=0.92,
         )
+
+    try:
+        from packages.dialogue_engine.policy import _is_other_person_only as _other_only
+
+        if ctx.answer_slot in ("wellness", "mood", "sleep") and _other_only(raw):
+            return StructuredMeaning(
+                act=SemanticAct.UNCLEAR.value,
+                answers_to=ctx.answer_slot,
+                raw_text=raw,
+                confidence=0.2,
+            )
+    except Exception:  # noqa: BLE001
+        pass
 
     polarity = _detect_polarity(raw)
     if polarity and ctx.answer_slot:
@@ -376,6 +399,16 @@ def _extract_multi_slots(text: str, ctx: InterpretContext) -> dict[str, SlotCand
     normalized = text.lower()
     core = _normalize_core(text)
     slots: dict[str, SlotCandidate] = {}
+    try:
+        from packages.dialogue_engine.policy import _is_other_person_only
+
+        if _is_other_person_only(text):
+            # Someone else's complaint alone never fills speaker slots
+            # («у мужа плохо» ≠ speaker wellness). Mixed turns with speaker
+            # markers proceed; per-clause split is handled by callers.
+            return {}
+    except Exception:  # noqa: BLE001
+        pass
 
     if _WELLNESS_IN_TEXT.search(normalized) or (
         ctx.answer_slot == "wellness" and _detect_polarity(text)

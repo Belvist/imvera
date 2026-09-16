@@ -621,6 +621,52 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
         if ans.goal_id in state.slots:
             state.slots[ans.goal_id] = SlotStatus.FILLED
             state.slot_values[ans.goal_id] = ans.value
+            # Single coherent record: mission path must also write slot_records
+            # (policy reads polarity from it; slots FILLED without record
+            # previously opened the routine ladder on «плохо»/мусор).
+            try:
+                from packages.dialogue_engine.context import SlotValue
+                from packages.dialogue_engine.fast_interpreter import (
+                    _detect_polarity as _mission_polarity,
+                )
+
+                _prev = state.slot_records.get(ans.goal_id)
+                if _prev is not None and ans.is_correction:
+                    state.slot_corrections.append(
+                        {
+                            "slot": ans.goal_id,
+                            "old": _prev.value,
+                            "new": str(ans.value),
+                            "source_turn": turn.utterance_id,
+                        }
+                    )
+                _pol = _mission_polarity(str(ans.evidence or ans.value))
+                if _pol is None:
+                    _pol = _mission_polarity(str(ans.value))
+                if _pol is None and ans.goal_id == "wellness":
+                    # Tier-2 fallback (pilot only): substantive per the learned
+                    # boundary but no clear valence → uncertain-middle (probe,
+                    # never the routine ladder which needs explicit positive).
+                    # judge() returns None with the flag off → stays None.
+                    try:
+                        from packages.dialogue_engine.slotclf import (
+                            judge as _wellness_pol_judge,
+                        )
+
+                        if _wellness_pol_judge("wellness", str(ans.value)) == "answer":
+                            _pol = "uncertain"
+                    except Exception:  # noqa: BLE001 — keep None
+                        pass
+                state.slot_records[ans.goal_id] = SlotValue(
+                    value=str(ans.value),
+                    confidence=float(ans.confidence),
+                    source_turn_id=turn.utterance_id,
+                    source_text=str(ans.evidence or ans.value),
+                    polarity=_pol,
+                    confirmed=False,
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     dispositions = filter_grounded_dispositions(
         getattr(turn, "goal_dispositions", ()) or (),

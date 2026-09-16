@@ -217,6 +217,29 @@ def extract_goal_facts(
     )
     if _has_other and not _has_speaker:
         return ()
+    if _has_other and _has_speaker:
+        # Mixed subjects («у мужа плохо, а у меня более-менее»): evaluate
+        # speaker clauses only — husband's «плохо» must not become speaker
+        # wellness. Drop other-only clauses, keep speaker evidence.
+        try:
+            from packages.dialogue_engine.policy import (
+                _is_other_person_only as _mixed_other_only,
+            )
+
+            _parts = re.split(r"\s*[,;]\s*|\s+а\s+|\s+но\s+|\s+однако\s+", raw)
+            _kept = [
+                p.strip()
+                for p in _parts
+                if p.strip() and not _mixed_other_only(p.strip())
+            ]
+            if not _kept:
+                return ()
+            raw = " ".join(_kept).strip()
+            raw = re.sub(r"^а\s+", "", raw, flags=re.I).strip()
+            n = raw.lower().replace("ё", "е")
+            _low = n
+        except Exception:  # noqa: BLE001
+            pass
     facts: list[FactCandidate] = []
     full_evidence = _evidence(raw, 0, len(raw))
     seen: set[str] = set()
@@ -275,8 +298,24 @@ def extract_goal_facts(
         _add("wellness", "negative")
     elif wellness_pos:
         _add("wellness", "positive")
-    elif answer_slot == "wellness" and (_POSITIVE.match(core) or _SO_SO.match(core)):
-        _add("wellness", "positive" if not _SO_SO.match(core) else "uncertain")
+    elif answer_slot == "wellness" and (
+        _POSITIVE.match(core)
+        or _SO_SO.match(core)
+        or re.search(
+            r"(так\s+себе|более[\s\-‑—]*менее|сойд|пойд|терпимо)",
+            n,
+            re.I,
+        )
+    ):
+        _is_soso = bool(
+            _SO_SO.match(core)
+            or re.search(
+                r"(так\s+себе|более[\s\-‑—]*менее|сойд|пойд|терпимо|средн)",
+                n,
+                re.I,
+            )
+        )
+        _add("wellness", "uncertain" if _is_soso else "positive")
 
     if _MOOD_NEGATIVE.match(core) or _MOOD_NEGATIVE_PHRASE.search(n):
         _add("mood", "negative")

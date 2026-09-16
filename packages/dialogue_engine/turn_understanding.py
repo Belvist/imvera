@@ -244,10 +244,26 @@ def build_rich_turn_from_text(
 
         ctx = InterpretContext.from_engine_state(engine_state, turn_id=utterance_id)
         sem, confident = contextual_interpret(text.strip(), ctx)
-        harvested = {
-            f.field: f
-            for f in extract_goal_facts(text.strip(), answer_slot=answer_slot)
-        }
+        try:
+            from packages.dialogue_engine.policy import (
+                _is_other_person_only as _turn_other_only,
+            )
+
+            if _turn_other_only(text.strip()):
+                # Other person's complaint alone: no speaker facts from any
+                # harvester (mission path already filters; legacy must agree).
+                sem = sem.model_copy(update={"slots": {}}) if hasattr(sem, "model_copy") else sem
+                harvested = {}
+            else:
+                harvested = {
+                    f.field: f
+                    for f in extract_goal_facts(text.strip(), answer_slot=answer_slot)
+                }
+        except Exception:  # noqa: BLE001
+            harvested = {
+                f.field: f
+                for f in extract_goal_facts(text.strip(), answer_slot=answer_slot)
+            }
         for f in turn.goal_facts:
             harvested.setdefault(f.field, f)
         if confident and sem.slots:

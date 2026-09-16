@@ -39,7 +39,7 @@ sys.path.insert(0, str(ROOT))
 
 MODEL_PATH = ROOT / "models" / "slot_answer_clf.pkl"
 
-# (pending_slot, text, label). Slots: onset|duration|severity|current.
+# (pending_slot, text, label). Slots: onset|duration|severity|current|wellness.
 SEED_ROWS: list[tuple[str, str, str]] = [
     # --- temporal answers (any slot onset/duration) ---
     ("onset", "с утра", "answer"), ("onset", "со вчера", "answer"),
@@ -69,6 +69,52 @@ SEED_ROWS: list[tuple[str, str, str]] = [
     ("current", "ещё болит", "answer"), ("current", "уже не болит", "answer"),
     ("current", "прошла", "answer"), ("current", "полегче", "answer"),
     ("current", "болит чуток", "answer"),
+    # --- wellness answers (substantive self-assessment, any polarity) ---
+    ("wellness", "хорошо", "answer"), ("wellness", "нормально", "answer"),
+    ("wellness", "отлично", "answer"), ("wellness", "прекрасно", "answer"),
+    ("wellness", "неплохо", "answer"),
+    ("wellness", "хорошо себя чувствую", "answer"),
+    ("wellness", "нормально себя чувствую", "answer"),
+    ("wellness", "самочувствие хорошее", "answer"),
+    ("wellness", "вроде нормально", "answer"),
+    ("wellness", "ничего", "answer"),
+    ("wellness", "плохо", "answer"), ("wellness", "мне плохо", "answer"),
+    ("wellness", "мне очень плохо", "answer"),
+    ("wellness", "плохое самочувствие", "answer"),
+    ("wellness", "состояние не очень", "answer"),
+    ("wellness", "не очень", "answer"),
+    ("wellness", "болею", "answer"), ("wellness", "приболел", "answer"),
+    ("wellness", "голова болит", "answer"),
+    ("wellness", "более-менее", "answer"),
+    ("wellness", "более менее", "answer"),
+    ("wellness", "так себе", "answer"),
+    ("wellness", "мне так себе", "answer"),
+    ("wellness", "по состоянию мне более-менее", "answer"),
+    ("wellness", "средне", "answer"), ("wellness", "терпимо", "answer"),
+    ("wellness", "сойдёт", "answer"), ("wellness", "пойдёт", "answer"),
+    ("wellness", "ни шатко ни валко", "answer"),
+    ("wellness", "кое-как", "answer"),
+    ("wellness", "помаленьку", "answer"),
+    ("wellness", "ни то ни сё", "answer"),
+    ("wellness", "когда как", "answer"),
+    # --- wellness skips (refuse the dimension) ---
+    ("wellness", "не скажу", "skip"), ("wellness", "дальше", "skip"),
+    ("wellness", "давай дальше", "skip"), ("wellness", "пропусти", "skip"),
+    ("wellness", "не хочу говорить", "skip"),
+    # --- wellness garbage (re-ask, never close the slot) ---
+    ("wellness", "абракадабра", "garbage"),
+    ("wellness", "ага", "garbage"), ("wellness", "угу", "garbage"),
+    ("wellness", "да", "garbage"), ("wellness", "нет", "garbage"),
+    ("wellness", "алло", "garbage"), ("wellness", "э-э", "garbage"),
+    ("wellness", "ну", "garbage"), ("wellness", "спасибо", "garbage"),
+    ("wellness", "не знаю", "garbage"), ("wellness", "не помню", "garbage"),
+    ("wellness", "даже не знаю", "garbage"),
+    ("wellness", "ну не знаю", "garbage"),
+    ("wellness", "не помню как", "garbage"),
+    ("wellness", "хз", "garbage"),
+    ("wellness", "у мужа плохо", "garbage"),
+    ("wellness", "муж болеет", "garbage"),
+    ("wellness", "что вы спросили", "garbage"),
     # --- skips (refuse the dimension, move on) ---
     ("onset", "дальше", "skip"), ("onset", "давай дальше", "skip"),
     ("onset", "пропусти", "skip"), ("onset", "не помню когда", "skip"),
@@ -131,6 +177,21 @@ _GARBAGE_FORMS = [
     "поднял", "ага", "угу", "ну", "э-э", "пло", "алло", "спасибо",
     "колю покушал когда", "это хуйня", "чего-то там",
 ]
+_WELLNESS_ANSWERS = [
+    "хорошо", "нормально", "отлично", "прекрасно", "неплохо",
+    "плохо", "мне плохо", "очень плохо", "не очень",
+    "более-менее", "более менее", "так себе", "средне", "терпимо",
+    "сойдёт", "пойдёт", "ни шатко ни валко", "кое-как", "помаленьку",
+    "ни то ни сё", "когда как", "болею", "приболел",
+]
+_WELLNESS_SKIP = [
+    "дальше", "давай дальше", "пропусти", "не скажу", "не хочу говорить",
+]
+_WELLNESS_GARBAGE = [
+    "поднял", "ага", "угу", "да", "нет", "ну", "э-э", "пло", "алло",
+    "спасибо", "абракадабра", "не знаю", "не помню",
+    "у мужа плохо", "муж болеет", "что вы спросили",
+]
 
 
 def _preload() -> list[tuple[str, str, str]]:
@@ -156,6 +217,12 @@ def _preload() -> list[tuple[str, str, str]]:
         rows.append(("severity", s, "skip"))
     for g in _GARBAGE_FORMS:
         rows.append(("severity", g, "garbage"))
+    for s in _WELLNESS_ANSWERS:
+        rows.append(("wellness", s, "answer"))
+    for s in _WELLNESS_SKIP:
+        rows.append(("wellness", s, "skip"))
+    for g in _WELLNESS_GARBAGE:
+        rows.append(("wellness", g, "garbage"))
     for c in ("ещё болит", "уже не болит", "прошла", "полегче", "болит"):
         rows.append(("current", c, "answer"))
     return rows

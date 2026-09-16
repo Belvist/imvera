@@ -409,7 +409,9 @@ def _detect_polarity(text: str) -> str | None:
     ):
         return "positive"
     if _SO_SO.match(core) or re.search(
-        r"\b(так\s+себе|сойд[её]т|пойд[её]т|средн\w*|терпимо|ну\s+такое)\b", core, re.I
+        r"\b(так\s+себе|сойд[её]т|пойд[её]т|средн\w*|терпимо|ну\s+такое)\b|более[\s\-‑—]*менее",
+        core,
+        re.I,
     ):
         return "uncertain"
     if _NORMAL.match(core):

@@ -530,6 +530,78 @@ def _free_text_blocked_reason(text: str) -> str | None:
     return None
 
 
+def _wellness_speaker_text(text: str) -> str | None:
+    """Speaker-only slice for wellness free_text.
+
+    Other person's complaint («у мужа плохо») must never become the
+    speaker's wellness fact. Mixed turns keep only speaker clauses
+    («у мужа плохо, а у меня более-менее» → «у меня более-менее»).
+    Returns None when no speaker slice exists.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    try:
+        from packages.dialogue_engine.policy import _is_other_person_only
+    except Exception:  # noqa: BLE001
+        return raw
+    clauses = split_mission_clauses(raw)
+    if len(clauses) <= 1:
+        if _is_other_person_only(raw):
+            return None
+        return raw
+    kept = [c.text for c in clauses if not _is_other_person_only(c.text)]
+    if not kept:
+        return None
+    joined = " ".join(kept).strip()
+    joined = re.sub(r"^а\s+", "", joined, flags=re.I).strip()
+    return joined or None
+
+
+def _wellness_grounded(speaker_text: str) -> bool:
+    """Wellness free_text is VALID only with grounded meaning.
+
+    Accepts polarity signal, complaint/symptom, or a harvested wellness
+    fact. Bare garbage («абракадабра») has none of these and must stay
+    UNCLEAR instead of closing the slot.
+    """
+    raw = (speaker_text or "").strip()
+    if not raw:
+        return False
+    try:
+        from packages.dialogue_engine.fast_interpreter import (
+            _detect_polarity as _well_pol,
+        )
+
+        if _well_pol(raw) is not None:
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from packages.dialogue_engine.check_path import (
+            _looks_like_complaint as _well_complaint,
+        )
+        from packages.dialogue_engine.check_path import (
+            has_pain_mention as _well_pain,
+        )
+
+        if _well_complaint(raw) or _well_pain(raw):
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from packages.dialogue_engine.issue_mention_extract import (
+            extract_goal_facts as _well_facts,
+        )
+
+        facts = _well_facts(raw, answer_slot="wellness")
+        if any(f.field == "wellness" for f in facts):
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
 def _pick_value_for_clause(
     clause: str,
     gdef: GoalDefinition,
@@ -849,6 +921,32 @@ class DeterministicMissionUnderstandingProvider:
         if not stripped:
             return None
         if for_delivered:
+            # Wellness: context + subject + groundedness. Same «более-менее»
+            # after sleep/pain belongs to that question (delivered binding
+            # already scopes it); other person's clause never fills speaker
+            # wellness; garbage never closes the slot.
+            if gdef.goal_id == "wellness":
+                speaker = _wellness_speaker_text(stripped)
+                if speaker is None or not speaker:
+                    return None
+                if not _wellness_grounded(speaker):
+                    # Tier-2 (pilot only): learned answer/skip/garbage boundary
+                    # for anchor-misses. `answer` records the user's own words
+                    # (polarity resolved at write time; unknown valence falls
+                    # back to uncertain there — probe, never the food ladder).
+                    # skip/garbage/abstain → None (re-ask, never close).
+                    # judge() returns None with the flag off → frozen path
+                    # keeps the deterministic behavior above.
+                    try:
+                        from packages.dialogue_engine.slotclf import (
+                            judge as _wellness_judge,
+                        )
+
+                        if _wellness_judge("wellness", speaker) != "answer":
+                            return None
+                    except Exception:  # noqa: BLE001 — fail closed to re-ask
+                        return None
+                return speaker
             return stripped
         # Future free_text: require strong hint/alias — not any non-empty utterance.
         if _match_answer_aliases(stripped, gdef) is not None:
@@ -891,7 +989,7 @@ class DeterministicMissionUnderstandingProvider:
                     goal_id=gdef.goal_id,
                     value=value,
                     confidence=0.8,
-                    evidence=text.strip(),
+                    evidence=value,
                     is_correction=is_correction,
                 ),
                 None,

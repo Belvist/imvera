@@ -25,7 +25,11 @@ TRAINER = ROOT / "tools" / "voice_lab" / "train_slot_answer_clf.py"
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--slot", required=True, choices=["onset", "duration", "severity", "current"])
+    ap.add_argument(
+        "--slot",
+        required=True,
+        choices=["onset", "duration", "severity", "current", "wellness"],
+    )
     ap.add_argument("--label", required=True, choices=["answer", "skip", "garbage"])
     ap.add_argument("--text", required=True)
     args = ap.parse_args()
