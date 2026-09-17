@@ -40,7 +40,11 @@ from packages.dialogue_engine.action_policy_shadow_config import (  # noqa: E402
     FROZEN_POLICY_SHA,
 )
 
-FROZEN_SHORT = "c0fa158"
+# Historical v8 baseline for the differential — decoupled from the runtime
+# freeze pin on purpose: repinning FROZEN_POLICY_SHA to v9 must not move the
+# baseline this tool diffs against.
+V8_BASELINE_SHA = "c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4"
+V8_BASELINE_SHORT = "c0fa158"
 POLICY_RELS = (
     "packages/dialogue_engine/action_policy/need_value.py",
     "packages/dialogue_engine/action_policy/snapshot.py",
@@ -320,10 +324,10 @@ def compare_runs(
 
 def run_full_comparison(ladders: tuple[str, ...] = LADDER_FLAGS) -> dict[str, Any]:
     """Swap v8 in, run battery, restore v9, run battery. Always restores v9."""
-    if not FROZEN_POLICY_SHA.startswith(FROZEN_SHORT):
-        raise RuntimeError(f"frozen pin drift: {FROZEN_POLICY_SHA}")
+    if not V8_BASELINE_SHA.startswith(V8_BASELINE_SHORT):
+        raise RuntimeError(f"v8 baseline drift: {V8_BASELINE_SHA}")
     v9 = read_working_tree()
-    v8 = {rel: git_show_file(FROZEN_POLICY_SHA, rel) for rel in POLICY_RELS}
+    v8 = {rel: git_show_file(V8_BASELINE_SHA, rel) for rel in POLICY_RELS}
     hashes_before = {rel: sha256_bytes(data) for rel, data in v9.items()}
     v8_rows: list[dict[str, Any]] = []
     v9_rows: list[dict[str, Any]] = []
@@ -345,6 +349,7 @@ def run_full_comparison(ladders: tuple[str, ...] = LADDER_FLAGS) -> dict[str, An
     gate_pass = not unexplained and bool(expected)
     return {
         "frozen_policy_sha": FROZEN_POLICY_SHA,
+        "v8_baseline_sha": V8_BASELINE_SHA,
         "v9_candidate": "working-tree need_value.py + snapshot.py",
         "file_hashes_before": hashes_before,
         "file_hashes_after": hashes_after,

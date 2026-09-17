@@ -1,4 +1,24 @@
-# Current task — Stage A: concern-answer contract fixed, corpus 500/500 (2026-09-18)
+# Current task — Stage A DONE: v9 promoted + frozen, suite 0 failed (2026-09-18)
+
+- Branch `feature/voice-zoiper-m5`. Commit A `254f0ba` (promote: scorer
+  POLICY_VERSION v8→v9; version test renamed). Commit B (this, unpushed):
+  manifest `docs/evaluation/action-policy-phase1-v9-freeze-manifest.json`
+  (tested_sha=254f0ba, per-file sha256 + tree hash, documented construction),
+  repin FROZEN SHA c0fa158→254f0ba in shadow config + guard test, config
+  version→v9, evaluator V8 baseline decoupled (V8_BASELINE_SHA constant +
+  decoupling test). scorer.py is guard-frozen, so version bump went to A.
+- VERIFIED: guard test_h_frozen_policy_unchanged green; differential gate True
+  (92/4/4/0, restored); challenge_v8_live pass 1.0/0/0; corpus 500/500.
+  FULL: `python3 -B -m pytest tests -q -p no:cacheprovider --tb=short`
+  -> 1551 passed, 6 skipped, 0 failed, 68.26s. Touched ruff clean except
+  pre-existing E501 test_shadow_m1.py:367 (repo-wide debt, not this diff).
+- NEXT: push A+B → CI green → Stage A closed → Stage B live stop/ACK probe.
+  DialogueEngine work stops here per owner order.
+- NOT VERIFIED: remote CI, live playout/production. B–J untouched.
+
+---
+
+# Historical — Stage A concern-answer (2026-09-18)
 
 - Branch `feature/voice-zoiper-m5`, HEAD `dd9be91`; local uncommitted fix only.
   Owner decision applied: negative/uncertain correction (and any negative/

@@ -51,7 +51,7 @@ _RESTORE_CHILD_LINES = [
     "from tools.voice_lab import policy_diff_v8_v9 as pdiff",
     "before = pdiff.snapshot_hashes()",
     "before_bytes = pdiff.read_working_tree()",
-    "v8 = {rel: pdiff.git_show_file(pdiff.FROZEN_POLICY_SHA, rel)"
+    "v8 = {rel: pdiff.git_show_file(pdiff.V8_BASELINE_SHA, rel)"
     " for rel in pdiff.POLICY_RELS}",
     "assert any(v8[rel] != before_bytes[rel] for rel in pdiff.POLICY_RELS)",
     "with pdiff.variant_installed('v8', v8, before_bytes):",
@@ -77,6 +77,13 @@ def _run_child(args: list[str], stdin_code: str | None = None) -> subprocess.Com
         text=True,
         timeout=300,
     )
+
+
+def test_v8_baseline_decoupled_from_runtime_pin() -> None:
+    """Freeze repin must not move the differential baseline."""
+    assert pdiff.V8_BASELINE_SHA == "c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4"
+    assert pdiff.V8_BASELINE_SHA.startswith(pdiff.V8_BASELINE_SHORT)
+    assert pdiff.FROZEN_POLICY_SHA != pdiff.V8_BASELINE_SHA
 
 
 def test_evaluator_restores_files_byte_identical() -> None:

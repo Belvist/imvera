@@ -34,7 +34,7 @@ from packages.dialogue_engine.state import EngineState
 from packages.dialogue_engine.turn_understanding import RichUserTurn
 
 ROOT = Path(__file__).resolve().parents[2]
-FROZEN_SHA = "c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4"
+FROZEN_SHA = "254f0baed11ba7913d276c50ca7bd574778f19a5"
 
 
 @pytest.fixture(autouse=True)
@@ -632,7 +632,7 @@ def test_runtime_truth_exposes_shadow_fields(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("IMVERA_ACTION_POLICY_MODE", "shadow")
     truth = runtime_truth()
     assert truth["action_policy.mode"] == "shadow"
-    assert truth["action_policy.policy_version"] == "action-policy-phase1-v8"
+    assert truth["action_policy.policy_version"] == "action-policy-phase1-v9"
     assert truth["action_policy.frozen_policy_sha"] == FROZEN_POLICY_SHA
     assert truth["action_policy.decision_scope"] == "conversation_scheduler"
 

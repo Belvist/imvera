@@ -8,9 +8,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-# Frozen v8 provenance — must match freeze manifest tested_sha.
-FROZEN_POLICY_SHA = "c0fa158bd2ffb4109d1f0776c3b3245cdff31ce4"
-POLICY_VERSION = "action-policy-phase1-v8"
+# Frozen v9 provenance — must match freeze manifest tested_sha.
+FROZEN_POLICY_SHA = "254f0baed11ba7913d276c50ca7bd574778f19a5"
+POLICY_VERSION = "action-policy-phase1-v9"
 SHADOW_SCHEMA_VERSION = 1
 SHADOW_BUFFER_MAX = 64
 DECISION_SCOPE = "conversation_scheduler"

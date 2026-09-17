@@ -1,0 +1,61 @@
+{
+  "action_policy_phase1_freeze": true,
+  "tested_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
+  "policy_version": "action-policy-phase1-v9",
+  "hash_construction": {
+    "per_file": "sha256 of git blob bytes at tested_sha for each core file",
+    "policy_tree_sha256": "sha256 of concatenated core file bytes, filenames sorted ascending",
+    "weights_sha256": "sha256 of working-tree models/slot_answer_clf.pkl (untracked-binary policy input, must not change)"
+  },
+  "core_file_sha256": {
+    "actions.py": "95030b08c4a372d35bd7268491d0a2e65247af21c4b8c1984671c8804d63556b",
+    "constraints.py": "3a669aeb959f50da77bc0d7a49672800a1abce4acb989f056271ac730fe90bce",
+    "features.py": "b2e5576df7b099ce1aa3ef65cb2884333510fa15a20e471b1db1aeebc24f2897",
+    "mandatory.py": "2a08a110a3138bc895567e83c82b3954c110dae03279fd49296a770982e483b1",
+    "need_value.py": "3cd09ea178c59a1a4e8aa6df74f75092dcf12aa3d743ee22d2a5aa77aae51940",
+    "needs.py": "bde922a3f330fbb8a5610430993f1789492f9b3eb0984e60d3f7f29ad9484e7e",
+    "policy.py": "64ea7e5dc00799bc8408693fd9744c92b20ba68ad41a4558b77e39a371d64184",
+    "scorer.py": "b731fe564cd20776cfeb5d5a212cf8cc8db1c3294441ed660f2f84387761157d",
+    "semantic_signals.py": "ba1e77a90e8f06ffce9bc1b579c7cffa9eeaa27fce55d53cea074c15c9ab06fc",
+    "snapshot.py": "9a7e60ab6757485f5b739a37c4df4512a74d844d45092bd5392d07bd90ce0349"
+  },
+  "policy_tree_sha256": "04e423ac2819e6ed43eef2f3ca467596b7724895e19f839c50ad82406ff4ad5d",
+  "weights_sha256": "47e36b51c3d9f2fd9eb716ab178975f3e4e84bc27b5a8ffa651dcb0064a48b1f",
+  "corpus_sha256": {
+    "dialogue_corpus_version": "1.1.0",
+    "challenge_report": ".run/action-policy-phase1-v9-challenge.json (gitignored local evidence)"
+  },
+  "ci_run_id": "pending-push",
+  "ci_conclusion": "pending-push",
+  "python": "3.13.14",
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "gates": {
+    "differential_v8_v9": "92 compared / 4 changed / 4 expected / 0 unexplained, files restored",
+    "challenge_v8_live_on_v9": "pass_rate 1.0, forbidden 0, constraint violations 0",
+    "dialogue_corpus": "500/500 pass",
+    "live_builder": "tests/action_policy/test_v8_live_builder.py",
+    "invariants": "tests/action_policy/test_v8_invariants.py",
+    "action_policy_suite": "local, part of full suite",
+    "lint_dialogue": "success",
+    "contracts": "success (CI, prior SHA; re-run on push)",
+    "semantic_kernel": "success (CI, prior SHA; re-run on push)",
+    "dialogue_rich": "success (CI, prior SHA; re-run on push)",
+    "dialogue_runtime": "success (CI, prior SHA; re-run on push)",
+    "action_policy_shadow": "guard green after repin (this commit); full CI on push",
+    "full_pytest": "0 failed / 1551 passed / 6 skipped (local, this tree pre-commit)",
+    "pipeline_policy_failure": 0
+  },
+  "known_limitations": [
+    "Remote CI green pending push of this commit",
+    "Soft/hard cutover OFF",
+    "Production shadow acceptance (100/1000) not started",
+    "Operator plumbing canary on Shadow M1.2 still required before real shadow evidence"
+  ],
+  "notes": {
+    "v9_deltas_vs_v8": "temporal-severity retention + fresh-issue probe retention (differential reason classes)",
+    "production_hook": "OFF",
+    "shadow": "instrumentation ready; frozen at this manifest",
+    "supersedes": "action-policy-phase1-v8 as cutover candidate"
+  }
+}
