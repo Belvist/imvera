@@ -1,3 +1,32 @@
+# Current task — Stage 2: stop/ack boundary probe (2026-09-17)
+
+- ADR-018 proposed (`docs/adr/018-stage2-production-hardening.md`): 5 workstreams
+  inside frozen diagram; no new brain/providers/scenarios.
+- Read-only recon (FS 1.10.12, mod_audio_stream commercial v1.0.3, 0 channels):
+  primary candidate `uuid_audio_stream <uuid> break` (drain mode in release
+  notes, `breakAudio(int)` in binary); `stop` kills WS, `pause` gates uplink,
+  `uuid_break` would hang up via sleep-fallthrough. Wiring sketch: thread
+  generation_id through send_pcm → per-generation bridge queue + purge →
+  ESL break → ack via `::playback` event. Effort S if live probe passes,
+  else mod_imvera_audio (2–4 weeks).
+- NEXT GATE: manual Zoiper call + `uuid_audio_stream <live-uuid> break`
+  mid-playback, observe wire silence. Needs user on the phone.
+
+---
+
+# Current task — ветки прибраны, дерево зафиксировано (2026-09-17)
+
+- Коммит `e12d4eb` на `feature/voice-zoiper-m5` (42 файла: fail-safe
+  uncertainty, PCM-целостность, eval-harness без xfail), запушен в origin.
+  Дерево чистое (0 dirty).
+- Удалены 6 мёртвых `pr/*` веток (Asterisk-эра, до ADR-013) локально и на
+  GitHub. `feature/*` оставлены — их содержимое уже внутри m5; удалить после
+  слияния m5 в main.
+- Сливать всё подряд было нельзя: stale-ветки воскрешали бы отвергнутую
+  архитектуру (нарушение ADR-014).
+
+---
+
 # Current task — authorized LOCAL bridge preview restart (2026-09-17)
 
 ## CHANGED

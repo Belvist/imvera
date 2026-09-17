@@ -10,29 +10,34 @@ Deterministic transcript rules → RED/YELLOW candidate.
 Control confirmation → CONFIRMED RED.
 ```
 
-## Status
+## Status (2026-09-17, branch `feature/voice-zoiper-m5`, HEAD `e12d4eb`)
 
-| Phase | Status |
-|-------|--------|
-| 0 Agent system | ✅ |
-| 1 Architecture/contracts | 🟡 ADR STT/TTS updated; CI added |
-| 2 Domain core | ✅ edge-case gate (47 tests) |
-| 3A STT lab + voice chat shell | next |
-| 4 Realtime streaming | ❌ |
-| 5 Asterisk | ❌ |
+Архитектура выбрана и заморожена ([ADR-014](./docs/adr/014-architecture-freeze-acceptance-gates.md),
+путь: SIP → FreeSWITCH → CallActor → GigaAM → DialogueEngine → Silero).
+**Ни одни из 7 acceptance gates не пройдены** — это не прод.
 
-## Quick start
+| Направление | Состояние |
+|-------------|-----------|
+| Dialogue engine (single-writer, fail-safe uncertainty) | работает в лабе, 1494 passed / 17 baseline-failed |
+| Voice runtime (PCM integrity, utterance resume) | работает в лабе |
+| STT longform (>25s fallback) | код готов, вживую не проверен |
+| Local SIP lab (Zoiper ↔ FreeSWITCH ↔ Vera) | звонки идут, трассировки есть |
+| PSTN via VoxImplant | **блокер: 403 Invalid CallerID** — нужен CallerID в панели |
+| PSTN via Novofon (gateway `novofon` в контейнере) | **блокер: провайдер молча дропает SIP с нашего IP** — шаги в кабинете |
+| Downstream stop/ack, barge-in | отсутствует (доказано тестом), включать запрещено |
+| Core inbox / результат → статус семье | не собрано |
+| Прод-сервер, GPU, мониторинг | нет |
+
+## Quick start (lab, Mac)
 
 ```bash
-make install && make test    # local dev
-make up                      # Docker: postgres, redis, minio, api
-make api-health              # http://127.0.0.1:8080/health
-make down                    # stop stack
+make install && python3 -B -m pytest tests/ -q -p no:cacheprovider
+make freeswitch-zoiper-voice-up   # full lab: FS + bridge + STT/TTS
 ```
 
-Copy `docker/.env.example` → `docker/.env` for custom secrets (never commit `.env`).
-
-Full guide: **[LAUNCH.md](./LAUNCH.md)**
+Bridge: `http://127.0.0.1:9210/health/ready`. STT `:9101`, TTS `:9102`.
+Секреты — только в окружении/контейнере, никогда в git.
+Детали запуска: **[LAUNCH.md](./LAUNCH.md)**. Текущая работа: **`docs/current-task.md`**.
 
 ## Documentation
 

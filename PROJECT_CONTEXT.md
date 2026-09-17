@@ -141,20 +141,28 @@ See [docs/AUDIO_CONTRACT.md](docs/AUDIO_CONTRACT.md) and [docs/adr/008-product-m
 
 ## Deployment Phases (ADR-008 milestones)
 
-1. **M0** — ADR-008, doctor, doc sync
-2. **M1** — Mic loopback: real STT + LLM interpretation + TTS + PostgreSQL
-3. **M2** — Dialogue/audio integrity (barge-in, ledger, single CALL_ENDED)
-4. **M3** — Core inbox, family app, scheduler, notification channel
-5. **M4** — Asterisk SIP lab → PSTN trunk
-6. **M5** — Pilot deploy, load, rollback evidence
+1. **M0** — ADR-008, doctor, doc sync ✅
+2. **M1** — Mic loopback: real STT + LLM interpretation + TTS + PostgreSQL ✅ (lab)
+3. **M2** — Dialogue/audio integrity (barge-in, ledger, single CALL_ENDED) 🟡 частично:
+   ledger и CALL_ENDED есть; **barge-in отсутствует** (downstream stop/ack нет)
+4. **M3** — Core inbox, family app, scheduler, notification channel ❌ не собрано
+5. **M4** — ~~Asterisk~~ FreeSWITCH SIP lab → PSTN trunk 🟡 лаба работает;
+   PSTN заблокирован (VoxImplant 403 CallerID; Novofon дропает SIP)
+6. **M5** — Pilot deploy, load, rollback evidence ❌
+
+**Stage 2 (с 2026-09-17):** прод-контур поверх замороженного пути —
+downstream stop/ack + generation purge, Core-проводка результат→статус,
+деплой Linux+GPU, мониторинг. Без новой архитектуры (ADR-014 действует).
 
 ## Technology Constraints (initial)
 
 - Language: **Python 3.12+** for runtime services (fast iteration, team familiarity)
 - Telephony: **FreeSWITCH** + `mod_sofia` + PCM WebSocket bridge — ADR-013 (production)
 - Telephony lab: Asterisk (`lab/asterisk/`), LiveKit (`archive/telephony/livekit/`) — not production
-- STT: **Qwen3-ASR** primary candidate per ADR-003; benchmark before release
-- TTS: **CosyVoice3** primary candidate per ADR-006; benchmark before release
+- STT: **GigaAM v3 RNNT (local)** — production path during ADR-014 freeze.
+  ADR-003/Qwen3-ASR — исторический бенчмарк, не основание для замены.
+- TTS: **Silero v5 ru `kseniya` (local)** — production path during freeze.
+  ADR-006/CosyVoice3 — исторический бенчмарк, не основание для замены.
 - LLM: interpretation (SemanticPayload) + Renderer; local inference workers; no verdict authority
 - StatusEngine: pure domain logic in Phase 2 (not Phase 6)
 - Persistence: async only in voice hot path; durable spool for recordings
