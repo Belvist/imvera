@@ -1,4 +1,40 @@
-# Current task — Stage A: summary delivery fixed; correction contract blocked (2026-09-18)
+# Current task — Stage A: concern-answer contract fixed, corpus 500/500 (2026-09-18)
+
+- Branch `feature/voice-zoiper-m5`, HEAD `dd9be91`; local uncommitted fix only.
+  Owner decision applied: negative/uncertain correction (and any negative/
+  uncertain wellness) keeps mandatory concern probing before ITS — no probe
+  bypass, no silent expectation edits.
+- ROOT CAUSE: scheduler safety net emits probe_concern without probe_phase, but
+  the semantic path consumed only probe_phase/open-slot answers — grounded
+  complaint evidence ("Голова болит.") was dropped into probe_concern_options.
+- CHANGED: shared `apply_concern_answer` in check_path.py (single owner;
+  _probe_concern delegates). Reducer bridge v2 consumes only delivered
+  probe_concern/options answers: complaint (ANSWER) grounds via shared contract
+  with duration follow-up; UNCLEAR routes to scheduler net with user text;
+  ANSWER non-complaints fall through to the net. Scheduler twice-vague
+  escalation falls back to ctx.user_text when no RichUserTurn (semantic path).
+- Corpus contract made explicit in one place: families.py splices
+  probe_concern + complaint ("Голова болит.") + probe_duration + duration
+  ("Вчера началось.") before first ITS for so_so/okay/bad, with structural
+  preconditions; family tails untouched. CORPUS_VERSION 1.0.0 → 1.1.0.
+- Tests: 14 in test_same_turn_self_correction.py (complaint→duration→ITS,
+  vague/refusal→options, hostile→urgent_close+unspecified, calm→decline→ITS).
+- VERIFIED: corpus generate 500/500 pass; full suite 1 failed (frozen guard by
+  design — v9 candidate unfrozen) / 1548 passed / 6 skipped, 68.77s;
+  differential 92/4/4/0 gate True restored True; challenge_v8_live pass_rate
+  1.0 forbidden 0 violations 0; policy+corpus selection 93 passed; shadow
+  58+guard-fail; live-replays 61 passed; touched-file ruff + diff-check clean.
+- Independent review round 1 BLOCKED v1 (duration skip, options-escalation
+  suppression, second brain, splice breadth) — all addressed in v2, re-review
+  requested. Rich-path reference: complaint→episode+duration, vague→options.
+  Semantic path grounds without episode (probe_duration) — same obligation.
+- NEXT: re-review verdict → commit + push dialogue fix → commit B freeze
+  (manifest + repin; evaluator baseline decoupling needed) → CI green.
+- NOT VERIFIED: live playout, production acceptance, remote CI. B–J untouched.
+
+---
+
+# Historical — Stage A summary delivery (2026-09-18)
 
 - Branch `feature/voice-zoiper-m5`, base HEAD `6b88e78831ed5efa4f4901b9ea896619f613fb07`;
   initially clean. Local uncommitted fix only, no deploy/restart/commit/push.

@@ -83,6 +83,64 @@ def build_family_steps(
     wellness_category: str = "good",
 ) -> tuple[CorpusStep, ...]:
     """Return full step sequence for a family + lexical answers."""
+    steps = _base_family_steps(family, answers, wellness_category=wellness_category)
+    if wellness_category in _CONCERN_PROBE_CATEGORIES:
+        steps = _with_concern_probe(steps, family, wellness_category)
+    return steps
+
+
+# Negative/uncertain wellness keeps the concern-obligation contract (owner
+# decision 2026-09-18; tests/test_same_turn_self_correction.py): Vera must
+# probe WHAT hurts before the routine ladder. good/normal go straight to
+# important_to_share.
+_CONCERN_PROBE_CATEGORIES = ("so_so", "okay", "bad")
+
+_CONCERN_COMPLAINT = "Голова болит."
+
+_CONCERN_DURATION = "Вчера началось."
+
+
+def _with_concern_probe(
+    steps: tuple[CorpusStep, ...], family: str, wellness_category: str
+) -> tuple[CorpusStep, ...]:
+    """Splice probe_concern + complaint answer before the first ITS question.
+
+    Replaces the first ExpectSpeakIntent(important_to_share) — which always
+    follows the wellness UserStep + ExpectSlot — with the probe obligation:
+    expect probe_concern, deliver it, answer with a grounded complaint, then
+    expect ITS. Everything after (including the original DeliverPlayout or an
+    immediate interrupting UserStep) is untouched, preserving each family's
+    technical point.
+    """
+    for idx, step in enumerate(steps):
+        if isinstance(step, ExpectSpeakIntent) and step.intent == "important_to_share":
+            break
+    else:
+        raise ValueError(f"no ITS probe point in {wellness_category}-{family}")
+    if idx < 2 or not isinstance(steps[idx - 2], UserStep):
+        raise ValueError(f"ITS probe point misplaced in {wellness_category}-{family}")
+    if steps[idx - 1] != ExpectSlot(slot="wellness"):
+        raise ValueError(f"ITS probe point misplaced in {wellness_category}-{family}")
+    return (
+        *steps[:idx],
+        ExpectSpeakIntent(intent="probe_concern"),
+        DeliverPlayout(),
+        UserStep(text=_CONCERN_COMPLAINT),
+        ExpectSpeakIntent(intent="probe_duration"),
+        DeliverPlayout(),
+        UserStep(text=_CONCERN_DURATION),
+        steps[idx],
+        *steps[idx + 1 :],
+    )
+
+
+def _base_family_steps(
+    family: str,
+    answers: SlotAnswers,
+    *,
+    wellness_category: str = "good",
+) -> tuple[CorpusStep, ...]:
+    """Return full step sequence for a family + lexical answers."""
     a = answers
     base_wellness = _wellness_phase(a.wellness)
     closing = _closing_from_share(a)

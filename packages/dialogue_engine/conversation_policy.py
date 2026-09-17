@@ -1171,7 +1171,11 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 # the concern instead (live fs-a1dca80c); only refusal/vent
                 # («Отстань», hostile, debris) escalates from here.
                 _force = True
-                if turn is not None:
+                _raw_turn = turn.raw_text if turn is not None else ""
+                # Semantic path carries no RichUserTurn: fall back to the
+                # scheduled user text so calm/hostile distinction still runs.
+                _raw = _raw_turn or (turn_context.user_text or "")
+                if _raw.strip():
                     from packages.dialogue_engine.check_path import _looks_like_complaint
                     from packages.dialogue_engine.reluctance import (
                         _DONT_KNOW,
@@ -1179,7 +1183,6 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                         _IRRITATION,
                     )
 
-                    _raw = turn.raw_text or ""
                     _cant_say = _DONT_KNOW.match(_raw.strip()) or re.search(
                         r"не\s+могу\s+сказать", _raw, re.I
                     )

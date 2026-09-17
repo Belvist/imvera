@@ -1366,6 +1366,45 @@ def _apply_semantic(
         advance_probe_phase(state, text)
         return _schedule_advance(state, user_text=text)
 
+    if (
+        semantic.act in (SemanticAct.ANSWER, SemanticAct.UNCLEAR)
+        and not state.probe_phase
+        and state.delivered_question is not None
+        and state.delivered_question.intent in ("probe_concern", "probe_concern_options")
+        and state.concern_probe_count >= 1
+        and state.wellness_concern == ""
+        and "concern_declined" not in state.observations
+    ):
+        # Delivered concern probe is an open obligation (mirrors the rich
+        # path: complaint grounds via the shared check_path contract with a
+        # duration follow-up; anything else goes to the scheduler safety net
+        # — options after the first probe, decline/escalation after options).
+        # Without this, grounded complaint evidence is dropped and unclear
+        # answers strand in the slot-unclear logic instead of the net.
+        from packages.dialogue_engine.check_path import (
+            _looks_like_complaint,
+            apply_concern_answer,
+        )
+
+        text = semantic.value or semantic.source_quote or ""
+        if semantic.act == SemanticAct.ANSWER and _looks_like_complaint(text):
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.waiting_on_slot = None
+            state.delivered_question = None
+            state.planned_question = None
+            outcome = apply_concern_answer(state, text)
+            if outcome == "urgent":
+                return _emit_urgent_close(state, user_text=text)
+            return _schedule_advance(state, user_text=text)
+        if semantic.act == SemanticAct.UNCLEAR:
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.waiting_on_slot = None
+            state.delivered_question = None
+            state.planned_question = None
+            state.bump_revision()
+            return _schedule_advance(state, user_text=text)
     if is_topic_slot(answer_slot) and semantic.act == SemanticAct.ANSWER:
         state.processing_turn_id = None
         state.processing_effect_id = None

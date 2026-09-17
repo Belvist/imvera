@@ -124,6 +124,129 @@ def test_conversation_runner_bad_self_correction(runner: ConversationRunner) -> 
     assert [e.intent for e in result.speak_effects] == ["probe_concern"]
 
 
+def test_delivered_concern_probe_consuming_answer_fixes_concern(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Semantic path: probe_concern delivery creates a concern obligation.
+    The complaint answer must ground wellness_concern via the shared
+    check_path contract — including the duration follow-up, like rich."""
+    for key, value in {
+        "IMVERA_DIALOGUE_ENGINE": "1",
+        "IMVERA_VOICE_DIRECT_WELLNESS_OPENING": "1",
+        "IMVERA_COVERAGE_LADDER": "0",
+        "IMVERA_LLM_INTERPRET": "0",
+        "IMVERA_MISSION_LLM_INTERPRET": "0",
+        "IMVERA_SEMANTIC_ML": "0",
+        "IMVERA_ACTION_POLICY_MODE": "off",
+    }.items():
+        monkeypatch.setenv(key, value)
+    from packages.dialogue_engine.corpus.generator import _build_scenario
+    from packages.dialogue_engine.corpus.runner import CorpusRunner
+    from packages.dialogue_engine.corpus.schema import FAMILY_NAMES
+
+    scenario = _build_scenario(
+        "bad", "self_correction", FAMILY_NAMES.index("self_correction"), 0
+    )
+    runner = CorpusRunner(scenario)
+    runner._start_call()
+    runner._user_turn(BAD, delayed=False)
+    assert [e.intent for e in runner._pending_speaks] == ["probe_concern"]
+    probe = runner._pending_speaks.pop(0)
+    runner._deliver_speak(probe)
+    runner._user_turn("Голова болит.", delayed=False)
+    intents = [e.intent for e in runner._pending_speaks]
+    assert "probe_concern_options" not in intents
+    assert runner.engine.state.wellness_concern == "Голова болит."
+    assert intents == ["probe_duration"]
+    duration = runner._pending_speaks.pop(0)
+    runner._deliver_speak(duration)
+    runner._user_turn("Вчера началось.", delayed=False)
+    assert [e.intent for e in runner._pending_speaks] == ["important_to_share"]
+
+
+def _concern_runner(monkeypatch: pytest.MonkeyPatch):
+    for key, value in {
+        "IMVERA_DIALOGUE_ENGINE": "1",
+        "IMVERA_VOICE_DIRECT_WELLNESS_OPENING": "1",
+        "IMVERA_COVERAGE_LADDER": "0",
+        "IMVERA_LLM_INTERPRET": "0",
+        "IMVERA_MISSION_LLM_INTERPRET": "0",
+        "IMVERA_SEMANTIC_ML": "0",
+        "IMVERA_ACTION_POLICY_MODE": "off",
+    }.items():
+        monkeypatch.setenv(key, value)
+    from packages.dialogue_engine.corpus.generator import _build_scenario
+    from packages.dialogue_engine.corpus.runner import CorpusRunner
+    from packages.dialogue_engine.corpus.schema import FAMILY_NAMES
+
+    scenario = _build_scenario(
+        "bad", "self_correction", FAMILY_NAMES.index("self_correction"), 0
+    )
+    runner = CorpusRunner(scenario)
+    runner._start_call()
+    runner._user_turn(BAD, delayed=False)
+    assert [e.intent for e in runner._pending_speaks] == ["probe_concern"]
+    probe = runner._pending_speaks.pop(0)
+    runner._deliver_speak(probe)
+    return runner
+
+
+def test_answer_act_non_complaint_reaches_net(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ANSWER-act non-complaint falls through to the scheduler net → options."""
+    runner = _concern_runner(monkeypatch)
+    runner._user_turn("Нормально.", delayed=False)
+    assert runner.engine.state.wellness_concern == ""
+    assert [e.intent for e in runner._pending_speaks] == ["probe_concern_options"]
+
+
+def test_vague_first_probe_answer_goes_to_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-complaint after probe_concern re-probes (mirrors rich path)."""
+    runner = _concern_runner(monkeypatch)
+    runner._user_turn("Поел.", delayed=False)
+    assert runner.engine.state.wellness_concern == ""
+    assert runner.engine.state.observations.get("concern_declined") is None
+    assert [e.intent for e in runner._pending_speaks] == ["probe_concern_options"]
+
+
+def test_refusal_first_probe_answer_goes_to_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _concern_runner(monkeypatch)
+    runner._user_turn("Не скажу.", delayed=False)
+    assert [e.intent for e in runner._pending_speaks] == ["probe_concern_options"]
+
+
+def test_hostile_after_options_escalates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Options-stage decline falls through: hostile escalates unspecified."""
+    runner = _concern_runner(monkeypatch)
+    runner._user_turn("Не скажу.", delayed=False)
+    assert [e.intent for e in runner._pending_speaks] == ["probe_concern_options"]
+    options = runner._pending_speaks.pop(0)
+    runner._deliver_speak(options)
+    runner._user_turn("Отстань.", delayed=False)
+    assert runner.engine.state.observations.get("concern_status") == "unspecified"
+    assert [e.intent for e in runner._pending_speaks] == ["urgent_close"]
+
+
+def test_calm_after_options_declines(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Options-stage calm substantive answer declines, ladder continues."""
+    runner = _concern_runner(monkeypatch)
+    runner._user_turn("Не скажу.", delayed=False)
+    options = runner._pending_speaks.pop(0)
+    runner._deliver_speak(options)
+    runner._user_turn("Пойдёт.", delayed=False)
+    assert runner.engine.state.observations.get("concern_declined") == "1"
+    assert [e.intent for e in runner._pending_speaks] == ["important_to_share"]
+
+
 def test_unrelated_complaint_still_extracts() -> None:
     from packages.dialogue_engine.issue_mention_extract import extract_issue_mentions
 

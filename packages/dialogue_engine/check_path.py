@@ -256,7 +256,13 @@ def _register_probe(phase: str, handler: Callable[[EngineState, str], ProbeStep]
     _PROBE_FLOW[phase] = handler
 
 
-def _probe_concern(state: EngineState, text: str) -> ProbeStep:
+def apply_concern_answer(state: EngineState, text: str) -> str:
+    """Single owner for concern-probe answers (rich and semantic paths).
+
+    A complaint grounds wellness_concern; urgent text arms the urgent path;
+    anything else declines the concern. Returns "grounded" | "declined" |
+    "urgent". Callers map the outcome to their own step/plan type.
+    """
     from packages.dialogue_engine.state import CheckPath
 
     # A non-complaint answer («поел», «нормально») DECLINES the concern —
@@ -265,13 +271,22 @@ def _probe_concern(state: EngineState, text: str) -> ProbeStep:
     if not _looks_like_complaint(text):
         state.probe_phase = None
         state.observations["concern_declined"] = "1"
-        return ProbeStep(action=ProbeAction.CONTINUE_LADDER)
+        return "declined"
     state.wellness_concern = text
     if is_urgent_concern(text):
         state.check_path = CheckPath.URGENT
         state.probe_phase = None
-        return ProbeStep(action=ProbeAction.URGENT_CLOSE)
+        return "urgent"
     state.probe_phase = "duration"
+    return "grounded"
+
+
+def _probe_concern(state: EngineState, text: str) -> ProbeStep:
+    outcome = apply_concern_answer(state, text)
+    if outcome == "declined":
+        return ProbeStep(action=ProbeAction.CONTINUE_LADDER)
+    if outcome == "urgent":
+        return ProbeStep(action=ProbeAction.URGENT_CLOSE)
     return ProbeStep(action=ProbeAction.SPEAK_PROBE, probe_phase="duration")
 
 
