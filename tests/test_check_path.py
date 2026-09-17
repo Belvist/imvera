@@ -8,13 +8,11 @@ from packages.contracts.enums import SlotStatus
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession
 from packages.dialogue_engine.check_path import prior_followup_question
-from packages.dialogue_engine.state import CheckPath
 from packages.dialogue_engine.events import CallStarted, PlayoutCompleted
 from packages.dialogue_engine.reducer import reduce
 from packages.dialogue_engine.scenario_runner import ScenarioRunner
-from packages.dialogue_engine.state import EngineState
+from packages.dialogue_engine.state import CheckPath, EngineState
 from packages.voice_perception.text_echo import is_repair_phrase, is_text_echo_of_bot
-
 
 pytestmark = pytest.mark.dialogue_engine
 
@@ -245,3 +243,94 @@ def test_kakoe_repair_on_mood() -> None:
     sem, confident = contextual_interpret("Какое?", ctx)
     assert confident
     assert sem.act == SemanticAct.REPAIR_REQUEST
+
+
+def _runtime_probe_session() -> CallSession:
+    session = CallSession(
+        call_id="duration-regression",
+        family_id="duration-regression",
+        elder_display_name="Даниил",
+        store=InMemoryCallRecordStore(),
+    )
+    session._engine.state.client_id = ""
+    _deliver_runtime_result(session, session.start())
+    for text in (
+        "Йой-ой-ой. Чувствую себя отвратительно, прямо вообще не знаю даже, как описать.",
+        "Ну, не знаю, Вера. Знаешь, вот такое состояние непонятное, то ли хорошо, то ли плохо.",
+    ):
+        _runtime_reply(session, text)
+    assert session._engine.answer_context_slot() == "probe_duration"
+    return session
+
+
+def _deliver_runtime_result(session: CallSession, result) -> None:
+    if result.speak_effect is not None:
+        effect = result.speak_effect
+        session._engine.on_playout_started(effect.generation, effect.question_id)
+        session.mark_spoken_action(effect.generation_id)
+
+
+def _runtime_reply(session: CallSession, text: str):
+    from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
+
+    uid = f"u-{session.turn_id}"
+    state = session._engine.state
+    slot = session._engine.answer_context_slot()
+    parsed = interpret(text, utterance_id=uid, engine_state=state, answer_slot=slot)
+    turn = kernel_to_rich_turn(parsed, answer_slot=slot, engine_state=state)
+    result = session.handle_user_text(text, utterance_id=uid, rich_turn=turn)
+    _deliver_runtime_result(session, result)
+    return result
+
+
+@pytest.mark.parametrize("ladder", ["0", "1"])
+def test_runtime_duration_garbage_stays_unresolved(monkeypatch, ladder) -> None:
+    monkeypatch.setenv("IMVERA_COVERAGE_LADDER", ladder)
+    session = _runtime_probe_session()
+    result = _runtime_reply(session, "Трамвай приехал.")
+    state = session._engine.state
+    assert state.wellness_duration == "", result.speak_effect
+    assert state.probe_phase == "duration"
+    assert session._engine.answer_context_slot() == "probe_duration"
+    assert not state.important_to_share_asked
+    assert not state.call_closed
+    assert state.issue_episodes == {}
+    assert state.slots["wellness"] == SlotStatus.FILLED
+    assert result.speak_effect.intent == "probe_duration"
+
+
+@pytest.mark.parametrize("ladder", ["0", "1"])
+def test_runtime_duration_valid_preserves_raw_text(monkeypatch, ladder) -> None:
+    monkeypatch.setenv("IMVERA_COVERAGE_LADDER", ladder)
+    session = _runtime_probe_session()
+    text = "Продолжительное время уже продолжается такое, уже два дня, наверное."
+    result = _runtime_reply(session, text)
+    state = session._engine.state
+    assert state.wellness_duration == text, result.speak_effect
+    assert state.probe_phase is None
+    assert state.important_to_share_asked
+    assert session._engine.answer_context_slot() == "important_to_share"
+    assert not state.call_closed
+    assert state.issue_episodes == {}
+    assert result.speak_effect.intent == "important_to_share"
+
+
+def test_temporal_marker_stays_typed_and_serializable() -> None:
+    import warnings
+
+    from packages.dialogue_engine.reducer import _note_temporal_emit
+
+    state = EngineState(call_id="temporal-marker", elder_display_name="Даниил")
+    assert _note_temporal_emit(state, "probe_duration", "probe_duration") is False
+    assert state.last_temporal_probe == "temporal_duration"
+    assert state.slot_unclear_counts == {"emit_temporal_duration_run": 1}
+    assert all(isinstance(value, int) for value in state.slot_unclear_counts.values())
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        state.model_dump(mode="json")
+    assert _note_temporal_emit(state, "check_mood", "check_mood") is False
+    assert state.last_temporal_probe is None
+    assert state.slot_unclear_counts == {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        state.model_dump(mode="json")

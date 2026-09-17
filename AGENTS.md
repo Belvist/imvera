@@ -173,6 +173,50 @@ Until these exist, agent reports exact commands run.
 - Do not recommend a model/vendor without `ai-model-evaluation` evidence.
 - Prefer one verified path over three speculative options.
 
+## Reliability boundary finding (2026-09-17)
+
+- Exhausted wellness UNCLEAR/PARTIAL survives result serialization; the explicit
+  `wellness_unknown` note is now retained too. Slot DECLINED alone does not
+  establish consent refusal or public DECLINED. No active Core inbox/result-to-status
+  projection was found in this checkout; `packages/core` provides persistence.
+  See the top of `docs/current-task.md` for exact offline evidence and remaining gaps.
+
+## Correction / mood boundary finding (2026-09-17)
+
+- Bare `Плохо.` in wellness context falsely filled mood before the positive
+  correction. Existing negative mood matcher now requires mood context;
+  explicit mood phrases remain valid. Reducer correction changes preserved.
+- Exact full correction conversation passes without xfail; ITS xfail remains.
+  Full suite measured pre/post: 18→17 failures, 1455→1462 passes (six new cases),
+  6 skips and 1 ITS xfail. Repo lint still 199 errors; touched Ruff passes.
+- Separate replay found wellness correction contaminating pending episode onset;
+  complaint retention is not proof of temporal correctness. See current-task top
+  for commands, narrow evidence, and next ITS gate. No production acceptance.
+
+## ITS anaphora completion finding (2026-09-17)
+
+- `Только это было.` now completes ITS via the existing kernel REFERS_TO
+  relation + closed grammatical categories (`is_exclusive_topic_reference` in
+  `reference_resolver.py`); classifier `TOPIC_COMPLETE` gated on delivered ITS
+  question and a single evidenced speaker episode. ITS xfail removed only
+  after the original expectation passed under `--runxfail`; expectations
+  unchanged. Negative controls and 15 context guards added; full suite 17
+  failures unchanged, 1494 passed, 0 xfailed; repo lint still 199 errors.
+- New documented instance of free-text temporal contamination: with a pending
+  onset probe, the anaphora string was written verbatim as episode onset.
+  Unfixed — belongs to the pending-attribute observation boundary, not ITS.
+  See top of `docs/current-task.md` for commands, scope, and next gate.
+
+## Local preview restart (2026-09-17)
+
+- Authorized host bridge-only restart at 01:16:31 UTC: PID 57135 → 68416,
+  current dirty source on HEAD e81aeb8; native Darwin environment recovery,
+  unchanged launch environment, selected new-PID flags verified. Bridge/STT/TTS
+  readiness HTTP 200; new PID persisted at 69 seconds. FS/providers untouched.
+- Local preview, not production acceptance. Preflight marker absent; no tests or
+  manual call rerun; old loaded code cannot be rolled back from HEAD alone.
+  Full evidence and verification limitations: top of `docs/current-task.md`.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)

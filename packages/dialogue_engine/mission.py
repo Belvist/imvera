@@ -72,6 +72,9 @@ def daily_check_mission() -> CallMission:
             answer_type="free_text",
             allowed_values=(),
             source="daily_check_preset",
+            # Wellness find-out ladder asks up to 3 times differently
+            # (ask → hint → options) before explicit unknown.
+            max_attempts=3 if slot == "wellness" else 2,
         )
         for i, slot in enumerate(("wellness", "mood", "sleep", "plans"))
     )

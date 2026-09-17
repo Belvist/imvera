@@ -14,6 +14,8 @@ Rules:
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -33,29 +35,44 @@ def main() -> int:
     ap.add_argument("--label", required=True, choices=["answer", "skip", "garbage"])
     ap.add_argument("--text", required=True)
     args = ap.parse_args()
+    text = args.text.strip().lower()
+    if not text:
+        ap.error("--text must not be blank")
 
     src = TRAINER.read_text(encoding="utf-8")
-    row = f'    ("{args.slot}", "{args.text.strip().lower()}", "{args.label}"),\n'
+    row = f"    {(args.slot, text, args.label)!r},\n"
     marker = "    # --- LIVE_QUOTES: append every anchor-miss with its true label ---"
     assert marker in src, "trainer marker moved"
     src = src.replace(marker, marker + "\n" + row.rstrip("\n"), 1)
     TRAINER.write_text(src, encoding="utf-8")
     print(f"appended: {row.strip()}")
 
-    import subprocess
-
-    r1 = subprocess.run(
-        [sys.executable, str(ROOT / "tools/voice_lab/train_slot_answer_clf.py")],
-        cwd=ROOT, capture_output=True, text=True,
-    )
-    print(r1.stdout.strip() or r1.stderr.strip()[-500:])
-    if r1.returncode != 0:
-        return 1
-    r2 = subprocess.run(
-        [sys.executable, str(ROOT / "tools/voice_lab/ambiguity_bench.py")],
-        cwd=ROOT, capture_output=True, text=True,
-    )
-    print(r2.stdout.strip().splitlines()[0] if r2.stdout.strip() else r2.stderr.strip()[-500:])
+    stages = [
+        ("trainer", [sys.executable, str(TRAINER)], os.environ.copy()),
+        (
+            "bench (coverage=1)",
+            [sys.executable, str(ROOT / "tools/voice_lab/ambiguity_bench.py")],
+            {**os.environ, "IMVERA_COVERAGE_LADDER": "1"},
+        ),
+    ]
+    for coverage in ("0", "1"):
+        stages.append((
+            f"fuzz (coverage={coverage})",
+            [sys.executable, str(ROOT / "scripts/dialogue_behavior_fuzz.py"),
+             "--n", "1000", "--seed", "7"],
+            {**os.environ, "IMVERA_COVERAGE_LADDER": coverage},
+        ))
+    for name, command, env in stages:
+        result = subprocess.run(
+            command, cwd=ROOT, env=env, capture_output=True, text=True,
+        )
+        if result.stdout:
+            print(result.stdout, end="")
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
+        if result.returncode != 0:
+            print(f"{name} failed (exit {result.returncode})", file=sys.stderr)
+            return result.returncode
     return 0
 
 

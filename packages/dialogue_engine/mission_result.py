@@ -77,6 +77,9 @@ def build_mission_result(state: EngineState) -> MissionResultSnapshot:
         for o in (state.observations.values() if state.observations else [])
         if getattr(o, "attribute", None) and getattr(o, "value", None)
     ][:40]
+    wellness_unknown = state.observations.get("wellness_unknown")
+    if isinstance(wellness_unknown, str):
+        obs_notes.append(f"wellness_unknown:{wellness_unknown}")
     issues = [
         f"{ep.kind}:{ep.primary_label}:{ep.status}"
         for ep in state.issue_episodes.values()

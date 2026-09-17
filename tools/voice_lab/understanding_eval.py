@@ -51,8 +51,12 @@ def main() -> int:
                       if f["kind"] == "symptom" and f["subject"] == "other_person"}
         total_sp += len(want)
         for quote, _ in want:
-            if not any(_same(quote, g) for g, _ in got):
+            matches = [(g, s) for g, s in got if _same(quote, g)]
+            if not matches:
                 misses += 1
+            elif not any(s == "speaker" for _, s in matches):
+                # Mention found, but attributed to the wrong subject bucket.
+                subj_err += 1
         for g, s in got:
             if not any(_same(g, w) for w, _ in want):
                 # other-person facts must not appear as speaker mentions

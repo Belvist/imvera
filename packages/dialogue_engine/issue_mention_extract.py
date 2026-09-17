@@ -257,6 +257,9 @@ def extract_goal_facts(
         _WELLNESS_NEGATIVE,
         _WELLNESS_POSITIVE,
     )
+    from packages.dialogue_engine.fast_interpreter import (
+        is_nonhealth_evaluation as _is_film_like,
+    )
 
     core = re.sub(r"[.!?…]+$", "", raw).strip()
     # «плохо спал» is sleep evidence, not a wellness crisis by itself
@@ -279,11 +282,14 @@ def extract_goal_facts(
         )
 
     wellness_neg = bool(
-        _WELLNESS_CRISIS.search(n_wellness)
-        or _WELLNESS_NEGATIVE.search(n_wellness)
-        or _WELLNESS_FREE_NEGATED_POSITIVE.search(n_wellness)
-        or re.search(r"\b(не\s+очень|плох\w*|состояние\s+не|умира\w*)\b", n_wellness)
-        or _NEGATIVE.match(core)
+        not _is_film_like(raw)
+        and (
+            _WELLNESS_CRISIS.search(n_wellness)
+            or _WELLNESS_NEGATIVE.search(n_wellness)
+            or _WELLNESS_FREE_NEGATED_POSITIVE.search(n_wellness)
+            or re.search(r"\b(не\s+очень|плох\w*|состояние\s+не|умира\w*)\b", n_wellness)
+            or _NEGATIVE.match(core)
+        )
     )
     wellness_pos = bool(
         not wellness_neg
@@ -317,7 +323,7 @@ def extract_goal_facts(
         )
         _add("wellness", "uncertain" if _is_soso else "positive")
 
-    if _MOOD_NEGATIVE.match(core) or _MOOD_NEGATIVE_PHRASE.search(n):
+    if (answer_slot == "mood" and _MOOD_NEGATIVE.match(core)) or _MOOD_NEGATIVE_PHRASE.search(n):
         _add("mood", "negative")
     elif _MOOD_POSITIVE.search(n) or (
         re.search(r"настроени\w*", n)

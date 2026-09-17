@@ -149,6 +149,8 @@ def run_deterministic() -> BenchResult:
 def run_tiny(model: str, repeat: int) -> BenchResult:
     import os
 
+    if repeat <= 0:
+        raise ValueError("repeat must be positive")
     os.environ["IMVERA_TINYLLM_MODEL"] = model
     from packages.dialogue_engine import tinyllm
 
@@ -174,7 +176,8 @@ def run_tiny(model: str, repeat: int) -> BenchResult:
     total = len(CASES) * repeat
     p50 = lat[len(lat) // 2]
     p95 = lat[int(len(lat) * 0.95)]
-    return BenchResult(f"tiny:{model}", 1 - len(bad) / total, p50, p95, abstain, bad)
+    return BenchResult(f"tiny:{model}", (total - len(bad) - abstain) / total,
+                       p50, p95, abstain, bad)
 
 
 def main() -> int:
@@ -182,6 +185,8 @@ def main() -> int:
     ap.add_argument("--models", default="deterministic")
     ap.add_argument("--repeat", type=int, default=1)
     args = ap.parse_args()
+    if args.repeat <= 0:
+        ap.error("--repeat must be positive")
     results: list[BenchResult] = []
     for name in args.models.split(","):
         name = name.strip()
@@ -199,7 +204,7 @@ def main() -> int:
               f"p95={r.p95_ms:.1f}ms abstain={r.abstain}")
         for e in r.errors[:12]:
             print(f"   miss: {e}")
-    return 0
+    return int(any(r.errors or r.abstain for r in results))
 
 
 if __name__ == "__main__":

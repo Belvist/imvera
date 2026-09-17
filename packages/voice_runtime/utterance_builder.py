@@ -44,7 +44,6 @@ class UtteranceBuilder:
         self._endpoint_pending = False
         self._silence_frames = 0
         self._speech_frames = 0
-        post_frames = max(0, self.config.post_roll_ms // self.config.frame_ms)
         self._post_roll_remaining = 0
         self._post_roll: list[bytes] = []
 
@@ -101,23 +100,23 @@ class UtteranceBuilder:
                 self._silence_frames = 0
                 self._speech_frames = 1
                 self._segment = list(self._pre_roll)
-                self._segment.append(pcm)
             return None
 
-        if speech_started and self._endpoint_pending:
-            self._endpoint_pending = False
-            self._silence_frames = 0
-            self._segment.append(pcm)
-            self._speech_frames += 1
-            return None
+        if (speech_started or speech_active) and self._endpoint_pending:
+            self._segment.extend(self._post_roll)
+            self._post_roll = []
+            self._post_roll_remaining = 0
 
         if self._post_roll_remaining > 0:
             self._post_roll.append(pcm)
+            self._silence_frames += 1
             self._post_roll_remaining -= 1
             if self._post_roll_remaining <= 0:
                 self._segment.extend(self._post_roll)
                 self._post_roll = []
-                return self._maybe_emit(min_frames, silence_tail_ms=frame_ms)
+                return self._maybe_emit(
+                    min_frames, silence_tail_ms=self._silence_frames * frame_ms
+                )
             return None
 
         self._segment.append(pcm)
@@ -153,7 +152,7 @@ class UtteranceBuilder:
 
     def _finalize_now(self, *, silence_tail_ms: int) -> BuiltUtterance:
         pcm = b"".join(self._segment)
-        duration_ms = int(len(pcm) / max(2, self.sample_rate) * 1000)
+        duration_ms = int(len(pcm) / max(4, self.sample_rate * 2) * 1000)
         speech_ms = self._speech_frames * self.config.frame_ms
         return BuiltUtterance(
             pcm=pcm,

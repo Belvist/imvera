@@ -285,23 +285,23 @@ def _note_temporal_emit(state: EngineState, slot: str | None, intent: str) -> bo
     elif "onset" in blob:
         tkey = "temporal_onset"
     if tkey is None:
-        state.slot_unclear_counts.pop("emit_temporal_last", None)
+        state.last_temporal_probe = None
         state.slot_unclear_counts.pop("emit_temporal_onset_run", None)
         state.slot_unclear_counts.pop("emit_temporal_duration_run", None)
         return False
-    last = state.slot_unclear_counts.get("emit_temporal_last")
+    last = state.last_temporal_probe
     if last == tkey:
         run = state.slot_unclear_counts.get(f"emit_{tkey}_run", 0) + 1
     else:
         other = "temporal_duration" if tkey == "temporal_onset" else "temporal_onset"
         state.slot_unclear_counts.pop(f"emit_{other}_run", None)
         run = 1
-    state.slot_unclear_counts["emit_temporal_last"] = tkey
+    state.last_temporal_probe = tkey
     state.slot_unclear_counts[f"emit_{tkey}_run"] = run
     if run < 3:
         return False
     state.slot_unclear_counts.pop(f"emit_{tkey}_run", None)
-    state.slot_unclear_counts.pop("emit_temporal_last", None)
+    state.last_temporal_probe = None
     dropped = (
         state.pending_episode_attribute
         if state.pending_episode_attribute in ("onset", "duration")
@@ -382,26 +382,30 @@ def _emit_speak(
     gen = state.active_playout_generation + 1
     state.active_playout_generation = gen
     if marks_question and slot and not reserve_question(state, slot, gen_id):
-        # Exhausted episode probes fall back to the frozen partial-close path.
-        # Never fabricate attribute values: "unknown" is not an answer and
-        # must not be written into known_attributes (noise != answer).
-        if slot.startswith("episode_"):
-            from packages.dialogue_engine.issue_memory import (
-                activate_next_pending_episode,
-                episode_complete,
-                finalize_episode_if_complete,
-                get_active_episode,
-            )
+        # Safety probes are not quizzes: attempt caps must never silence
+        # «Что именно беспокоит?» (live: cap eaten by opening+clarify closed
+        # the call on fresh «плохо»). Bounded by concern_probe_count instead.
+        if intent not in ("probe_concern", "probe_concern_options"):
+            # Exhausted episode probes fall back to the frozen partial-close path.
+            # Never fabricate attribute values: "unknown" is not an answer and
+            # must not be written into known_attributes (noise != answer).
+            if slot.startswith("episode_"):
+                from packages.dialogue_engine.issue_memory import (
+                    activate_next_pending_episode,
+                    episode_complete,
+                    finalize_episode_if_complete,
+                    get_active_episode,
+                )
 
-            ep = get_active_episode(state)
-            if ep is not None:
-                finalize_episode_if_complete(ep)
-            state.pending_episode_attribute = None
-            state.waiting_on_slot = None
-            if ep is not None and episode_complete(ep):
-                activate_next_pending_episode(state)
-                return _schedule_advance(state)
-        return _close_partial(state)
+                ep = get_active_episode(state)
+                if ep is not None:
+                    finalize_episode_if_complete(ep)
+                state.pending_episode_attribute = None
+                state.waiting_on_slot = None
+                if ep is not None and episode_complete(ep):
+                    activate_next_pending_episode(state)
+                    return _schedule_advance(state)
+            return _close_partial(state)
     resolved_goal = goal_id or (slot if intent == "ask_mission_goal" else None)
     q = Question(
         question_id=gen_id,
@@ -632,10 +636,115 @@ def _on_interpretation_completed(
     return _apply_semantic(state, event.semantic)
 
 
+_VALENCE_ORDER = {"positive": 2, "uncertain": 1, "negative": 0}
+
+
+def _wellness_contradicts(state: EngineState, fact, turn: RichUserTurn) -> bool:
+    """Fresh deterioration or grounded current self-assessment over a filled slot.
+
+    Someone else's complaint never contradicts the speaker's record
+    («у мужа плохо» after speaker «хорошо» changes nothing).
+    """
+    if fact.value not in _VALENCE_ORDER:
+        return False
+    rec = state.slot_records.get("wellness")
+    if rec is None:
+        return False
+    if rec.polarity == fact.value:
+        return False
+    try:
+        from packages.dialogue_engine.policy import _is_other_person_only
+
+        if _is_other_person_only(turn.raw_text):
+            return False
+    except Exception:  # noqa: BLE001 — fail open to contradiction
+        pass
+    if fact.value == "positive":
+        from packages.dialogue_engine.fast_interpreter import _WELLNESS_POSITIVE
+
+        # The harvester currently labels even historical facts as "now".
+        # Require a complete present-tense self-assessment, not a positive
+        # fragment inside a historical, conditional or mixed statement.
+        quote = fact.evidence.quote if fact.evidence else ""
+        assessment = re.sub(r"^(?:нет\s*[,—-]?\s*)?(?:я\s+)?", "", quote.strip(), flags=re.I)
+        return bool(
+            fact.subject == "speaker"
+            and fact.temporal_scope == "now"
+            and not fact.negated
+            and quote
+            and quote in turn.raw_text
+            and turn.control in ("none", "")
+            and not turn.user_question
+            and _WELLNESS_POSITIVE.fullmatch(assessment.rstrip(".!…"))
+        )
+    rec_order = _VALENCE_ORDER.get(rec.polarity, 2)  # unknown ≈ positive-like
+    return _VALENCE_ORDER[fact.value] < rec_order
+
+
+def _is_bare_valence_for_wellness(text: str, turn: RichUserTurn) -> bool:
+    """Whole utterance is just a valence assessment («Так себе.»).
+
+    Such turns carry no slot-specific content, so harvesters scoped to the
+    delivered slot yield nothing and the ladder would march on in silence.
+    A bare negative/uncertain self-assessment is always health-relevant —
+    never a reason to advance past it quietly.
+    """
+    raw = (text or "").strip()
+    if not raw or len(raw) > 60:
+        return False
+    if turn.control not in ("none", ""):
+        return False
+    if turn.dialogue_act != "answer":
+        return False
+    if turn.user_question:
+        return False
+    try:
+        from packages.dialogue_engine.fast_interpreter import (
+            _detect_polarity as _bare_polarity,
+        )
+        from packages.dialogue_engine.policy import (
+            _is_other_person_only as _bare_other_only,
+        )
+
+        if _bare_polarity(raw) not in ("negative", "uncertain"):
+            return False
+        if _bare_other_only(raw):
+            return False
+    except Exception:  # noqa: BLE001 — fail closed (no synthesis)
+        return False
+    return True
+
+
 def _apply_goal_facts(state: EngineState, turn: RichUserTurn) -> list[str]:
     filled: list[str] = []
     for fact in turn.goal_facts:
         if state.slots.get(fact.field) != SlotStatus.OPEN:
+            # Deterioration after a fill must never be silently dropped.
+            # Live holes: «Плохо мне.» after positive wellness slid to food;
+            # «мне плохо» at summary got a polite goodbye. A strictly worse
+            # valence overwrites the record (probe follows via safety net);
+            # the ladder is never advanced here — hence no `filled` append.
+            if fact.field == "wellness" and _wellness_contradicts(state, fact, turn):
+                quote = fact.evidence.quote if fact.evidence else turn.raw_text
+                prev = state.slot_records.get("wellness")
+                state.slot_corrections.append(
+                    {
+                        "slot": "wellness",
+                        "old": prev.value if prev is not None else "",
+                        "new": fact.value,
+                        "source_turn": turn.utterance_id,
+                    }
+                )
+                apply_slot_answer(
+                    state,
+                    "wellness",
+                    fact.value,
+                    turn_id=turn.utterance_id,
+                    source_text=quote,
+                    polarity=fact.value,
+                    confidence=0.9,
+                    correction=True,
+                )
             continue
         if fact.field in ("wellness", "mood", "sleep"):
             from packages.dialogue_engine.policy import _is_other_person_only
@@ -964,6 +1073,23 @@ def _apply_rich_turn(
             if facts and facts[0].field == slot:
                 turn = turn.model_copy(update={"goal_facts": facts})
                 break
+
+    if (
+        not turn.goal_answers
+        and not turn.goal_facts
+        and _is_bare_valence_for_wellness(user_text, turn)
+    ):
+        from packages.dialogue_engine.issue_mention_extract import (
+            extract_goal_facts as _bare_goal_facts,
+        )
+
+        _bare = [
+            f
+            for f in _bare_goal_facts(user_text, answer_slot="wellness")
+            if f.field == "wellness" and f.value in ("negative", "uncertain")
+        ]
+        if _bare:
+            turn = turn.model_copy(update={"goal_facts": tuple(_bare)})
 
     newly_filled = _apply_goal_facts(state, turn)
     if newly_filled:
@@ -1551,6 +1677,13 @@ def _record_negative_wellness(
         return False
     from packages.dialogue_engine.check_path import is_urgent_state
     from packages.dialogue_engine.fast_interpreter import _detect_polarity
+    from packages.dialogue_engine.fast_interpreter import (
+        is_nonhealth_evaluation as _film_eval,
+    )
+
+    # «Мне плохо от фильма» is not a health fact on any path.
+    if _film_eval(user_text):
+        return False
 
     # Red-state cries («умираю») are negative facts even though no polarity
     # list contains them.

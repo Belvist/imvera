@@ -144,8 +144,13 @@ def _record_important_share(state: EngineState, text: str) -> None:
 def _classify_important_to_share_answer(
     turn: RichUserTurn | None,
     raw: str,
+    state: EngineState | None = None,
 ) -> str:
     """Semantic class for ITS answers — raw text alone is never a recorded fact."""
+    from packages.dialogue_engine.semantic_kernel.reference_resolver import (
+        is_exclusive_topic_reference,
+    )
+
     if _is_important_to_share_decline(raw):
         return "DECLINE"
     if turn is not None:
@@ -161,6 +166,19 @@ def _classify_important_to_share_answer(
             return "NEW_GROUNDED_INFORMATION"
         if turn.dialogue_act in ("unclear", "backchannel"):
             return "UNCLEAR"
+        if (
+            turn.dialogue_act == "answer"
+            and turn.answers_pending_question
+            and not turn.needs_clarification
+            and not turn.kernel_ambiguities
+            and not turn.risk_candidates
+            and not turn.observations
+            and not turn.episode_attributes
+            and is_exclusive_topic_reference(
+                raw, turn.semantic_spans, turn.semantic_relations, state,
+            )
+        ):
+            return "TOPIC_COMPLETE"
     if _mentions_medication(raw or ""):
         return "NEW_GROUNDED_INFORMATION"
     # Meaningful text without grounded extraction → not a share note.
@@ -473,6 +491,21 @@ def _wellness_entry_covered(state: EngineState) -> bool:
     return False
 
 
+def _turn_reports_fresh_negative(turn) -> bool:
+    """This turn carries a fresh negative wellness signal.
+
+    Early-close (reluctance) must yield to it: «Нет, мне плохо» at summary
+    is a health report, not consent to hang up. Scoped to this turn only —
+    an old probed negative must not block a later tired close.
+    """
+    if turn is None:
+        return False
+    for fact in turn.goal_facts or ():
+        if fact.field == "wellness" and fact.value in ("negative", "uncertain"):
+            return True
+    return False
+
+
 def _important_to_share_plan(state: EngineState) -> ResponsePlan | None:
     if state.important_to_share_asked or state.important_to_share_resolved:
         return None
@@ -690,17 +723,17 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
     # Reluctance: client signals they are done — warm early close with what
     # is recorded, instead of squeezing (never on URGENT path).
     # ADR-014 exception, flagged: IMVERA_COVERAGE_LADDER=1.
-    # First: a first answer that contributed NOTHING (no fill, no facts,
-    # no mentions — «Непонятно.», debris) must clarify wellness itself,
-    # never slide into the ladder with health unknown (live fs-d99db688).
-    # Once per call, pilot-flagged.
+    # Find-out ladder for an answer that contributed NOTHING (no fill, no
+    # facts, no mentions — «Непонятно.», debris): try to find out, each time
+    # differently — hint, then concrete options — then record unknown
+    # EXPLICITLY and move on. Never slide into the ladder with health
+    # unknown (live fs-d99db688), never hang up on confusion. Bounded: 3.
     if (
         turn is not None
         and state.check_path != CheckPath.URGENT
         and not _has_open_episodes(state)
         and state.slots.get("wellness") == SlotStatus.OPEN
         and state.first_user_turn_received
-        and not state.wellness_clarify_asked
         and not turn.issue_mentions
         and not turn.goal_facts
         and not turn.user_question
@@ -709,17 +742,67 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         from packages.dialogue_engine.runtime import coverage_ladder_enabled as _ladder
 
         if _ladder():
+            from packages.dialogue_engine.fast_interpreter import (
+                is_nonhealth_evaluation as _film_clarify,
+            )
+
+            attempt = state.slot_unclear_counts.get("wellness", 0) + 1
+            state.slot_unclear_counts["wellness"] = attempt
             state.wellness_clarify_asked = True
+            if attempt == 1:
+                # Heard, but off-topic («фильм плохой»): acknowledge and
+                # redirect to self instead of lying «не расслышала».
+                _raw = (turn.raw_text or "").strip()
+                if _film_clarify(_raw) and len(_raw.split()) >= 2:
+                    _q = (
+                        "Понятно. А вы сами как себя чувствуете — "
+                        "хорошо или не очень?"
+                    )
+                else:
+                    _q = (
+                        "Простите, не расслышала. Как вы себя чувствуете — "
+                        "хорошо или не очень?"
+                    )
+                return ResponsePlan(
+                    obligation=ConversationObligation.NEVER_SILENT,
+                    action="speak",
+                    mandatory_question=_q,
+                    intent="clarify_wellness",
+                    slot="wellness",
+                    marks_question=True,
+                )
+            if attempt == 2:
+                return ResponsePlan(
+                    obligation=ConversationObligation.NEVER_SILENT,
+                    action="speak",
+                    mandatory_question=(
+                        "Скажите просто: хорошо, нормально или плохо?"
+                    ),
+                    intent="clarify_wellness",
+                    slot="wellness",
+                    marks_question=True,
+                )
+            from packages.dialogue_engine.state import GoalLifecycle
+
+            goal = state.goals.get("wellness")
+            if goal is not None:
+                goal.lifecycle = GoalLifecycle.UNCLEAR
+                goal.status = SlotStatus.UNRESOLVED
+            state.slots["wellness"] = SlotStatus.UNRESOLVED
+            _mark_slot_coverage(
+                state, "wellness", BackgroundGoalCoverage.SKIPPED
+            )
+            state.observations["wellness_unknown"] = (turn.raw_text or "").strip()
+            state.slot_unclear_counts.pop("wellness", None)
             return ResponsePlan(
                 obligation=ConversationObligation.NEVER_SILENT,
                 action="speak",
                 mandatory_question=(
-                    "Простите, не расслышала. Как вы себя чувствуете — "
-                    "хорошо или не очень?"
+                    "Не получается разобрать, я это запишу. Продолжим?"
                 ),
-                intent="clarify_wellness",
+                intent="wellness_unknown",
                 slot="wellness",
-                marks_question=True,
+                marks_question=False,
             )
     if turn is not None and state.check_path != CheckPath.URGENT:
         from packages.dialogue_engine.reluctance import note_reluctance, wants_early_close
@@ -739,12 +822,14 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             coverage_ladder_enabled()
             and wants_early_close(state)
             and not _has_open_episodes(state)
+            and not _turn_reports_fresh_negative(turn)
         ):
             return _summary_plan(state)
         elif (
             coverage_ladder_enabled()
             and wants_early_close(state)
             and state.reluctance_score >= 10
+            and not _turn_reports_fresh_negative(turn)
         ):
             # Explicit finish-now: close even with open threads, facts kept.
             return _summary_plan(state)
@@ -930,8 +1015,10 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 slot="important_to_share",
                 marks_question=True,
             )
-        its_class = _classify_important_to_share_answer(turn, raw)
-        if its_class == "DECLINE":
+        its_class = _classify_important_to_share_answer(turn, raw, state)
+        # Fresh negative inside a decline («Нет, мне плохо») is a health
+        # report, not consent to close: fall through to the safety net.
+        if its_class in ("DECLINE", "TOPIC_COMPLETE") and not _turn_reports_fresh_negative(turn):
             state.important_to_share_resolved = True
             if state.mandatory_background_goals:
                 bg = _background_goal_plan(state, filled=filled)
@@ -998,7 +1085,11 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
     # A twice-vague critical caller escalates with concern unknown (never a
     # «не получилось узнать» partial on red). Runs also on URGENT check path
     # while red_state_pending (clarifying WHAT before the close).
-    if not _has_open_episodes(state) and not state.important_to_share_asked:
+    # A fresh negative re-arms the net even after ITS was asked: the probe
+    # below fires on the record, which the reducer just updated.
+    if not _has_open_episodes(state) and (
+        not state.important_to_share_asked or _turn_reports_fresh_negative(turn)
+    ):
         _concern_bits = " ".join(
             x
             for x in [
@@ -1057,6 +1148,10 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             r"не\s+очень|так\s+себе)",
             _well_text.lower(),
         )
+        # Health concern only: a plain ITS note («Дома буду») is not a
+        # concern and must not stand the net down (live: «мне плохо» at
+        # summary slid to goodbye because ITS was already asked).
+        _health_concern = (state.wellness_concern or "").strip()
         _negative_no_concern = (
             _well is not None
             and (
@@ -1064,7 +1159,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 or _well.polarity == "uncertain"
                 or (_well.polarity is None and _bad_markers)
             )
-            and not _concern_bits.strip()
+            and not _health_concern
             and not _declined
         ) or (state.red_state_pending and not _concern_bits.strip())
         if _negative_no_concern and (
@@ -1197,6 +1292,13 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                         marks_question=True,
                     )
             return _summary_plan(state)
+
+    if _has_open_episodes(state) and not _all_episodes_resolved(state):
+        # No episode plan materialized (ask caps exhausted on confusion):
+        # never re-ask an answered slot, never hang up on confusion.
+        # Warm summary with what IS known (partial episode data kept,
+        # nothing fabricated); the user can still add after it.
+        return _summary_plan(state)
 
     return ResponsePlan(
         obligation=ConversationObligation.NEVER_SILENT,

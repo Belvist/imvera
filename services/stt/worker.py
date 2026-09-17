@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import base64
+import logging
 import os
 import tempfile
 import wave
 from pathlib import Path
 from typing import Any
-
-import logging
 
 import uvicorn
 import yaml
@@ -77,7 +76,15 @@ def _transcribe_sync(
     if hotwords is not None:
         raw_text = _asr.transcribe_wav(wav_path, hotwords=hotwords)
     else:
-        raw_text = _asr.transcribe_wav(wav_path)
+        try:
+            raw_text = _asr.transcribe_wav(wav_path)
+        except ValueError as exc:
+            # Over the ~25s single-pass limit (slow elderly speech): fall
+            # back to windowed longform instead of HTTP 500.
+            if "Too long" not in str(exc) or not hasattr(_asr, "transcribe_wav_longform"):
+                raise
+            logger.info("stt longform fallback duration_ms=%d", duration_ms)
+            raw_text = _asr.transcribe_wav_longform(wav_path)
     text = normalize_transcript(raw_text)
     quality = assess_asr_quality(
         pcm,

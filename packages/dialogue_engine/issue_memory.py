@@ -708,7 +708,6 @@ def _fill_pending_attribute_for_episode(
         if value:
             ep.known_attributes["onset"] = value
             state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
-            _maybe_infer_current_active_from_temporal_answer(ep, turn.raw_text)
             _maybe_clear_pending_attribute(state, episode_id, attribute)
             finalize_episode_if_complete(ep)
         else:
@@ -746,7 +745,6 @@ def _fill_pending_attribute_for_episode(
         if value:
             ep.known_attributes["duration"] = value
             state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
-            _maybe_infer_current_active_from_temporal_answer(ep, turn.raw_text)
             _maybe_clear_pending_attribute(state, episode_id, attribute)
             finalize_episode_if_complete(ep)
         else:
@@ -817,8 +815,6 @@ def _second_tier_judgement(
         if _mem == "answer":
             ep.known_attributes[attribute] = turn.raw_text.strip()[:80]
             state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
-            if attribute in ("onset", "duration"):
-                _maybe_infer_current_active_from_temporal_answer(ep, turn.raw_text)
             _maybe_clear_pending_attribute(state, episode_id, attribute)
             finalize_episode_if_complete(ep)
             return True
@@ -845,8 +841,6 @@ def _second_tier_judgement(
                 _mem_record(client_id, attribute, turn.raw_text, "answer")
         ep.known_attributes[attribute] = turn.raw_text.strip()[:80]
         state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
-        if attribute in ("onset", "duration"):
-            _maybe_infer_current_active_from_temporal_answer(ep, turn.raw_text)
         _maybe_clear_pending_attribute(state, episode_id, attribute)
         finalize_episode_if_complete(ep)
         return True
@@ -885,17 +879,6 @@ def _mark_temporal_asked(state: EngineState, ep: IssueEpisode) -> None:
         ep.known_attributes["_temporal_skipped"] = "1"
     except Exception:  # noqa: BLE001 — telemetry must never break dialogue
         pass
-
-
-def _maybe_infer_current_active_from_temporal_answer(ep: IssueEpisode, text: str) -> None:
-    """Temporal-only answer to when/current compound ⇒ still active unless improved."""
-    from packages.dialogue_engine.question_context import utterance_indicates_resolved
-
-    if ep.known_attributes.get("current"):
-        return
-    if utterance_indicates_resolved(text):
-        return
-    ep.known_attributes["current"] = "active"
 
 
 def _fill_pending_attribute_from_answer(state: EngineState, turn: RichUserTurn) -> None:

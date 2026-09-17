@@ -163,16 +163,9 @@ def is_urgent_state(text: str) -> bool:
 
 
 def looks_like_duration_answer(text: str) -> bool:
-    normalized = (text or "").lower().strip()
-    if not normalized:
-        return False
-    if is_urgent_concern(normalized):
-        return True
-    if _DURATION_HINT.search(normalized):
-        return True
-    if re.match(r"^\d+\s*(час|день|дн|недел)", normalized):
-        return True
-    return len(normalized.split()) >= 2
+    from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
+
+    return extract_grounded_onset_value(text or "") is not None
 
 
 def _pain_ok_but(text: str) -> bool:
@@ -302,11 +295,14 @@ def _probe_duration(state: EngineState, text: str) -> ProbeStep:
     from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
     from packages.dialogue_engine.state import CheckPath
 
-    state.wellness_duration = text
-    state.probe_phase = None
     if is_urgent_concern(text) or is_urgent_concern(state.wellness_concern):
         state.check_path = CheckPath.URGENT
+        state.probe_phase = None
         return ProbeStep(action=ProbeAction.URGENT_CLOSE)
+    if not looks_like_duration_answer(text):
+        return ProbeStep(action=ProbeAction.SPEAK_PROBE, probe_phase="duration")
+    state.wellness_duration = text
+    state.probe_phase = None
     if state.active_episode_id:
         ep = state.issue_episodes.get(state.active_episode_id)
         if ep is not None:

@@ -90,7 +90,9 @@ SEED_ROWS: list[tuple[str, str, str]] = [
     ("wellness", "так себе", "answer"),
     ("wellness", "мне так себе", "answer"),
     ("wellness", "по состоянию мне более-менее", "answer"),
-    ("wellness", "средне", "answer"), ("wellness", "терпимо", "answer"),
+    ("wellness", "средне", "answer"), ("wellness", "средненько", "answer"),
+    ("wellness", "средненько себя чувствую", "answer"),
+    ("wellness", "терпимо", "answer"),
     ("wellness", "сойдёт", "answer"), ("wellness", "пойдёт", "answer"),
     ("wellness", "ни шатко ни валко", "answer"),
     ("wellness", "кое-как", "answer"),
@@ -115,6 +117,19 @@ SEED_ROWS: list[tuple[str, str, str]] = [
     ("wellness", "у мужа плохо", "garbage"),
     ("wellness", "муж болеет", "garbage"),
     ("wellness", "что вы спросили", "garbage"),
+    # --- nonsense breadth: garbage is an open class, it needs examples ---
+    ("wellness", "белиберда", "garbage"),
+    ("wellness", "трамвай", "garbage"),
+    ("wellness", "тарабарщина", "garbage"),
+    ("wellness", "крокодил", "garbage"),
+    ("wellness", "чемодан", "garbage"),
+    ("wellness", "огурец", "garbage"),
+    ("wellness", "эээ", "garbage"),
+    ("wellness", "ммм", "garbage"),
+    ("wellness", "шо", "garbage"),
+    ("wellness", "каво", "garbage"),
+    ("wellness", "бла бла бла", "garbage"),
+    ("wellness", "трали вали", "garbage"),
     # --- skips (refuse the dimension, move on) ---
     ("onset", "дальше", "skip"), ("onset", "давай дальше", "skip"),
     ("onset", "пропусти", "skip"), ("onset", "не помню когда", "skip"),
@@ -176,6 +191,10 @@ _SKIP_FORMS = [
 _GARBAGE_FORMS = [
     "поднял", "ага", "угу", "ну", "э-э", "пло", "алло", "спасибо",
     "колю покушал когда", "это хуйня", "чего-то там",
+    # nonsense breadth: garbage is an open class (live: «Трамвай» was
+    # recorded as duration). Same list feeds onset/duration/severity.
+    "белиберда", "трамвай", "тарабарщина", "крокодил", "чемодан",
+    "огурец", "эээ", "ммм", "абракадабра", "трали вали",
 ]
 _WELLNESS_ANSWERS = [
     "хорошо", "нормально", "отлично", "прекрасно", "неплохо",
@@ -191,6 +210,8 @@ _WELLNESS_GARBAGE = [
     "поднял", "ага", "угу", "да", "нет", "ну", "э-э", "пло", "алло",
     "спасибо", "абракадабра", "не знаю", "не помню",
     "у мужа плохо", "муж болеет", "что вы спросили",
+    "белиберда", "трамвай", "тарабарщина", "крокодил", "чемодан",
+    "огурец", "эээ", "ммм", "шо", "каво", "бла бла бла", "трали вали",
 ]
 
 
@@ -225,6 +246,8 @@ def _preload() -> list[tuple[str, str, str]]:
         rows.append(("wellness", g, "garbage"))
     for c in ("ещё болит", "уже не болит", "прошла", "полегче", "болит"):
         rows.append(("current", c, "answer"))
+    for g in _GARBAGE_FORMS:
+        rows.append(("current", g, "garbage"))
     return rows
 
 

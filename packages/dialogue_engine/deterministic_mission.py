@@ -572,7 +572,14 @@ def _wellness_grounded(speaker_text: str) -> bool:
         from packages.dialogue_engine.fast_interpreter import (
             _detect_polarity as _well_pol,
         )
+        from packages.dialogue_engine.fast_interpreter import (
+            is_nonhealth_evaluation as _well_film,
+        )
 
+        # «Мне плохо от фильма»: badness about something else is not a
+        # health answer, even though polarity/complaint markers fire.
+        if _well_film(raw):
+            return False
         if _well_pol(raw) is not None:
             return True
     except Exception:  # noqa: BLE001
@@ -929,6 +936,17 @@ class DeterministicMissionUnderstandingProvider:
                 speaker = _wellness_speaker_text(stripped)
                 if speaker is None or not speaker:
                     return None
+                try:
+                    from packages.dialogue_engine.fast_interpreter import (
+                        is_nonhealth_evaluation as _film_veto,
+                    )
+
+                    # Morphology veto beats the learned boundary: film-eval
+                    # must not reach the judge as a candidate at all.
+                    if _film_veto(speaker):
+                        return None
+                except Exception:  # noqa: BLE001
+                    pass
                 if not _wellness_grounded(speaker):
                     # Tier-2 (pilot only): learned answer/skip/garbage boundary
                     # for anchor-misses. `answer` records the user's own words

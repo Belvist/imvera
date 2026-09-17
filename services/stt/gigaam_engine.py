@@ -128,6 +128,30 @@ class GigaAMEngine:
             return (result.text or "").strip()
         return str(result).strip()
 
+    def transcribe_wav_longform(self, wav_path: Path) -> str:
+        """Chunked transcription for audio over the ~25s model limit.
+
+        Deliberately NOT gigaam.transcribe_longform: it requires pyannote
+        (gated weights, heavy deps). Fixed windows + overlap + word dedup
+        need nothing new; input is already a VAD utterance.
+        """
+        import wave
+
+        from services.stt.longform import transcribe_long_audio
+
+        with wave.open(str(wav_path), "rb") as wf:
+            rate = wf.getframerate()
+            pcm = wf.readframes(wf.getnframes())
+        return transcribe_long_audio(
+            pcm, rate, lambda chunk_wav: self._transcribe_chunk(chunk_wav)
+        )
+
+    def _transcribe_chunk(self, wav_path: Path) -> str:
+        result = self.model.transcribe(str(wav_path))
+        if hasattr(result, "text"):
+            return (result.text or "").strip()
+        return str(result).strip()
+
 
 def load_gigaam_engine(asr_cfg: dict[str, Any]) -> GigaAMEngine:
     """Load GigaAM ASR model; fails loud if deps or weights are missing."""

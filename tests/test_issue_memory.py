@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from packages.contracts.semantic import Evidence, IssueMention, SemanticPayload
 from packages.dialogue_engine.issue_memory import (
     get_active_episode,
@@ -174,3 +176,93 @@ def test_correction_does_not_duplicate_mention() -> None:
     )
     after = len(state.issue_episodes[ep_id].mentions)
     assert after == before + 1
+
+
+@pytest.mark.parametrize("ladder", ["0", "1"])
+@pytest.mark.parametrize("attribute", ["onset", "duration"])
+@pytest.mark.parametrize("current", [None, "active", "resolved"])
+def test_temporal_answer_does_not_invent_current(monkeypatch, ladder, attribute, current) -> None:
+    from packages.dialogue_engine.state import IssueEpisode
+
+    monkeypatch.setenv("IMVERA_COVERAGE_LADDER", ladder)
+    ep = IssueEpisode(
+        episode_id="headache", primary_label="головная боль", kind="symptom",
+        body_site="голова", subject="speaker",
+        known_attributes={} if current is None else {"current": current},
+    )
+    state = EngineState(
+        call_id="temporal-only", issue_episodes={ep.episode_id: ep},
+        active_episode_id=ep.episode_id, pending_episode_attribute=attribute,
+    )
+    text = "С 10 утра"
+    ingest_rich_turn(
+        state,
+        build_rich_turn_from_payload(
+            _payload_answer(text), utterance_id="u-temporal", raw_text=text,
+        ),
+    )
+    ep = state.issue_episodes[ep.episode_id]
+    assert ep.known_attributes[attribute] == text
+    assert ep.known_attributes.get("current") == current
+    assert state.pending_episode_attribute is None
+    if current is None:
+        assert ep.status == "open"
+
+
+@pytest.mark.parametrize("ladder", ["0", "1"])
+def test_runtime_temporal_only_keeps_current_unresolved(monkeypatch, ladder) -> None:
+    from packages.dialogue_engine.effects import SpeakEffect
+    from packages.dialogue_engine.engine import DialogueEngine
+    from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
+
+    monkeypatch.setenv("IMVERA_COVERAGE_LADDER", ladder)
+    engine = DialogueEngine(call_id="temporal-runtime")
+
+    def deliver(effects):
+        speaks = [effect for effect in effects if isinstance(effect, SpeakEffect)]
+        for effect in speaks:
+            engine.on_playout_started(effect.generation, effect.question_id)
+            engine.on_playout_completed(effect.generation, effect.question_id)
+        return speaks
+
+    def reply(text):
+        slot = engine.answer_context_slot()
+        uid = f"u-{engine.state.revision}"
+        parsed = interpret(text, utterance_id=uid, engine_state=engine.state, answer_slot=slot)
+        turn = kernel_to_rich_turn(parsed, answer_slot=slot, engine_state=engine.state)
+        return deliver(engine.on_user_turn(uid, text, rich_turn=turn))
+
+    deliver(engine.start())
+    reply("Меня знобит.")
+    ep_id = engine.state.active_episode_id
+    assert ep_id is not None
+    assert engine.state.pending_episode_attribute == "onset"
+    ep_before = engine.state.issue_episodes[ep_id]
+    current_before = ep_before.known_attributes.get("current")
+    speaks = reply("С 10 утра")
+    ep = engine.state.issue_episodes[ep_id]
+    assert ep.known_attributes["onset"] == "С 10 утра"
+    assert ep.known_attributes.get("current") == current_before
+    assert speaks
+    assert not engine.state.call_closed
+
+
+@pytest.mark.parametrize("text, current", [("Ещё болит.", "active"), ("Уже не болит.", "resolved")])
+def test_explicit_current_answer_remains_grounded(text, current) -> None:
+    from packages.dialogue_engine.state import IssueEpisode
+
+    ep = IssueEpisode(
+        episode_id="headache", primary_label="головная боль", kind="symptom",
+        body_site="голова", subject="speaker", known_attributes={"onset": "С утра"},
+    )
+    state = EngineState(
+        call_id="explicit-current", issue_episodes={ep.episode_id: ep},
+        active_episode_id=ep.episode_id, pending_episode_attribute="current",
+    )
+    ingest_rich_turn(
+        state,
+        build_rich_turn_from_payload(
+            _payload_answer(text), utterance_id="u-current", raw_text=text,
+        ),
+    )
+    assert state.issue_episodes[ep.episode_id].known_attributes["current"] == current

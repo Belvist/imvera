@@ -173,6 +173,15 @@ def fast_interpret_semantic(
                     ),
                     True,
                 )
+            return (
+                SemanticTurn(
+                    act=SemanticAct.UNCLEAR,
+                    target_slot=answer_slot,
+                    confidence=0.2,
+                    source_quote=raw,
+                ),
+                False,
+            )
         if len(core.split()) >= 1 and core not in _BACKCHANNEL:
             return (
                 SemanticTurn(
@@ -221,6 +230,16 @@ def fast_interpret_semantic(
         )
 
     if _UNCERTAIN.match(core):
+        if answer_slot == "wellness":
+            return (
+                SemanticTurn(
+                    act=SemanticAct.UNCLEAR,
+                    target_slot=answer_slot,
+                    confidence=0.2,
+                    source_quote=raw,
+                ),
+                False,
+            )
         return (
             SemanticTurn(
                 act=SemanticAct.ANSWER,
@@ -431,6 +450,54 @@ def _detect_polarity(text: str) -> str | None:
     if _MOOD_POSITIVE.search(normalized):
         return "positive"
     return None
+
+
+# Non-health evaluation carrying "bad": badness predicated of an external
+# object («фильм плохой») or caused by a non-bodily thing («мне плохо от
+# фильма»). Asymmetry is deliberate: the bodily/physiological class is
+# CLOSED (body doesn't invent new organs), while films/foods/news/jobs are
+# OPEN — so openness defaults to "not health", and no listing is needed.
+_BODILY_CAUSE = re.compile(
+    r"(голов|серд[еи]ц|бол|болит|болезн|давлен|температур|жар[аыу]|духот|"
+    r"холод|погод|головокруж|тошн|озноб|горл|живот|спин|поясниц|сустав|"
+    r"груд|кашл|насморк|грипп|простуд|дав[аи]т|кружи|рв[ео]т|неме[ею]т|"
+    r"лом[яи]т|тян[еу]т|но[ею]т|перш|заложен|слабост|устал)",
+    re.I,
+)
+_BODY_PART = re.compile(
+    r"\b(ног|рук|голов|сердц|спин|живот|горл|глаз|зуб|сустав|поясниц|груд|"
+    r"ше[яию]|ух[аоу]|нос|лоб|висок|челюст|печен|почк|плеч|колен|локт)\w*",
+    re.I,
+)
+_SELF_STATE = re.compile(
+    r"\b(я|мне|меня|мной|у\s+меня|себя|состояние|самочувствие|здоровье)\b",
+    re.I,
+)
+_PLOH_ADJECTIVE = re.compile(
+    r"\bплох(ой|ая|ое|ие|ого|его|ому|ему|ым|им|ом|ем|ую|юю|ею|ою|их|ых)\b",
+    re.I,
+)
+
+
+def is_nonhealth_evaluation(text: str) -> bool:
+    """True when «плохо» rates something other than the speaker's health."""
+    low = (text or "").lower()
+    if "плох" not in low:
+        return False
+    # Badness as an adjective on a non-self, non-body object: «фильм
+    # плохой», «еда плохая». Bare adverb («плохо», «мне плохо») stays health.
+    if (
+        _PLOH_ADJECTIVE.search(low)
+        and not _SELF_STATE.search(low)
+        and not _BODY_PART.search(low)
+    ):
+        return True
+    # Self-state badness blamed on a non-bodily cause: «мне плохо от
+    # фильма». Bodily causes («от боли», «от жары») stay health.
+    if re.search(r"\bот\b", low) and not _BODILY_CAUSE.search(low):
+        if not _BODY_PART.search(low):
+            return True
+    return False
 
 
 def _resolve_slot(answer_slot: str, text: str, polarity: str) -> str:

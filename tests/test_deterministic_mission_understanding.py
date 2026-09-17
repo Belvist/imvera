@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import ast
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -13,7 +13,6 @@ import pytest
 
 from packages.contracts.enums import AsrQuality
 from packages.core.memory_store import InMemoryCallRecordStore
-from packages.dialogue.session import CallSession
 from packages.dialogue_engine.deterministic_mission import (
     DeterministicMissionUnderstandingProvider,
 )
@@ -197,7 +196,8 @@ def test_ambiguous_does_not_fabricate_satisfied() -> None:
         assert ans.evidence.casefold() in "ну вроде оплатили"
     # Prefer unclear over guessing when binding is weak/ambiguous.
     if not result.goal_answers:
-        assert result.goal_dispositions or True
+        assert result.goal_dispositions
+        assert any(d.disposition == "unclear" for d in result.goal_dispositions)
     else:
         # If something bound, must be uniquely evidenced — never both goals.
         assert len(result.goal_answers) <= 1
@@ -349,9 +349,10 @@ def test_media_bridge_readiness_green_without_llm(monkeypatch: pytest.MonkeyPatc
             return False
 
         async def get(self, url: str):
+            req = httpx.Request("GET", url)
             if ":9103" in url:
-                return httpx.Response(503, json={"status": "down"}, request=httpx.Request("GET", url))
-            return httpx.Response(200, json={"status": "ok"}, request=httpx.Request("GET", url))
+                return httpx.Response(503, json={"status": "down"}, request=req)
+            return httpx.Response(200, json={"status": "ok"}, request=req)
 
     monkeypatch.setattr(httpx, "AsyncClient", Client)
     blockers = asyncio.run(ca.inference_blockers())

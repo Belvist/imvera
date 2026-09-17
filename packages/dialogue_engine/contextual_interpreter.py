@@ -23,6 +23,7 @@ from packages.dialogue_engine.fast_interpreter import (
     _WELLNESS_POSITIVE,
     _detect_polarity,
     _normalize_core,
+    is_nonhealth_evaluation,
 )
 from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
 
@@ -132,6 +133,12 @@ def interpret_structured(text: str, ctx: InterpretContext) -> StructuredMeaning:
                     raw_text=raw,
                     confidence=0.93,
                 )
+            return StructuredMeaning(
+                act=SemanticAct.UNCLEAR.value,
+                answers_to=ctx.answer_slot,
+                raw_text=raw,
+                confidence=0.2,
+            )
         if len(core.split()) >= 1 and core not in _BACKCHANNEL:
             return StructuredMeaning(
                 act=SemanticAct.ANSWER.value,
@@ -252,14 +259,19 @@ def interpret_structured(text: str, ctx: InterpretContext) -> StructuredMeaning:
                 raw_text=raw,
                 confidence=0.94,
             )
-        return StructuredMeaning(
-            act=SemanticAct.ANSWER.value,
-            answers_to=slot,
-            slots={slot: SlotCandidate(value=raw, polarity=polarity, confidence=0.96)},
-            polarity=polarity,
-            raw_text=raw,
-            confidence=0.96,
-        )
+        # Film-eval («мне плохо от фильма») is never a negative fact on
+        # any slot: skip the shortcut so the guarded branches below run.
+        if polarity == "negative" and is_nonhealth_evaluation(raw):
+            pass
+        else:
+            return StructuredMeaning(
+                act=SemanticAct.ANSWER.value,
+                answers_to=slot,
+                slots={slot: SlotCandidate(value=raw, polarity=polarity, confidence=0.96)},
+                polarity=polarity,
+                raw_text=raw,
+                confidence=0.96,
+            )
 
     if ctx.answer_slot == "mood" and _MOOD_NEGATIVE.match(core):
         return StructuredMeaning(
@@ -333,13 +345,17 @@ def interpret_structured(text: str, ctx: InterpretContext) -> StructuredMeaning:
             confidence=0.94,
         )
 
-    if ctx.answer_slot == "wellness" and _WELLNESS_NEGATIVE.search(normalized):
+    if (
+        ctx.answer_slot == "wellness"
+        and _WELLNESS_NEGATIVE.search(normalized)
+        and not is_nonhealth_evaluation(raw)
+    ):
         return StructuredMeaning(
             act=SemanticAct.ANSWER.value,
             answers_to="wellness",
-            slots={"wellness": SlotCandidate(value=raw, polarity="negative", confidence=0.95)},
+            slots={"wellness": SlotCandidate(value=raw, polarity="negative", confidence=0.94)},
             raw_text=raw,
-            confidence=0.95,
+            confidence=0.94,
         )
 
     if ctx.answer_slot == "wellness" and _WELLNESS_POSITIVE.search(normalized):
@@ -410,9 +426,9 @@ def _extract_multi_slots(text: str, ctx: InterpretContext) -> dict[str, SlotCand
     except Exception:  # noqa: BLE001
         pass
 
-    if _WELLNESS_IN_TEXT.search(normalized) or (
+    if (_WELLNESS_IN_TEXT.search(normalized) or (
         ctx.answer_slot == "wellness" and _detect_polarity(text)
-    ):
+    )) and not is_nonhealth_evaluation(text):
         pol = _detect_polarity(text) or "positive"
         if _WELLNESS_NEGATIVE.search(normalized):
             pol = "negative"
@@ -421,8 +437,12 @@ def _extract_multi_slots(text: str, ctx: InterpretContext) -> dict[str, SlotCand
         if "нормально" in normalized and "плохо" not in normalized:
             pol = "positive"
         slots["wellness"] = SlotCandidate(value=text, polarity=pol, confidence=0.9)
-    elif ctx.answer_slot == "wellness" and re.search(
-        r"\b(отлично|прекрасно|хорошо|плохо|так\s+себе)\b", normalized
+    elif (
+        ctx.answer_slot == "wellness"
+        and re.search(
+            r"\b(отлично|прекрасно|хорошо|плохо|так\s+себе)\b", normalized
+        )
+        and not is_nonhealth_evaluation(text)
     ):
         pol = _detect_polarity(text) or (
             "negative" if "плохо" in normalized else "positive"

@@ -35,8 +35,8 @@ def test_husband_complaint_not_speaker_wellness() -> None:
     from packages.contracts.enums import SlotStatus
 
     assert r.state.slots.get("wellness") == SlotStatus.OPEN
-    assert [e.subject for e in r.state.issue_episodes.values()] == [] or all(
-        e.subject != "speaker" or True for e in r.state.issue_episodes.values()
+    assert all(
+        e.subject != "speaker" for e in r.state.issue_episodes.values()
     )
     # No question about the speaker's OWN head pain.
     assert "episode_headache_duration" not in intents

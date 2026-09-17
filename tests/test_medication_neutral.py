@@ -67,7 +67,7 @@ def test_s3_not_taken_yet():
     r, intents, _ = run([CallStarted(), "Хорошо.", "Поела.",
                          "Да, принимаю.", "Нет, ещё не принимал."])
     assert "background_medication_today" in intents
-    assert not r.state.call_closed or True
+    assert not r.state.call_closed
 
 
 def test_s4_unsure():

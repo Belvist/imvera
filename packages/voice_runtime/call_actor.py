@@ -956,7 +956,7 @@ class CallActor:
         if built:
             if isinstance(built, bytes):
                 pcm_out = built
-                duration_ms = int(len(pcm_out) / max(2, self.config.target_sample_rate) * 1000)
+                duration_ms = int(len(pcm_out) / max(2, self.config.target_sample_rate * 2) * 1000)
                 segment_rms = pcm_rms_s16le(pcm_out)
                 silence_tail_ms = 0
             else:
@@ -1608,7 +1608,7 @@ class CallActor:
         self._utterance_budgets[utterance_seq] = budget
         self._active_stage_budget = budget
         sr = self.config.target_sample_rate
-        duration_ms = int(len(pcm) / max(2, sr) * 1000) if pcm else 0
+        duration_ms = int(len(pcm) / max(2, sr * 2) * 1000) if pcm else 0
         pcm_rms = round(pcm_rms_s16le(pcm), 1)
         dump_path = self._stt_dump_pcm(pcm, utterance_id)
         stt_request_ts = utc_now_iso()
