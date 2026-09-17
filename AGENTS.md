@@ -254,6 +254,17 @@ Until these exist, agent reports exact commands run.
 - NEXT: commit B freeze (manifest + repin + evaluator baseline decoupling).
   B–J untouched. Evidence: top of `docs/current-task.md`.
 
+## Stage A closure finding (2026-09-18)
+
+- v9 promoted (254f0ba: scorer version) + frozen (cb2eb61: manifest with
+  tested_sha + per-file/tree hashes, FROZEN SHA repin c0fa158→254f0ba,
+  evaluator V8 baseline decoupled). scorer.py is guard-frozen, hence two
+  commits. Both pushed; tree clean.
+- VERIFIED at freeze: full suite 0 failed / 1551 passed / 6 skipped;
+  differential 92/4/4/0; challenge 1.0; corpus 500/500; guard green.
+- NEXT: CI green on cb2eb61 → Stage A closed → Stage B live stop/ACK probe.
+  DialogueEngine work stops here. B–J untouched.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
