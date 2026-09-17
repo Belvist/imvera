@@ -161,8 +161,10 @@ downstream stop/ack + generation purge, Core-проводка результат
 - Telephony lab: Asterisk (`lab/asterisk/`), LiveKit (`archive/telephony/livekit/`) — not production
 - STT: **GigaAM v3 RNNT (local)** — production path during ADR-014 freeze.
   ADR-003/Qwen3-ASR — исторический бенчмарк, не основание для замены.
-- TTS: **Silero v5 ru `kseniya` (local)** — production path during freeze.
-  ADR-006/CosyVoice3 — исторический бенчмарк, не основание для замены.
+- TTS: **gate открыт.** Дефолт конфига — `mlx_customvoice` (Qwen3-TTS);
+  `silero_lab` помечен `NC, lab only` (CC-BY-NC-SA — не для пилота);
+  ADR-014 называет Silero production path. Нужен license+quality gate,
+  ADR-003/ADR-006 — исторические бенчмарки, не основание для замены.
 - LLM: interpretation (SemanticPayload) + Renderer; local inference workers; no verdict authority
 - StatusEngine: pure domain logic in Phase 2 (not Phase 6)
 - Persistence: async only in voice hot path; durable spool for recordings

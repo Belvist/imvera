@@ -36,4 +36,10 @@ def _ensure_slot_answer_model() -> None:
         return
     from tools.voice_lab.train_slot_answer_clf import train
 
-    train(model)
+    try:
+        train(model)
+    except ImportError:
+        # CI jobs with only .[dev] extras: sklearn imports live inside
+        # train(), so the failure surfaces here. Judge stays fail-open
+        # (None) — exactly the pre-fixture behavior. Do NOT skip the session.
+        return

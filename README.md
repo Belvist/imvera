@@ -13,7 +13,7 @@ Control confirmation → CONFIRMED RED.
 ## Status (2026-09-17, branch `feature/voice-zoiper-m5`, HEAD `e12d4eb`)
 
 Архитектура выбрана и заморожена ([ADR-014](./docs/adr/014-architecture-freeze-acceptance-gates.md),
-путь: SIP → FreeSWITCH → CallActor → GigaAM → DialogueEngine → Silero).
+путь: SIP → FreeSWITCH → CallActor → GigaAM → DialogueEngine → TTS).
 **Ни одни из 7 acceptance gates не пройдены** — это не прод.
 
 | Направление | Состояние |
@@ -22,6 +22,7 @@ Control confirmation → CONFIRMED RED.
 | Voice runtime (PCM integrity, utterance resume) | работает в лабе |
 | STT longform (>25s fallback) | код готов, вживую не проверен |
 | Local SIP lab (Zoiper ↔ FreeSWITCH ↔ Vera) | звонки идут, трассировки есть |
+| TTS provider | **открыт вопрос: дефолт `mlx_customvoice` (Qwen3-TTS), `silero_lab` — NC/lab-only, freeze называет Silero — нужен license/quality gate** |
 | PSTN via VoxImplant | **блокер: 403 Invalid CallerID** — нужен CallerID в панели |
 | PSTN via Novofon (gateway `novofon` в контейнере) | **блокер: провайдер молча дропает SIP с нашего IP** — шаги в кабинете |
 | Downstream stop/ack, barge-in | отсутствует (доказано тестом), включать запрещено |
