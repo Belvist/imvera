@@ -240,6 +240,20 @@ Until these exist, agent reports exact commands run.
   uncommitted work on 6b88e78, no deployment/production acceptance. Exact commands,
   regression evidence and next gate are at the top of `docs/current-task.md`.
 
+## Stage A concern-answer finding (2026-09-18)
+
+- Scheduler safety net emits probe_concern without probe_phase; semantic path
+  dropped grounded complaints into probe_concern_options. Shared
+  `apply_concern_answer` in check_path.py now owns the verdict (rich
+  _probe_concern delegates); reducer bridge v2 grounds complaints with
+  duration follow-up, routes UNCLEAR/ANSWER-non-complaint to the net.
+- Corpus contract explicit: probe + complaint + duration + ITS for
+  so_so/okay/bad (CORPUS_VERSION 1.1.0); 500/500 pass. Full suite 1 failed
+  (frozen guard by design) / 1548 passed / 6 skipped; differential 92/4/4/0;
+  challenge 1.0; review round 1 BLOCK → v2 APPROVE. Commit 1229dd6 pushed.
+- NEXT: commit B freeze (manifest + repin + evaluator baseline decoupling).
+  B–J untouched. Evidence: top of `docs/current-task.md`.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
