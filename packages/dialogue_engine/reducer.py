@@ -418,6 +418,8 @@ def _emit_speak(
     state.planned_question = q if marks_question else None
     state.playing_question = q if marks_question else None
     state.active_playout = q
+    if intent == "summary":
+        state.summary_delivered = False
     state.bump_revision()
     effect = SpeakEffect(
         effect_id=_new_effect_id(),
@@ -506,6 +508,8 @@ def _on_playout_completed(
     if event.question_id and ap.question_id and ap.question_id != event.question_id:
         return state, []
     state.active_playout = None
+    if ap.intent == "summary":
+        state.summary_delivered = True
     state.bump_revision()
     if ap.intent in _CONTROL_HANGUP_INTENTS:
         return state, [
@@ -1649,7 +1653,7 @@ def _emit_summary(state: EngineState, *, acknowledge: str = "") -> tuple[EngineS
     """
     if state.call_closed and state.summary_spoken:
         return state, []
-    if state.summary_spoken:
+    if state.summary_delivered:
         return _emit_goodbye_final(state)
     state.fsm_state = FsmState.SUMMARY
     state.summary_spoken = True
@@ -2086,9 +2090,11 @@ def _handle_closing_turn(
         and state.fsm_state == FsmState.SUMMARY
         and not state.call_closed
     ):
-        # Closing acknowledgment: "ага" after summary answers no question,
-        # but acknowledges the close (fuzz I1: must not go silent here).
-        return _emit_goodbye_final(state)
+        if state.summary_delivered:
+            return _emit_goodbye_final(state)
+        if state.active_playout is None and state.deferred_speak is None:
+            return _emit_summary(state)
+        return state, []
     if semantic.act == SemanticAct.BACKCHANNEL and not state.awaiting_goodbye_confirm:
         return None
     if semantic.act == SemanticAct.UNCLEAR and not state.awaiting_goodbye_confirm:

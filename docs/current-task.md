@@ -1,4 +1,50 @@
-# Current task — ActionPolicy v9 Step 1: v8↔v9 differential (2026-09-17)
+# Current task — Stage A: summary delivery fixed; correction contract blocked (2026-09-18)
+
+- Branch `feature/voice-zoiper-m5`, base HEAD `6b88e78831ed5efa4f4901b9ea896619f613fb07`;
+  initially clean. Local uncommitted fix only, no deploy/restart/commit/push.
+- ROOT CAUSE: `summary_spoken` is set on emission. Deferred summary + `ага`
+  therefore closed before delivery; stale summary could no longer be reissued.
+  Offline step trace of original `good-stale_speak-00` reproduced this exactly.
+- CHANGED: reducer + EngineState now distinguish `summary_delivered` from the
+  existing emitted flag. Only valid current-generation PlayoutCompleted sets it;
+  every summary emission resets it. Backchannel and repeated-summary anti-stall
+  require delivered summary before goodbye. Cancelled summary with no pending
+  delivery is re-emitted on backchannel. Explicit farewell still closes.
+- Added ten cases to `tests/test_engine_effect_delivery.py`: pending/deferred/
+  cancelled/stale summary, late/duplicate completion, replacement reset, delivered
+  acknowledgment/anti-stall, explicit farewell, and original corpus scenario.
+  Original corpus assertions and lexical variants unchanged. Two old Ruff issues
+  in this touched test file fixed without changing behavior.
+- VERIFIED red-before-green: initial eight-case selection had 6 failed / 2 passed
+  on original reducer; cancellation-recovery assertion separately failed before
+  its fix. Final delivery selection:
+  `python3 -m pytest tests/test_engine_effect_delivery.py tests/test_effect_delivery_v2.py tests/test_call_actor_deferred_delivery.py -q --tb=short`
+  -> 103 passed. Original good-stale_speak now passes with summary reissued.
+- Full command `python3 -B -m pytest tests -q -p no:cacheprovider --tb=short`
+  -> 17 failed / 1527 passed / 6 skipped, 45.18s. Same failing test IDs;
+  16 generation-dependent tests now stop at `so_so-self_correction-00`, not
+  stale_speak; one failure is the unchanged v8 frozen-policy guard.
+- `python3 -m ruff check --no-cache packages/dialogue_engine/reducer.py packages/dialogue_engine/state.py tests/test_engine_effect_delivery.py`
+  and `git diff --check` passed. `make lint` ran, failed with 199 errors before
+  the two touched-file cleanups; final equivalent Ruff command with
+  `--output-format concise` reports 197 errors elsewhere. Static independent
+  review APPROVE after cancellation recovery; no live evidence claimed.
+- NEXT GATE / OWNER DECISION: original self_correction family hardcodes
+  `important_to_share` even for negative/uncertain corrections
+  (`corpus/families.py:130-143`), whereas current policy asks `probe_concern`;
+  `tests/test_same_turn_self_correction.py:115-124` explicitly requires that
+  probe for the negative correction on ConversationRunner. Offline offset-zero
+  replay: good/normal pass; so_so/okay/bad fail on probe vs ITS then summary.
+  No probe bypass, expectation edits, skips, or freeze re-pin performed.
+  Need owner disposition of this contract before attempting full green.
+- NOT VERIFIED: live playout, production acceptance, expanded v9 adversarial/
+  shadow acceptance, freeze and remote CI for this diff. Typecheck command not
+  found in Makefile/pyproject; ask owner rather than inventing one. Engine delivery
+  completion is not proof of audible downstream stop/ACK. B-J untouched.
+
+---
+
+# Historical — ActionPolicy v9 Step 1: v8↔v9 differential (2026-09-17)
 
 - Tool: `tools/voice_lab/policy_diff_v8_v9.py` (new, lab-only) + `tests/test_policy_diff_v8_v9.py`
   (new). v8 via `git show c0fa158:path`, v9 = working tree held in memory; SHA256

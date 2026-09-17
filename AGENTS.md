@@ -226,6 +226,20 @@ Until these exist, agent reports exact commands run.
   manual call rerun; old loaded code cannot be rolled back from HEAD alone.
   Full evidence and verification limitations: top of `docs/current-task.md`.
 
+## Stage A summary delivery finding (2026-09-18)
+
+- `summary_spoken` remains the emitted flag; new `summary_delivered` is set only
+  by valid current-generation PlayoutCompleted and reset on summary emission.
+  Backchannel cannot close an undelivered summary; cancelled summary recovery
+  re-emits it. Original stale_speak corpus assertions pass unchanged.
+- Final delivery tests: 103 passed; full suite: 17 failed / 1527 passed / 6 skipped.
+  Corpus now blocked at so_so-self_correction: hardcoded ITS expectation conflicts
+  with negative/uncertain concern probing. Do not bypass probing or alter corpus
+  expectations without owner disposition. v8 pin and policy files untouched.
+- Touched Ruff clean, repo Ruff 197 errors; no typecheck command found. Local
+  uncommitted work on 6b88e78, no deployment/production acceptance. Exact commands,
+  regression evidence and next gate are at the top of `docs/current-task.md`.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)

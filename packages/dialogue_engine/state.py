@@ -188,6 +188,7 @@ class EngineState(BaseModel):
     last_temporal_probe: Literal["temporal_onset", "temporal_duration"] | None = None
     waiting_on_slot: str | None = None
     summary_spoken: bool = False
+    summary_delivered: bool = False
     awaiting_goodbye_confirm: bool = False
     goodbye_confirmed: bool = False
     goodbye_count: int = 0

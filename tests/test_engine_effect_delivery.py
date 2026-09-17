@@ -94,6 +94,124 @@ def test_stale_summary_reemitted_after_revision_bump() -> None:
     assert effects[0].revision == state.revision
 
 
+@pytest.mark.parametrize("delivery", ["pending", "deferred", "cancelled", "stale"])
+def test_undelivered_summary_backchannel_does_not_close(delivery: str) -> None:
+    from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
+    from packages.dialogue_engine.reducer import _emit_summary
+
+    eng = DialogueEngine(call_id="summary-delivery", elder_display_name="Даниил")
+    eng.state, effects = _emit_summary(eng.state)
+    summary = effects[0]
+    if delivery == "deferred":
+        eng.on_delivery_deferred(summary)
+    elif delivery == "cancelled":
+        eng.on_playout_cancelled(summary.generation, summary.question_id)
+        eng.on_playout_completed(summary.generation, summary.question_id)
+    elif delivery == "stale":
+        eng.on_speak_effect_stale(summary)
+        eng.on_playout_completed(summary.generation, summary.question_id)
+    semantic, _ = fast_interpret_semantic("ага", answer_slot=None)
+    effects = eng.on_user_turn("ack", "ага", semantic)
+    assert not eng.state.call_closed
+    assert not eng.state.goodbye_confirmed
+    assert eng.state.fsm_state == FsmState.SUMMARY
+    assert not any(isinstance(e, SpeakEffect) and e.intent == "goodbye_final" for e in effects)
+    if delivery == "cancelled":
+        replacements = [e for e in effects if isinstance(e, SpeakEffect)]
+        assert [e.intent for e in replacements] == ["summary"]
+        replacement = replacements[0]
+        eng.on_playout_completed(replacement.generation, replacement.question_id)
+        followups = eng.on_user_turn("delivered-ack", "ага", semantic)
+        assert [e.intent for e in followups if isinstance(e, SpeakEffect)] == ["goodbye_final"]
+
+
+def test_delivered_summary_backchannel_closes_once() -> None:
+    from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
+    from packages.dialogue_engine.reducer import _emit_summary
+
+    eng = DialogueEngine(call_id="summary-ack", elder_display_name="Даниил")
+    eng.state, effects = _emit_summary(eng.state)
+    summary = effects[0]
+    eng.on_playout_completed(summary.generation, summary.question_id)
+    semantic, _ = fast_interpret_semantic("ага", answer_slot=None)
+    effects = eng.on_user_turn("ack", "ага", semantic)
+    assert eng.state.call_closed
+    assert eng.state.goodbye_confirmed
+    assert [e.intent for e in effects if isinstance(e, SpeakEffect)] == ["goodbye_final"]
+    assert eng.on_user_turn("duplicate-ack", "ага", semantic) == []
+
+
+def test_undelivered_summary_explicit_farewell_still_closes() -> None:
+    from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
+    from packages.dialogue_engine.reducer import _emit_summary
+
+    eng = DialogueEngine(call_id="summary-farewell", elder_display_name="Даниил")
+    eng.state, _ = _emit_summary(eng.state)
+    semantic, _ = fast_interpret_semantic("до свидания", answer_slot=None)
+    effects = eng.on_user_turn("farewell", "до свидания", semantic)
+    assert eng.state.call_closed
+    assert [e.intent for e in effects if isinstance(e, SpeakEffect)] == ["goodbye_final"]
+
+
+def test_repeated_summary_emission_does_not_acknowledge_delivery() -> None:
+    from packages.dialogue_engine.reducer import _emit_summary
+
+    state = EngineState(call_id="summary-repeat", elder_display_name="Даниил")
+    state, _ = _emit_summary(state)
+    state, effects = _emit_summary(state)
+    assert not state.call_closed
+    assert [e.intent for e in effects if isinstance(e, SpeakEffect)] == ["summary"]
+
+
+def test_delivered_summary_repeat_closes_without_replaying_summary() -> None:
+    from packages.dialogue_engine.reducer import _emit_summary
+
+    eng = DialogueEngine(call_id="summary-repeat-delivered", elder_display_name="Даниил")
+    eng.state, effects = _emit_summary(eng.state)
+    summary = effects[0]
+    eng.on_playout_completed(summary.generation, summary.question_id)
+    revision = eng.revision
+    assert eng.on_playout_completed(summary.generation, summary.question_id) == []
+    assert eng.revision == revision
+    eng.state, effects = _emit_summary(eng.state)
+    assert eng.state.call_closed
+    assert [e.intent for e in effects if isinstance(e, SpeakEffect)] == ["goodbye_final"]
+
+
+def test_summary_replacement_requires_its_own_delivery() -> None:
+    from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
+    from packages.dialogue_engine.reducer import _emit_summary
+
+    eng = DialogueEngine(call_id="summary-replacement", elder_display_name="Даниил")
+    eng.state, effects = _emit_summary(eng.state)
+    summary = effects[0]
+    eng.on_playout_completed(summary.generation, summary.question_id)
+    assert eng.state.summary_delivered
+    effects = eng.on_speak_effect_stale(summary)
+    replacement = next(e for e in effects if isinstance(e, SpeakEffect))
+    assert not eng.state.summary_delivered
+    eng.on_playout_completed(summary.generation, summary.question_id)
+    assert not eng.state.summary_delivered
+    semantic, _ = fast_interpret_semantic("ага", answer_slot=None)
+    eng.on_user_turn("pending-ack", "ага", semantic)
+    assert not eng.state.call_closed
+    eng.on_playout_completed(replacement.generation, replacement.question_id)
+    assert eng.state.summary_delivered
+    eng.on_user_turn("delivered-ack", "ага", semantic)
+    assert eng.state.call_closed
+
+
+def test_original_good_stale_speak_scenario_passes() -> None:
+    from packages.dialogue_engine.corpus.generator import _build_scenario
+    from packages.dialogue_engine.corpus.runner import CorpusRunner
+    from packages.dialogue_engine.corpus.schema import FAMILY_NAMES
+
+    scenario = _build_scenario("good", "stale_speak", FAMILY_NAMES.index("stale_speak"), 0)
+    result = CorpusRunner(scenario).run()
+    assert result.passed, result.errors
+    assert result.speak_intents == ["important_to_share", "summary", "summary", "goodbye_final"]
+
+
 def test_stale_summary_cannot_play_when_invalid() -> None:
     eng = DialogueEngine(call_id="t", elder_display_name="Даниил")
     eff = _speak(eng, revision=eng.revision - 1, generation=0)
@@ -368,13 +486,13 @@ def test_fs_14c79443_full_sequence_reaches_goodbye_final() -> None:
 
 
 def test_session_summary_allowed_after_probe_path_plans_fill() -> None:
-    """Regression fs-8054b8c5: Validator must not block engine summary on legacy identity/consent."""
+    """Regression fs-8054b8c5: legacy identity/consent must not block engine summary."""
     from packages.core.memory_store import InMemoryCallRecordStore
+    from packages.dialogue.interpretation import to_turn_interpretation
     from packages.dialogue.session import CallSession
     from packages.dialogue_engine.context import InterpretContext
     from packages.dialogue_engine.contextual_interpreter import contextual_interpret
     from packages.dialogue_engine.semantic import semantic_to_interpretation
-    from packages.dialogue.interpretation import to_turn_interpretation
 
     session = CallSession(
         call_id="fs-8054b8c5",
