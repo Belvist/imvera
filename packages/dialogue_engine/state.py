@@ -119,6 +119,7 @@ class IssueEpisode(BaseModel):
     # Single source of truth — no parallel notations. unknown is preserved
     # (never defaulted to speaker); merge never downgrades a known subject.
     subject: str = "unknown"
+    canonical_key: str = ""
 
     mentions: list[IssueMention] = Field(default_factory=list)
     evidence_turn_ids: list[str] = Field(default_factory=list)

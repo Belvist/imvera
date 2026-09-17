@@ -207,6 +207,15 @@ Until these exist, agent reports exact commands run.
   Unfixed — belongs to the pending-attribute observation boundary, not ITS.
   See top of `docs/current-task.md` for commands, scope, and next gate.
 
+## CI pytest extras + missing-sklearn fixture (2026-09-17)
+
+- `dialogue-rich` and `semantic-kernel` CI jobs now install `.[dev,test]`;
+  conftest `_ensure_slot_answer_model` no longer catches ImportError, so a
+  missing sklearn fails session setup instead of silently disabling the judge.
+  Regression in `tests/test_add_quote.py` (temp sklearn stub); isolated temp
+  fixture build verified, live pkl untouched, local gates green.
+  Full evidence: top of `docs/current-task.md`. No commit/push by agent.
+
 ## Local preview restart (2026-09-17)
 
 - Authorized host bridge-only restart at 01:16:31 UTC: PID 57135 → 68416,

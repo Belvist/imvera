@@ -54,7 +54,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,test]"
       - name: Phase 2 rich turn gate
         run: make test-dialogue-rich
 
@@ -66,7 +66,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,test]"
       - name: Semantic Kernel gate
         run: make test-semantic-kernel
 

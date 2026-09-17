@@ -1,3 +1,133 @@
+# Current task — ActionPolicy v9 Step 1: v8↔v9 differential (2026-09-17)
+
+- Tool: `tools/voice_lab/policy_diff_v8_v9.py` (new, lab-only) + `tests/test_policy_diff_v8_v9.py`
+  (new). v8 via `git show c0fa158:path`, v9 = working tree held in memory; SHA256
+  before/after, try/finally restore, no index writes. Battery = 41 snapshot cases +
+  5 checked live-replay turns × ladders 0/1 = 92 comparisons, fresh module purge per variant.
+- OUTCOME: GATE FAIL (exit 1, honest): 4 changed rows = 2 scenarios × 2 ladders, all
+  v8 ACK_ONLY → v9 ASK_EPISODE:severity. fs-77afbbf1:turn2 = expected
+  temporal→severity retention (last_question_need=temporal, core known, severity unknown).
+  fs-1f6d3000:turn2 = UNEXPLAINED per Step-1 classifier (last_question_need=concern,
+  has_new_speaker_issue=true — likely the snapshot.py fresh-issue guard from the same
+  a788b16 commit, but NOT dispositioned here). Changed set identical across ladders.
+- No freeze, no revert, no expectation/config/guard/manifest/policy edits. Report:
+  `.run/policy_diff_v8_v9.json` (gitignored). New tests 6 passed (subprocess-isolated;
+  in-process swap broke collection-bound monkeypatch references, so the battery runs
+  in child processes only); tests/action_policy 71 passed; action_policy_shadow +
+  mission_slice2: 71 passed, 1 failed = pre-existing `test_h_frozen_policy_unchanged`
+  (guard diffs c0fa158→HEAD from a788b16, predates this task). Touched-file ruff clean.
+  Two self-inflicted artifacts noted: (1) evaluator file-swap must NEVER run
+  concurrently with pytest (transient pipeline-gate failures); (2) in-process swap
+  must never share a pytest session with other tests — both resolved by isolation.
+- NEXT: owner disposition of fs-1f6d3000:turn2 second delta (separate step), then
+  freeze/re-pin decision per A1 options.
+
+---
+
+# Current task — v9 differential: оба дельта-класса закрыты (2026-09-17)
+
+- Second delta dispositioned from evidence: fs-1f6d3000:turn2 (last need
+  concern + has_new_speaker_issue) flips ACK_ONLY → ASK severity because the
+  snapshot.py fresh-issue guard blocks transition and probes the new episode
+  — the documented intent of that hunk, distinct from temporal retention.
+- Evaluator + tests extended: EXPECTED_FRESH_REASON with ordered
+  classification (temporal first), gate counts both classes; unit cases for
+  fresh/no-episode/overlap.
+- VERIFIED: evaluator exit 0 — 92 compared / 4 changed / 4 expected /
+  0 unexplained / restored True; policy tree untouched; pytest
+  test_policy_diff_v8_v9 6 passed; ruff + diff-check clean.
+- v8 SHA untouched; no freeze taken. NEXT: remaining regressions
+  (good-stale_speak-00, so_so/okay/bad-self_correction) without touching
+  expectations; then adversarial/shadow; then commit A+B.
+
+---
+
+# Current task — Этап A: A2 самокоррекция + A3 метки (2026-09-17)
+
+- A1↔A2 link REFUTED: with need_value.py+snapshot.py reverted to c0fa158
+  content, corpus gate fails identically. Index restored after probe.
+- A3 root cause: pymorphy3 installed in CI (dev extras), absent locally →
+  normalize_text lemmatized ('болеть') vs lowercase ('болит'); label drifted
+  by environment (CI-only subject failure). Contract implemented:
+  label/primary_label = surface human-readable; canonical_key (lemma) added
+  to IssueMention + IssueEpisode; matching switched to canonical.
+- A2: same-turn 'Плохо… хотя нет, хорошо.' → positive + correction, full raw
+  quote preserved (comma-drop was deterministic_mission clause rejoin).
+  good/normal-self_correction-00 pass; gate halts at good-stale_speak-00
+  (pre-existing terminal bookkeeping, byte-identical on clean HEAD).
+- VERIFIED: full suite 17 failed (identical IDs) / 1511 passed / 6 skipped;
+  real pymorphy3 installed locally → subject + canonical + 320-test dialogue
+  batch pass in CI conditions. Touched-file ruff + diff-check clean. Model
+  pkl SHA unchanged. so_so/okay/bad-self_correction left failing (expectation
+  vs routing conflict; changing either is forbidden here).
+- OPEN OWNER DECISION (A1): need_value.py + snapshot.py differ from frozen
+  c0fa158 (committed a788b16, intentional fs-77afbbf1). Options: (a) revert
+  to v8 (loses temporal-severity behavior), (b) v9 candidate acceptance
+  process + re-pin. NOT decided here; guard untouched.
+- NEXT GATE: good-stale_speak-00 terminal bookkeeping; then live stop/ack
+  probe (Этап B, needs user on the phone).
+
+---
+
+# Current task — CI pytest extras + honest missing-sklearn fixture (2026-09-17)
+
+- Branch `feature/voice-zoiper-m5` HEAD `bf12de9` + these uncommitted edits.
+- CHANGED: `tests/conftest.py` `_ensure_slot_answer_model` no longer swallows
+  `ImportError` — a missing sklearn (or trainer import) now fails session setup
+  loudly instead of silently disabling the judge; failing setups prevent test
+  bodies from running. `.github/workflows/ci.yml`: `dialogue-rich` and
+  `semantic-kernel` now install `.[dev,test]` like the other three pytest jobs
+  (sklearn already lives in the existing `test` extra; pyproject untouched).
+- New regression `tests/test_add_quote.py::test_session_fixture_fails_when_sklearn_is_missing`:
+  copies real conftest into temp dir, shadows sklearn with a raising stub
+  module, and asserts pytest exit 1, `ERROR at setup of test_probe`,
+  sklearn `ModuleNotFoundError`, no `models/` pkl written, and that the probe
+  body never runs. Verified it failed against the OLD conftest (body ran) and
+  passes against the new one.
+- VERIFIED: `make test-dialogue-rich` → 52 passed; `make test-semantic-kernel`
+  → 243 passed; `tests/test_add_quote.py` → 19 passed;
+  `ruff check --no-cache tests/conftest.py tests/test_add_quote.py` → clean;
+  `git diff --check` → clean. Isolated run in
+  `/var/folders/.../T/opencode/verify_ci_dependencies.py`: parsed ci.yml and
+  asserted all five pytest jobs install `dev,test`; ran the session fixture in
+  a temp namespace → trained candidate pkl (99608 bytes, group5fold mean 0.845)
+  into temp storage only, reused it without retraining on second call, live
+  `models/slot_answer_clf.pkl` SHA256+mtime unchanged. `make lint` → FAILED
+  199 errors (unchanged pre-existing repo debt, diagnostics outside touched
+  files; legacy-lint CI job stays `continue-on-error: true`).
+- Local verification only: no commit/push, deploy, or live-model training.
+  Latest inspected CI run 35272632508 targets bf12de9, NOT these edits.
+  That run's dialogue-rich and semantic-kernel jobs passed with the old
+  fail-open fixture; dependency hardening is not proof of fixing all CI.
+  Remaining failed jobs: action-policy-shadow, test, and allowed-failure
+  legacy-lint. Remote full suite: 18 failed, 1495 passed, 4 skipped.
+- The frozen guard detects committed changes in BOTH need_value.py and
+  snapshot.py from a788b16 against c0fa158; neither file nor the pin was
+  changed here. An intentional change is not an accepted new freeze.
+- Exact offset-zero good-self_correction-00 reproduction:
+  `Плохо… хотя нет, хорошо.` becomes negative and emits probe_concern instead
+  of important_to_share. Existing contextual correction logic understands it;
+  fast/rich extraction do not. This is a semantic defect, not a reason to
+  weaken the corpus expectation.
+- A candidate correction patch was explored and then fully restored to its
+  pre-task contents after additional provenance assertions failed (rich state
+  dropped punctuation from the original quote). No candidate runtime changes
+  remain. Its intermediate failures must not be reported as fixed on this tree.
+  The candidate exposed good-stale_speak-00 next; corpus selection and original
+  expectations were unchanged throughout.
+- Agent verification after restoration used an OFFLINE subset excluding live
+  LLM/SIP modules, with IMVERA_PG_URL unset: 1495 passed, 17 failed, 3 skipped;
+  failing IDs matched that agent's pre-task subset. This is NOT a complete
+  suite or a clean-tree baseline. Parent re-ran make test-dialogue-rich (52),
+  make test-semantic-kernel (243), tests/test_add_quote.py (19): all passed;
+  touched Ruff and git diff --check passed. No typecheck command identified.
+- NEXT GATE: preserve original quote provenance through rich interpretation,
+  then fix exact same-turn correction without weakening tests. Publishing
+  this CI patch requires an explicit commit/push request; remote verification
+  remains outstanding. Frozen candidate acceptance is a separate decision.
+
+---
+
 # Current task — Stage 2: stop/ack boundary probe (2026-09-17)
 
 - ADR-018 proposed (`docs/adr/018-stage2-production-hardening.md`): 5 workstreams

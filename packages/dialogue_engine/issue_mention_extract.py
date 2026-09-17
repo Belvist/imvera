@@ -72,6 +72,8 @@ def _clause_mentions(raw: str, clause: str, *, first_symptom: bool) -> list[Issu
         role: str,
         quote: str,
     ) -> None:
+        from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+
         start = raw.lower().find(quote.lower())
         if start < 0:
             start = base
@@ -81,6 +83,7 @@ def _clause_mentions(raw: str, clause: str, *, first_symptom: bool) -> list[Issu
                 mention_id=_mid(),
                 kind=kind,
                 label=label,
+                canonical_key=normalize_text(label),
                 role=role,
                 body_site=body_site,
                 temporal_scope="now",
@@ -256,14 +259,18 @@ def extract_goal_facts(
         _SO_SO,
         _WELLNESS_NEGATIVE,
         _WELLNESS_POSITIVE,
+        self_correction_tail,
     )
     from packages.dialogue_engine.fast_interpreter import (
         is_nonhealth_evaluation as _is_film_like,
     )
 
     core = re.sub(r"[.!?…]+$", "", raw).strip()
+    _tail = self_correction_tail(raw)
+    _judge = _tail if _tail is not None else raw
+    _judge_n = _judge.lower().replace("ё", "е")
     # «плохо спал» is sleep evidence, not a wellness crisis by itself
-    n_wellness = re.sub(r"плох\w*\s+спал\w*", " ", n)
+    _judge_wellness = re.sub(r"плох\w*\s+спал\w*", " ", _judge_n)
 
     def _add(field: str, value: str, *, start: int = 0, end: int | None = None) -> None:
         if field in seen:
@@ -284,19 +291,19 @@ def extract_goal_facts(
     wellness_neg = bool(
         not _is_film_like(raw)
         and (
-            _WELLNESS_CRISIS.search(n_wellness)
-            or _WELLNESS_NEGATIVE.search(n_wellness)
-            or _WELLNESS_FREE_NEGATED_POSITIVE.search(n_wellness)
-            or re.search(r"\b(не\s+очень|плох\w*|состояние\s+не|умира\w*)\b", n_wellness)
+            _WELLNESS_CRISIS.search(_judge_wellness)
+            or _WELLNESS_NEGATIVE.search(_judge_wellness)
+            or _WELLNESS_FREE_NEGATED_POSITIVE.search(_judge_wellness)
+            or re.search(r"\b(не\s+очень|плох\w*|состояние\s+не|умира\w*)\b", _judge_wellness)
             or _NEGATIVE.match(core)
         )
     )
     wellness_pos = bool(
         not wellness_neg
         and (
-            _WELLNESS_POSITIVE.search(n)
+            _WELLNESS_POSITIVE.search(_judge_n)
             or _POSITIVE.match(core)
-            or _WELLNESS_FREE_POSITIVE.search(n_wellness)
+            or _WELLNESS_FREE_POSITIVE.search(_judge_wellness)
             or _NORMAL.match(core)
         )
     )
@@ -309,7 +316,7 @@ def extract_goal_facts(
         or _SO_SO.match(core)
         or re.search(
             r"(так\s+себе|более[\s\-‑—]*менее|сойд|пойд|терпимо)",
-            n,
+            _judge_n,
             re.I,
         )
     ):
@@ -323,12 +330,14 @@ def extract_goal_facts(
         )
         _add("wellness", "uncertain" if _is_soso else "positive")
 
-    if (answer_slot == "mood" and _MOOD_NEGATIVE.match(core)) or _MOOD_NEGATIVE_PHRASE.search(n):
+    if (answer_slot == "mood" and _MOOD_NEGATIVE.match(core)) or (
+        _MOOD_NEGATIVE_PHRASE.search(_judge_n)
+    ):
         _add("mood", "negative")
-    elif _MOOD_POSITIVE.search(n) or (
-        re.search(r"настроени\w*", n)
-        and re.search(r"\b(хорош\w*|нормальн\w*|отличн\w*|спокойн\w*)\b", n)
-        and not _MOOD_NEGATIVE_PHRASE.search(n)
+    elif _MOOD_POSITIVE.search(_judge_n) or (
+        re.search(r"настроени\w*", _judge_n)
+        and re.search(r"\b(хорош\w*|нормальн\w*|отличн\w*|спокойн\w*)\b", _judge_n)
+        and not _MOOD_NEGATIVE_PHRASE.search(_judge_n)
     ):
         _add("mood", "positive")
     elif answer_slot == "mood" and (

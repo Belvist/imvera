@@ -553,6 +553,8 @@ def _wellness_speaker_text(text: str) -> str | None:
     kept = [c.text for c in clauses if not _is_other_person_only(c.text)]
     if not kept:
         return None
+    if len(kept) == len(clauses):
+        return raw
     joined = " ".join(kept).strip()
     joined = re.sub(r"^а\s+", "", joined, flags=re.I).strip()
     return joined or None

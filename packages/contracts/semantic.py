@@ -102,6 +102,7 @@ class IssueMention(StrictModel):
     # SubjectKind value (speaker | other_person | unknown). Unknown default —
     # legacy-sourced mentions resolve it in merge; never assume speaker.
     subject: str = "unknown"
+    canonical_key: str = ""
 
 
 class GoalAnswerSemantic(StrictModel):

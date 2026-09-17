@@ -137,3 +137,41 @@ def test_quote_is_only_a_literal_tuple(
     assert ast.literal_eval(assignment.value) == [("onset", text.strip().lower(), "answer")]
     row = f"    {('onset', text.strip().lower(), 'answer')!r},\n"
     assert source.replace(row, "", 1) == before
+
+
+def test_session_fixture_fails_when_sklearn_is_missing(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "conftest.py").write_text(
+        (root / "tests" / "conftest.py").read_text(encoding="utf-8"), encoding="utf-8",
+    )
+    (tests / "test_probe.py").write_text(
+        "def test_probe():\n    raise AssertionError('test body must not run')\n",
+        encoding="utf-8",
+    )
+    sklearn = tmp_path / "sklearn"
+    sklearn.mkdir()
+    (sklearn / "__init__.py").write_text(
+        "raise ModuleNotFoundError(\"No module named 'sklearn'\", name='sklearn')\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join([str(tmp_path), str(root)]),
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+            "PYTEST_ADDOPTS": "",
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "ERROR at setup of test_probe" in result.stdout
+    assert "No module named 'sklearn'" in result.stdout
+    assert "1 error" in result.stdout
+    assert "test body must not run" not in result.stdout
+    assert not (tmp_path / "models" / "slot_answer_clf.pkl").exists()

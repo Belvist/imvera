@@ -10,7 +10,7 @@ Deterministic transcript rules → RED/YELLOW candidate.
 Control confirmation → CONFIRMED RED.
 ```
 
-## Status (2026-09-17, branch `feature/voice-zoiper-m5`, HEAD `e12d4eb`)
+## Status (branch `feature/voice-zoiper-m5`)
 
 Архитектура выбрана и заморожена ([ADR-014](./docs/adr/014-architecture-freeze-acceptance-gates.md),
 путь: SIP → FreeSWITCH → CallActor → GigaAM → DialogueEngine → TTS).

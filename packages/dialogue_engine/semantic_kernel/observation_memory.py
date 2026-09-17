@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from packages.contracts.semantic import Evidence, IssueMention
 from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds, clause_for_position
+from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
 from packages.dialogue_engine.semantic_kernel.subject_resolver import (
     _subject_for_clause,
     subject_for_issue,
@@ -95,7 +96,8 @@ def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
         body_spans = body_of.get(issue.span_id, [])
         body_site = body_spans[0].normalized if body_spans else None
         issue_norm = issue.normalized or issue.text.lower()
-        label = f"{body_site} {issue_norm}".strip() if body_site else issue.text
+        issue_surface = issue.text.strip().lower() or issue_norm
+        label = f"{body_site} {issue_surface}".strip() if body_site else issue.text
         clause = clause_for_position(clauses, issue.start)
         clause_subject = _subject_for_clause(clause, has_issue=True)
         subject = subject_for_issue(
@@ -214,7 +216,9 @@ def build_reference_observations(
         return ()
 
     body_site = ep.body_site
-    issue_norm = ep.primary_label.lower()
+    issue_norm = (getattr(ep, "canonical_key", "") or "").strip() or normalize_text(
+        ep.primary_label or ""
+    )
     observations: list[Observation] = []
     raw = result.raw_text.strip()
     from packages.dialogue_engine.question_context import utterance_indicates_resolved
@@ -401,7 +405,10 @@ def apply_corrections(
 
 
 def _episode_key(ep) -> tuple[str | None, str]:
-    return (ep.body_site, (ep.primary_label or "").lower())
+    stored = (getattr(ep, "canonical_key", "") or "").strip()
+    if stored:
+        return (ep.body_site, stored.lower())
+    return (ep.body_site, normalize_text(ep.primary_label or ""))
 
 
 def _match_episode_for_observation(
@@ -418,8 +425,9 @@ def _match_episode_for_observation(
     if obs.issue_normalized:
         norm = obs.issue_normalized.lower()
         for ep_id, ep in state.issue_episodes.items():
-            label = (ep.primary_label or "").lower()
-            if norm in label or (ep.body_site and norm.startswith(ep.body_site)):
+            stored = (getattr(ep, "canonical_key", "") or "").strip()
+            key = stored.lower() if stored else normalize_text(ep.primary_label or "")
+            if norm in key or (ep.body_site and norm.startswith(ep.body_site)):
                 return ep_id
     if (
         obs.attribute in ("onset", "duration", "severity", "current")
@@ -629,6 +637,9 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
                 from packages.dialogue_engine.fast_interpreter import (
                     _detect_polarity as _mission_polarity,
                 )
+                from packages.dialogue_engine.fast_interpreter import (
+                    self_correction_tail as _mission_correction_tail,
+                )
 
                 _prev = state.slot_records.get(ans.goal_id)
                 if _prev is not None and ans.is_correction:
@@ -640,7 +651,11 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
                             "source_turn": turn.utterance_id,
                         }
                     )
-                _pol = _mission_polarity(str(ans.evidence or ans.value))
+                _pol_source = str(ans.evidence or ans.value)
+                _pol_tail = _mission_correction_tail(_pol_source)
+                _pol = _mission_polarity(
+                    _pol_tail if _pol_tail is not None else _pol_source
+                )
                 if _pol is None:
                     _pol = _mission_polarity(str(ans.value))
                 if _pol is None and ans.goal_id == "wellness":
@@ -848,12 +863,13 @@ def observations_to_issue_mentions(
             temporal = "past" if "вчера" in obs.temporal.onset.lower() else "now"
         label = obs.value
         if body_site and body_site not in label.lower():
-            label = f"{body_site} {obs.issue_normalized or obs.normalized_value}".strip()
+            label = f"{body_site} {obs.evidence}".strip()
         mentions.append(
             IssueMention(
                 mention_id=f"im-{obs.observation_id[-8:]}",
                 kind="symptom",
                 label=label[:60],
+                canonical_key=normalize_text(label[:60]),
                 role=role,
                 body_site=body_site,
                 temporal_scope=temporal,

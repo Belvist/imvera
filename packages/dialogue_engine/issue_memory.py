@@ -154,6 +154,15 @@ def _new_episode_id() -> str:
     return f"ep-{uuid.uuid4().hex[:8]}"
 
 
+def _canonical_label(label: str | None, stored: str | None) -> str:
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+
+    key = (stored or "").strip()
+    if key:
+        return key.lower()
+    return normalize_text(label or "")
+
+
 def _episode_from_mention(mention: IssueMention, turn_id: str) -> IssueEpisode:
     attrs: dict[str, str] = {}
     if mention.onset:
@@ -170,6 +179,7 @@ def _episode_from_mention(mention: IssueMention, turn_id: str) -> IssueEpisode:
     return IssueEpisode(
         episode_id=_new_episode_id(),
         primary_label=mention.label,
+        canonical_key=_canonical_label(mention.label, getattr(mention, "canonical_key", "")),
         kind=mention.kind,
         body_site=mention.body_site,
         subject=(getattr(mention, "subject", "") or "unknown").strip().lower() or "unknown",
@@ -227,8 +237,8 @@ def _merge_mention(episode: IssueEpisode, mention: IssueMention, turn_id: str) -
 
 def _find_episode_for_mention(state: EngineState, mention: IssueMention) -> str | None:
     key = (mention.body_site or mention.label).lower()
-    label = (mention.label or "").lower()
     site = (mention.body_site or "").lower()
+    mkey = _canonical_label(mention.label, getattr(mention, "canonical_key", ""))
     # Prefer the active episode on site match: answering a pending probe by
     # restating the symptom («В 8:00 начала болеть голова») must fill the
     # pending attribute, never spawn a duplicate (live fs-07799215).
@@ -239,12 +249,14 @@ def _find_episode_for_mention(state: EngineState, mention: IssueMention) -> str 
             or site in (active.primary_label or "").lower()
         ):
             return active.episode_id
-        if not site and active.primary_label.lower() == label:
+        if not site and _canonical_label(
+            active.primary_label, getattr(active, "canonical_key", "")
+        ) == mkey:
             return active.episode_id
     for ep_id, ep in state.issue_episodes.items():
         if ep.body_site and ep.body_site.lower() == key:
             return ep_id
-        if ep.primary_label.lower() == mention.label.lower():
+        if _canonical_label(ep.primary_label, getattr(ep, "canonical_key", "")) == mkey:
             return ep_id
         # Cross-form site match: «Голова болеть» (site голова) attaches to
         # «голова болит», «живот приболел» to «живот болит».
@@ -277,7 +289,7 @@ def _dedupe_primary_mentions(mentions: tuple[IssueMention, ...]) -> tuple[IssueM
                 continue
             seen_sites.add(mention.body_site)
         elif mention.role in ("primary", "independent"):
-            label = (mention.label or "").lower()
+            label = _canonical_label(mention.label, getattr(mention, "canonical_key", ""))
             if label in seen_primaries:
                 continue
             seen_primaries.add(label)

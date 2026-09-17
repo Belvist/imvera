@@ -115,6 +115,13 @@ def _normalize_core(text: str) -> str:
     return core
 
 
+def self_correction_tail(text: str) -> str | None:
+    parts = re.split(r"хотя\s+нет[,\s]*", text, maxsplit=1, flags=re.I)
+    if len(parts) == 2 and parts[1].strip():
+        return parts[1].strip()
+    return None
+
+
 def fast_interpret_semantic(
     text: str,
     *,
@@ -228,6 +235,24 @@ def fast_interpret_semantic(
             ),
             True,
         )
+
+    tail = self_correction_tail(raw)
+    if tail is not None:
+        tail_polarity = _detect_polarity(tail)
+        if tail_polarity is not None and answer_slot:
+            slot = _resolve_slot(answer_slot, tail, tail_polarity)
+            return (
+                SemanticTurn(
+                    act=SemanticAct.ANSWER,
+                    target_slot=slot,
+                    polarity=tail_polarity,
+                    confidence=0.96,
+                    source_quote=raw,
+                    value=raw,
+                    correction=True,
+                ),
+                True,
+            )
 
     if _UNCERTAIN.match(core):
         if answer_slot == "wellness":
