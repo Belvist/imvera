@@ -16,6 +16,7 @@ from packages.dialogue.fsm import CallFsm
 from packages.dialogue.interpretation import UserInterpretation
 from packages.dialogue.interpreter import Interpreter
 from packages.dialogue.planner import Planner
+from packages.dialogue.question_ledger import release_question_attempt
 from packages.dialogue.state import DialogueState
 from packages.dialogue.transition_store import DialogueTransitionStore
 from packages.dialogue.validator import Validator
@@ -565,7 +566,7 @@ class CallSession:
                 self._engine.on_playout_cancelled(meta[0], meta[1])
                 self._engine.sync_to_legacy(self.state)
             return
-        Planner.release_question_attempt(self.state, generation_id)
+        release_question_attempt(self.state, generation_id)
 
     def start(self) -> SessionTurnResult:
         ensure = self.store.ensure_call(self.state.call_id, self.state.family_id)

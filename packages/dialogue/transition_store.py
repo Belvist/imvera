@@ -19,7 +19,7 @@ from packages.contracts.outbox import (
     may_auto_replay,
 )
 from packages.contracts.turn import TurnProposal
-from packages.dialogue.planner import Planner
+from packages.dialogue.question_ledger import mark_question_delivered
 from packages.dialogue.state import DialogueState
 
 
@@ -265,7 +265,7 @@ class DialogueTransitionStore:
         skip_planner: bool = False,
     ) -> PersistResult:
         if not skip_planner:
-            Planner.mark_question_delivered(state, action_id)
+            mark_question_delivered(state, action_id)
         dispatch = self.mark_outbox_dispatching(state, action_id)
         if not dispatch.ok:
             return dispatch

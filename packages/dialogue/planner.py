@@ -11,7 +11,10 @@ from packages.dialogue.interpretation import UserInterpretation, interpret_user_
 from packages.dialogue.question_ledger import (
     MAX_AUTOMATIC_ATTEMPTS,
     clarification_for_slot,
+    mark_question_delivered as ledger_mark_question_delivered,
     next_open_slot,
+    release_question_attempt as ledger_release_question_attempt,
+    reserve_question_attempt as ledger_reserve_question_attempt,
 )
 from packages.dialogue.reducer import DialogueReducer
 from packages.dialogue.state import DialogueState
@@ -299,56 +302,15 @@ class Planner:
 
     @staticmethod
     def reserve_question_attempt(state: DialogueState, generation_id: str, slot: str) -> bool:
-        """Atomically reserve an attempt before TTS. Returns False if budget exhausted."""
-        goal = state.ensure_goal(slot)
-        if goal.status != GoalStatus.OPEN:
-            return False
-        if goal.reserved_attempt_id == generation_id:
-            return True
-        if goal.reserved_attempt_id is not None:
-            return False
-        if goal.automatic_attempts_used >= goal.max_automatic_attempts:
-            return False
-        goal.reserved_attempt_id = generation_id
-        state.pending_action_id = generation_id
-        state.bump_version()
-        return True
+        return ledger_reserve_question_attempt(state, generation_id, slot)
 
     @staticmethod
     def mark_question_delivered(state: DialogueState, generation_id: str) -> None:
-        """Count attempt when question audio may reach the channel."""
-        slot = state.pending_slot
-        if not slot:
-            return
-        goal = state.get_goal(slot)
-        if goal is None or goal.reserved_attempt_id != generation_id:
-            return
-        if goal.automatic_attempts_used < goal.max_automatic_attempts:
-            goal.automatic_attempts_used += 1
-        goal.last_question_id = generation_id
-        goal.last_delivery_state = "may_have_reached_channel"
-        goal.audio_may_have_reached_channel = True
-        goal.reserved_attempt_id = None
-        state.pending_question_delivered = True
-        state.delivered_answer_slot = slot
-        state.pending_action_id = None
-        if slot == "wellness" and state.opening_play_count > 0:
-            state.opening_delivered = True
-        state.bump_version()
+        ledger_mark_question_delivered(state, generation_id)
 
     @staticmethod
     def release_question_attempt(state: DialogueState, generation_id: str) -> None:
-        """Drop reservation when question audio never reached the channel."""
-        slot = state.pending_slot
-        if not slot:
-            return
-        goal = state.get_goal(slot)
-        if goal is None or goal.reserved_attempt_id != generation_id:
-            return
-        goal.reserved_attempt_id = None
-        if state.pending_action_id == generation_id:
-            state.pending_action_id = None
-        state.bump_version()
+        ledger_release_question_attempt(state, generation_id)
 
     @staticmethod
     def _is_complaint_report(value: str, *, negated: bool = False) -> bool:

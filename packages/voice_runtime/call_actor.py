@@ -23,7 +23,7 @@ from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.context_builder import active_question_kind, build_turn_context
 from packages.dialogue.interpretation import to_turn_interpretation
-from packages.dialogue.planner import Planner
+from packages.dialogue.question_ledger import release_question_attempt
 from packages.dialogue.semantic_adapter import adapt_semantic_turn
 from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue.validator import Validator
@@ -1460,7 +1460,7 @@ class CallActor:
                 action_id,
             )
             await asyncio.to_thread(
-                Planner.release_question_attempt,
+                release_question_attempt,
                 self.session.state,
                 action_id,
             )
@@ -2474,7 +2474,7 @@ class CallActor:
             )
             return
         await asyncio.to_thread(
-            Planner.release_question_attempt,
+            release_question_attempt,
             self.session.state,
             action_id,
         )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -74,3 +75,56 @@ def next_open_slot(slots: dict[str, SlotStatus]) -> str | None:
         if is_slot_collectable(slots, slot):
             return slot
     return None
+
+
+def reserve_question_attempt(state: Any, generation_id: str, slot: str) -> bool:
+    """Reserve one legacy question attempt; ledger owns delivery accounting."""
+    goal = state.ensure_goal(slot)
+    if goal.status != GoalStatus.OPEN:
+        return False
+    if goal.reserved_attempt_id == generation_id:
+        return True
+    if goal.reserved_attempt_id is not None:
+        return False
+    if goal.automatic_attempts_used >= goal.max_automatic_attempts:
+        return False
+    goal.reserved_attempt_id = generation_id
+    state.pending_action_id = generation_id
+    state.bump_version()
+    return True
+
+
+def mark_question_delivered(state: Any, generation_id: str) -> None:
+    """Count a legacy attempt only once audio may have reached the channel."""
+    slot = state.pending_slot
+    if not slot:
+        return
+    goal = state.get_goal(slot)
+    if goal is None or goal.reserved_attempt_id != generation_id:
+        return
+    if goal.automatic_attempts_used < goal.max_automatic_attempts:
+        goal.automatic_attempts_used += 1
+    goal.last_question_id = generation_id
+    goal.last_delivery_state = "may_have_reached_channel"
+    goal.audio_may_have_reached_channel = True
+    goal.reserved_attempt_id = None
+    state.pending_question_delivered = True
+    state.delivered_answer_slot = slot
+    state.pending_action_id = None
+    if slot == "wellness" and state.opening_play_count > 0:
+        state.opening_delivered = True
+    state.bump_version()
+
+
+def release_question_attempt(state: Any, generation_id: str) -> None:
+    """Release a legacy reservation when no audio reached the channel."""
+    slot = state.pending_slot
+    if not slot:
+        return
+    goal = state.get_goal(slot)
+    if goal is None or goal.reserved_attempt_id != generation_id:
+        return
+    goal.reserved_attempt_id = None
+    if state.pending_action_id == generation_id:
+        state.pending_action_id = None
+    state.bump_version()
