@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-from packages.contracts.core import TerminationReason
 from packages.contracts.enums import AsrQuality
 from packages.contracts.interpretation import TurnInterpretation
 from packages.contracts.outbox import ActionOutboxStatus
@@ -485,17 +484,14 @@ class CallActor:
                 await self._on_pcm(event.pcm, event.sample_rate)
 
     async def _finalize_disconnect(self) -> None:
-        if self.session.state.call_finalized:
+        if self.session.is_finalized:
             return
         try:
             self._tl().mark("hangup")
             await self._emit_stage("timeline", **self._tl().to_payload())
         except Exception:  # noqa: BLE001 — observability never breaks teardown
             pass
-        if not self.session.state.final_action_done:
-            self.session.state.final_action_done = True
-            self.session.state.termination_reason = TerminationReason.DISCONNECTED
-        await asyncio.to_thread(self.session.finalize_if_needed)
+        await asyncio.to_thread(self.session.finalize_disconnect)
 
     async def _ensure_output_chain(
         self, output_sample_rate: int, output_frame_size: int
@@ -2803,6 +2799,8 @@ class CallActor:
                 ("check_", "clarify_", "repeat_")
             )
             if marks_question:
+                # Separate remaining legacy write (not part of Cut 2
+                # finalization boundary) — tracked for a later cut.
                 self.session.state.pending_question_delivered = True
             if (
                 self._pending_mark_render_gen == gen

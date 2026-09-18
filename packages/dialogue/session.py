@@ -1035,6 +1035,26 @@ class CallSession:
             persist_error=error,
         )
 
+    def is_finalized(self) -> bool:
+        """Read-only finalization guard (transitional; engine backing later)."""
+        return self.state.call_finalized
+
+    def finalize_disconnect(self) -> None:
+        """Transport-drop finalization, owned by the session (Cut 2).
+
+        CallActor must not mutate finalization flags directly. Semantics
+        identical on both paths for now: the finalize machinery still reads
+        legacy flags, so engine-native flag migration is a later cut.
+        """
+        if self.state.call_finalized:
+            return
+        if not self.state.final_action_done:
+            self.state.final_action_done = True
+            from packages.contracts.core import TerminationReason
+
+            self.state.termination_reason = TerminationReason.DISCONNECTED
+        self.finalize_if_needed()
+
     def finalize_if_needed(self) -> tuple[bool, str | None]:
         if not self.state.final_action_done and not self.state.call_finalized:
             self.state.final_action_done = True

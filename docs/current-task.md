@@ -1,4 +1,15 @@
-# Current task — A.5.3 Cut 1: engine pending_slot reads (2026-09-18)
+# Current task — A.5.3 Cut 2: finalization API (2026-09-18)
+
+- `CallSession.finalize_disconnect()` owns disconnect mutation; CallActor
+  calls API (+ read-only is_finalized guard preserving telemetry order).
+  Unused TerminationReason import removed. C14 pending_question_delivered
+  marked as separate tracked write, untouched.
+- Engine-native flag migration deferred honestly: finalize machinery still
+  reads legacy flags — later cut, not silently claimed.
+- VERIFIED: targeted 51 passed; full 1559/6/0; differential 92/4/4/0;
+  corpus 500/500; touched ruff clean. Commit + push.
+- NEXT Cut 3: TransitionStore/outbox engine boundary. Scheduler out of A.5.3.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - `DialogueEngine.pending_slot_name()` + CallActor `_engine_pending_slot()`;
   migrated C3-slot/C5/C7 reads (engine-guarded, legacy fallback). Proven
