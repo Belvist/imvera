@@ -1,7 +1,8 @@
 """Telephony adapter contract — carrier media stream → CallActor ingress.
 
-Asterisk (lab) and Telnyx (production candidate) implement the same boundary:
-directional PCM in, TTS PCM out, per-call lifecycle + media counters.
+Asterisk (lab) and FreeSWITCH (frozen production path, ADR-013) implement the
+same boundary: directional PCM in, TTS PCM out, per-call lifecycle counters.
+Telnyx/LiveKit spikes were rejected and removed (archive/README.md).
 """
 
 from __future__ import annotations

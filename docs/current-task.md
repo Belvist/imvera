@@ -1,4 +1,22 @@
-# Current task — Stage A.5.1: repo-wide lint zero, legacy-lint mandatory (2026-09-18)
+# Current task — Stage A.5.2: dead code removed, gates identical (2026-09-18)
+
+- Deleted with zero-reference proof: archive/telephony/livekit +
+  telnyx (53 files; pytest never collected them, no code refs),
+  dialogue_engine/bridge.py + dialogue/mandatory.py (re-exports, no
+  importers), semantic_kernel/renderer.py + response_plan.py (only ref each
+  other; trace-string hits unrelated). archive/README.md kept as pointer.
+  adapter.py docstring fixed (Telnyx/LiveKit rejected, FreeSWITCH frozen).
+- Deferred honestly: tinyllm.py MLX generative branch stays — flag-gated off
+  by default and referenced by tools/voice_lab/ambiguity_bench.py experiment
+  docs; removal would break documented lab usage. Owner call.
+- VERIFIED: ruff 0; full suite 1551 passed / 6 skipped / 0 failed (identical);
+  differential 92/4/4/0; corpus 500/500. Commit + push, then A.5.3 recon
+  (legacy shell — read-only, no cutting yet).
+- NOT VERIFIED: remote CI on this commit. B–J untouched.
+
+---
+
+# Historical — Stage A.5.1 lint zero (2026-09-18)
 
 - Mechanical cleanup only, no dialogue behavior change. Frozen policy files
   untouched (0 diffs under packages/dialogue_engine/action_policy/).
