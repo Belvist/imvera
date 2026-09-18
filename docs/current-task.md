@@ -1,4 +1,32 @@
-# Current task — Stage A.5.2: dead code removed, gates identical (2026-09-18)
+# Current task — Stage A.5.3 Cut 1: engine fallback off Planner (2026-09-18)
+
+- Read-only migration map done (consumers/orphans/ordered cuts in recon
+  report; CallFsm + DialogueReducer already engine-detached; Validator /
+  Interpreter / TransitionStore / contracts stay for gated steps).
+- Cut 1: session.py:436 engine-only no-effect fallback builds TurnProposal
+  directly (identical fields to pure Planner._terminal_noop); legacy/shared
+  sites untouched; Planner import stays for legacy branches.
+- VERIFIED: baseline 1551/6/0 at 3e16f27 before cut; after: targeted 48
+  passed, corpus 500/500, full 1551/6/0, differential 92/4/4/0, touched ruff
+  clean. Diff: session.py one hunk (+ memory note).
+- NEXT: Cut 2 (function-local CallFsm import) → persistence-cutover design.
+  Scheduler consolidation out of A.5.3.
+- NOT VERIFIED: remote CI. B–J untouched.
+
+- Remote CI on 3e16f27 (A.5.2): full SUCCESS — test, legacy-lint
+  (mandatory), shadow, contracts, dialogue jobs all green.
+- Recon finding: legacy shell is a per-turn pipeline, not just state —
+  session engine path builds TurnProposal + Validator.validate +
+  transitions.commit_transition on synced legacy state every turn; CallActor
+  reads legacy fields (pending_question/slot, facts, finalized); persistence
+  projects legacy facts/metadata/results.
+- Read-only migration-map recon delegated (consumers, orphans, ordered cuts);
+  no cutting in this step. Scheduler consolidation explicitly out of A.5.3.
+- NEXT: recon map → smallest zero-behavior cut with full gates → A.5 close.
+
+---
+
+# Historical — Stage A.5.2 dead code (2026-09-18)
 
 - Deleted with zero-reference proof: archive/telephony/livekit +
   telnyx (53 files; pytest never collected them, no code refs),

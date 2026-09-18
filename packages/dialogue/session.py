@@ -433,7 +433,17 @@ class CallSession:
             )
         if speak is None:
             gen = self._next_generation_id()
-            proposal = Planner._terminal_noop(self.state, self.turn_id, gen)
+            # Engine-only fallback: identical to Planner._terminal_noop but
+            # without the legacy Planner dependency (pure construction from
+            # already-synced values; Validator semantics unchanged).
+            proposal = TurnProposal(
+                turn_id=self.turn_id,
+                generation_id=gen,
+                speech="",
+                intent="terminal_noop",
+                fsm_state=self.state.fsm_state,
+                mandatory_remaining=self.state.mandatory_remaining(),
+            )
             validated = Validator.validate(proposal)
             return SessionTurnResult(
                 user_text=user_text,
