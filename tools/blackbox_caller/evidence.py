@@ -83,7 +83,9 @@ class SoakSummary:
         return asdict(self)
 
 
-def anti_cheating_from_config(config: BlackboxConfig, *, import_guard_passed: bool) -> AntiCheatingReport:
+def anti_cheating_from_config(
+    config: BlackboxConfig, *, import_guard_passed: bool
+) -> AntiCheatingReport:
     return AntiCheatingReport(
         production_git_sha=config.production_git_sha,
         production_image_digest=config.production_git_sha,

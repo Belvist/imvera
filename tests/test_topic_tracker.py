@@ -119,11 +119,7 @@ def test_headache_at_sleep_slot_starts_topic_not_clarify() -> None:
     intents = [e.intent for e in result.speak_effects]
     assert "clarify_sleep" not in intents
     headache_ep = next(
-        (
-            ep
-            for ep in result.state.issue_episodes.values()
-            if "голов" in ep.primary_label.lower()
-        ),
+        (ep for ep in result.state.issue_episodes.values() if "голов" in ep.primary_label.lower()),
         None,
     )
     assert headache_ep is not None, "headache IssueEpisode must capture focus"
@@ -147,7 +143,7 @@ def test_poor_sleep_at_wellness_starts_topic_not_probe() -> None:
 
 
 def test_sleep_topic_then_mood_ladder() -> None:
-    # old transport: topic_sleep_* ladder → canonical: background goals + important_to_share → summary
+    # old transport: topic_sleep_* → canonical background goals + ITS → summary
     result = _runner().run(
         [
             CallStarted(),

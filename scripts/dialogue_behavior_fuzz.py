@@ -25,7 +25,6 @@ import argparse
 import json
 import random
 import sys
-import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -39,38 +38,73 @@ from packages.dialogue_engine.scenario_runner import ScenarioRunner  # noqa: E40
 # Behavior class -> phrase pool (live quotes first, then systematic variants).
 BEHAVIORS: dict[str, list[str]] = {
     "direct_temporal": [
-        "С утра.", "Со вчерашнего дня.", "После того как покушал.",
-        "После еды.", "Вот когда утром макароны поел.", "Началось, когда покушал.",
-        "Началось это буквально 3 ч назад.", "Двадцать минут назад.",
-        "Уже с четырёх утра.", "В 4:00 утра голова заболела.",
+        "С утра.",
+        "Со вчерашнего дня.",
+        "После того как покушал.",
+        "После еды.",
+        "Вот когда утром макароны поел.",
+        "Началось, когда покушал.",
+        "Началось это буквально 3 ч назад.",
+        "Двадцать минут назад.",
+        "Уже с четырёх утра.",
+        "В 4:00 утра голова заболела.",
         "Головная боль начала болеть с 6:00 утра до 8 вечера.",
     ],
     "direct_severity": [
-        "Терпимая.", "Сильная.", "Боль была достаточно сильной, но она прошла.",
-        "Болит чуток.", "Слабая.", "Невыносимая.",
+        "Терпимая.",
+        "Сильная.",
+        "Боль была достаточно сильной, но она прошла.",
+        "Болит чуток.",
+        "Слабая.",
+        "Невыносимая.",
     ],
     "direct_current": [
-        "Ещё болит.", "Уже не болит.", "Сейчас уже полегче.", "Сейчас сердце болит.",
-        "Да, ещё беспокоит.", "Прошла.",
+        "Ещё болит.",
+        "Уже не болит.",
+        "Сейчас уже полегче.",
+        "Сейчас сердце болит.",
+        "Да, ещё беспокоит.",
+        "Прошла.",
     ],
     "direct_farewell": ["До свидания.", "Всё, спасибо большое, пока.", "Пока."],
     "direct_decline": ["Нет.", "Нет, обращать внимания ни на что не нужно.", "Ничего больше."],
     "vague": [
-        "Ну так.", "Не знаю.", "Ага.", "Алло.", "Чего?", "Что?",
-        "Ну, наверное.", "Да вроде бы нет.", "Я ж сказал уже всё.",
+        "Ну так.",
+        "Не знаю.",
+        "Ага.",
+        "Алло.",
+        "Чего?",
+        "Что?",
+        "Ну, наверное.",
+        "Да вроде бы нет.",
+        "Я ж сказал уже всё.",
     ],
     "garbage": [
-        "Поднял.", "Меняет.", "Люпимая.", "Спали того.", "Пло.", "Колю покушал когда?",
-        "Э-э.", "Ну блядь, всё равно типа",
+        "Поднял.",
+        "Меняет.",
+        "Люпимая.",
+        "Спали того.",
+        "Пло.",
+        "Колю покушал когда?",
+        "Э-э.",
+        "Ну блядь, всё равно типа",
     ],
     "hostile_meta": [
-        "Не, это хуйня, ты сразу всё спросил.", "Ты дура.", "Не звони больше.",
-        "Почему она говорит Даниил? Откуда?", "Про что ты?", "А вы кто?",
+        "Не, это хуйня, ты сразу всё спросил.",
+        "Ты дура.",
+        "Не звони больше.",
+        "Почему она говорит Даниил? Откуда?",
+        "Про что ты?",
+        "А вы кто?",
     ],
     "topic_jump": [
-        "Ноги.", "Таблетку забыла выпить от сосудов.", "Плохо спал.",
-        "Забыла собаку выгулить.", "Надо сходить, ноги болят.",
-        "У меня болит глаз сегодня.", "Грустно мне.",
+        "Ноги.",
+        "Таблетку забыла выпить от сосудов.",
+        "Плохо спал.",
+        "Забыла собаку выгулить.",
+        "Надо сходить, ноги болят.",
+        "У меня болит глаз сегодня.",
+        "Грустно мне.",
     ],
     "multi_dump": [
         "У меня болит голова, забыла выпить таблетки от давления. У меня болит сердце.",
@@ -80,15 +114,22 @@ BEHAVIORS: dict[str, list[str]] = {
         "Живот болит после того, как покушал.",
     ],
     "contradiction": [
-        "Уже не болит.", "Вообще-то всё нормально.", "Да нет, прошло уже.",
+        "Уже не болит.",
+        "Вообще-то всё нормально.",
+        "Да нет, прошло уже.",
     ],
     "emergency": [
         "Сердце болит, я падаю, мне плохо, теряю сознание.",
         "Сейчас, я же говорю, я сейчас умру, я задыхаюсь уже.",
-        "Вызовите скорую.", "Упал и не могу встать.", "Сердце давит.",
+        "Вызовите скорую.",
+        "Упал и не могу встать.",
+        "Сердце давит.",
     ],
     "question_back": [
-        "А вы кто?", "Зачем звоните?", "Про что ты?", "Что вы спросили?",
+        "А вы кто?",
+        "Зачем звоните?",
+        "Про что ты?",
+        "Что вы спросили?",
     ],
 }
 
@@ -104,8 +145,15 @@ SEEDS: dict[str, list[str]] = {
 }
 
 EMERGENCY_LEX = (
-    "падаю", "упал", "задыхаюсь", "теряю сознание", "умру", "умираю",
-    "скорую", "не могу встать", "давит",
+    "падаю",
+    "упал",
+    "задыхаюсь",
+    "теряю сознание",
+    "умру",
+    "умираю",
+    "скорую",
+    "не могу встать",
+    "давит",
 )
 
 TERMINAL_OK = {"goodbye_final", "partial_unresolved_close", "close_urgent", "urgent_close"}
@@ -125,7 +173,9 @@ def _speak_intents(effects: list) -> list[str]:
     return [e.intent for e in effects if isinstance(e, SpeakEffect)]
 
 
-def run_one(seed_name: str, prefix: list[str], behaviors: list[str], rng: random.Random) -> list[FuzzFailure]:
+def run_one(
+    seed_name: str, prefix: list[str], behaviors: list[str], rng: random.Random
+) -> list[FuzzFailure]:
     failures: list[FuzzFailure] = []
     r = ScenarioRunner(call_id=f"fuzz-{seed_name}", elder_display_name="Тест")
     transcript: list[str] = []
@@ -137,8 +187,9 @@ def run_one(seed_name: str, prefix: list[str], behaviors: list[str], rng: random
             transcript.extend(f"ВЫ: {t}" for _ in [0])
             transcript.extend(f"ВЕРА: {(e.text or '')[:120]}" for e in res.speak_effects)
     except Exception as exc:  # noqa: BLE001
-        failures.append(FuzzFailure(seed_name, "seed_prefix", prefix, "I6",
-                                    f"{type(exc).__name__}: {exc}"))
+        failures.append(
+            FuzzFailure(seed_name, "seed_prefix", prefix, "I6", f"{type(exc).__name__}: {exc}")
+        )
         return failures
 
     temporal_run = 0
@@ -150,9 +201,16 @@ def run_one(seed_name: str, prefix: list[str], behaviors: list[str], rng: random
         try:
             res = r.run([text])
         except Exception as exc:  # noqa: BLE001
-            failures.append(FuzzFailure(seed_name, behavior, list(played), "I6",
-                                        f"{type(exc).__name__}: {str(exc)[:200]}",
-                                        list(transcript) + [f"ВЫ: {text}", "<EXCEPTION>"]))
+            failures.append(
+                FuzzFailure(
+                    seed_name,
+                    behavior,
+                    list(played),
+                    "I6",
+                    f"{type(exc).__name__}: {str(exc)[:200]}",
+                    list(transcript) + [f"ВЫ: {text}", "<EXCEPTION>"],
+                )
+            )
             break
         speaks = res.speak_effects
         intents = _speak_intents(res.effects)
@@ -165,13 +223,28 @@ def run_one(seed_name: str, prefix: list[str], behaviors: list[str], rng: random
         # I1: meaningful turn must produce an outcome (speak, EndCall, or an
         # explicit listen-wait timer for backchannels — never bare silence).
         if not closed and not speaks and not ends and not timers and text.strip():
-            failures.append(FuzzFailure(seed_name, behavior, list(played), "I1",
-                                        "no speak and no EndCall", list(transcript)))
+            failures.append(
+                FuzzFailure(
+                    seed_name,
+                    behavior,
+                    list(played),
+                    "I1",
+                    "no speak and no EndCall",
+                    list(transcript),
+                )
+            )
         # I2: hangup only via terminal intents.
         if ends and not (set(intents) & TERMINAL_OK):
-            failures.append(FuzzFailure(seed_name, behavior, list(played), "I2",
-                                        f"EndCall without terminal intent: {intents}",
-                                        list(transcript)))
+            failures.append(
+                FuzzFailure(
+                    seed_name,
+                    behavior,
+                    list(played),
+                    "I2",
+                    f"EndCall without terminal intent: {intents}",
+                    list(transcript),
+                )
+            )
         # I3: temporal loop guard — same question slot 3x in a row.
         slots = [e.slot for e in speaks if isinstance(e, SpeakEffect) and e.slot]
         if slots and all(("onset" in s or "duration" in s) for s in slots):
@@ -184,23 +257,46 @@ def run_one(seed_name: str, prefix: list[str], behaviors: list[str], rng: random
             temporal_run = 0
             temporal_slot = ""
         if temporal_run >= 3:
-            failures.append(FuzzFailure(seed_name, behavior, list(played), "I3",
-                                        f"temporal probe 3x in a row: {temporal_slot}",
-                                        list(transcript)))
+            failures.append(
+                FuzzFailure(
+                    seed_name,
+                    behavior,
+                    list(played),
+                    "I3",
+                    f"temporal probe 3x in a row: {temporal_slot}",
+                    list(transcript),
+                )
+            )
             temporal_run = 0
         # I4: emergency must never be abandoned into partial.
         low = text.lower()
         if any(k in low for k in EMERGENCY_LEX) and "partial_unresolved_close" in intents:
-            failures.append(FuzzFailure(seed_name, behavior, list(played), "I4",
-                                        "emergency abandoned via partial", list(transcript)))
+            failures.append(
+                FuzzFailure(
+                    seed_name,
+                    behavior,
+                    list(played),
+                    "I4",
+                    "emergency abandoned via partial",
+                    list(transcript),
+                )
+            )
         if closed:
             break
     else:
         # I5: farewell must close within the run.
         if any(t.lower().rstrip(".!") in ("до свидания", "пока") for t in played[-3:]):
             if not r.state.call_closed:
-                failures.append(FuzzFailure(seed_name, behavior, list(played[-3:]), "I5",
-                                            "farewell did not close", list(transcript)))
+                failures.append(
+                    FuzzFailure(
+                        seed_name,
+                        behavior,
+                        list(played[-3:]),
+                        "I5",
+                        "farewell did not close",
+                        list(transcript),
+                    )
+                )
     return failures
 
 
@@ -239,7 +335,8 @@ def main() -> int:
         out.mkdir(parents=True, exist_ok=True)
         payload = [f.__dict__ for f in failures]
         (out / f"fuzz_seed{args.seed}.json").write_text(
-            json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+            json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
         print(f"dumped {len(payload)} failures to {out}")
     return 0 if not failures else 2
 

@@ -7,7 +7,7 @@ from typing import Any
 
 from tools.blackbox_caller.config import BlackboxConfig
 from tools.blackbox_caller.sip_client import SipSessionInfo
-from tools.pjsua2_blackbox_caller.config import Pjsua2Config, load_pjsua2_config
+from tools.pjsua2_blackbox_caller.config import load_pjsua2_config
 
 
 class Pjsua2ImportError(RuntimeError):

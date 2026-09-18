@@ -39,7 +39,8 @@ def run_transport_gate() -> TransportGateResult:
     result.offered_codecs = list(cfg.offered_codecs)
 
     try:
-        client = Pjsua2SipClient(cfg.blackbox)
+        # Construction itself is the availability probe; errors mean no backend.
+        _client = Pjsua2SipClient(cfg.blackbox)
     except Pjsua2ImportError as exc:
         result.errors.append(str(exc))
         return result

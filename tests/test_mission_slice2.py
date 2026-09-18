@@ -25,7 +25,7 @@ from packages.dialogue_engine.mission_understanding import (
     set_mission_understanding_provider,
 )
 from packages.dialogue_engine.semantic_kernel.types import Observation, SubjectKind
-from packages.dialogue_engine.state import GoalLifecycle, Question, QuestionPhase
+from packages.dialogue_engine.state import GoalLifecycle, QuestionPhase
 from packages.dialogue_engine.turn_understanding import RichUserTurn, build_rich_turn_from_text
 
 

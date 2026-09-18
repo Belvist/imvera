@@ -67,7 +67,9 @@ def main() -> int:
 
     print("=== Phase A: internal docker live smoke (diagnostic) ===", flush=True)
     print("Ensuring MLX workers + CallActor bridge...", flush=True)
-    rc = _run([sys.executable, str(ROOT / "scripts" / "freeswitch_zoiper_voice_up.py")], check=False)
+    rc = _run(
+        [sys.executable, str(ROOT / "scripts" / "freeswitch_zoiper_voice_up.py")], check=False
+    )
     if rc != 0:
         print("BLOCKED: freeswitch-zoiper-voice-up failed", file=sys.stderr)
         return rc

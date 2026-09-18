@@ -9,16 +9,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from packages.telephony.adapter import (
     InboundMediaFrame,
     StreamTrack,
     TelephonyMediaCounters,
 )
-
 from packages.telephony.freeswitch_outbound import encode_stream_audio_json
 
 log = logging.getLogger(__name__)

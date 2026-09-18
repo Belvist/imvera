@@ -12,7 +12,7 @@ import subprocess
 import sys
 import time
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -26,7 +26,10 @@ from scripts.local_sip_config import load_or_create
 RUN = ROOT / ".run"
 DIAG_ROOT = RUN / "diag"
 REDACT_PATTERNS = (
-    (re.compile(r"(password|token|secret|authorization)\s*[:=]\s*['\"]?\S+", re.I), r"\1=***REDACTED***"),
+    (
+        re.compile(r"(password|token|secret|authorization)\s*[:=]\s*['\"]?\S+", re.I),
+        r"\1=***REDACTED***",
+    ),
     (re.compile(r"postgresql://[^:]+:[^@]+@"), "postgresql://imvera:***REDACTED***@"),
 )
 
@@ -80,7 +83,7 @@ def _runtime_manifest() -> dict:
         chan_ws = chan_path.read_text(encoding="utf-8")
 
     return {
-        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collected_at": datetime.now(UTC).isoformat(),
         "git_sha": sha,
         "process_pids": pids,
         "endpoints": {"stt": stt, "tts": tts, "llm": llm, "gateway": "http://127.0.0.1:9200"},
@@ -156,11 +159,11 @@ def _diagnose_call(call_id: str, manifest: dict) -> dict:
     ws_path = RUN / "ws-diag" / f"{call_id}.jsonl"
     rows = []
     if trace_path.exists():
-        rows = [json.loads(l) for l in trace_path.read_text().splitlines() if l]
+        rows = [json.loads(line) for line in trace_path.read_text().splitlines() if line]
     types = {r.get("type") for r in rows}
     ws_rows = []
     if ws_path.exists():
-        ws_rows = [json.loads(l) for l in ws_path.read_text().splitlines() if l]
+        ws_rows = [json.loads(line) for line in ws_path.read_text().splitlines() if line]
 
     playback = next((r for r in rows if r.get("type") == "playback.completed"), None)
     sent = int((playback or {}).get("payload", {}).get("sent_samples", 0))
@@ -179,7 +182,9 @@ def _diagnose_call(call_id: str, manifest: dict) -> dict:
         findings.append("Greeting gate: media.ready MISSING — check WS attach order.")
 
     if sent > 0:
-        findings.append(f"TTS/inject: playback.completed sent_samples={sent} (gateway sent PCM to inject WS).")
+        findings.append(
+            f"TTS/inject: playback.completed sent_samples={sent} (gateway sent PCM to inject WS)."
+        )
     else:
         findings.append("TTS/inject: no samples sent to inject.")
 
@@ -270,7 +275,7 @@ def build_archive(call_id: str | None = None, skip_call: bool = False) -> Path:
     if not call_id:
         call_id = f"unknown-{int(time.time())}"
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     bundle_dir = DIAG_ROOT / f"{stamp}_{call_id}"
     bundle_dir.mkdir(parents=True, exist_ok=True)
 
@@ -317,7 +322,9 @@ def build_archive(call_id: str | None = None, skip_call: bool = False) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build one-call SIP diagnostic archive")
     parser.add_argument("--call-id", help="Use existing call_id instead of placing new call")
-    parser.add_argument("--skip-call", action="store_true", help="Only collect runtime + last trace")
+    parser.add_argument(
+        "--skip-call", action="store_true", help="Only collect runtime + last trace"
+    )
     args = parser.parse_args()
     build_archive(call_id=args.call_id, skip_call=args.skip_call or bool(args.call_id))
     return 0

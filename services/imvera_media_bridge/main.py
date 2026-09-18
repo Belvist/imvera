@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 import wave
 from pathlib import Path
 
@@ -138,7 +137,10 @@ def _write_session_artifacts(session: FreeSwitchBridgeSession) -> None:
         rms_peak = max(rms_peak, rms)
         peak = max(
             peak,
-            max(abs(int.from_bytes(chunk[j : j + 2], "little", signed=True)) for j in range(0, len(chunk) - 1, 2)),
+            max(
+                abs(int.from_bytes(chunk[j : j + 2], "little", signed=True))
+                for j in range(0, len(chunk) - 1, 2)
+            ),
         )
 
     downlink_raw = invite.get("synthetic_downlink_path", str(GATE_ROOT / "synthetic_downlink.u8"))

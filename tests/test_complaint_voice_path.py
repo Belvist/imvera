@@ -3,10 +3,9 @@
 import asyncio
 from types import SimpleNamespace
 
-from packages.contracts.enums import AsrQuality, FsmState, SlotStatus
+from packages.contracts.enums import AsrQuality, SlotStatus
 from packages.contracts.semantic import Evidence, FactCandidate, SemanticPayload
 from packages.core.memory_store import InMemoryCallRecordStore
-from packages.dialogue.planner import Planner
 from packages.dialogue.session import CallSession
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks
 from services.llm.http_provider import RenderChunk

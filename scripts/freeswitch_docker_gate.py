@@ -54,7 +54,12 @@ def _git_image_tag() -> str:
 
 def _wait_fs_module(timeout_s: float = 90.0) -> None:
     proc = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "freeswitch_readiness_check.py"), "--wait", str(int(timeout_s))],
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "freeswitch_readiness_check.py"),
+            "--wait",
+            str(int(timeout_s)),
+        ],
         cwd=ROOT,
         check=False,
     )

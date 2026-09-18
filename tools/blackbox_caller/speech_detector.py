@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 SILENCE_CENTER = 128
 
 
@@ -40,7 +39,6 @@ class DownlinkSpeechDetector:
         """Return (bot_speaking, bot_just_finished)."""
         rms = self._rms_u8(chunk)
         self._last_rms = rms
-        was = self._bot_speaking
         if rms >= self.config.speech_rms_threshold:
             self._speech_run += 1
             self._silence_run = 0

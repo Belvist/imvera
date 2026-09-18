@@ -20,7 +20,7 @@ def write_zoiper_runtime_config(media_host: str | None = None) -> Path:
         "\n".join(
             [
                 "<include>",
-                f'  <X-PRE-PROCESS cmd="set" data="imvera_media_bridge_ws=ws://host.docker.internal:9210/stream"/>',
+                '  <X-PRE-PROCESS cmd="set" data="imvera_media_bridge_ws=ws://host.docker.internal:9210/stream"/>',
                 f'  <X-PRE-PROCESS cmd="set" data="domain={host}"/>',
                 f'  <X-PRE-PROCESS cmd="set" data="domain_name={host}"/>',
                 f'  <X-PRE-PROCESS cmd="set" data="external_rtp_ip={host}"/>',

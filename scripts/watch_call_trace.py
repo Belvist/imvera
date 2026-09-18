@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -27,7 +26,8 @@ def main() -> int:
                     if not line.strip():
                         continue
                     row = json.loads(line)
-                    msg = f"{path.name} {row.get('type')} {json.dumps(row.get('payload', {}), ensure_ascii=False)}"
+                    payload = json.dumps(row.get("payload", {}), ensure_ascii=False)
+                    msg = f"{path.name} {row.get('type')} {payload}"
                     print(msg, flush=True)
                     log.write(msg + "\n")
                 seen[path.name] = len(lines)

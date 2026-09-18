@@ -23,14 +23,27 @@ from packages.dialogue_engine.action_policy.actions import (
     PolicyConstraintViolation,
     normalize_need,
 )
-from packages.dialogue_engine.action_policy.bridge import legacy_plan_to_action_key, to_response_plan
+from packages.dialogue_engine.action_policy.bridge import (
+    legacy_plan_to_action_key,
+    to_response_plan,
+)
 from packages.dialogue_engine.action_policy.policy import choose
 from packages.dialogue_engine.action_policy.scorer import POLICY_VERSION
-from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView, build_policy_snapshot
+from packages.dialogue_engine.action_policy.snapshot import (
+    PolicySnapshot,
+    TurnContextView,
+    build_policy_snapshot,
+)
 from packages.dialogue_engine.conversation_policy import TurnContext, schedule_next_action
 from packages.dialogue_engine.issue_memory import filter_rich_turn_mentions
 from packages.dialogue_engine.semantic_kernel.observation_memory import atomic_semantic_apply
-from packages.dialogue_engine.state import BackgroundGoalCoverage, CheckPath, EngineState, IssueEpisode, Question
+from packages.dialogue_engine.state import (
+    BackgroundGoalCoverage,
+    CheckPath,
+    EngineState,
+    IssueEpisode,
+    Question,
+)
 from packages.dialogue_engine.turn_understanding import RichUserTurn, build_rich_turn_from_text
 
 CORPUS_ROOT = ROOT / "tests" / "action_policy" / "corpus"
@@ -116,18 +129,29 @@ def run_snapshot_benchmark() -> dict[str, Any]:
         try:
             decision = choose(snapshot, ctx)
         except PolicyConstraintViolation as exc:
-            rows.append({
-                "split": split,
-                "id": case["id"],
-                "new": f"CONSTRAINT_VIOLATION:{exc.mandatory_class}",
-                "legacy": _legacy_action(snapshot, ctx),
-                "acceptable": sorted(case.get("acceptable", ())),
-                "forbidden": sorted(case.get("forbidden", ())),
-                "new_ok": False,
-                "legacy_ok": False,
-                "constraint_violation": exc.mandatory_class,
-            })
-            stat = split_stats.setdefault(split, {"total": 0, "new_ok": 0, "legacy_ok": 0, "new_forbidden": 0, "legacy_forbidden": 0})
+            rows.append(
+                {
+                    "split": split,
+                    "id": case["id"],
+                    "new": f"CONSTRAINT_VIOLATION:{exc.mandatory_class}",
+                    "legacy": _legacy_action(snapshot, ctx),
+                    "acceptable": sorted(case.get("acceptable", ())),
+                    "forbidden": sorted(case.get("forbidden", ())),
+                    "new_ok": False,
+                    "legacy_ok": False,
+                    "constraint_violation": exc.mandatory_class,
+                }
+            )
+            stat = split_stats.setdefault(
+                split,
+                {
+                    "total": 0,
+                    "new_ok": 0,
+                    "legacy_ok": 0,
+                    "new_forbidden": 0,
+                    "legacy_forbidden": 0,
+                },
+            )
             stat["total"] += 1
             continue
         new_key = decision.chosen.key.label()
@@ -136,24 +160,31 @@ def run_snapshot_benchmark() -> dict[str, Any]:
         forbidden = set(case.get("forbidden", ()))
         new_ok = new_key in acceptable and new_key not in forbidden
         legacy_ok = legacy_key in acceptable and legacy_key not in forbidden
-        stat = split_stats.setdefault(split, {"total": 0, "new_ok": 0, "legacy_ok": 0, "new_forbidden": 0, "legacy_forbidden": 0})
+        stat = split_stats.setdefault(
+            split,
+            {"total": 0, "new_ok": 0, "legacy_ok": 0, "new_forbidden": 0, "legacy_forbidden": 0},
+        )
         stat["total"] += 1
         stat["new_ok"] += int(new_ok)
         stat["legacy_ok"] += int(legacy_ok)
         stat["new_forbidden"] += int(new_key in forbidden)
         stat["legacy_forbidden"] += int(legacy_key in forbidden)
-        rows.append({
-            "split": split,
-            "id": case["id"],
-            "new": new_key,
-            "legacy": legacy_key,
-            "acceptable": sorted(acceptable),
-            "forbidden": sorted(forbidden),
-            "new_ok": new_ok,
-            "legacy_ok": legacy_ok,
-            "rejected": [{"action": r.action.key.label(), "rule": r.rule_id} for r in decision.rejected],
-            "chosen_contributions": decision.candidates[0].contributions,
-        })
+        rows.append(
+            {
+                "split": split,
+                "id": case["id"],
+                "new": new_key,
+                "legacy": legacy_key,
+                "acceptable": sorted(acceptable),
+                "forbidden": sorted(forbidden),
+                "new_ok": new_ok,
+                "legacy_ok": legacy_ok,
+                "rejected": [
+                    {"action": r.action.key.label(), "rule": r.rule_id} for r in decision.rejected
+                ],
+                "chosen_contributions": decision.candidates[0].contributions,
+            }
+        )
     return {"policy_version": POLICY_VERSION, "splits": split_stats, "cases": rows}
 
 
@@ -252,7 +283,10 @@ def run_pipeline_diagnostic() -> dict[str, Any]:
     checked = 0
     for path in sorted(LIVE_REPLAY_ROOT.glob("*.json")):
         raw = json.loads(path.read_text(encoding="utf-8"))
-        state = EngineState(call_id=f"action-policy-{raw.get('call_id', path.stem)}", elder_display_name=raw.get("elder_display_name", "Даниил"))
+        state = EngineState(
+            call_id=f"action-policy-{raw.get('call_id', path.stem)}",
+            elder_display_name=raw.get("elder_display_name", "Даниил"),
+        )
         for idx, turn in enumerate(raw.get("turns", ()), start=1):
             pending_attr = turn.get("pending_episode_attribute")
             if pending_attr:
@@ -274,7 +308,9 @@ def run_pipeline_diagnostic() -> dict[str, Any]:
                     text=turn.get("bot_text", ""),
                     intent=f"episode_{pending_attr}",
                 )
-            rich = build_rich_turn_from_text(turn["stt_final"], utterance_id=f"u-{idx}", engine_state=state)
+            rich = build_rich_turn_from_text(
+                turn["stt_final"], utterance_id=f"u-{idx}", engine_state=state
+            )
             rich = filter_rich_turn_mentions(state, rich)
             before_episode_ids = set(state.issue_episodes)
             atomic_semantic_apply(state, rich)
@@ -302,18 +338,25 @@ def run_pipeline_diagnostic() -> dict[str, Any]:
                 nlu_state_loss += 1
             elif failed:
                 policy_failure += 1
-            results.append({
-                "fixture": path.stem,
-                "turn": idx,
-                "text": turn["stt_final"],
-                "expected_kind": expected_kind.value,
-                "chosen": decision.chosen.key.label(),
-                "pending_episode_attribute": turn.get("pending_episode_attribute"),
-                "failure_reason": reason,
-                "nlu_state_loss": state_loss,
-                "policy_failure": failed and not state_loss,
-            })
-    return {"checked_turns": checked, "nlu_state_loss": nlu_state_loss, "policy_failure": policy_failure, "turns": results}
+            results.append(
+                {
+                    "fixture": path.stem,
+                    "turn": idx,
+                    "text": turn["stt_final"],
+                    "expected_kind": expected_kind.value,
+                    "chosen": decision.chosen.key.label(),
+                    "pending_episode_attribute": turn.get("pending_episode_attribute"),
+                    "failure_reason": reason,
+                    "nlu_state_loss": state_loss,
+                    "policy_failure": failed and not state_loss,
+                }
+            )
+    return {
+        "checked_turns": checked,
+        "nlu_state_loss": nlu_state_loss,
+        "policy_failure": policy_failure,
+        "turns": results,
+    }
 
 
 def _percentile(sorted_ns: list[int], q: float) -> float:
@@ -387,7 +430,11 @@ def main() -> int:
     splits = report["snapshot_benchmark"]["splits"]
     p0 = splits.get("p0_golden", {})
     held = splits.get("held_out", {})
-    p0_ok = bool(p0.get("total", 0)) and p0.get("new_ok") == p0.get("total") and p0.get("new_forbidden") == 0
+    p0_ok = (
+        bool(p0.get("total", 0))
+        and p0.get("new_ok") == p0.get("total")
+        and p0.get("new_forbidden") == 0
+    )
     held_ratio = (held.get("new_ok", 0) / held.get("total", 1)) if held.get("total") else 0.0
     held_ok = held_ratio >= 0.95 and held.get("new_forbidden") == 0
     latency_ok = bool(report["latency"]["target_pass"])

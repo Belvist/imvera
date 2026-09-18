@@ -75,7 +75,10 @@ def main() -> int:
         except wave.Error:
             pass
 
-    from packages.telephony.freeswitch_forensics import DOCKER_PUBLISHED_RTP_RANGE, port_in_published_range
+    from packages.telephony.freeswitch_forensics import (
+        DOCKER_PUBLISHED_RTP_RANGE,
+        port_in_published_range,
+    )
 
     evidence.docker_published_rtp_range = DOCKER_PUBLISHED_RTP_RANGE
     if evidence.local_media_port and not port_in_published_range(evidence.local_media_port):
@@ -116,10 +119,17 @@ def main() -> int:
 
     evidence = classify_media_boundary(evidence)
     report_path = out_dir / "forensic.json"
-    report_path.write_text(json.dumps(evidence.to_dict(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    report_path.write_text(
+        json.dumps(evidence.to_dict(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
-    print(f"  rtp_local={vars_map.get('local_media_ip', '')}:{vars_map.get('local_media_port', '')}")
-    print(f"  rtp_remote={vars_map.get('remote_media_ip', '')}:{vars_map.get('remote_media_port', '')}")
+    print(
+        f"  rtp_local={vars_map.get('local_media_ip', '')}:{vars_map.get('local_media_port', '')}"
+    )
+    print(
+        f"  rtp_remote={vars_map.get('remote_media_ip', '')}"
+        f":{vars_map.get('remote_media_port', '')}"
+    )
     print(f"boundary={evidence.boundary}")
     print(f"detail={evidence.boundary_detail}")
     print(f"rtp_in_packets={evidence.rtp_audio_in_packets}")
@@ -127,7 +137,9 @@ def main() -> int:
     print(f"codec={evidence.negotiated_codec}")
     print(f"fs_read_rms={evidence.fs_read_rms_peak:.1f} nonzero={evidence.fs_read_nonzero_frames}")
     print(f"ws_rms={evidence.ws_rms_peak:.1f} nonzero={evidence.ws_nonzero_frames}")
-    print(f"actor_nonzero={evidence.actor_nonzero_frames} listen_rms={evidence.listen_rms_peak:.1f}")
+    print(
+        f"actor_nonzero={evidence.actor_nonzero_frames} listen_rms={evidence.listen_rms_peak:.1f}"
+    )
     print(f"report={report_path}")
     return 0 if evidence.boundary == "ok_chain" else 2
 

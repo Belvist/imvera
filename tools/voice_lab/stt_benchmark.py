@@ -54,7 +54,9 @@ class ConfigResult:
             "n_samples": len(self.samples),
             "failures": self.failures,
             "warm_p50_ms": int(statistics.median(lats)) if lats else None,
-            "warm_p95_ms": int(statistics.quantiles(lats, n=20)[-1]) if len(lats) >= 2 else (lats[0] if lats else None),
+            "warm_p95_ms": int(statistics.quantiles(lats, n=20)[-1])
+            if len(lats) >= 2
+            else (lats[0] if lats else None),
             "wer_mean": round(statistics.mean(wers), 4) if wers else None,
             "cer_mean": round(statistics.mean(cers), 4) if cers else None,
             "rtf_mean": round(

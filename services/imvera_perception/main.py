@@ -46,7 +46,9 @@ def _session_config(body: SessionCreate) -> PerceptionConfig:
     return PerceptionConfig(
         sample_rate=body.sample_rate,
         echo_ref_gate=body.echo_ref_gate if body.echo_ref_gate is not None else base.echo_ref_gate,
-        lab_half_duplex=body.lab_half_duplex if body.lab_half_duplex is not None else base.lab_half_duplex,
+        lab_half_duplex=body.lab_half_duplex
+        if body.lab_half_duplex is not None
+        else base.lab_half_duplex,
         lab_barge_in=body.lab_barge_in if body.lab_barge_in is not None else base.lab_barge_in,
         post_speech_pause_ms=base.post_speech_pause_ms,
         uplink_preroll_ms=base.uplink_preroll_ms,
@@ -169,7 +171,9 @@ def _process_uplink_frame(
     }
 
 
-async def _handle_control(session: PerceptionSession, data: dict[str, Any]) -> dict[str, Any] | None:
+async def _handle_control(
+    session: PerceptionSession, data: dict[str, Any]
+) -> dict[str, Any] | None:
     msg_type = str(data.get("type", ""))
     if msg_type == "config":
         sample_rate = int(data.get("sample_rate", 16000))
@@ -178,7 +182,9 @@ async def _handle_control(session: PerceptionSession, data: dict[str, Any]) -> d
             echo_ref_gate=bool(data.get("echo_ref_gate", session.config.echo_ref_gate)),
             lab_half_duplex=bool(data.get("lab_half_duplex", session.config.lab_half_duplex)),
             lab_barge_in=bool(data.get("lab_barge_in", session.config.lab_barge_in)),
-            post_speech_pause_ms=int(data.get("post_speech_pause_ms", session.config.post_speech_pause_ms)),
+            post_speech_pause_ms=int(
+                data.get("post_speech_pause_ms", session.config.post_speech_pause_ms)
+            ),
             uplink_preroll_ms=int(data.get("uplink_preroll_ms", session.config.uplink_preroll_ms)),
         )
         return {"type": "config_ack", "sample_rate": sample_rate}

@@ -9,7 +9,6 @@ from pathlib import Path
 from tools.telephony_gate.evidence import MediaGateEvidence, MediaGateFailure, classify_media_gate
 from tools.telephony_gate.tone import (
     MEDIA_GATE_CALLER_HZ,
-    MEDIA_GATE_PROBE_OUTBOUND_HZ,
     analyze_duplex_probe,
     generate_tone_s16le,
     tone_present,

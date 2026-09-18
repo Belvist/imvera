@@ -6,11 +6,13 @@ import pytest
 
 from packages.contracts.enums import SlotStatus
 from packages.dialogue_engine.context import InterpretContext
-from packages.dialogue_engine.contextual_interpreter import contextual_interpret, interpret_structured
+from packages.dialogue_engine.contextual_interpreter import (
+    contextual_interpret,
+    interpret_structured,
+)
 from packages.dialogue_engine.scenario_runner import ScenarioRunner
 from packages.dialogue_engine.semantic import SemanticAct
 from packages.dialogue_engine.state import EngineState, Question, QuestionPhase
-
 
 pytestmark = pytest.mark.dialogue_engine
 

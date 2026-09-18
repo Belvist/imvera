@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 
 from packages.contracts.core import TerminationReason
-from packages.contracts.enums import FsmState, GoalStatus, SlotStatus
+from packages.contracts.enums import FsmState, SlotStatus
 from packages.contracts.mandatory import PILOT_MANDATORY_CHECKS, pilot_mandatory_defaults
 from packages.dialogue.facts import FactRecord
 from packages.dialogue.question_ledger import (

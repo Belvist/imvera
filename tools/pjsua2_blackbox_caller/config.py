@@ -5,7 +5,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from tools.blackbox_caller.config import BlackboxConfig, load_config as load_blackbox_config
+from tools.blackbox_caller.config import BlackboxConfig
+from tools.blackbox_caller.config import load_config as load_blackbox_config
 
 
 @dataclass(frozen=True)

@@ -11,10 +11,11 @@ from typing import Literal
 
 from packages.dialogue_engine.corpus.generator import (
     CORPUS_SEED as MATRIX_SEED,
+)
+from packages.dialogue_engine.corpus.generator import (
     CORPUS_VERSION,
     SCENARIOS_PER_CATEGORY,
     WELLNESS_CATEGORIES,
-    count_by_category,
     generate_corpus,
 )
 from packages.dialogue_engine.corpus.schema import (

@@ -99,3 +99,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Lab scripts/tools must configure sys.path before importing repo packages —
+# E402 is the intended pattern there, not a violation.
+"scripts/**" = ["E402"]
+"tools/**" = ["E402"]

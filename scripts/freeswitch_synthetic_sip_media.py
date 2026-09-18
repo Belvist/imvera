@@ -277,7 +277,11 @@ def main() -> int:
     parser.add_argument("--sip-host", default=os.environ.get("FS_SIP_HOST", "127.0.0.1"))
     parser.add_argument("--sip-port", type=int, default=int(os.environ.get("FS_SIP_PORT", "5060")))
     parser.add_argument("--dial", default=os.environ.get("FS_INBOUND_NUMBER", "+15550001000"))
-    parser.add_argument("--local-sip-port", type=int, default=int(os.environ.get("IMVERA_FS_SYNTH_SIP_PORT", "5077")))
+    parser.add_argument(
+        "--local-sip-port",
+        type=int,
+        default=int(os.environ.get("IMVERA_FS_SYNTH_SIP_PORT", "5077")),
+    )
     parser.add_argument("--speech-seconds", type=float, default=3.0)
     parser.add_argument("--calls", type=int, default=1)
     args = parser.parse_args()

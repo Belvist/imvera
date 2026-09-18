@@ -272,9 +272,7 @@ def test_f_pre_legacy_snapshot_before_mutation(monkeypatch: pytest.MonkeyPatch) 
         "packages.dialogue_engine.action_policy_shadow.build_policy_snapshot",
         spy_build,
     )
-    plan = schedule_next_action(
-        state, TurnContext(user_text="", newly_filled_slots=("wellness",))
-    )
+    plan = schedule_next_action(state, TurnContext(user_text="", newly_filled_slots=("wellness",)))
     assert seen["wellness_before"] == "unseen"
     assert state.background_goal_status.get("wellness") == "answered"
     assert isinstance(plan, ResponsePlan)
@@ -364,7 +362,14 @@ def test_h_frozen_guard_fails_when_git_object_missing(
     monkeypatch.setattr(subprocess, "run", fake_run)
     with pytest.raises(AssertionError, match="frozen SHA|frozen guard failed"):
         _ensure_frozen_sha_available()
-        proc = _git("diff", "--exit-code", FROZEN_SHA, "HEAD", "--", "packages/dialogue_engine/action_policy/policy.py")
+        proc = _git(
+            "diff",
+            "--exit-code",
+            FROZEN_SHA,
+            "HEAD",
+            "--",
+            "packages/dialogue_engine/action_policy/policy.py",
+        )
         assert proc.returncode == 0, (
             f"frozen guard failed for policy.py: rc={proc.returncode}\n"
             f"stdout={proc.stdout!r}\nstderr={proc.stderr!r}"
@@ -514,9 +519,7 @@ def test_persistence_retry_same_idempotency_key(
     assert health2["shadow_records_persisted"] >= 1
     assert eng.state.action_policy_shadow_records == []
     events = [
-        e
-        for e in store._events.get("persist-retry", [])
-        if e.event_type == "ACTION_POLICY_SHADOW"
+        e for e in store._events.get("persist-retry", []) if e.event_type == "ACTION_POLICY_SHADOW"
     ]
     assert len(events) == 1
     assert events[0].idempotency_key == key

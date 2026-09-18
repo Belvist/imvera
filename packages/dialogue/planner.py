@@ -5,12 +5,10 @@ import re
 
 from packages.contracts.core import TerminationReason
 from packages.contracts.enums import AnswerJudgement, AsrQuality, FsmState, GoalStatus, SlotStatus
-from packages.contracts.mandatory import PILOT_SLOT_CHECKS
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.fsm import CallFsm
 from packages.dialogue.interpretation import UserInterpretation, interpret_user_turn
 from packages.dialogue.question_ledger import (
-    MAX_AUTOMATIC_ATTEMPTS,
     clarification_for_slot,
     next_open_slot,
 )

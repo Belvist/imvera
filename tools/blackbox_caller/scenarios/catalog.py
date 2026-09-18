@@ -378,7 +378,13 @@ def live_daily_branch_scenarios() -> list[BlackboxScenario]:
         _scenario(
             "live-branch-04-repair-kakoe",
             ["repair"],
-            ["wellness_bad_01", "repair_allo_01", "mood_negative_01", "sleep_bad_01", "plans_home_01"],
+            [
+                "wellness_bad_01",
+                "repair_allo_01",
+                "mood_negative_01",
+                "sleep_bad_01",
+                "plans_home_01",
+            ],
             ["opening", "probe_concern", "repair_repeat", "check_mood", "summary", "goodbye_final"],
             category="bad",
         ),
@@ -399,13 +405,26 @@ def live_daily_branch_scenarios() -> list[BlackboxScenario]:
                 "sleep_bad_01",
                 "plans_none_01",
             ],
-            ["opening", "probe_concern", "probe_duration", "check_mood", "summary", "goodbye_final"],
+            [
+                "opening",
+                "probe_concern",
+                "probe_duration",
+                "check_mood",
+                "summary",
+                "goodbye_final",
+            ],
             category="bad",
         ),
         _scenario(
             "live-branch-07-backchannel",
             ["backchannel"],
-            ["wellness_good_01", "backchannel_01", "mood_positive_01", "sleep_good_01", "plans_walk_01"],
+            [
+                "wellness_good_01",
+                "backchannel_01",
+                "mood_positive_01",
+                "sleep_good_01",
+                "plans_walk_01",
+            ],
             ["opening", "check_mood", "check_sleep", "check_plans", "summary", "goodbye_final"],
         ),
         _scenario(

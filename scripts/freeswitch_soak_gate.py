@@ -62,7 +62,9 @@ def _classify_latest() -> tuple[MediaGateFailure, dict]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="FreeSWITCH P0-A soak gate")
-    parser.add_argument("--calls", type=int, default=int(os.environ.get("IMVERA_FS_SOAK_CALLS", "1")))
+    parser.add_argument(
+        "--calls", type=int, default=int(os.environ.get("IMVERA_FS_SOAK_CALLS", "1"))
+    )
     args = parser.parse_args()
 
     unit = subprocess.run(

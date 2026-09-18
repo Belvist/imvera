@@ -216,7 +216,6 @@ def test_pack_multi_symptom_reaches_its_without_hangup() -> None:
         ]
     )
     intents = _intents(r)
-    texts = " ".join(e.text.lower() for e in r.effects if getattr(e, "text", None))
     assert "partial_unresolved_close" not in intents
     assert "important_to_share" in intents or r.state.important_to_share_asked
     # Frozen contract: a fresh vague lead ("ещё болит") is probed, not hung

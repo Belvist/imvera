@@ -3,7 +3,7 @@
 from collections import Counter
 
 from packages.contracts.core import TerminationReason
-from packages.contracts.enums import AnswerJudgement, FsmState, GoalStatus, SlotStatus
+from packages.contracts.enums import FsmState, GoalStatus, SlotStatus
 from packages.contracts.semantic import SemanticPayload
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.context_builder import active_question_kind

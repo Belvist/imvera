@@ -74,8 +74,7 @@ def _say_wav(phrase: str, sample_rate: int = 16000) -> bytes:
 def _tone_wav(duration_ms: int, sample_rate: int = 16000) -> bytes:
     n = int(sample_rate * duration_ms / 1000)
     samples = [
-        int(0.25 * 32767 * math.sin(2 * math.pi * 440.0 * i / sample_rate))
-        for i in range(n)
+        int(0.25 * 32767 * math.sin(2 * math.pi * 440.0 * i / sample_rate)) for i in range(n)
     ]
     return struct.pack(f"<{len(samples)}h", *samples)
 
@@ -113,7 +112,9 @@ def main(argv: list[str] | None = None) -> int:
 
     model_revision = str(health.get("model_revision", ""))
     if args.json:
-        print(json.dumps({"stt_url": base_url, "model_revision": model_revision}, ensure_ascii=False))
+        print(
+            json.dumps({"stt_url": base_url, "model_revision": model_revision}, ensure_ascii=False)
+        )
 
     rows: list[dict] = []
 
@@ -139,9 +140,9 @@ def main(argv: list[str] | None = None) -> int:
         if raw and raw != text:
             text = f"{text} (raw:{raw})"
         print(
-            f"{row.get('probe_label',''):<28} "
+            f"{row.get('probe_label', ''):<28} "
             f"{text:<24} "
-            f"{str(row.get('asr_quality','')):<10} "
+            f"{str(row.get('asr_quality', '')):<10} "
             f"{int(row.get('duration_ms', 0)):>5}"
         )
     return 0

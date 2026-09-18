@@ -43,7 +43,15 @@ def sync_freeswitch_zoiper_profile() -> dict:
 def _stack_running() -> bool:
     try:
         out = subprocess.run(
-            ["docker", "compose", "-f", str(ROOT / "infra" / "freeswitch" / "docker-compose.yml"), "ps", "--status", "running"],
+            [
+                "docker",
+                "compose",
+                "-f",
+                str(ROOT / "infra" / "freeswitch" / "docker-compose.yml"),
+                "ps",
+                "--status",
+                "running",
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -74,7 +82,7 @@ def main() -> int:
     print("  Codecs:         PCMU + PCMA only (G.711 — P0-A lab)")
     print("  STUN:           OFF (Advanced → Don't use STUN)")
     print("  Disable:        DNS SRV, outbound proxy")
-    print(f"\n--- Dial ---")
+    print("\n--- Dial ---")
     print(f"  {data['dial_number']}  → Vera (after make freeswitch-zoiper-voice-up)")
     print("  +15550001000 → P0-A synthetic gate tones only")
     print("\n--- Vera lab (CallActor) ---")

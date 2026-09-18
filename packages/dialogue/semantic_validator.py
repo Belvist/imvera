@@ -44,13 +44,11 @@ class SemanticValidator:
         rejected: list[RejectedFact] = []
         accepted_facts: list[FactCandidate] = []
 
-        consent_ok = (
-            payload.consent_evidence is not None
-            and evidence_matches(raw_text, payload.consent_evidence)
+        consent_ok = payload.consent_evidence is not None and evidence_matches(
+            raw_text, payload.consent_evidence
         )
-        control_ok = (
-            payload.control_evidence is None
-            or evidence_matches(raw_text, payload.control_evidence)
+        control_ok = payload.control_evidence is None or evidence_matches(
+            raw_text, payload.control_evidence
         )
 
         for fact in payload.facts:
@@ -70,9 +68,7 @@ class SemanticValidator:
 
         if payload.answers_pending_question and not question_delivered:
             if active_question_kind in ("identity", "consent", "can_talk", "slot"):
-                safe_payload = safe_payload.model_copy(
-                    update={"answers_pending_question": False}
-                )
+                safe_payload = safe_payload.model_copy(update={"answers_pending_question": False})
                 reason_codes.append("answer_without_delivered_question")
 
         if payload.consent_answer in ("yes", "no") and not consent_ok:
@@ -128,7 +124,9 @@ class SemanticValidator:
         if fact.temporal_scope == "past" and fact.field in ("wellness", "mood"):
             if pending_slot and fact.field == pending_slot:
                 lowered = f"{fact.value} {fact.evidence.quote}".lower()
-                if any(marker in lowered for marker in ("бол", "плох", "устал", "с утра", "сегодня")):
+                if any(
+                    marker in lowered for marker in ("бол", "плох", "устал", "с утра", "сегодня")
+                ):
                     return None
                 return "past_not_current_answer"
         if fact.temporal_scope not in _CURRENT_SCOPES and fact.field in (

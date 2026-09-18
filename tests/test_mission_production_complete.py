@@ -10,12 +10,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from packages.contracts.enums import AsrQuality, FsmState
-from packages.contracts.mission_result import MissionResultSnapshot
 from packages.contracts.semantic import (
     GoalAnswerSemantic,
     MissionContextSnapshot,
     SemanticPayload,
-    TurnContext,
 )
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession
@@ -34,7 +32,7 @@ from packages.telephony.product_originate import (
     media_bridge_ws_url,
     originate_product_call,
 )
-from packages.voice_runtime.call_actor import CallActor, MediaCallbacks, build_call_actor
+from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
 from packages.voice_runtime.call_registry import CallBinding, build_call_registry
 
 
@@ -589,7 +587,9 @@ def test_product_api_freeswitch_handoff_same_mission(
     monkeypatch.setattr(vs, "_sessions", {})
     monkeypatch.setattr(vs, "_store", store)
     monkeypatch.setattr(vs, "_telephony_shared_store_ready", lambda: (True, ""))
-    monkeypatch.setattr(ca, "create_call_record_store", lambda: InMemoryCallRecordStore(shared=shared))
+    monkeypatch.setattr(
+        ca, "create_call_record_store", lambda: InMemoryCallRecordStore(shared=shared)
+    )
 
     async def fake_originate(*, call_id: str, **_k):
         return {

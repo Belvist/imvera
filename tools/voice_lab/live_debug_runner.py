@@ -9,10 +9,14 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from tools.blackbox_caller.config import LIVE_E2E_ROOT, BlackboxConfig, load_config
+from tools.blackbox_caller.config import load_config
 from tools.blackbox_caller.evidence import anti_cheating_from_config, write_json
 from tools.blackbox_caller.import_guard import assert_blackbox_clean
-from tools.blackbox_caller.scenario_driver import load_manifest, run_scenario, uplink_manifest_payload
+from tools.blackbox_caller.scenario_driver import (
+    load_manifest,
+    run_scenario,
+    uplink_manifest_payload,
+)
 from tools.blackbox_caller.scenarios.catalog import BlackboxScenario, generate_catalog
 from tools.blackbox_caller.trace_correlation import copy_server_trace, wait_for_trace
 from tools.voice_lab.live_trace_validator import (
@@ -322,7 +326,9 @@ def run_live_debug(
             try:
                 from tools.voice_lab.forensic_gate import _load_manifest, _parse_trace
 
-                manifest_path = ROOT / "tools" / "voice_lab" / "fixtures" / "stt_phone" / "manifest.jsonl"
+                manifest_path = (
+                    ROOT / "tools" / "voice_lab" / "fixtures" / "stt_phone" / "manifest.jsonl"
+                )
                 manifest_map = _load_manifest(manifest_path)
                 turns = _parse_trace(trace, manifest_map)
                 forensic_dict = {
@@ -333,9 +339,7 @@ def run_live_debug(
                 write_json(call_dir / "forensic.json", forensic_dict)
                 for turn in turns:
                     if turn.verdict in {"CAPTURE_ECHO", "STT_ERROR", "INTERPRETER_SLOW_PATH"}:
-                        call_result.errors.append(
-                            f"forensic {turn.utterance_id}: {turn.verdict}"
-                        )
+                        call_result.errors.append(f"forensic {turn.utterance_id}: {turn.verdict}")
             except Exception as exc:
                 call_result.warnings.append(f"forensic skipped: {exc}")
 

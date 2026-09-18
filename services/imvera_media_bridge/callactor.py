@@ -8,7 +8,6 @@ import subprocess
 import sys
 import wave
 from pathlib import Path
-
 from typing import Any
 
 import httpx
@@ -17,16 +16,16 @@ from fastapi import WebSocket
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.core import create_call_record_store
 from packages.telephony.adapter import InboundMediaFrame
-from packages.voice_runtime.audio import pcm_rms_s16le
 from packages.telephony.freeswitch_bridge import (
     FRAME_MS,
     FreeSwitchBridgeSession,
     FreeSwitchOutboundMode,
 )
-from packages.voice_runtime.codec_output import bridge_audio_rates, resampler_chain_summary
 from packages.telephony.freeswitch_esl import hangup_channel
+from packages.voice_runtime.audio import pcm_rms_s16le
 from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
 from packages.voice_runtime.call_registry import build_call_registry
+from packages.voice_runtime.codec_output import bridge_audio_rates, resampler_chain_summary
 from packages.voice_runtime.trace import record_event
 
 log = logging.getLogger("imvera_media_bridge.callactor")
@@ -269,6 +268,10 @@ def _run_forensic_collect(fs_uuid: str, call_id: str) -> None:
         if result.stdout:
             log.info("callactor.forensic\n%s", result.stdout.strip())
         if result.returncode not in (0, 2):
-            log.warning("callactor.forensic.failed code=%s stderr=%s", result.returncode, result.stderr.strip())
+            log.warning(
+                "callactor.forensic.failed code=%s stderr=%s",
+                result.returncode,
+                result.stderr.strip(),
+            )
     except (OSError, subprocess.TimeoutExpired) as exc:
         log.warning("callactor.forensic.error: %s", exc)

@@ -16,11 +16,11 @@ LAB_AST = ROOT / "lab" / "asterisk" / "packages"
 if str(LAB_AST) not in sys.path:
     sys.path.insert(0, str(LAB_AST))
 from asterisk import is_stasis_app_registered, normalize_ari_http_root  # noqa: E402 lab only
+
+from packages.voice_runtime.audio_audit import apply_audio_audit_env
+from packages.voice_runtime.lab_half_duplex import apply_lab_half_duplex_env
 from packages.voice_runtime.profile import apply_audio_env, audio_settings
 from scripts.local_sip_config import load_or_create
-from packages.voice_runtime.lab_half_duplex import apply_lab_half_duplex_env
-from packages.voice_runtime.audio_audit import apply_audio_audit_env
-from packages.voice_runtime.audio_audit import apply_audio_audit_env
 from services.tts.lab_fast import apply_lab_fast_env, lab_fast_tts_enabled
 
 VOICE_COMPOSE = ["docker", "compose", "-f", "lab/asterisk/docker-compose.voice.yml"]
@@ -140,7 +140,9 @@ def _verify_asterisk_modules() -> bool:
             import httpx
 
             for name in ("imvera_capture", "imvera_inject"):
-                fmt = audio_settings()["capture_format" if name == "imvera_capture" else "inject_format"]
+                fmt = audio_settings()[
+                    "capture_format" if name == "imvera_capture" else "inject_format"
+                ]
                 r = httpx.post(
                     f"{http_root}/ari/channels/externalMedia",
                     params={
@@ -192,9 +194,7 @@ def main() -> int:
     print("SIP credentials synced to config/local/asterisk/")
 
     env = apply_audio_audit_env(
-        apply_lab_half_duplex_env(
-            apply_lab_fast_env(apply_audio_env(os.environ.copy()))
-        )
+        apply_lab_half_duplex_env(apply_lab_fast_env(apply_audio_env(os.environ.copy())))
     )
     if env.get("IMVERA_TTS_ENGINE") == "silero_lab":
         print("Lab fast TTS: silero_lab (IMVERA_LAB_FAST_TTS=1, ~1-2s warm first_pcm)")
@@ -210,10 +210,7 @@ def main() -> int:
             "Vera finishes → pause → mic; opening_wellness always-listen + echo-ref)"
         )
     elif env.get("IMVERA_ECHO_REF_GATE", "0") in {"1", "true", "yes"}:
-        print(
-            "Lab always-listen: echo reference gate ON "
-            "(downlink PCM ring — not ML speaker-ID)"
-        )
+        print("Lab always-listen: echo reference gate ON (downlink PCM ring — not ML speaker-ID)")
     else:
         print("Lab listen: always-listen, echo-ref gate OFF (raw uplink)")
     if env.get("IMVERA_AUDIO_AUDIT", "0") in {"1", "true", "yes"}:
@@ -234,11 +231,7 @@ def main() -> int:
         tts_rev = str(tts_health.json().get("model_revision", "")) if tts_ok else ""
     except httpx.HTTPError:
         tts_ok = False
-    if (
-        not tts_ok
-        or "macos_say" in tts_rev
-        or not tts_rev.startswith("silero_lab:silero:")
-    ):
+    if not tts_ok or "macos_say" in tts_rev or not tts_rev.startswith("silero_lab:silero:"):
         print(f"BLOCKED: TTS must be silero_lab (Silero), got {tts_rev!r}", file=sys.stderr)
         return 1
     env["IMVERA_TTS_MODEL_REVISION"] = tts_rev
@@ -326,7 +319,10 @@ def main() -> int:
     print("\nVoice stack up.")
     audio = audio_settings()
     print(f"  Inject format: {audio['inject_format']} ({audio['output_sample_rate']} Hz)")
-    print(f"  Capture format: {audio['capture_format']} (STT resamples to {audio['internal_sample_rate']} Hz)")
+    print(
+        f"  Capture format: {audio['capture_format']}"
+        f" (STT resamples to {audio['internal_sample_rate']} Hz)"
+    )
     print(f"  Zoiper: {cfg['username']}@{cfg['sip_server']}:{cfg['port']}")
     print(f"  Password: {cfg['password']}")
     print(f"  Dial: {cfg['vera_extension']}")
@@ -345,9 +341,7 @@ def main() -> int:
         return 1
 
     try:
-        sha = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-        ).strip()
+        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     except subprocess.CalledProcessError:
         sha = "unknown"
     print(f"\n  Git SHA: {sha}")

@@ -8,9 +8,9 @@ from packages.contracts.interpretation import TurnInterpretation
 from packages.contracts.turn import TurnProposal
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.interpretation import UserInterpretation
-from packages.dialogue.validator import Validator
 from packages.dialogue.planner import Planner
 from packages.dialogue.session import CallSession, SessionTurnResult
+from packages.dialogue.validator import Validator
 from packages.voice_runtime.call_actor import CallActor, CallActorConfig, MediaCallbacks
 from packages.voice_runtime.opening_cache import CachedOpening
 from packages.voice_runtime.playback import PlaybackQueue

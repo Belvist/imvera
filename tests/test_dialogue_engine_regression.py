@@ -8,13 +8,12 @@ from packages.contracts.enums import SlotStatus
 from packages.dialogue.interpretation import interpret_user_turn
 from packages.dialogue.planner import Planner
 from packages.dialogue.state import DialogueState
-from packages.dialogue_engine.events import CallStarted, PlayoutCancelled, PlayoutCompleted
+from packages.dialogue_engine.events import CallStarted, PlayoutCancelled
 from packages.dialogue_engine.fast_interpreter import fast_interpret, fast_interpret_semantic
 from packages.dialogue_engine.policy import mark_question_delivered, reserve_question
 from packages.dialogue_engine.reducer import reduce
 from packages.dialogue_engine.scenario_runner import ScenarioRunner
 from packages.dialogue_engine.state import EngineState
-
 
 pytestmark = pytest.mark.dialogue_engine
 

@@ -8,7 +8,6 @@ import json
 import os
 import queue
 import threading
-import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any

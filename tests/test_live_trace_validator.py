@@ -47,7 +47,9 @@ def test_full_daily_check_trace_passes() -> None:
 def test_missing_goodbye_fails() -> None:
     rows = _full_passing_trace()
     rows = [r for r in rows if r["payload"].get("intent") != "goodbye_final"]
-    result = validate_full_daily_check_trace(rows, downlink_bytes=120_000, require_full_goodbye=True)
+    result = validate_full_daily_check_trace(
+        rows, downlink_bytes=120_000, require_full_goodbye=True
+    )
     assert not result.passed
     assert any("goodbye_final" in e for e in result.errors)
 
@@ -56,8 +58,15 @@ def test_planner_legacy_fails() -> None:
     rows = _full_passing_trace()
     rows.insert(
         1,
-        _row("2026-09-08T18:00:00Z", "dialogue.planner_decision", intent="check_wellness", skip_planner=False),
+        _row(
+            "2026-09-08T18:00:00Z",
+            "dialogue.planner_decision",
+            intent="check_wellness",
+            skip_planner=False,
+        ),
     )
-    result = validate_full_daily_check_trace(rows, downlink_bytes=120_000, require_full_goodbye=True)
+    result = validate_full_daily_check_trace(
+        rows, downlink_bytes=120_000, require_full_goodbye=True
+    )
     assert not result.passed
     assert any("planner_legacy" in e for e in result.errors)

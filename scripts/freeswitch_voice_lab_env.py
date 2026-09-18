@@ -88,7 +88,10 @@ def ensure_silero_opening_cache(env: dict[str, str]) -> bool:
         print(f"BLOCKED: TTS unreachable: {exc}", file=__import__("sys").stderr)
         return False
     if "macos_say" in tts_rev or not tts_rev.startswith("silero_lab:silero:"):
-        print(f"BLOCKED: TTS must be silero_lab (Silero), got {tts_rev!r}", file=__import__("sys").stderr)
+        print(
+            f"BLOCKED: TTS must be silero_lab (Silero), got {tts_rev!r}",
+            file=__import__("sys").stderr,
+        )
         return False
     env["IMVERA_TTS_MODEL_REVISION"] = tts_rev
     print(f"  TTS revision: {tts_rev}")
@@ -107,5 +110,8 @@ def ensure_silero_opening_cache(env: dict[str, str]) -> bool:
         check=False,
     )
     if result.returncode != 0:
-        print("WARN: opening prerender failed — first call may wait on TTS", file=__import__("sys").stderr)
+        print(
+            "WARN: opening prerender failed — first call may wait on TTS",
+            file=__import__("sys").stderr,
+        )
     return True

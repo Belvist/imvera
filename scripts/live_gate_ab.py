@@ -28,7 +28,6 @@ from tools.blackbox_caller.scenarios.catalog import BlackboxScenario, ScenarioSt
 from tools.blackbox_caller.sip_client import PyVoIPSipClient
 from tools.blackbox_caller.trace_correlation import (
     copy_server_trace,
-    find_server_trace,
     wait_for_trace,
 )
 
@@ -198,7 +197,6 @@ def _validate_call_a(rows: list[dict], downlink_bytes: int) -> list[str]:
 def _validate_call_b(rows: list[dict], downlink_bytes: int) -> list[str]:
     errors: list[str] = []
     intents = _engine_intents(rows)
-    stages = _stages(rows)
     if "check_plans" not in intents and "opening" not in intents:
         errors.append("never reached plans context")
     clarify = [i for i in intents if i.startswith("clarify_")]

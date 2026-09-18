@@ -6,7 +6,6 @@ from packages.contracts.turn import TurnProposal
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.planner import Planner
 from packages.dialogue.session import CallSession
-from packages.dialogue.transition_store import DialogueTransitionStore
 
 
 def _session_with_wellness_question() -> tuple[CallSession, TurnProposal]:

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from packages.voice_runtime.profile import audio_settings, load_profile

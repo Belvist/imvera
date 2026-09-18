@@ -56,8 +56,11 @@ def main() -> int:
     if path is None:
         report = {
             "status": "unit_only",
-            "message": "No live evidence — P0-A: FS tone_stream 880 + mod_audio_stream uplink",
-            "next": "make freeswitch-up && python3 services/imvera_media_bridge/main.py && make freeswitch-synthetic-sip",
+            "message": "No live evidence — P0-A: FS tone_stream 880 + uplink",
+            "next": (
+                "make freeswitch-up && python3 services/imvera_media_bridge/main.py"
+                " && make freeswitch-synthetic-sip"
+            ),
         }
         _write_report(report)
         print("freeswitch-media-gate: unit OK — live gate NOT RUN (no evidence)")

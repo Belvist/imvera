@@ -61,7 +61,9 @@ class MediaGateEvidence:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
-def classify_media_gate(evidence: MediaGateEvidence, *, phase: str | None = None) -> MediaGateFailure:
+def classify_media_gate(
+    evidence: MediaGateEvidence, *, phase: str | None = None
+) -> MediaGateFailure:
     gate_phase = phase or evidence.gate_phase or "p0a"
     if evidence.inbound_has_880_hz:
         return MediaGateFailure.VERA_IN_INBOUND

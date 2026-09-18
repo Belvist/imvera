@@ -7,7 +7,6 @@ import time
 from dataclasses import dataclass
 from enum import StrEnum
 
-
 CONTAINER_NAME = "imvera-freeswitch"
 REQUIRED_MODULES: tuple[str, ...] = ("mod_audio_stream", "mod_sofia", "mod_event_socket")
 

@@ -9,7 +9,14 @@ from packages.dialogue_engine.scenario_runner import ScenarioRunner
 
 pytestmark = pytest.mark.dialogue_engine
 
-_BACKGROUND_LADDER = ("check_mood", "check_sleep", "check_plans", "clarify_mood", "clarify_sleep", "clarify_plans")
+_BACKGROUND_LADDER = (
+    "check_mood",
+    "check_sleep",
+    "check_plans",
+    "clarify_mood",
+    "clarify_sleep",
+    "clarify_plans",
+)
 
 
 def _runner() -> ScenarioRunner:
@@ -50,11 +57,7 @@ def test_flow_fs_f534c2e6_soft_no_closes_warm() -> None:
     its = [e for e in r.effects if getattr(e, "intent", "") == "important_to_share"]
     assert its
     assert "важн" in its[-1].text.lower()
-    result = r.run(
-        [
-            "Да вроде бы нет, планов толком тоже нет никаких. Так вроде всё нормально."
-        ]
-    )
+    result = r.run(["Да вроде бы нет, планов толком тоже нет никаких. Так вроде всё нормально."])
     intents = [e.intent for e in result.speak_effects]
     texts = " ".join(e.text.lower() for e in result.speak_effects)
     assert "summary" in intents
@@ -148,6 +151,8 @@ def test_session_live_silence_validator_no_longer_blocks() -> None:
     from packages.dialogue.session import CallSession
     from packages.dialogue_engine.semantic_kernel.kernel import (
         interpret as kernel_interpret,
+    )
+    from packages.dialogue_engine.semantic_kernel.kernel import (
         kernel_to_rich_turn,
     )
 
@@ -228,8 +233,8 @@ def test_compound_temporal_current_closes_both() -> None:
 
 
 def test_compound_known_current_asks_only_temporal() -> None:
-    from packages.dialogue_engine.state import EngineState, IssueEpisode
     from packages.dialogue_engine.semantic_kernel.information_gain import best_question_need
+    from packages.dialogue_engine.state import EngineState, IssueEpisode
 
     ep = IssueEpisode(
         episode_id="ep-1",
@@ -245,8 +250,8 @@ def test_compound_known_current_asks_only_temporal() -> None:
 
 
 def test_compound_known_duration_no_temporal_reask() -> None:
-    from packages.dialogue_engine.state import EngineState, IssueEpisode
     from packages.dialogue_engine.semantic_kernel.information_gain import best_question_need
+    from packages.dialogue_engine.state import EngineState, IssueEpisode
 
     ep = IssueEpisode(
         episode_id="ep-1",

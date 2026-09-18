@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 
 from packages.telephony.freeswitch_readiness import (
     check_freeswitch_ready,

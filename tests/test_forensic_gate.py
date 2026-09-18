@@ -10,12 +10,12 @@ from packages.voice_runtime.forensic import (
     is_text_echo_of_bot,
     text_echo_similarity,
 )
-from tools.voice_lab.forensic_gate import analyze_call
 from tools.voice_lab.dialogue_forensic import (
     check_topic_dialogue_policy,
     check_trace_file,
     extract_intent_sequence,
 )
+from tools.voice_lab.forensic_gate import analyze_call
 
 
 def test_text_echo_similarity_detects_vera_question_bleed() -> None:

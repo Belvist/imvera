@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 _OPENING_INTENTS = frozenset({"opening", "opening_wellness"})
 _SLOT_INTENTS = ("wellness", "mood", "sleep", "plans")
 _CHECK_INTENTS = ("check_mood", "check_sleep", "check_plans")
@@ -54,9 +53,7 @@ class TraceValidationResult:
 
 def load_trace_rows(path: Path) -> list[dict[str, Any]]:
     return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
 
 
@@ -122,8 +119,12 @@ def build_timeline(rows: list[dict[str, Any]]) -> list[TraceTimelineEvent]:
 def scenario_requires_full_goodbye(steps: list[Any]) -> bool:
     goodbye_phrases = 0
     for step in steps:
-        action = getattr(step, "action", None) or (step.get("action") if isinstance(step, dict) else None)
-        phrase = getattr(step, "phrase_id", None) or (step.get("phrase_id") if isinstance(step, dict) else None)
+        action = getattr(step, "action", None) or (
+            step.get("action") if isinstance(step, dict) else None
+        )
+        phrase = getattr(step, "phrase_id", None) or (
+            step.get("phrase_id") if isinstance(step, dict) else None
+        )
         if action == "play_wav" and phrase in {"goodbye_01", "goodbye_confirm_01"}:
             goodbye_phrases += 1
     return goodbye_phrases >= 1
@@ -158,9 +159,7 @@ def validate_full_daily_check_trace(
     ]
     if not stt_texts:
         stt_texts = [
-            str(_payload(row).get("text") or "")
-            for row in rows
-            if row.get("type") == "stt.final"
+            str(_payload(row).get("text") or "") for row in rows if row.get("type") == "stt.final"
         ]
 
     result.engine_intents = intents
@@ -188,14 +187,17 @@ def validate_full_daily_check_trace(
     }
 
     if planner_legacy > 0:
-        result.errors.append(f"planner_legacy_events={planner_legacy} (expected DialogueEngine only)")
+        result.errors.append(
+            f"planner_legacy_events={planner_legacy} (expected DialogueEngine only)"
+        )
 
     if opening_count != 1:
         result.errors.append(f"opening_count={opening_count} expected 1")
 
     if downlink_bytes < min_downlink_bytes:
         result.errors.append(
-            f"downlink too small ({downlink_bytes} bytes < {min_downlink_bytes}) — caller likely heard silence"
+            f"downlink too small ({downlink_bytes} bytes < {min_downlink_bytes})"
+            " — caller likely heard silence"
         )
 
     if user_turns_sent > 0 and len(result.stt_texts) < max(1, user_turns_sent // 2):

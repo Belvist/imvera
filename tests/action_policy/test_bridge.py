@@ -1,7 +1,15 @@
 from __future__ import annotations
 
-from packages.dialogue_engine.action_policy.actions import ActionKind, CandidateAction, PolicyDecision, ScoredAction
-from packages.dialogue_engine.action_policy.bridge import legacy_plan_to_action_key, to_response_plan
+from packages.dialogue_engine.action_policy.actions import (
+    ActionKind,
+    CandidateAction,
+    PolicyDecision,
+    ScoredAction,
+)
+from packages.dialogue_engine.action_policy.bridge import (
+    legacy_plan_to_action_key,
+    to_response_plan,
+)
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot
 from packages.dialogue_engine.question_context import QuestionNeed
 from packages.dialogue_engine.response_plan import ResponsePlan

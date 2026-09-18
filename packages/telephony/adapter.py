@@ -6,7 +6,7 @@ directional PCM in, TTS PCM out, per-call lifecycle + media counters.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 

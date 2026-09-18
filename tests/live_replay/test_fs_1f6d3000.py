@@ -65,7 +65,6 @@ def test_architecture_no_probe_short_circuit_before_semantic_apply() -> None:
     """Static guard: live rich path must not consume turns via probe before apply."""
     reducer = Path("packages/dialogue_engine/reducer.py").read_text(encoding="utf-8")
     # Forbidden pattern: probe answer branch that returns advance WITHOUT apply first
-    needle = "return _advance_probe_after_answer(state, user_text)"
     # Allow the helper definition and non-rich/legacy only if commented as compatibility.
     # Live rich path must not contain the early return sequence.
     rich_fn_start = reducer.find("def _apply_rich_turn(")

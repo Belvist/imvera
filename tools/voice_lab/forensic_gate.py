@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from packages.voice_runtime.forensic import classify_turn, normalize_speech_text, text_echo_similarity
+from packages.voice_runtime.forensic import (
+    classify_turn,
+    text_echo_similarity,
+)
 from tools.voice_lab.dialogue_forensic import check_trace_file, extract_intent_sequence
 
 ROOT = Path(__file__).resolve().parents[2]

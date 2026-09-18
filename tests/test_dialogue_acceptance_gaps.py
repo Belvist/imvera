@@ -19,7 +19,6 @@ from packages.contracts.enums import AsrQuality, FsmState, SlotStatus  # noqa: E
 from packages.contracts.semantic import Evidence, FactCandidate, SemanticPayload  # noqa: E402
 from packages.core.memory_store import InMemoryCallRecordStore  # noqa: E402
 from packages.dialogue.context_builder import active_question_kind, build_turn_context  # noqa: E402
-from packages.dialogue.planner import Planner  # noqa: E402
 from packages.dialogue.semantic_bridge import semantic_to_user_interpretation  # noqa: E402
 from packages.dialogue.session import CallSession  # noqa: E402
 
@@ -32,8 +31,11 @@ def evidence(text, quote=None):
 
 def payload(**changes):
     values = dict(
-        dialogue_act="answer", control="none", consent_answer="not_applicable",
-        answers_pending_question=False, needs_clarification=False,
+        dialogue_act="answer",
+        control="none",
+        consent_answer="not_applicable",
+        answers_pending_question=False,
+        needs_clarification=False,
     )
     values.update(changes)
     return SemanticPayload(**values)
@@ -41,14 +43,19 @@ def payload(**changes):
 
 def fact(text, field="wellness", *, subject="speaker", temporal_scope="now", quote=None):
     return FactCandidate(
-        field=field, value=quote or text, subject=subject, temporal_scope=temporal_scope,
-        negated=False, evidence=evidence(text, quote),
+        field=field,
+        value=quote or text,
+        subject=subject,
+        temporal_scope=temporal_scope,
+        negated=False,
+        evidence=evidence(text, quote),
     )
 
 
 def daily_session():
-    session = CallSession(call_id="audit-dialogue", family_id="audit-family",
-                          store=InMemoryCallRecordStore())
+    session = CallSession(
+        call_id="audit-dialogue", family_id="audit-family", store=InMemoryCallRecordStore()
+    )
     start = session.start()
     session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
     session.state.greeted = True
@@ -58,7 +65,9 @@ def daily_session():
 
 def apply(session, text, semantic):
     interp = semantic_to_user_interpretation(
-        text, semantic, active_question_kind=active_question_kind(session.state),
+        text,
+        semantic,
+        active_question_kind=active_question_kind(session.state),
     )
     return session.handle_user_text(text, interp=interp)
 
@@ -66,10 +75,16 @@ def apply(session, text, semantic):
 def test_fact_and_question_in_same_utterance_preserve_fact():
     session = daily_session()
     text = "Чувствую себя хорошо. А зачем вы спрашиваете?"
-    apply(session, text, payload(
-        dialogue_act="question", user_question="А зачем вы спрашиваете?",
-        facts=(fact(text, quote="Чувствую себя хорошо"),), answers_pending_question=True,
-    ))
+    apply(
+        session,
+        text,
+        payload(
+            dialogue_act="question",
+            user_question="А зачем вы спрашиваете?",
+            facts=(fact(text, quote="Чувствую себя хорошо"),),
+            answers_pending_question=True,
+        ),
+    )
     assert session.state.slots["wellness"] == SlotStatus.FILLED
 
 
@@ -100,9 +115,15 @@ def test_no_to_can_talk_does_not_repeat_same_question():
     session.state.pending_slot = None
     session.state.pending_question = None
     session.state.mandatory_checks["can_talk"] = False
-    result = apply(session, "Нет", payload(
-        consent_answer="no", consent_evidence=evidence("Нет"), answers_pending_question=True,
-    ))
+    result = apply(
+        session,
+        "Нет",
+        payload(
+            consent_answer="no",
+            consent_evidence=evidence("Нет"),
+            answers_pending_question=True,
+        ),
+    )
     assert session.state.call_finalized, result.validated.speech
 
 
@@ -116,8 +137,9 @@ def test_yes_to_goodbye_confirmation_closes_voice_path():
 
 
 def test_question_without_delivery_evidence_is_not_complete():
-    session = CallSession(call_id="audit-dialogue", family_id="audit-family",
-                          store=InMemoryCallRecordStore())
+    session = CallSession(
+        call_id="audit-dialogue", family_id="audit-family", store=InMemoryCallRecordStore()
+    )
     session.start()
     ctx = build_turn_context(session.state, turn_id=2, utterance_id="u2", raw_text="Да")
     assert ctx.pending_question_delivery != "complete"
@@ -170,9 +192,13 @@ def test_real_second_utterance_is_not_lost_on_state_version_change(monkeypatch):
             pass
 
         actor = CallActor(
-            call_id=session.state.call_id, family_id="audit-family", session=session,
-            stt=SimpleNamespace(transcribe_final=stt), tts=SimpleNamespace(),
-            llm=SimpleNamespace(interpret_turn=llm), media=MediaCallbacks(noop, noop, noop, noop),
+            call_id=session.state.call_id,
+            family_id="audit-family",
+            session=session,
+            stt=SimpleNamespace(transcribe_final=stt),
+            tts=SimpleNamespace(),
+            llm=SimpleNamespace(interpret_turn=llm),
+            media=MediaCallbacks(noop, noop, noop, noop),
         )
         actor._deliver_session_turn = noop  # Output is outside this input-order regression.
         first = asyncio.create_task(actor._handle_utterance(b"first", 1))
@@ -219,7 +245,9 @@ def test_happy_path_wellness_to_goodbye_rule_baseline():
         gen = session.state.pending_action_id
         if gen:
             session.mark_spoken_action(gen)
-    assert all(session.state.slots[s] == SlotStatus.FILLED for s in ("wellness", "mood", "sleep", "plans"))
+    assert all(
+        session.state.slots[s] == SlotStatus.FILLED for s in ("wellness", "mood", "sleep", "plans")
+    )
     assert session.state.fsm_state == FsmState.SUMMARY
     assert result.proposal.intent == "summary"
 

@@ -1,8 +1,8 @@
 """Planner direct-wellness opening flag."""
 
+from packages.contracts.enums import FsmState
 from packages.dialogue.planner import Planner, direct_wellness_opening_enabled
 from packages.dialogue.state import DialogueState
-from packages.contracts.enums import FsmState
 
 
 def test_direct_wellness_opening_default_on() -> None:

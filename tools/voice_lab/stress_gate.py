@@ -23,7 +23,7 @@ import sys
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -38,9 +38,9 @@ StressLayer = Literal["engine", "call_actor", "session", "all"]
 RUN_ROOT = ROOT / ".run" / "stress_gate"
 
 _GAP_HINTS: dict[str, str] = {
-    "goodbye_final": "DialogueEngine reducer / playout completion — verify on_playout_completed chain",
-    "opening_count": "Double opening — stale Effect Delivery V2 or duplicate CallStarted",
-    "partial_unresolved_close": "Timer/wait or clarify path — check TimerEffect + FireTimerExpired handling",
+    "goodbye_final": "DialogueEngine reducer/playout completion — verify chain",
+    "opening_count": "Double opening — stale delivery V2 or duplicate CallStarted",
+    "partial_unresolved_close": "Timer/wait or clarify path — check timer handling",
     "slot fill order": "Reducer slot progression — wellness→mood→sleep→plans invariant broken",
     "wellness ack": "Response plan ack prefix mismatch for wellness category",
     "planner_legacy": "IMVERA_DIALOGUE_ENGINE=1 not active — dual brain risk",
@@ -147,14 +147,12 @@ class StressSummary:
 
 def git_sha_short() -> str:
     try:
-        return (
-            subprocess.check_output(
-                ["git", "rev-parse", "--short", "HEAD"],
-                cwd=ROOT,
-                text=True,
-                stderr=subprocess.DEVNULL,
-            ).strip()
-        )
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
     except (subprocess.CalledProcessError, OSError):
         return os.environ.get("IMVERA_GIT_SHA", "unknown")
 
@@ -240,7 +238,9 @@ def _run_engine_scenario(scenario) -> ScenarioRecord:
         )
 
 
-def run_engine_stress(config: StressConfig, scenarios: list) -> tuple[LayerSummary, list[ScenarioRecord]]:
+def run_engine_stress(
+    config: StressConfig, scenarios: list
+) -> tuple[LayerSummary, list[ScenarioRecord]]:
     t0 = time.monotonic()
     records: list[ScenarioRecord] = []
     workers = max(1, min(config.workers, len(scenarios)))
@@ -276,9 +276,8 @@ def run_engine_stress(config: StressConfig, scenarios: list) -> tuple[LayerSumma
 
 
 def _interpret_user_text_for_corpus(session, text: str, answer_slot: str | None):
-    from packages.dialogue.interpretation import to_turn_interpretation
+    from packages.dialogue.interpretation import interpret_user_turn, to_turn_interpretation
     from packages.dialogue.state import DialogueState
-    from packages.dialogue.interpretation import interpret_user_turn
     from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
     from packages.dialogue_engine.semantic import semantic_from_legacy, semantic_to_interpretation
 
@@ -334,9 +333,9 @@ async def _run_call_actor_scenario_async(scenario) -> ScenarioRecord:
     from packages.core.memory_store import InMemoryCallRecordStore
     from packages.dialogue.session import CallSession
     from packages.dialogue_engine.corpus.schema import (
+        DeferLastSpeak,
         DeliverPlayout,
         DeliverPlayoutDuplicate,
-        DeferLastSpeak,
         FireTimerExpired,
         StaleLastSpeak,
         UserStep,
@@ -399,12 +398,8 @@ async def _run_call_actor_scenario_async(scenario) -> ScenarioRecord:
         for step in scenario.steps:
             if isinstance(step, UserStep):
                 answer_slot = session._engine.answer_context_slot()
-                interp, contract = _interpret_user_text_for_corpus(
-                    session, step.text, answer_slot
-                )
-                result = session.handle_user_text(
-                    step.text, interp=interp, contract=contract
-                )
+                interp, contract = _interpret_user_text_for_corpus(session, step.text, answer_slot)
+                result = session.handle_user_text(step.text, interp=interp, contract=contract)
                 if result.speak_effect is not None:
                     speak_intents.append(result.speak_effect.intent)
                     pending_speaks.append(result.speak_effect)
@@ -429,7 +424,9 @@ async def _run_call_actor_scenario_async(scenario) -> ScenarioRecord:
                 if last_delivered is not None:
                     session.mark_spoken_action(last_delivered.generation_id)
             elif isinstance(step, FireTimerExpired):
-                timer_id = step.timer_id or f"wait-{session._engine.state.waiting_on_slot or 'wellness'}"
+                timer_id = (
+                    step.timer_id or f"wait-{session._engine.state.waiting_on_slot or 'wellness'}"
+                )
                 await actor._cancel_engine_timer()
                 expired = session.handle_wait_expired(timer_id)
                 if expired.speak_effect is not None:

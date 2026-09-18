@@ -41,7 +41,6 @@ def server_trace_summary(trace_path: Path) -> dict:
         for line in trace_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    types = [row.get("type") for row in rows]
     stt_texts = [
         str(row.get("payload", {}).get("text", ""))
         for row in rows

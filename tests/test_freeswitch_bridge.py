@@ -5,14 +5,13 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from starlette.websockets import WebSocketDisconnect
 
+from packages.telephony.adapter import InboundMediaFrame
 from packages.telephony.freeswitch_bridge import (
     FreeSwitchBridgeSession,
     FreeSwitchOutboundMode,
 )
-from packages.telephony.adapter import InboundMediaFrame, StreamTrack
-from tools.telephony_gate.tone import generate_tone_s16le, MEDIA_GATE_CALLER_HZ
+from tools.telephony_gate.tone import MEDIA_GATE_CALLER_HZ, generate_tone_s16le
 
 
 class _FakeWebSocket:

@@ -7,7 +7,6 @@ import time
 from packages.contracts.enums import SlotStatus
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession
-
 from tests.corpus.invariants import check_turn_invariants
 from tests.corpus.models import Scenario, ScenarioResult, TurnTrace
 

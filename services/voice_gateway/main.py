@@ -64,7 +64,9 @@ async def _warm_tts_pipeline() -> None:
         log.error("TTS warmup produced no PCM at startup")
         return
     if first_s > TTS_WARMUP_BUDGET_S:
-        log.error("TTS warmup slow: first_pcm in %.1fs (budget %.1fs)", first_s, TTS_WARMUP_BUDGET_S)
+        log.error(
+            "TTS warmup slow: first_pcm in %.1fs (budget %.1fs)", first_s, TTS_WARMUP_BUDGET_S
+        )
     else:
         log.info("TTS warmup OK: first_pcm in %.2fs", first_s)
 
@@ -74,7 +76,7 @@ async def _lifespan(_app: FastAPI):
     if os.environ.get("IMVERA_GATEWAY_TTS_WARMUP", "0") == "1":
         try:
             await asyncio.wait_for(_warm_tts_pipeline(), timeout=30.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.error("TTS warmup timed out at gateway startup (30s)")
     yield
 
@@ -103,7 +105,13 @@ async def ready() -> JSONResponse | dict:
     if blockers:
         return JSONResponse(
             status_code=503,
-            content={"status": "not_ready", "blockers": blockers, "stt": stt, "tts": tts, "llm": llm},
+            content={
+                "status": "not_ready",
+                "blockers": blockers,
+                "stt": stt,
+                "tts": tts,
+                "llm": llm,
+            },
         )
     return {"status": "ok", "stt": stt, "tts": tts, "llm": llm, "telephony": "freeswitch"}
 
@@ -133,7 +141,9 @@ async def browser_media_lab(
     async def emit(event: RuntimeEvent) -> None:
         record_event(call_id, event)
         await websocket.send_text(
-            json.dumps({"type": event.event_type.value, "payload": event.payload}, ensure_ascii=False)
+            json.dumps(
+                {"type": event.event_type.value, "payload": event.payload}, ensure_ascii=False
+            )
         )
 
     actor = build_call_actor(

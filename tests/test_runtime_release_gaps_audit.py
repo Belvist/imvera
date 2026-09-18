@@ -5,10 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from packages.contracts.enums import AsrQuality, FsmState
+from packages.contracts.enums import AsrQuality
 from packages.contracts.semantic import Evidence, FactCandidate, SemanticPayload
 from packages.core.memory_store import InMemoryCallRecordStore
-from packages.dialogue.planner import Planner
 from packages.dialogue.session import CallSession
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks
 from services.llm.http_provider import RenderChunk
@@ -114,12 +113,12 @@ def test_stream_done_snapshot_does_not_replay_spoken_phrases():
     async def scenario():
         session = session_at_wellness()
         session.turn_id += 1
-        from packages.contracts.turn import TurnProposal
-        from packages.dialogue.validator import Validator
-        from packages.dialogue.interpretation import UserInterpretation
-        from packages.contracts.interpretation import TurnInterpretation
         from packages.contracts.enums import AnswerJudgement, DialogueAct
+        from packages.contracts.interpretation import TurnInterpretation
+        from packages.contracts.turn import TurnProposal
+        from packages.dialogue.interpretation import UserInterpretation
         from packages.dialogue.session import SessionTurnResult
+        from packages.dialogue.validator import Validator
 
         proposal = TurnProposal(
             turn_id=session.turn_id,

@@ -12,7 +12,6 @@ from packages.contracts.enums import AnswerJudgement, DialogueAct, FsmState
 from packages.contracts.interpretation import TurnInterpretation
 from packages.contracts.status import SafetySnapshot
 from packages.contracts.turn import TurnProposal, ValidatedTurn
-from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.interpretation import UserInterpretation
 from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue_engine.delivery import EffectOutbox, EffectStatus
@@ -292,7 +291,7 @@ def test_random_interleaving_lifecycle(seed: int) -> None:
                 generation_id=gen_id,
                 generation=gen,
                 text=f"q{i}",
-                intent="check_wellness" if i == 0 else f"check_mood",
+                intent="check_wellness" if i == 0 else "check_mood",
                 slot="wellness" if i == 0 else "mood",
                 marks_question=True,
                 semantic_scope_id=speak_scope_for(

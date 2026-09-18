@@ -11,7 +11,9 @@ from packages.voice_perception.session import PerceptionSession
 from packages.voice_perception.text_echo import is_text_echo_of_bot, text_echo_similarity
 
 
-def _pcm_sine(freq_hz: float, samples: int = 320, sample_rate: int = 16000, amp: int = 8000) -> bytes:
+def _pcm_sine(
+    freq_hz: float, samples: int = 320, sample_rate: int = 16000, amp: int = 8000
+) -> bytes:
     out = bytearray()
     for i in range(samples):
         t = i / sample_rate

@@ -11,7 +11,10 @@ from pathlib import Path
 
 import httpx
 
-from scripts.freeswitch_voice_lab_env import build_freeswitch_voice_lab_env, ensure_silero_opening_cache
+from scripts.freeswitch_voice_lab_env import (
+    build_freeswitch_voice_lab_env,
+    ensure_silero_opening_cache,
+)
 from scripts.freeswitch_write_zoiper_runtime import write_zoiper_runtime_config
 from scripts.freeswitch_zoiper_info import sync_freeswitch_zoiper_profile
 from scripts.voice_process import ROOT, is_running, start, stop
@@ -170,8 +173,7 @@ def main() -> int:
     preflight_marker = _find_preflight_marker(expected_sha)
     if preflight_marker is None:
         print(
-            f"BLOCKED: no preflight marker for {expected_sha}. "
-            "Run: make preflight-gates",
+            f"BLOCKED: no preflight marker for {expected_sha}. Run: make preflight-gates",
             file=sys.stderr,
         )
         return 1
@@ -195,10 +197,12 @@ def main() -> int:
     print(f"  Zoiper: Registered → dial {data['dial_number']}")
     print(f"  SIP:    {data['sip_host']}:{data['sip_port']}")
     print(f"  Elder:  {elder}")
-    print(f'  Opening: «Здравствуйте. Это сервис Амвера. {elder}, Как вы себя чувствуете?»')
+    print(f"  Opening: «Здравствуйте. Это сервис Амвера. {elder}, Как вы себя чувствуете?»")
     print("  Then: issue-first scheduler (wellness → issues → important_to_share → close)")
     print("\n  Logs:   .run/freeswitch_media_bridge.log")
-    print("  Forensic after call: make freeswitch-forensic-collect UUID=<fs_uuid> CALL_ID=fs-xxxxxxxx")
+    print(
+        "  Forensic after call: make freeswitch-forensic-collect UUID=<fs_uuid> CALL_ID=fs-xxxxxxxx"
+    )
     print("  Stop:   make freeswitch-zoiper-voice-down")
     return 0
 

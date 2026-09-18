@@ -9,7 +9,7 @@ import httpx
 
 from packages.contracts.enums import AsrQuality
 from packages.contracts.providers import ProviderTimeout, ProviderUnavailable
-from packages.contracts.stt import STTPartial, STTResult, CriticalTermMatch, AudioQualityHints
+from packages.contracts.stt import AudioQualityHints, CriticalTermMatch, STTPartial, STTResult
 
 
 class HttpSTTProvider:

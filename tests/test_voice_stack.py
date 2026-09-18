@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 
-import httpx
 import pytest
 
 from packages.contracts.enums import FsmState

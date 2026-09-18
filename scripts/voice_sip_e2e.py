@@ -137,7 +137,9 @@ def _cleanup_stale_calls() -> None:
     return
 
 
-def _wait_new_call(since_ts: float, timeout_s: float = 20.0, sip_call_id: str | None = None) -> str | None:
+def _wait_new_call(
+    since_ts: float, timeout_s: float = 20.0, sip_call_id: str | None = None
+) -> str | None:
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         candidates = []
@@ -150,8 +152,7 @@ def _wait_new_call(since_ts: float, timeout_s: float = 20.0, sip_call_id: str | 
             if sip_call_id:
                 rows = _trace_rows(chosen)
                 linked = any(
-                    row.get("payload", {}).get("sip_call_id") == sip_call_id
-                    for row in rows
+                    row.get("payload", {}).get("sip_call_id") == sip_call_id for row in rows
                 )
                 if not linked and len(candidates) > 1:
                     time.sleep(0.1)
@@ -404,9 +405,7 @@ def _assert_full_conversation(received: bytes, call_id: str, capture_bytes: int)
     stt_rows = [row for row in rows if row.get("type") == "stt.final"]
     stt_texts = [str(row.get("payload", {}).get("text", "")).lower() for row in stt_rows]
     if len(stt_texts) < MIN_USER_TURNS:
-        raise AssertionError(
-            f"expected at least {MIN_USER_TURNS} user turns, got {len(stt_texts)}"
-        )
+        raise AssertionError(f"expected at least {MIN_USER_TURNS} user turns, got {len(stt_texts)}")
     if not any("да" in t for t in stt_texts):
         raise AssertionError(f"STT did not match test phrase; got {stt_texts}")
 
@@ -416,9 +415,7 @@ def _assert_full_conversation(received: bytes, call_id: str, capture_bytes: int)
         if row.get("type") == "renderer.phrase_ready"
     ]
     if len(phrases) < MIN_USER_TURNS + 1:
-        raise AssertionError(
-            f"expected greeting plus {MIN_USER_TURNS} follow-up renderer phrases"
-        )
+        raise AssertionError(f"expected greeting plus {MIN_USER_TURNS} follow-up renderer phrases")
     if len(set(phrases)) < MIN_USER_TURNS + 1:
         raise AssertionError("dialogue did not advance across turns")
 

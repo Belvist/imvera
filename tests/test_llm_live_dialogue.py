@@ -5,10 +5,10 @@ import os
 import httpx
 import pytest
 
+from packages.contracts.enums import FsmState
 from packages.dialogue.context_builder import build_turn_context
 from packages.dialogue.semantic_adapter import adapt_semantic_turn
 from packages.dialogue.state import DialogueState
-from packages.contracts.enums import FsmState
 from services.llm.http_provider import HttpLLMProvider
 
 LLM_URL = os.environ.get("IMVERA_LLM_URL", "http://127.0.0.1:9103").rstrip("/")

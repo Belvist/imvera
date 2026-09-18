@@ -1,4 +1,23 @@
-# Current task — Stage A DONE: v9 promoted + frozen, suite 0 failed (2026-09-18)
+# Current task — Stage A.5.1: repo-wide lint zero, legacy-lint mandatory (2026-09-18)
+
+- Mechanical cleanup only, no dialogue behavior change. Frozen policy files
+  untouched (0 diffs under packages/dialogue_engine/action_policy/).
+- 242 → 0 ruff errors (packages/services/tests/scripts/tools): 110 auto-fixed
+  (F401/F541/I001/UP); 7×F841 + 2×E741 + 2×F811 (resolved by re-sort) by hand;
+  71×E501 via ruff format on affected files + 10 hand-split strings/comments;
+  41×E402 documented as bootstrap pattern via per-file-ignores
+  (scripts/**, tools/**) in pyproject.toml. One real bug fixed: F821
+  NameError `silence` in tools/blackbox_caller/sip_client.py (closure var used
+  outside; lab tooling only, hoisted to method scope).
+- CI: `legacy-lint` continue-on-error removed (mandatory).
+- VERIFIED: make lint clean; repo-wide ruff 0; full suite 1551 passed /
+  6 skipped / 0 failed (counts identical to freeze); differential 92/4/4/0;
+  corpus 500/500. Commit + push this step, then A.5.2 dead code.
+- NOT VERIFIED: remote CI on this commit. B–J untouched.
+
+---
+
+# Historical — Stage A closure (2026-09-18)
 
 - Branch `feature/voice-zoiper-m5`. Commit A `254f0ba` (promote: scorer
   POLICY_VERSION v8→v9; version test renamed). Commit B (this, unpushed):

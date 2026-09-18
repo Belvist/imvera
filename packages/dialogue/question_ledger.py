@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from packages.contracts.enums import GoalStatus, SlotStatus
 from packages.contracts.mandatory import PILOT_SLOT_CHECKS

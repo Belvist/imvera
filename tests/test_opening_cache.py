@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from packages.voice_runtime.opening_cache import (
     cache_path,
     load_opening,

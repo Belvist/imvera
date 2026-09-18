@@ -1,4 +1,4 @@
-"""SIP clients for blackbox gate — PJSUA2 (external live) + pyVoIP (legacy_lab / docker internal)."""
+"""SIP clients for blackbox gate — PJSUA2 live + pyVoIP lab/docker."""
 
 from __future__ import annotations
 
@@ -76,9 +76,7 @@ def _patch_pyvoip_invite() -> None:
         branch = "z9hG4bK" + self.gen_call_id()[0:25]
         call_id = self.gen_call_id()
         sess_id = self.sessID.next()
-        invite_body = self.gen_invite(
-            number, str(sess_id), ms, sendtype, branch, call_id
-        )
+        invite_body = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
         early_provisional = {
             SIPStatus(100),
             SIPStatus(180),
@@ -92,7 +90,7 @@ def _patch_pyvoip_invite() -> None:
                 self.s.settimeout(max(0.1, deadline - time.time()))
                 try:
                     raw = self.s.recv(8192)
-                except socket.timeout:
+                except TimeoutError:
                     break
                 if not raw:
                     continue
@@ -138,12 +136,8 @@ def _patch_pyvoip_invite() -> None:
                 + f'transport=UDP",response="{str(authhash, "utf8")}",'
                 + "algorithm=MD5\r\n"
             )
-            invite_auth = self.gen_invite(
-                number, str(sess_id), ms, sendtype, branch, call_id
-            )
-            invite_auth = invite_auth.replace(
-                "\r\nContent-Length", f"\r\n{auth}Content-Length"
-            )
+            invite_auth = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
+            invite_auth = invite_auth.replace("\r\nContent-Length", f"\r\n{auth}Content-Length")
             self.out.sendto(invite_auth.encode("utf8"), (self.server, self.port))
             return SIPMessage(invite_auth.encode("utf8")), call_id, sess_id
 
@@ -508,9 +502,9 @@ class PyVoIPSipClient:
 
     def _start_pump(self) -> None:
         frame_bytes = self.config.frame_bytes
+        silence = bytes([128]) * frame_bytes
 
         def _loop() -> None:
-            silence = bytes([128]) * frame_bytes
             while not self._pump_stop.is_set():
                 try:
                     chunk = self._call.read_audio(frame_bytes, blocking=True)

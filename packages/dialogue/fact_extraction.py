@@ -45,7 +45,8 @@ def _classify_clause(clause: str, pending_slot: str | None) -> str | None:
     if pending_slot and len(lower.split()) <= 4:
         short_by_slot = {
             "mood": lower in {"хорошо", "нормально", "отлично", "грустно", "плохо", "весело"},
-            "wellness": lower in {"хорошо", "нормально", "отлично", "плохо", "нехорошо", "не очень"},
+            "wellness": lower
+            in {"хорошо", "нормально", "отлично", "плохо", "нехорошо", "не очень"},
             "sleep": bool(_SLEEP.search(lower)),
             "plans": bool(_PLANS.search(lower)) or lower in {"дома", "нигде"},
         }
@@ -57,9 +58,7 @@ def _classify_clause(clause: str, pending_slot: str | None) -> str | None:
         return "sleep"
     if _PLANS.search(lower):
         return "plans"
-    if _WELLNESS_POSITIVE.search(lower) or (
-        _WELLNESS.search(lower) and not _MOOD.search(lower)
-    ):
+    if _WELLNESS_POSITIVE.search(lower) or (_WELLNESS.search(lower) and not _MOOD.search(lower)):
         if pending_slot == "mood":
             return "mood"
         return "wellness"

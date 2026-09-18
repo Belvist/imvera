@@ -25,10 +25,30 @@ from packages.dialogue_engine.action_policy.snapshot import (
 from packages.dialogue_engine.state import EngineState, IssueEpisode, Question
 
 CORPUS_CHOICES = {
-    "challenge_frozen": ROOT / "tests" / "action_policy" / "corpus" / "challenge_frozen" / "scenarios.json",
-    "challenge_v6_frozen": ROOT / "tests" / "action_policy" / "corpus" / "challenge_v6_frozen" / "scenarios.json",
-    "challenge_v7_frozen": ROOT / "tests" / "action_policy" / "corpus" / "challenge_v7_frozen" / "scenarios.json",
-    "challenge_v8_live": ROOT / "tests" / "action_policy" / "corpus" / "challenge_v8_live" / "scenarios.json",
+    "challenge_frozen": ROOT
+    / "tests"
+    / "action_policy"
+    / "corpus"
+    / "challenge_frozen"
+    / "scenarios.json",
+    "challenge_v6_frozen": ROOT
+    / "tests"
+    / "action_policy"
+    / "corpus"
+    / "challenge_v6_frozen"
+    / "scenarios.json",
+    "challenge_v7_frozen": ROOT
+    / "tests"
+    / "action_policy"
+    / "corpus"
+    / "challenge_v7_frozen"
+    / "scenarios.json",
+    "challenge_v8_live": ROOT
+    / "tests"
+    / "action_policy"
+    / "corpus"
+    / "challenge_v8_live"
+    / "scenarios.json",
 }
 DEFAULT_CORPUS = "challenge_v8_live"
 FROZEN_POLICY_SHA_V5 = "0271c624e93e3f8e6f01d5f6dafcf03a377c8b8b"
@@ -88,8 +108,7 @@ def _build_live_snapshot(live: dict[str, Any]) -> PolicySnapshot:
     # Override speaker_owned for explicit other-person episodes.
     patched = []
     owned_map = {
-        ep["episode_id"]: bool(ep.get("speaker_owned", True))
-        for ep in (live.get("episodes") or ())
+        ep["episode_id"]: bool(ep.get("speaker_owned", True)) for ep in (live.get("episodes") or ())
     }
     for ep in snap.episodes:
         if ep.episode_id in owned_map and owned_map[ep.episode_id] != ep.speaker_owned:
@@ -293,22 +312,24 @@ def main() -> int:
         out = ROOT / out
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps(
-        {
-            "passed_gate": report["passed_gate"],
-            "passed": report["passed"],
-            "failed": report["failed"],
-            "forbidden_count": report["forbidden_count"],
-            "constraint_violation_count": report["constraint_violation_count"],
-            "pass_rate": report["pass_rate"],
-            "frozen_policy_sha": report["frozen_policy_sha"],
-            "freeze_manifest_commit": report["freeze_manifest_commit"],
-            "challenge_corpus_commit": report["challenge_corpus_commit"],
-            "output": str(out.relative_to(ROOT)),
-        },
-        ensure_ascii=False,
-        indent=2,
-    ))
+    print(
+        json.dumps(
+            {
+                "passed_gate": report["passed_gate"],
+                "passed": report["passed"],
+                "failed": report["failed"],
+                "forbidden_count": report["forbidden_count"],
+                "constraint_violation_count": report["constraint_violation_count"],
+                "pass_rate": report["pass_rate"],
+                "frozen_policy_sha": report["frozen_policy_sha"],
+                "freeze_manifest_commit": report["freeze_manifest_commit"],
+                "challenge_corpus_commit": report["challenge_corpus_commit"],
+                "output": str(out.relative_to(ROOT)),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0 if report["passed_gate"] else 1
 
 

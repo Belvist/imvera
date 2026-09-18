@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 from packages.contracts.enums import AsrQuality, FsmState
 from packages.core.memory_store import InMemoryCallRecordStore
-from packages.dialogue.planner import Planner
 from packages.dialogue.session import CallSession
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks
 

@@ -4,7 +4,6 @@ from packages.contracts.enums import FsmState, SlotStatus
 from packages.contracts.semantic import Evidence, FactCandidate, SemanticPayload
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.context_builder import active_question_kind
-from packages.dialogue.planner import Planner
 from packages.dialogue.semantic_adapter import adapt_semantic_turn
 from packages.dialogue.semantic_validator import SemanticValidator
 from packages.dialogue.session import CallSession

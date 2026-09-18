@@ -21,8 +21,8 @@ from packages.core import create_call_record_store
 from packages.core.pg_store import PostgresCallRecordStore
 from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
 from packages.voice_runtime.call_registry import CallBinding, build_call_registry
-from services.providers.http_clients import close_shared_async_client, get_shared_async_client
 from packages.voice_runtime.trace import record_event
+from services.providers.http_clients import close_shared_async_client, get_shared_async_client
 
 _store = create_call_record_store()
 _call_registry = build_call_registry(_store)

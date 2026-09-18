@@ -1,10 +1,9 @@
 """Mixed non-answer sequence — budget must not reset (spec §21.1)."""
 
-from packages.contracts.enums import FsmState, GoalStatus
+from packages.contracts.enums import GoalStatus
 from packages.contracts.semantic import SemanticPayload
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.context_builder import active_question_kind
-from packages.dialogue.planner import Planner
 from packages.dialogue.question_ledger import MAX_AUTOMATIC_ATTEMPTS
 from packages.dialogue.semantic_adapter import adapt_semantic_turn
 from packages.dialogue.session import CallSession

@@ -61,10 +61,10 @@ def main() -> int:
     port = z.get("port", data["port"])
     print("\n--- Zoiper account (exact fields) ---")
     print(f"  Domain / Host:  {host}:{port}  (LAN IP — NOT 127.0.0.1, Docker RTP)")
-    print(f"  Transport:      UDP")
+    print("  Transport:      UDP")
     print(f"  Username:       {z.get('username', data['username'])}")
     print(f"  Password:       {data['password']}")
-    print(f"  Realm (auth):   127.0.0.1  (from Asterisk — leave as-is if asked)")
+    print("  Realm (auth):   127.0.0.1  (from Asterisk — leave as-is if asked)")
     print("  Disable:        DNS SRV lookup, outbound proxy")
     if audio_settings:
         audio = audio_settings()
@@ -72,7 +72,7 @@ def main() -> int:
         out_sr = audio["output_sample_rate"]
         sip_codecs = audio.get("sip_codecs", "g722")
         print(
-            f"  Codec (lab):    Account → Advanced → enable **G.722** (wideband 16 kHz), "
+            "  Codec (lab):    Account → Advanced → enable **G.722** (wideband 16 kHz), "
             "disable PCMU/PCMA"
         )
         print(

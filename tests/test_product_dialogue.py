@@ -3,7 +3,6 @@
 from packages.contracts.core import DeliveryStage
 from packages.contracts.enums import FsmState, RiskLevel, SlotStatus
 from packages.core.memory_store import InMemoryCallRecordStore
-from packages.dialogue.planner import Planner
 from packages.dialogue.session import CallSession
 
 

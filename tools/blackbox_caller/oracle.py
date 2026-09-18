@@ -8,7 +8,6 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 BOT_INTENTS = (
     "opening",
     "check_mood",

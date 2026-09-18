@@ -180,8 +180,8 @@ def _apply_bootstrap(state: EngineState, bootstrap: dict[str, Any]) -> None:
 
 
 def _playout_completed_from_effects(effects: list, revision: int):
-    from packages.dialogue_engine.events import PlayoutCompleted
     from packages.dialogue_engine.effects import SpeakEffect
+    from packages.dialogue_engine.events import PlayoutCompleted
 
     for effect in reversed(effects):
         if isinstance(effect, SpeakEffect):

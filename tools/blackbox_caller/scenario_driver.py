@@ -10,7 +10,7 @@ from typing import Any
 
 from tools.blackbox_caller.audio import load_wav_u8, play_u8_on_call
 from tools.blackbox_caller.config import VOICE_MANIFEST, BlackboxConfig
-from tools.blackbox_caller.scenarios.catalog import BlackboxScenario, ScenarioStep
+from tools.blackbox_caller.scenarios.catalog import BlackboxScenario
 from tools.blackbox_caller.sip_client import create_sip_client
 
 

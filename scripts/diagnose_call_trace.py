@@ -115,9 +115,7 @@ def diagnose(call_id: str) -> int:
         or any(n.endswith("playback.completed") for n in names)
     )
     has_listen = "listen.enabled" in names
-    has_speech = "speech.started" in event_types or any(
-        n.startswith("speech.") for n in names
-    )
+    has_speech = "speech.started" in event_types or any(n.startswith("speech.") for n in names)
     has_stt = "stt.final" in event_types or "stt.final" in names
     interrupted = "playback.interrupted" in event_types or "playback.interrupted" in names
 
@@ -134,7 +132,9 @@ def diagnose(call_id: str) -> int:
         print("OK: listen.enabled present")
 
     if has_listen and not has_speech:
-        print("WARN: listen.enabled but no speech.* — mic/VAD/capture (check uplink/capture.summary)")
+        print(
+            "WARN: listen.enabled but no speech.* — mic/VAD/capture (check uplink/capture.summary)"
+        )
     elif has_speech:
         print("OK: speech events present")
 
@@ -213,7 +213,6 @@ def diagnose(call_id: str) -> int:
             if res.get("normalized_changed"):
                 print("    → normalize changed raw output")
             rms_in = res.get("pcm_rms")
-            rms_worker = res.get("audio_rms")
             if rms_in is not None and float(rms_in) < 280:
                 print(f"    → quiet segment (rms={rms_in}) — STT may hallucinate")
     elif stt_texts:

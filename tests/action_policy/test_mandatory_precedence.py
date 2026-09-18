@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from packages.dialogue_engine.action_policy.actions import ActionKind, CandidateAction, PolicyConstraintViolation
+from packages.dialogue_engine.action_policy.actions import (
+    ActionKind,
+    CandidateAction,
+    PolicyConstraintViolation,
+)
 from packages.dialogue_engine.action_policy.mandatory import MandatoryClass, compute_mandatory_class
 from packages.dialogue_engine.action_policy.policy import choose
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView

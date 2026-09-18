@@ -72,7 +72,7 @@ async def originate_product_call(
     Production order (mocked in tests via ``api``):
       1) api originate {ignore_early_media,origination_uuid,imvera_call_id}dest &park()
       2) api uuid_setvar <fs_uuid> STREAM_PLAYBACK 1
-      3) api uuid_audio_stream <fs_uuid> start ws://.../stream/<fs_uuid>?call_id=<product_call_id> ...
+      3) api uuid_audio_stream <fs_uuid> start ws://.../stream/<fs_uuid> ...
     """
     esl = api or freeswitch_api
     timeout_s = _originate_timeout_s(timeout_s)
