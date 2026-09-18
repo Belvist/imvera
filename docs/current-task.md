@@ -1,4 +1,18 @@
-# Current task — Stage A.5.3 Cut 2: CallFsm out of engine module graph (2026-09-18)
+# Current task — Stage A.5.3 parity harness green (2026-09-18)
+
+- Owner decision (b) implemented: `persistence_projection.project_call_result`
+  builds the snapshot contract from EngineState; verbatim facts/quotes;
+  store-owned keys (dialogue_state/state_version/outbox/pending) excluded by
+  design; legacy_public_status pass-through until status migrates.
+- Parity test (3 session-level flows): facts/quotes/fsm/partial/call_ended/
+  termination/mission_result/outcomes/metadata all equal. Two honest fixes en
+  route: partial replicates the legacy 7-check rule (identity/consent/can_talk
+  stay open — preserved quirk); harness compares the finalized envelope.
+- VERIFIED: new 3 passed; full 1554/6/0; differential 92/4/4/0; corpus 500/500;
+  touched ruff clean. Commit + push this step.
+- NEXT: production cutover to projection (separate step + CI) → CallActor
+  reads migration → DialogueState orphaned. Scheduler out of A.5.3.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - Cut 2: top-level `from packages.dialogue.fsm import CallFsm` removed from
   session.py; function-local import inside the legacy RED branch only (sole
