@@ -12,7 +12,6 @@ from packages.contracts.interpretation import TurnInterpretation
 from packages.contracts.status import SafetySnapshot
 from packages.contracts.turn import TurnProposal, ValidatedTurn
 from packages.core import create_call_record_store, observation_from_fact, observation_from_risk
-from packages.dialogue.fsm import CallFsm
 from packages.dialogue.interpretation import UserInterpretation
 from packages.dialogue.interpreter import Interpreter
 from packages.dialogue.planner import Planner
@@ -736,6 +735,10 @@ class CallSession:
                     contract,
                     observation_ids=[risk_obs_id] if risk_obs_id else [],
                 )
+            # Legacy RED branch only — engine path uses on_safety_interrupt.
+            # Function-local import keeps fsm out of the engine module graph.
+            from packages.dialogue.fsm import CallFsm
+
             CallFsm.interrupt_red(
                 self.state,
                 source_quote=user_text.strip(),

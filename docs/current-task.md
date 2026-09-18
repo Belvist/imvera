@@ -1,4 +1,13 @@
-# Current task — Stage A.5.3 Cut 1: engine fallback off Planner (2026-09-18)
+# Current task — Stage A.5.3 Cut 2: CallFsm out of engine module graph (2026-09-18)
+
+- Cut 2: top-level `from packages.dialogue.fsm import CallFsm` removed from
+  session.py; function-local import inside the legacy RED branch only (sole
+  use site). Engine RED path already used on_safety_interrupt.
+- VERIFIED: targeted 48 passed, corpus 500/500, full 1551/6/0, differential
+  92/4/4/0, touched ruff clean. Diff: session.py one hunk (+ memory note).
+- NEXT: persistence-cutover design (dual-write or engine-native snapshot);
+  Validator/Interpreter/contracts stay gated. Scheduler out of A.5.3.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - Read-only migration map done (consumers/orphans/ordered cuts in recon
   report; CallFsm + DialogueReducer already engine-detached; Validator /
