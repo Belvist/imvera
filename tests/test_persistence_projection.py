@@ -1,8 +1,11 @@
-"""Parity harness: engine-native projection vs legacy snapshot (ADR-019).
+"""Production contract: engine-native snapshot on the engine path (ADR-019).
 
-Decision (b): legacy-compatible surface must match verbatim; store-owned
-metadata keys are excluded by design (see STORE_OWNED_METADATA_KEYS).
-Any field drift outside the exclusion set fails the cut.
+Since the cutover, `CallSession._snapshot()` builds from EngineState via
+`project_call_result`. These tests pin the persisted contract on closed
+calls: verbatim facts/quotes (decision b), final FSM, COMPLETED termination,
+store-owned metadata survival (Postgres replaces metadata wholesale).
+
+Pre-cutover projection-vs-legacy parity evidence lives at ebff322 CI.
 """
 
 from __future__ import annotations
@@ -11,20 +14,18 @@ from pathlib import Path
 
 import pytest
 
+from packages.contracts.core import TerminationReason
+from packages.contracts.enums import FsmState
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession, SessionTurnResult
-from packages.dialogue_engine.persistence_projection import (
-    STORE_OWNED_METADATA_KEYS,
-    project_call_result,
-)
 from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
 
 pytestmark = pytest.mark.dialogue_engine
 
 FLOWS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("parity-good", ("Хорошо.", "Хорошее.", "Спал нормально.", "Дома.", "до свидания")),
-    ("parity-bad", ("Плохо.", "Голова болит.", "Вчера началось.", "Ничего.", "до свидания")),
-    ("parity-so-so", ("Так себе.", "Голова болит.", "Вчера началось.", "Ничего.", "до свидания")),
+    ("proj-good", ("Хорошо.", "Хорошее.", "Спал нормально.", "Дома.", "до свидания")),
+    ("proj-bad", ("Плохо.", "Голова болит.", "Вчера началось.", "Ничего.", "до свидания")),
+    ("proj-so-so", ("Так себе.", "Голова болит.", "Вчера началось.", "Ничего.", "до свидания")),
 )
 
 
@@ -42,7 +43,7 @@ def _session(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, call_id: str) -> C
     monkeypatch.setattr(caller_memory, "_store_dir", lambda: tmp_path / "phrase_memory")
     session = CallSession(
         call_id=call_id,
-        family_id="parity-family",
+        family_id="proj-family",
         elder_display_name="Тест",
         store=InMemoryCallRecordStore(),
     )
@@ -79,100 +80,47 @@ def _run_flow(
     return session
 
 
-def _assert_parity(
-    session: CallSession, base_metadata: dict | None = None
-) -> None:
-    assert session._engine is not None
-    # Compare against what store.finalize_call receives: _snapshot() with the
-    # call_ended envelope applied (session._finalize_call_if_needed).
-    assert session.state.final_action_done and not session.state.call_finalized
-    legacy = session._snapshot().model_copy(update={"call_ended": True})
-    projected = project_call_result(
-        session._engine,
-        call_id=session.state.call_id,
-        family_id=session.state.family_id,
-        elder_display_name=session.state.elder_display_name,
-        observation_ids=list(session._persisted_obs_ids),
-        mission_is_daily_check=session.mission.is_daily_check,
-        legacy_public_status=(
-            session.state.public_status.value
-            if getattr(session.state, "public_status", None)
-            else None
-        ),
-        base_metadata=base_metadata,
-    )
-    assert projected.facts == legacy.facts
-    assert projected.fact_quotes == legacy.fact_quotes
-    assert projected.fsm_state == legacy.fsm_state
-    assert projected.partial == legacy.partial
-    assert projected.call_ended == legacy.call_ended
-    assert projected.termination_reason == legacy.termination_reason
-    assert projected.mission_result == legacy.mission_result
-    assert projected.outcomes == legacy.outcomes
-    legacy_meta = {
-        k: v for k, v in legacy.metadata.items() if k not in STORE_OWNED_METADATA_KEYS
-    }
-    projected_meta = {
-        k: v for k, v in projected.metadata.items() if k not in STORE_OWNED_METADATA_KEYS
-    }
-    assert projected_meta == legacy_meta
-
-
 @pytest.mark.parametrize("call_id,texts", FLOWS)
-def test_projection_matches_legacy_snapshot(
+def test_production_snapshot_contract(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, call_id: str, texts: tuple[str, ...]
 ) -> None:
     session = _run_flow(monkeypatch, tmp_path, call_id, texts)
-    _assert_parity(session)
+    assert session._engine is not None
+    assert session._engine.state.call_closed
+    snap = session._snapshot()
+    assert snap.call_id == call_id
+    assert snap.fsm_state == FsmState.FINAL_CLASSIFICATION
+    assert snap.termination_reason == TerminationReason.COMPLETED
+    assert snap.call_ended is True
+    assert snap.fact_quotes == snap.facts
+    assert snap.facts.get("wellness")
+    assert len(snap.observations) > 0
+    assert snap.mission_result is not None
+    assert snap.outcomes is not None
+    assert "mission_result" in snap.metadata
+    assert "outcomes" in snap.metadata
 
 
-def test_store_owned_metadata_survives_projection(
+def test_store_owned_metadata_survives_production_snapshot(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Postgres replaces metadata wholesale at finalize; InMemory merges.
 
-    The projection must preserve store-owned/unknown keys from base metadata
-    on either backend. Regression for the cutover blocker.
+    Seeded store-owned/unknown keys must survive the production snapshot.
     """
-    session = _run_flow(
-        monkeypatch, tmp_path, "parity-binding", FLOWS[0][1]
-    )
+    session = _run_flow(monkeypatch, tmp_path, "proj-binding", FLOWS[0][1])
     store = session.store
     seeded = {
-        "product_call_binding": {"call_id": "parity-binding", "trunk": "lab"},
+        "product_call_binding": {"call_id": "proj-binding", "trunk": "lab"},
         "custom_unknown": "keep-me",
     }
-    snap = store.get_call_result("parity-binding", "parity-family")
+    snap = store.get_call_result("proj-binding", "proj-family")
     assert snap is not None
     store.save_dialogue_snapshot(
         snap.model_copy(update={"metadata": {**snap.metadata, **seeded}}),
-        "parity-family",
+        "proj-family",
     )
-    base = store.get_call_result("parity-binding", "parity-family")
-    assert base is not None
-    _assert_parity(session, base_metadata=dict(base.metadata))
+    final = session._snapshot()
     for key, value in seeded.items():
-        assert base.metadata[key] == value
-    # Store-owned outbox is excluded from field parity by design, but its
-    # survival through base_metadata must hold explicitly (Postgres replaces
-    # metadata wholesale at finalize).
-    from packages.dialogue_engine.persistence_projection import project_call_result
-
-    assert session._engine is not None
-    projected = project_call_result(
-        session._engine,
-        call_id=session.state.call_id,
-        family_id=session.state.family_id,
-        elder_display_name=session.state.elder_display_name,
-        observation_ids=list(session._persisted_obs_ids),
-        mission_is_daily_check=session.mission.is_daily_check,
-        base_metadata=dict(base.metadata),
-    )
-    legacy_final = session._snapshot().model_copy(update={"call_ended": True})
-    assert "action_outbox" in legacy_final.metadata
-    assert (
-        projected.metadata["action_outbox"]
-        == legacy_final.metadata["action_outbox"]
-    )
-    for key, value in seeded.items():
-        assert projected.metadata[key] == value
+        assert final.metadata[key] == value
+    assert "action_outbox" in final.metadata
