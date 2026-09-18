@@ -1,4 +1,43 @@
-# Current task — production persistence cutover done (2026-09-18)
+# Current task — bridge was uplink_only, fixed to callactor (2026-09-18)
+
+- Silence cause (my restart fault): bridge default mode is uplink_only
+  (record-only); old process ran IMVERA_MEDIA_BRIDGE_MODE=callactor.
+  Restarted pid 97652 with full lab env (callactor, engine single_writer,
+  fea61eb, PG, ladder+route_clf); /health/ready ok, mode callactor.
+- Lab: bridge callactor ✅ STT ✅ TTS silero ✅ on HEAD fea61eb.
+- NEXT: owner redials 7000 (Zoiper → .47:5060).
+
+- Zoiper 503 cause: Mac DHCP IP changed .194→.47; FS advertised stale IP.
+  Regenerated runtime config + `sofia profile internal restart` → internal
+  RUNNING on .47. User must repoint Zoiper server to 192.168.1.47:5060.
+- TTS: MLX warmup hangs in worker context (direct inference OK, cause open).
+  Owner asked Silero back: worker restarted with IMVERA_TTS_ENGINE=silero_lab
+  + IMVERA_SILERO_LAB_ACK=1 (pid 95862, ready 200, real synthesis 96KB OK,
+  speaker kseniya). STT untouched (GigaAM, 200). Bridge fresh 200.
+- Lab status: bridge/STT/TTS all 200 on HEAD fea61eb. Silero is CC-BY-NC-SA,
+  lab-only — not a production decision. No prod exists; nothing to harm.
+- NOT VERIFIED: live 7000 call E2E (needs Zoiper repoint + owner dial).
+
+---
+
+# Historical — lab restart partial (2026-09-18)
+
+- Owner asked to update the Mac lab (no prod exists). Killed old
+  bridge/STT/TTS (PIDs 68416/70809/5942, pre-A.5 code) and restarted on HEAD
+  fea61eb: bridge pid 87744 /health/ready 200; STT pid 87672 /health/ready
+  200. Docker FS/API/DB untouched, healthy.
+- TTS DOWN: fresh worker hangs in warmup generate at 0% CPU then dies;
+  port 9102 never binds. Proven NOT model/cache: direct _load_mlx_model +
+  _produce_chunks work outside worker; thread-load hypothesis disproved.
+  Cause unknown (worker-context only). Killed previously-working TTS in the
+  process — flagged as my responsibility.
+- NEXT: diagnose worker-context warmup hang (py-spy/Metal) or restore TTS
+  another way before any live call. No live calls until TTS ready.
+- NOT VERIFIED: TTS synthesis; any voice path E2E on fresh code.
+
+---
+
+# Historical — production cutover (2026-09-18)
 
 - `_snapshot()` engine branch builds from `project_call_result`
   (base_metadata from store); legacy branch kept for flag-off. Parity test
