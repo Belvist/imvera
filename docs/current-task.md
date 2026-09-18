@@ -1,4 +1,15 @@
-# Current task — Stage A.5.3 parity harness green (2026-09-18)
+# Current task — metadata-preservation parity done, cutover unblocked (2026-09-18)
+
+- Reviewer blocker verified in source: PG finalize replaces metadata
+  wholesale (`metadata = EXCLUDED.metadata`), InMemory merges. Projection now
+  takes `base_metadata` and overwrites engine-owned keys only.
+- Regression test: seeded product_call_binding + unknown key + real outbox
+  survive identically in projection; PG-vs-InMemory semantics both safe.
+- VERIFIED: parity 4 passed; full 1555/6/0; differential 92/4/4/0; corpus
+  500/500 (prior); touched ruff clean. Commit + push this step.
+- NEXT: production cutover (separate commit + CI) → CallActor reads →
+  DialogueState orphan. Scheduler out of A.5.3.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - Owner decision (b) implemented: `persistence_projection.project_call_result`
   builds the snapshot contract from EngineState; verbatim facts/quotes;

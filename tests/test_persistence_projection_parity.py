@@ -79,7 +79,9 @@ def _run_flow(
     return session
 
 
-def _assert_parity(session: CallSession) -> None:
+def _assert_parity(
+    session: CallSession, base_metadata: dict | None = None
+) -> None:
     assert session._engine is not None
     # Compare against what store.finalize_call receives: _snapshot() with the
     # call_ended envelope applied (session._finalize_call_if_needed).
@@ -97,6 +99,7 @@ def _assert_parity(session: CallSession) -> None:
             if getattr(session.state, "public_status", None)
             else None
         ),
+        base_metadata=base_metadata,
     )
     assert projected.facts == legacy.facts
     assert projected.fact_quotes == legacy.fact_quotes
@@ -121,3 +124,55 @@ def test_projection_matches_legacy_snapshot(
 ) -> None:
     session = _run_flow(monkeypatch, tmp_path, call_id, texts)
     _assert_parity(session)
+
+
+def test_store_owned_metadata_survives_projection(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Postgres replaces metadata wholesale at finalize; InMemory merges.
+
+    The projection must preserve store-owned/unknown keys from base metadata
+    on either backend. Regression for the cutover blocker.
+    """
+    session = _run_flow(
+        monkeypatch, tmp_path, "parity-binding", FLOWS[0][1]
+    )
+    store = session.store
+    seeded = {
+        "product_call_binding": {"call_id": "parity-binding", "trunk": "lab"},
+        "custom_unknown": "keep-me",
+    }
+    snap = store.get_call_result("parity-binding", "parity-family")
+    assert snap is not None
+    store.save_dialogue_snapshot(
+        snap.model_copy(update={"metadata": {**snap.metadata, **seeded}}),
+        "parity-family",
+    )
+    base = store.get_call_result("parity-binding", "parity-family")
+    assert base is not None
+    _assert_parity(session, base_metadata=dict(base.metadata))
+    for key, value in seeded.items():
+        assert base.metadata[key] == value
+    # Store-owned outbox is excluded from field parity by design, but its
+    # survival through base_metadata must hold explicitly (Postgres replaces
+    # metadata wholesale at finalize).
+    from packages.dialogue_engine.persistence_projection import project_call_result
+
+    assert session._engine is not None
+    projected = project_call_result(
+        session._engine,
+        call_id=session.state.call_id,
+        family_id=session.state.family_id,
+        elder_display_name=session.state.elder_display_name,
+        observation_ids=list(session._persisted_obs_ids),
+        mission_is_daily_check=session.mission.is_daily_check,
+        base_metadata=dict(base.metadata),
+    )
+    legacy_final = session._snapshot().model_copy(update={"call_ended": True})
+    assert "action_outbox" in legacy_final.metadata
+    assert (
+        projected.metadata["action_outbox"]
+        == legacy_final.metadata["action_outbox"]
+    )
+    for key, value in seeded.items():
+        assert projected.metadata[key] == value

@@ -17,6 +17,7 @@ migrates — it is not derived from the mirror here.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from packages.contracts.core import CallResultSnapshot, TerminationReason
@@ -49,8 +50,14 @@ def project_call_result(
     observation_ids: list[str],
     mission_is_daily_check: bool,
     legacy_public_status: str | None = None,
+    base_metadata: Mapping[str, Any] | None = None,
 ) -> CallResultSnapshot:
-    """Project the persisted snapshot contract from engine state only."""
+    """Project the persisted snapshot contract from engine state only.
+
+    Starts from `base_metadata` (existing snapshot metadata) and overwrites
+    engine-owned keys only, so store-owned/unknown keys survive on backends
+    that replace metadata wholesale (Postgres) as well as merging ones.
+    """
     state = engine.state
     facts: dict[str, str] = {}
     quotes: dict[str, str] = {}
@@ -61,7 +68,7 @@ def project_call_result(
             facts[slot] = val
             quotes[slot] = val
 
-    metadata: dict[str, Any] = {}
+    metadata: dict[str, Any] = dict(base_metadata) if base_metadata else {}
     metadata["elder_display_name"] = elder_display_name
     metadata.update(build_call_metadata(state))
     mission_result = build_mission_result(state)
