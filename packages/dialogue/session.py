@@ -24,6 +24,7 @@ from packages.dialogue_engine.engine import DialogueEngine
 from packages.dialogue_engine.mission import (
     CallMission,
     CustomMissionRequiresDialogueEngine,
+    DialogueEngineRequired,
     daily_check_mission,
 )
 from packages.dialogue_engine.runtime import dialogue_engine_active, log_runtime_truth
@@ -72,16 +73,28 @@ class CallSession:
         interpreter: Interpreter | None = None,
         mission: CallMission | None = None,
         mission_understanding_provider: object | None = None,
+        allow_legacy_planner: bool = False,
     ) -> None:
         if not family_id:
             raise ValueError("family_id is required for product calls")
         resolved_mission = mission if mission is not None else daily_check_mission()
-        # H: custom mission must never silently fall back to legacy Planner.
-        if resolved_mission.is_custom and not dialogue_engine_active():
-            raise CustomMissionRequiresDialogueEngine(
-                "Custom CallMission requires DialogueEngine "
-                "(IMVERA_DIALOGUE_ENGINE + direct wellness opening). "
-                "Refusing silent legacy Planner fallback."
+        engine_active = dialogue_engine_active()
+        if not engine_active:
+            if resolved_mission.is_custom:
+                raise CustomMissionRequiresDialogueEngine(
+                    "Custom CallMission requires DialogueEngine "
+                    "(IMVERA_DIALOGUE_ENGINE + direct wellness opening). "
+                    "Refusing silent legacy Planner fallback."
+                )
+            if not allow_legacy_planner:
+                raise DialogueEngineRequired(
+                    "Product CallSession requires DialogueEngine. "
+                    "Legacy Planner is lab/test-only and must be explicitly opted in."
+                )
+            _log.warning(
+                "LEGACY_PLANNER_LAB_ONLY call_id=%s mission=%s",
+                call_id,
+                resolved_mission.mission_id,
             )
         self.mission = resolved_mission
         self.mission_understanding_provider = mission_understanding_provider
@@ -110,7 +123,7 @@ class CallSession:
         if not _session_runtime_logged:
             log_runtime_truth(_log)
             _session_runtime_logged = True
-        if dialogue_engine_active():
+        if engine_active:
             prior: dict[str, str] = {}
             if hasattr(self.store, "get_latest_family_snapshot"):
                 snap = self.store.get_latest_family_snapshot(
@@ -136,11 +149,6 @@ class CallSession:
                 "DialogueEngine.on_session call_id=%s mode=single_writer mission=%s",
                 call_id,
                 resolved_mission.mission_id,
-            )
-        elif resolved_mission.is_custom:
-            # Defense in depth — should already have raised above.
-            raise CustomMissionRequiresDialogueEngine(
-                "Custom CallMission constructed without DialogueEngine"
             )
 
     def uses_dialogue_engine(self) -> bool:

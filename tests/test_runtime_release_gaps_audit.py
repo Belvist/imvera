@@ -18,11 +18,12 @@ async def noop(*args, **kwargs):
     pass
 
 
-def session_at_wellness():
+def session_at_wellness(*, allow_legacy_planner: bool = False):
     session = CallSession(
         call_id="release-audit",
         family_id="audit-family",
         store=InMemoryCallRecordStore(),
+        allow_legacy_planner=allow_legacy_planner,
     )
     start = session.start()
     session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
@@ -56,7 +57,7 @@ def test_out_of_order_inference_does_not_deadlock_actor(monkeypatch):
     monkeypatch.setenv("IMVERA_LLM_INTERPRET", "1")
 
     async def scenario():
-        session = session_at_wellness()
+        session = session_at_wellness(allow_legacy_planner=True)
         first_entered, second_entered, release_first = (
             asyncio.Event(),
             asyncio.Event(),

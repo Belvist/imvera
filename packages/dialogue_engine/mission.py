@@ -111,5 +111,9 @@ class GoalDispositionCandidate(BaseModel):
     model_config = {"frozen": True}
 
 
-class CustomMissionRequiresDialogueEngine(RuntimeError):
+class DialogueEngineRequired(RuntimeError):
+    """Product CallSession requires DialogueEngine; no implicit Planner fallback."""
+
+
+class CustomMissionRequiresDialogueEngine(DialogueEngineRequired):
     """Custom CallMission must not silently fall back to legacy Planner."""

@@ -12,6 +12,7 @@ from packages.dialogue.session import CallSession
 from packages.dialogue_engine.mission import (
     CallMission,
     CustomMissionRequiresDialogueEngine,
+    DialogueEngineRequired,
     GoalAnswerCandidate,
     GoalDefinition,
 )
@@ -186,6 +187,16 @@ def _session_with_mission(
     assert session._engine is not None
     session.start()
     return session
+
+
+def test_daily_check_fail_closed_without_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IMVERA_DIALOGUE_ENGINE", "0")
+    with pytest.raises(DialogueEngineRequired):
+        CallSession(
+            call_id="no-engine-daily",
+            family_id="slice1-family",
+            store=InMemoryCallRecordStore(),
+        )
 
 
 def test_custom_mission_fail_closed_without_engine(monkeypatch: pytest.MonkeyPatch) -> None:
