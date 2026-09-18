@@ -1,6 +1,5 @@
 """Planner — decides what to do next (not how to say it)."""
 
-import os
 import re
 
 from packages.contracts.core import TerminationReason
@@ -17,19 +16,13 @@ from packages.dialogue.question_ledger import (
 from packages.dialogue.reducer import DialogueReducer
 from packages.dialogue.state import DialogueState
 from packages.dialogue_engine import questions
+from packages.dialogue_engine.runtime import direct_wellness_opening_enabled
 
 _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
 _GOODBYE_FINAL = "До свидания. Хорошего дня."
 _GOODBYE_MARKERS = ("до свидания", "всего доброго")
 
 
-def direct_wellness_opening_enabled() -> bool:
-    """Lab shortcut: skip identity/consent → wellness. Default ON for automated gates."""
-    return os.environ.get("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
 _MAX_SLOT_UNCLEAR = 2
 _STT_GARBAGE_PHRASES = frozenset(
     {

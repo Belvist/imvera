@@ -24,6 +24,15 @@ def _flag_on(name: str, default: str) -> bool:
     return os.environ.get(name, default).strip().lower() in {"1", "true", "yes"}
 
 
+def direct_wellness_opening_enabled() -> bool:
+    """Whether the frozen daily-check starts directly at wellness.
+
+    Runtime configuration belongs to DialogueEngine, not the legacy Planner.
+    Kept as a separate flag for existing lab/gate profiles.
+    """
+    return _flag_on("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1")
+
+
 def llm_interpret_enabled() -> bool:
     """Whether legacy CallActor may call HttpLLMProvider.interpret_turn.
 
@@ -67,8 +76,6 @@ def git_sha_short() -> str:
 
 
 def dialogue_engine_active() -> bool:
-    from packages.dialogue.planner import direct_wellness_opening_enabled
-
     return direct_wellness_opening_enabled() and engine_enabled()
 
 

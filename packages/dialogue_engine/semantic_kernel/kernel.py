@@ -12,7 +12,6 @@ from packages.dialogue_engine.issue_mention_extract import (
     extract_goal_facts,
 )
 from packages.dialogue_engine.semantic_kernel.controls import match_level0, normalize_control
-from packages.dialogue_engine.semantic_kernel.ml_fallback import ml_enhance_spans
 from packages.dialogue_engine.semantic_kernel.observation_memory import (
     build_observations,
     build_reference_observations,
@@ -94,7 +93,6 @@ def interpret(
         )
 
     spans = list(parse_spans(raw))
-    spans = list(ml_enhance_spans(raw, tuple(spans)))
     relations = list(parse_relations(tuple(spans), raw_text=raw))
     _subject, subj_rels = resolve_subject(raw, tuple(spans))
     relations.extend(subj_rels)
