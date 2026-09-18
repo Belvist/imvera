@@ -8,6 +8,7 @@ from packages.contracts.mandatory import PILOT_SLOT_CHECKS
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.fsm import CallFsm
 from packages.dialogue.interpretation import UserInterpretation, interpret_user_turn
+from packages.dialogue.proposals import terminal_noop
 from packages.dialogue.question_ledger import (
     MAX_AUTOMATIC_ATTEMPTS,
     clarification_for_slot,
@@ -467,14 +468,7 @@ class Planner:
         turn_id: int,
         generation_id: str,
     ) -> TurnProposal:
-        return TurnProposal(
-            turn_id=turn_id,
-            generation_id=generation_id,
-            speech="",
-            intent="terminal_noop",
-            fsm_state=state.fsm_state,
-            mandatory_remaining=state.mandatory_remaining(),
-        )
+        return terminal_noop(state, turn_id, generation_id)
 
     @staticmethod
     def _handle_revoke_consent(

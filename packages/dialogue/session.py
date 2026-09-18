@@ -16,6 +16,7 @@ from packages.dialogue.fsm import CallFsm
 from packages.dialogue.interpretation import UserInterpretation
 from packages.dialogue.interpreter import Interpreter
 from packages.dialogue.planner import Planner
+from packages.dialogue.proposals import terminal_noop
 from packages.dialogue.question_ledger import release_question_attempt
 from packages.dialogue.state import DialogueState
 from packages.dialogue.transition_store import DialogueTransitionStore
@@ -442,7 +443,7 @@ class CallSession:
             )
         if speak is None:
             gen = self._next_generation_id()
-            proposal = Planner._terminal_noop(self.state, self.turn_id, gen)
+            proposal = terminal_noop(self.state, self.turn_id, gen)
             validated = Validator.validate(proposal)
             return SessionTurnResult(
                 user_text=user_text,
@@ -643,7 +644,7 @@ class CallSession:
     ) -> SessionTurnResult:
         if self.state.call_finalized:
             gen = self._next_generation_id()
-            proposal = Planner._terminal_noop(self.state, self.turn_id, gen)
+            proposal = terminal_noop(self.state, self.turn_id, gen)
             validated = Validator.validate(proposal)
             return SessionTurnResult(
                 user_text=user_text,
@@ -994,7 +995,7 @@ class CallSession:
         validated: ValidatedTurn | None = None,
     ) -> SessionTurnResult:
         if proposal is None:
-            proposal = Planner._terminal_noop(self.state, self.turn_id, self._next_generation_id())
+            proposal = terminal_noop(self.state, self.turn_id, self._next_generation_id())
         if validated is None:
             validated = Validator.validate(proposal)
         return SessionTurnResult(
