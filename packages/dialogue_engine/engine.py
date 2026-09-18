@@ -90,6 +90,24 @@ class DialogueEngine:
     def answer_context_slot(self) -> str | None:
         return self.state.answer_context_slot()
 
+    def pending_slot_name(self) -> str | None:
+        """Engine mirror of the synced legacy pending_slot (sync_to_legacy).
+
+        Delivered → playing → planned slot, else next open slot. Read-only;
+        proven equal by tests/test_engine_pending_accessors.py. Question text
+        and delivered_answer_slot are NOT mirrored: legacy keeps them stale
+        after the engine question clears, so blind migration would change
+        echo/fallback behavior (documented Cut-1 boundary).
+        """
+        state = self.state
+        if state.delivered_question is not None:
+            return state.delivered_question.slot
+        if state.playing_question is not None:
+            return state.playing_question.slot
+        if state.planned_question is not None:
+            return state.planned_question.slot
+        return state.next_open_slot()
+
     def begin_interpret(self, turn_id: str) -> str:
         effect_id = f"ix-{uuid.uuid4().hex[:8]}"
         self.state.processing_turn_id = turn_id

@@ -265,6 +265,21 @@ Until these exist, agent reports exact commands run.
 - NEXT: CI green on cb2eb61 → Stage A closed → Stage B live stop/ACK probe.
   DialogueEngine work stops here. B–J untouched.
 
+## TTS decision + license provenance (2026-09-18)
+
+- Owner: Silero stays as the working voice (others do not pull their weight).
+  Lab runs `IMVERA_TTS_ENGINE=silero_lab`; committed default unchanged
+  (mlx_customvoice); lab env and prod/default config stay separate per plan.
+- Do NOT assert CC-BY-NC-SA as established fact: current upstream
+  snakers4/silero-models marks TTS models MIT, but our loader pins NO
+  revision (`torch.hub.load repo_or_dir="snakers4/silero-models"`,
+  local v5_ru cache of unknown provenance). Repo docstrings claiming NC
+  are stale relative to upstream.
+- REQUIRED before Stage G: provenance of the actually-running v5_ru
+  (upstream commit/tag, artifact URL/hash, license of that exact version),
+  then a production licensing decision. Until then Silero is lab-only
+  in practice, without asserting which license applies.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)

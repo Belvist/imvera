@@ -1,4 +1,20 @@
-# Current task — bridge was uplink_only, fixed to callactor (2026-09-18)
+# Current task — A.5.3 Cut 1: engine pending_slot reads (2026-09-18)
+
+- `DialogueEngine.pending_slot_name()` + CallActor `_engine_pending_slot()`;
+  migrated C3-slot/C5/C7 reads (engine-guarded, legacy fallback). Proven
+  4/4 flows equal after every turn.
+- NOT migrated (proven divergent, stale legacy semantics): pending_question
+  text (C2 echo) and delivered_answer_slot — legacy keeps last value after
+  engine clears; blind swap would change behavior. C6-else already branched.
+- VERIFIED: new 4 passed; full 1559/6/0; differential 92/4/4/0; corpus
+  500/500; touched ruff clean. Commit + push.
+- NEXT Cut 2: finalization/disconnect API (call_finalized, final_action_done,
+  termination_reason). Scheduler out of A.5.3.
+- NOT VERIFIED: remote CI. B–J untouched.
+
+---
+
+# Historical — bridge callactor fix (2026-09-18)
 
 - Silence cause (my restart fault): bridge default mode is uplink_only
   (record-only); old process ran IMVERA_MEDIA_BRIDGE_MODE=callactor.

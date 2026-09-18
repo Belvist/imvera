@@ -1391,10 +1391,22 @@ class CallActor:
         expired = await asyncio.to_thread(self.session.handle_wait_expired, wait_id)
         await self._post_apply_turn(expired)
 
+    def _engine_pending_slot(self) -> str | None:
+        """Pending slot from EngineState on the engine path, else legacy mirror.
+
+        Proven equal by tests/test_engine_pending_accessors.py (Cut 1).
+        """
+        if self.session.uses_dialogue_engine() and self.session._engine:
+            return self.session._engine.pending_slot_name()
+        return self.session.state.pending_slot
+
     async def _handle_backchannel_continuation(self, result: SessionTurnResult) -> None:
         goal_id = result.proposal.wait_goal_id
         if self._wait_state is None:
-            slot = self.session.state.pending_slot
+            if self.session.uses_dialogue_engine() and self.session._engine:
+                slot = self.session._engine.pending_slot_name()
+            else:
+                slot = self.session.state.pending_slot
             goal = self.session.state.get_goal(slot) if slot else None
             self._start_answer_wait(
                 goal_id=goal_id or (goal.goal_id if goal else None),
@@ -1621,7 +1633,7 @@ class CallActor:
             duration_ms=duration_ms,
             pcm_rms=pcm_rms,
             dump_path=dump_path or "",
-            pending_slot=self.session.state.pending_slot or "",
+            pending_slot=self._engine_pending_slot() or "",
         )
         await self._emit_stage("utterance.start", utterance_id=utterance_id, turn_id=turn_id)
         # region agent log
@@ -1823,7 +1835,7 @@ class CallActor:
                         stt_duration_ms=duration_ms,
                         stt_latency_ms=stt_elapsed_ms,
                         dump_path=dump_path or "",
-                        delivered_slot=answer_slot or self.session.state.pending_slot or "",
+                        delivered_slot=answer_slot or self._engine_pending_slot() or "",
                         interpret_path="echo_discarded",
                         interpret_latency_ms=0,
                         stt_request_ts=stt_request_ts,
@@ -2027,9 +2039,9 @@ class CallActor:
                 stt_rms=pcm_rms,
                 stt_duration_ms=duration_ms,
                 stt_latency_ms=stt_elapsed_ms,
-                dump_path=dump_path or "",
-                delivered_slot=answer_slot or self.session.state.pending_slot or "",
-                interpret_path=interpret_path,
+                        dump_path=dump_path or "",
+                        delivered_slot=answer_slot or self._engine_pending_slot() or "",
+                        interpret_path=interpret_path,
                 interpret_latency_ms=interpret_ready_ms,
                 stt_request_ts=stt_request_ts,
                 stt_result_ts=stt_result_ts,
