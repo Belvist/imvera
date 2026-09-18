@@ -1,4 +1,16 @@
-# Current task — metadata-preservation parity done, cutover unblocked (2026-09-18)
+# Current task — production persistence cutover done (2026-09-18)
+
+- `_snapshot()` engine branch builds from `project_call_result`
+  (base_metadata from store); legacy branch kept for flag-off. Parity test
+  file converted to production-contract test (pre-cutover evidence at ebff322).
+- Cutover exposed one real parity gap: finalize default DISCONNECTED
+  (finalize_if_needed) — replicated in projection, semantics unchanged.
+  wellness_result_contract 3 tests green again without touching expectations.
+- VERIFIED: full 1555/6/0; differential 92/4/4/0; corpus 500/500; touched
+  ruff clean. Commit + push this step.
+- NEXT: CallActor engine-path read migration → TransitionStore → sync removal
+  → orphan cleanup → A.5 close → Stage B. Scheduler out of A.5.3.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - Reviewer blocker verified in source: PG finalize replaces metadata
   wholesale (`metadata = EXCLUDED.metadata`), InMemory merges. Projection now

@@ -248,6 +248,29 @@ class CallSession:
             )
 
     def _snapshot(self) -> CallResultSnapshot:
+        if self._engine is not None:
+            # Production engine path (ADR-019): snapshot from EngineState.
+            # Legacy branch below stays for flag-off mode.
+            from packages.dialogue_engine.persistence_projection import (
+                project_call_result,
+            )
+
+            existing = self.store.get_call_result(self.state.call_id, self.state.family_id)
+            base = dict(existing.metadata) if existing else None
+            return project_call_result(
+                self._engine,
+                call_id=self.state.call_id,
+                family_id=self.state.family_id,
+                elder_display_name=self.state.elder_display_name,
+                observation_ids=list(self._persisted_obs_ids),
+                mission_is_daily_check=self.mission.is_daily_check,
+                legacy_public_status=(
+                    self.state.public_status.value
+                    if getattr(self.state, "public_status", None)
+                    else None
+                ),
+                base_metadata=base,
+            )
         facts = {k: v.value for k, v in self.state.facts.items()}
         quotes = {k: v.source_quote for k, v in self.state.facts.items()}
         existing = self.store.get_call_result(self.state.call_id, self.state.family_id)

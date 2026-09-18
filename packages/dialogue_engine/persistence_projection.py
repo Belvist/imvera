@@ -95,8 +95,10 @@ def project_call_result(
             else TerminationReason.PARTIAL
         )
     else:
+        # Replicates the finalize default (finalize_if_needed sets legacy
+        # termination to DISCONNECTED when unset): parity, not a verdict.
         call_ended = False
-        termination_reason = None
+        termination_reason = TerminationReason.DISCONNECTED
 
     if mission_is_daily_check:
         # Replicates the legacy rule exactly: sync_to_legacy marks a check
