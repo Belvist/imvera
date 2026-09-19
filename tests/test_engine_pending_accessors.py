@@ -1,9 +1,9 @@
-"""Cut 1 parity: engine pending_slot accessor vs synced mirror (A.5.3).
+"""Cut 1+4c: engine pending_slot accessor contract (A.5.3).
 
-Proven: pending_slot matches on all flows (delivered/playing/planned/next).
-NOT migrated (stale legacy semantics, proven divergent): pending_question
-text and delivered_answer_slot keep the last value after the engine
-question clears — blind migration would change echo/fallback behavior.
+The accessor powered the CallActor migration (proven vs mirror pre-4c).
+Since Cut 4c the mirror is no longer synced on this path by design, so this
+file now pins the accessor's direct contract: delivered → playing →
+planned → next open slot.
 """
 
 from __future__ import annotations
@@ -48,6 +48,9 @@ def _session(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, call_id: str) -> C
     assert result.persist_ok, result.persist_error
     _deliver(session, result)
     _assert_accessor_parity(session)
+    # Concrete checkpoint: opening asks wellness first.
+    assert session._engine is not None
+    assert session._engine.pending_slot_name() == "wellness"
     return session
 
 
@@ -65,7 +68,16 @@ def _deliver(session: CallSession, result: SessionTurnResult) -> None:
 def _assert_accessor_parity(session: CallSession) -> None:
     engine = session._engine
     assert engine is not None
-    assert engine.pending_slot_name() == session.state.pending_slot
+    state = engine.state
+    if state.delivered_question is not None:
+        expected = state.delivered_question.slot
+    elif state.playing_question is not None:
+        expected = state.playing_question.slot
+    elif state.planned_question is not None:
+        expected = state.planned_question.slot
+    else:
+        expected = state.next_open_slot()
+    assert engine.pending_slot_name() == expected
 
 
 @pytest.mark.parametrize("call_id,texts", FLOWS)

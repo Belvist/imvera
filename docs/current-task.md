@@ -1,4 +1,27 @@
-# Current task — Cut 4b: RED/safety engine ownership (2026-09-18)
+# Known semantic bug (NOT A.5 scope — separate patch after A.5)
+
+- False alarm clears SafetyEngine.active_risk → NONE but DialogueEngine
+  stays risk_handling=True, safety_mode="red"; next user text may still
+  enter _maybe_handle_safety_continuation → _safety_close_after_clarify.
+  Pre-existing (not a Cut 4b regression). Existing test only asserts the
+  SafetySnapshot side. Fix separately with scenario tests, do not mix
+  safety semantics into A.5 refactor cuts.
+
+---
+
+# Current task — ACTION 2 Cut 4c done: playout ownership (2026-09-18)
+
+- Removed mark_spoken sync; C14 engine-guarded (legacy keeps); C2 reads
+  engine question text (echo tests gate). effect_to_proposal legacy-args
+  dropped from signature? No — kept legacy builder as parity reference.
+- Suite caught REAL production gap: _persist_new_facts read the mirror →
+  observations would vanish. Fixed with engine-sourced facts + revision
+  continuity from persisted keys (identical key sequence).
+- 17 mirror-pinning tests migrated to engine reads (flow intact, verified
+  engine FILLED where asserted); redundant mirror lines dropped.
+- VERIFIED: playout 3 passed; full 1577/6/0; differential 92/4/4/0; corpus
+  500/500; repo-wide ruff 0. Commit + push. STOP — await review.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - Engine-path risk reads (handling/fsm/episode) from EngineState; legacy
   branch untouched. _persist_risk takes episode override (engine id).

@@ -108,6 +108,22 @@ class DialogueEngine:
             return state.planned_question.slot
         return state.next_open_slot()
 
+    def pending_question_text(self) -> str | None:
+        """Current engine question text, None when none pending.
+
+        Unlike the legacy mirror (which keeps the last text after clear),
+        this reports the live question only. Cut 4c: used for echo
+        candidates where staleness would misattribute old questions.
+        """
+        state = self.state
+        if state.delivered_question is not None:
+            return state.delivered_question.text
+        if state.playing_question is not None:
+            return state.playing_question.text
+        if state.planned_question is not None:
+            return state.planned_question.text
+        return None
+
     def begin_interpret(self, turn_id: str) -> str:
         effect_id = f"ix-{uuid.uuid4().hex[:8]}"
         self.state.processing_turn_id = turn_id

@@ -656,7 +656,14 @@ class CallActor:
             spoken = self._playback._ledger.canonical_text
             if spoken and spoken not in candidates:
                 candidates.append(spoken)
-        pending = self.session.state.pending_question
+        # Cut 4c: current engine question text. Legacy mirror kept the last
+        # text after clear (stale); engine gives None then. Fresh
+        # delivered_phrases/ledger above still cover recent speech, and echo
+        # tests gate the behavior (test_call_actor_post_stt).
+        if self.session.uses_dialogue_engine() and self.session._engine:
+            pending = self.session._engine.pending_question_text()
+        else:
+            pending = self.session.state.pending_question
         if pending and pending not in candidates:
             candidates.append(pending)
         return candidates
@@ -2838,9 +2845,11 @@ class CallActor:
                 ("check_", "clarify_", "repeat_")
             )
             if marks_question:
-                # Separate remaining legacy write (not part of Cut 2
-                # finalization boundary) — tracked for a later cut.
-                self.session.state.pending_question_delivered = True
+                # Cut 4c: engine path trusts engine delivery state (reducer
+                # marks delivered/attempts); the legacy flag is legacy-only.
+                # Separate tracked write — see Cut 2 note above.
+                if not (self.session.uses_dialogue_engine() and self.session._engine):
+                    self.session.state.pending_question_delivered = True
             if (
                 self._pending_mark_render_gen == gen
                 and self._pending_mark_spoken_id

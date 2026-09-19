@@ -351,6 +351,44 @@ class CallSession:
 
     def _persist_new_facts(self, turn_id: int) -> tuple[list[str], bool, str | None]:
         ids: list[str] = []
+        if self._engine is not None:
+            # Cut 4c: source facts from EngineState (the mirror is no longer
+            # synced on this path). Revision continuity derives from already
+            # persisted idempotency keys — identical key sequence to legacy.
+            from packages.contracts.enums import SlotStatus
+            from packages.dialogue.facts import FactRecord
+
+            eng = self._engine.state
+            for slot, status in eng.slots.items():
+                if status != SlotStatus.FILLED or slot not in eng.slot_values:
+                    continue
+                val = eng.slot_values[slot]
+                prefix = f"{self.state.call_id}:fact:{slot}:r"
+                rev = 1
+                for key in self._persisted_keys:
+                    if key.startswith(prefix):
+                        try:
+                            rev = max(rev, int(key[len(prefix):]) + 1)
+                        except ValueError:
+                            continue
+                fact = FactRecord(
+                    field=slot,
+                    value=val,
+                    source_quote=val,
+                    turn_id=eng.turn_seq,
+                    revision=rev,
+                )
+                self._obs_seq += 1
+                obs = observation_from_fact(self.state.call_id, turn_id, fact, self._obs_seq)
+                if obs.idempotency_key in self._persisted_keys:
+                    continue
+                result = self.store.save_observation(obs, self.state.family_id)
+                if not result.ok:
+                    return ids, False, result.error
+                self._persisted_keys.add(obs.idempotency_key)
+                ids.append(obs.observation_id)
+                self._persisted_obs_ids.append(obs.observation_id)
+            return ids, True, None
         for fact in self.state.facts.values():
             self._obs_seq += 1
             obs = observation_from_fact(self.state.call_id, turn_id, fact, self._obs_seq)
@@ -1042,7 +1080,9 @@ class CallSession:
                 or followup.end_call_effect is not None
             ):
                 self._engine_playout_followup = followup
-            self._engine.sync_to_legacy(self.state)
+            # Cut 4c: delivery ownership is engine-native (reducer marks
+            # delivered/attempts/wait/timer); the mirror is no longer synced.
+            # CallActor question-state reads moved to engine accessors.
         if self._engine is not None:
             result = self.transitions.mark_engine_action_delivered(
                 self.state.call_id,

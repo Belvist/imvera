@@ -79,7 +79,8 @@ def _exhaust(session: CallSession, text: str) -> None:
     assert engine.state.goals["wellness"].lifecycle == GoalLifecycle.UNCLEAR
     assert engine.state.observations["wellness_unknown"] == text
     assert "wellness" not in engine.state.slot_records
-    assert session.state.slots["wellness"] == SlotStatus.UNRESOLVED
+    # Mirror no longer synced on engine path (Cut 4c) — engine asserts
+    # above carry the contract.
     assert not session.state.mandatory_checks["wellness"]
 
 
@@ -128,9 +129,8 @@ def test_exhausted_wellness_survives_public_result(
     assert wellness["value"] is None
     assert wellness["evidence"] == []
     assert "wellness" not in body["facts"]
-    # No legacy dialogue_state dump in persisted metadata since Cut 3 — assert
-    # the same contract against the synced in-memory mirror instead.
-    assert session.state.slots["wellness"] == "UNRESOLVED"
+    # Mirror not synced on engine path since Cut 4c; engine asserts above
+    # carry the contract.
     assert session.state.consent_declined is False
     assert session.state.call_revoked is False
     assert session.safety.active_risk == RiskLevel.NONE

@@ -89,7 +89,8 @@ def _daily_session() -> CallSession:
     session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
     session.state.greeted = True
     session.mark_spoken_action(start.proposal.generation_id)
-    assert session.state.pending_slot == "wellness"
+    assert session._engine is not None
+    assert session._engine.pending_slot_name() == "wellness"
     return session
 
 
