@@ -1,4 +1,15 @@
-# Current task — A.5.3 Cut 3: engine TransitionStore boundary (2026-09-18)
+# Current task — Cut 3a: engine cancel off Planner + replay scope (2026-09-18)
+
+- C4 engine cancellation no longer calls Planner.release (reserve lives
+  only in legacy plan flows → always no-op on engine path). Regression
+  proves Planner untouched + outbox CANCELLED (red-proven via stash).
+- load()/replay_pending_action() scoped as legacy/test-only in docstrings:
+  no production engine-path callers (reference scan), engine commits stop
+  the dump by design. No behavior change.
+- VERIFIED: new 1 passed; full 1566/6/0; differential 92/4/4/0; corpus
+  500/500; touched ruff clean. Commit + push.
+- NEXT Cut 4: sync_to_legacy removal per site. Scheduler out of A.5.3.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - Additive engine methods (commit/outbox/delivered) sourced from engine
   values, no legacy dump; legacy methods intact for flag-off + resume tests.

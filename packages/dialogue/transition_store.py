@@ -91,6 +91,15 @@ class DialogueTransitionStore:
         self._family_id = family_id
 
     def load(self, call_id: str) -> DialogueTransition | None:
+        """Restore via the legacy dialogue_state dump.
+
+        Scope: legacy flag-off path + dispatch/replay tests only. Engine
+        commits (Cut 3) deliberately stop writing the dump, and no
+        production engine-path caller uses load()/replay_pending_action()
+        (verified by reference scan) — so there is nothing to restore for
+        new engine calls. An engine-native replay API is out of scope until
+        resume-on-new-call becomes a runtime contract (it is not today).
+        """
         snap = self._store.get_call_result(call_id, self._family_id)
         if snap is None:
             return None
@@ -506,6 +515,8 @@ class DialogueTransitionStore:
         return self._store.save_dialogue_snapshot(updated, self._family_id)
 
     def replay_pending_action(self, call_id: str) -> PendingAction | None:
+        """Legacy-scope replay (see load()). Not a runtime contract for
+        engine-path calls; engine delivery owns its outbox lifecycle."""
         trans = self.load(call_id)
         if trans is None or trans.pending_action is None:
             return None

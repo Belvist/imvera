@@ -1491,6 +1491,9 @@ class CallActor:
                 )
         else:
             if use_engine:
+                # Engine path never reserves via Planner (reserve lives only
+                # in legacy plan flows), so there is nothing to release —
+                # calling it would only reintroduce the Planner dependency.
                 await asyncio.to_thread(
                     self.session.transitions.mark_engine_outbox_cancelled,
                     self.session.state.call_id,
@@ -1503,11 +1506,11 @@ class CallActor:
                     self.session.state,
                     action_id,
                 )
-            await asyncio.to_thread(
-                Planner.release_question_attempt,
-                self.session.state,
-                action_id,
-            )
+                await asyncio.to_thread(
+                    Planner.release_question_attempt,
+                    self.session.state,
+                    action_id,
+                )
         self._outbox_action_id = None
 
     async def _post_apply_turn(self, result: SessionTurnResult) -> None:
