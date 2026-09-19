@@ -364,14 +364,16 @@ class CallSession:
             self._persisted_obs_ids.append(obs.observation_id)
         return ids, True, None
 
-    def _persist_risk(self, turn_id: int, quote: str) -> tuple[str | None, bool, str | None]:
+    def _persist_risk(
+        self, turn_id: int, quote: str, *, episode_id: str | None = None
+    ) -> tuple[str | None, bool, str | None]:
         self._obs_seq += 1
         obs = observation_from_risk(
             self.state.call_id,
             turn_id,
             quote,
             self._obs_seq,
-            self.state.risk_episode_id,
+            episode_id if episode_id is not None else self.state.risk_episode_id,
         )
         if obs.idempotency_key in self._persisted_keys:
             return obs.observation_id, True, None
@@ -747,19 +749,28 @@ class CallSession:
         asr_quality: AsrQuality = AsrQuality.GOOD,
         rich_turn: object | None = None,
     ) -> SessionTurnResult:
+        engine = self._engine
+        if engine is not None:
+            risk_handling = engine.state.risk_handling
+            fsm_state = engine.state.fsm_state
+            risk_episode_id = engine.state.risk_episode_id
+        else:
+            risk_handling = self.state.risk_handling
+            fsm_state = self.state.fsm_state
+            risk_episode_id = self.state.risk_episode_id
         allow_new = not (
-            self.state.risk_handling and self.state.fsm_state == FsmState.CONFIRM_SITUATION
+            risk_handling and fsm_state == FsmState.CONFIRM_SITUATION
         )
         SafetyEngine.ingest_transcript(self.safety, user_text, allow_new_episodes=allow_new)
 
-        if interp.risk_false_alarm and self.state.risk_episode_id:
-            SafetyEngine.resolve_false_alarm(self.safety, episode_id=self.state.risk_episode_id)
+        if interp.risk_false_alarm and risk_episode_id:
+            SafetyEngine.resolve_false_alarm(self.safety, episode_id=risk_episode_id)
 
         risk_obs_id: str | None = None
         if (
             self.safety.active_risk == RiskLevel.RED
-            and not self.state.risk_handling
-            and self.state.fsm_state not in _RED_INTERRUPT_STATES
+            and not risk_handling
+            and fsm_state not in _RED_INTERRUPT_STATES
         ):
             if self._engine is not None:
                 # DialogueEngine owns conversational safety when active.
@@ -768,12 +779,15 @@ class CallSession:
                     episode_id=self.safety.active_episode_id,
                     level="RED",
                 )
-                self._engine.sync_to_legacy(self.state)
                 self._append_event(
                     "RED_SIGNAL",
                     {"quote": user_text.strip(), "turn_id": next_turn, "owner": "dialogue_engine"},
                 )
-                risk_obs_id, ok, err = self._persist_risk(next_turn, user_text.strip())
+                risk_obs_id, ok, err = self._persist_risk(
+                    next_turn,
+                    user_text.strip(),
+                    episode_id=self._engine.state.risk_episode_id,
+                )
                 if not ok:
                     return self._failed_turn(user_text, interp, contract, err or "risk persist")
                 # Engine already produced SAFETY speech — do not also run mission turn.

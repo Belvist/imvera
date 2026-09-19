@@ -1,4 +1,14 @@
-# Current task — timer/wait regression added, Cut 4b next (2026-09-18)
+# Current task — Cut 4b: RED/safety engine ownership (2026-09-18)
+
+- Engine-path risk reads (handling/fsm/episode) from EngineState; legacy
+  branch untouched. _persist_risk takes episode override (engine id).
+  Removed RED sync. SafetyEngine record + semantics unchanged.
+- Regression (4 tests): interrupt sets engine flags/episode; no double
+  interrupt; false alarm resolves with engine episode; observation persisted.
+  Existing integrity RED tests (legacy branch) green unchanged.
+- VERIFIED: new 4 passed; full 1574/6/0; differential 92/4/4/0; corpus
+  500/500; touched ruff clean. Commit + push. STOP — await review.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - Reviewer-asked insurance for Cut 4a ensure_goal(): backchannel →
   TimerEffect → wait_for_continuation same slot/goal → expiry re-asks;
