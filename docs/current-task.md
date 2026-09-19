@@ -1,4 +1,14 @@
-# Current task — Cut 3a: engine cancel off Planner + replay scope (2026-09-18)
+# Current task — Cut 3b: stale dump dropped on engine writes (2026-09-18)
+
+- Rolling-update edge closed: engine commit/outbox/delivered pop legacy
+  dialogue_state instead of preserving it stale; store-owned/unknown keys
+  survive (read-modify-write from snap). Legacy methods still write dump.
+- Regression: seeded stale dump + binding + unknown → dump gone, others
+  survive, outbox/version current.
+- VERIFIED: new 1 passed; full 1567/6/0; differential 92/4/4/0; corpus
+  500/500; touched ruff clean. Commit + push.
+- NEXT Cut 4: sync_to_legacy removal per site. Scheduler out of A.5.3.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - C4 engine cancellation no longer calls Planner.release (reserve lives
   only in legacy plan flows → always no-op on engine path). Regression

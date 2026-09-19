@@ -265,6 +265,11 @@ class DialogueTransitionStore:
 
         metadata = dict(snap.metadata)
         metadata["state_version"] = state_revision
+        # Cut 3b: the legacy mirror is superseded on the engine path — drop a
+        # stale dump left by pre-cutover writes (rolling update) instead of
+        # preserving a second state that never updates again. All other
+        # store-owned/unknown keys survive via the snap copy.
+        metadata.pop("dialogue_state", None)
         metadata["action_outbox"] = _dump_outbox(outbox)
         metadata["pending_action"] = (
             pending.model_dump(mode="json") if pending is not None else None
@@ -413,6 +418,8 @@ class DialogueTransitionStore:
 
         metadata = dict(snap.metadata)
         metadata["state_version"] = state_revision
+        # Cut 3b: drop stale legacy dump (see commit_engine_transition).
+        metadata.pop("dialogue_state", None)
         metadata["action_outbox"] = _dump_outbox(outbox)
         metadata["pending_action"] = (
             pending.model_dump(mode="json") if pending is not None else None
@@ -485,6 +492,8 @@ class DialogueTransitionStore:
         metadata = dict(snap.metadata)
         metadata.pop("pending_action", None)
         metadata["state_version"] = state_revision
+        # Cut 3b: drop stale legacy dump (see commit_engine_transition).
+        metadata.pop("dialogue_state", None)
         updated = snap.model_copy(update={"metadata": metadata})
         return self._store.save_dialogue_snapshot(updated, self._family_id)
 

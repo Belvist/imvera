@@ -123,3 +123,43 @@ def test_engine_action_delivered_pops_pending() -> None:
     assert snap is not None
     assert snap.metadata.get("pending_action") is None
     assert "dialogue_state" not in snap.metadata
+
+
+def test_engine_commit_drops_stale_legacy_dump() -> None:
+    """Rolling-update edge: a pre-cutover dialogue_state dump must not
+    survive engine writes as a stale second state. Store-owned and unknown
+    keys survive; outbox and version stay current."""
+    store = _store()
+    seed = store._store.get_call_result("eng-1", "fam")
+    assert seed is not None
+    store._store.save_dialogue_snapshot(
+        seed.model_copy(
+            update={
+                "metadata": {
+                    **seed.metadata,
+                    "dialogue_state": {"old": "stale-mirror"},
+                    "product_call_binding": {"trunk": "lab"},
+                    "custom_unknown": "keep-me",
+                }
+            }
+        ),
+        "fam",
+    )
+    result = store.commit_engine_transition(
+        call_id="eng-1",
+        facts={"wellness": "Хорошо."},
+        fact_quotes={"wellness": "Хорошо."},
+        fsm_state=FsmState.DAILY_CHECK,
+        partial=True,
+        termination_reason=None,
+        state_revision=7,
+        proposal=_proposal(),
+    )
+    assert result.ok, result.error
+    snap = store._store.get_call_result("eng-1", "fam")
+    assert snap is not None
+    assert "dialogue_state" not in snap.metadata
+    assert snap.metadata["product_call_binding"] == {"trunk": "lab"}
+    assert snap.metadata["custom_unknown"] == "keep-me"
+    assert snap.metadata["action_outbox"]["g-1"]["status"] == ActionOutboxStatus.PENDING.value
+    assert snap.metadata["state_version"] == 7
