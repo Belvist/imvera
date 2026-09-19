@@ -1,4 +1,9 @@
-"""Transactional dialogue state persistence — mid-call ledger + action outbox."""
+"""Transactional dialogue state persistence — mid-call ledger + action outbox.
+
+Legacy methods take DialogueState (flag-off path + tests). Engine-native
+methods (commit_engine_transition, mark_engine_*, transition_engine_outbox)
+take engine-sourced values and never write the legacy dialogue_state dump.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +16,9 @@ from packages.contracts.core import (
     CallResultSnapshot,
     DeliveryStage,
     PersistResult,
+    TerminationReason,
 )
+from packages.contracts.enums import FsmState
 from packages.contracts.outbox import (
     ActionOutboxStatus,
     OutboxRecord,
@@ -175,6 +182,96 @@ class DialogueTransitionStore:
         )
         return self._store.save_dialogue_snapshot(updated, self._family_id)
 
+    def commit_engine_transition(
+        self,
+        *,
+        call_id: str,
+        facts: dict[str, str],
+        fact_quotes: dict[str, str],
+        fsm_state: FsmState,
+        partial: bool,
+        termination_reason: TerminationReason | None,
+        state_revision: int,
+        proposal: TurnProposal,
+        expected_version: int | None = None,
+    ) -> PersistResult:
+        """Engine-native commit: same ledger semantics as commit_transition
+        (optimistic version check, pending action, outbox merge) sourced from
+        engine values. Writes no legacy dialogue_state dump; sets
+        state_version from the engine revision. Read-modify-write starts from
+        the stored snapshot, so store-owned keys survive on both backends."""
+        if expected_version is not None and state_revision != expected_version:
+            return PersistResult(
+                ok=False,
+                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                error="state version mismatch",
+            )
+
+        pending: PendingAction | None = None
+        if proposal.intent == "wait_for_continuation":
+            pending = None
+        elif proposal.speech and proposal.intent not in ("terminal_noop",):
+            pending = PendingAction(
+                action_id=proposal.generation_id,
+                turn_id=proposal.turn_id,
+                intent=proposal.intent,
+                speech=proposal.speech,
+                question_goal_id=proposal.question_goal_id,
+                state_version=state_revision,
+            )
+
+        snap = self._store.get_call_result(call_id, self._family_id)
+        if snap is None:
+            ensure = self._store.ensure_call(call_id, self._family_id)
+            if not ensure.ok:
+                return ensure
+            snap = self._store.get_call_result(call_id, self._family_id)
+        if snap is None:
+            return PersistResult(
+                ok=False,
+                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                error="call missing",
+            )
+
+        stored_version = snap.metadata.get("state_version", -1)
+        if expected_version is not None and stored_version > expected_version:
+            return PersistResult(
+                ok=False,
+                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                error="stale transition",
+            )
+
+        outbox = _load_outbox(snap.metadata)
+        if pending is not None:
+            outbox[pending.action_id] = OutboxRecord(
+                action_id=pending.action_id,
+                call_id=call_id,
+                turn_id=pending.turn_id,
+                intent=pending.intent,
+                speech=pending.speech,
+                question_goal_id=pending.question_goal_id,
+                state_version=pending.state_version,
+                status=ActionOutboxStatus.PENDING,
+            )
+
+        metadata = dict(snap.metadata)
+        metadata["state_version"] = state_revision
+        metadata["action_outbox"] = _dump_outbox(outbox)
+        metadata["pending_action"] = (
+            pending.model_dump(mode="json") if pending is not None else None
+        )
+        updated = snap.model_copy(
+            update={
+                "fsm_state": fsm_state,
+                "facts": facts,
+                "fact_quotes": fact_quotes,
+                "partial": partial,
+                "termination_reason": termination_reason,
+                "metadata": metadata,
+            }
+        )
+        return self._store.save_dialogue_snapshot(updated, self._family_id)
+
     def _transition_outbox(
         self,
         state: DialogueState,
@@ -256,6 +353,131 @@ class DialogueTransitionStore:
 
     def mark_outbox_cancelled(self, state: DialogueState, action_id: str) -> PersistResult:
         return self._transition_outbox(state, action_id, ActionOutboxStatus.CANCELLED)
+
+    def _transition_engine_outbox(
+        self,
+        call_id: str,
+        action_id: str,
+        target: ActionOutboxStatus,
+        *,
+        sent_samples: int | None = None,
+        state_revision: int,
+    ) -> PersistResult:
+        """Engine-native outbox transition: same record mechanics as
+        _transition_outbox, no legacy state dump. Metadata starts from the
+        stored snapshot (read-modify-write), state_version set from the
+        engine revision."""
+        snap = self._store.get_call_result(call_id, self._family_id)
+        if snap is None:
+            return PersistResult(
+                ok=False,
+                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                error="call missing",
+            )
+        outbox = _load_outbox(snap.metadata)
+        record = outbox.get(action_id)
+        if record is None:
+            return PersistResult(
+                ok=False,
+                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                error="outbox action missing",
+            )
+        updated_record = apply_transition(record, target)
+        if updated_record is None:
+            return PersistResult(
+                ok=False,
+                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                error=f"illegal outbox transition {record.status} -> {target}",
+            )
+        if sent_samples is not None:
+            updated_record = updated_record.model_copy(update={"sent_samples": sent_samples})
+        outbox[action_id] = updated_record
+
+        pending = _load_pending(snap)
+        if target in (
+            ActionOutboxStatus.TRANSPORT_COMPLETE,
+            ActionOutboxStatus.CANCELLED,
+            ActionOutboxStatus.DELIVERY_UNKNOWN,
+        ):
+            if pending and pending.action_id == action_id:
+                pending = None
+
+        metadata = dict(snap.metadata)
+        metadata["state_version"] = state_revision
+        metadata["action_outbox"] = _dump_outbox(outbox)
+        metadata["pending_action"] = (
+            pending.model_dump(mode="json") if pending is not None else None
+        )
+        updated = snap.model_copy(update={"metadata": metadata})
+        return self._store.save_dialogue_snapshot(updated, self._family_id)
+
+    def mark_engine_outbox_dispatching(
+        self, call_id: str, action_id: str, *, state_revision: int
+    ) -> PersistResult:
+        return self._transition_engine_outbox(
+            call_id, action_id, ActionOutboxStatus.DISPATCHING, state_revision=state_revision
+        )
+
+    def mark_engine_outbox_transport_complete(
+        self,
+        call_id: str,
+        action_id: str,
+        *,
+        sent_samples: int = 0,
+        state_revision: int,
+    ) -> PersistResult:
+        return self._transition_engine_outbox(
+            call_id,
+            action_id,
+            ActionOutboxStatus.TRANSPORT_COMPLETE,
+            sent_samples=sent_samples,
+            state_revision=state_revision,
+        )
+
+    def mark_engine_outbox_delivery_unknown(
+        self,
+        call_id: str,
+        action_id: str,
+        *,
+        sent_samples: int = 0,
+        state_revision: int,
+    ) -> PersistResult:
+        return self._transition_engine_outbox(
+            call_id,
+            action_id,
+            ActionOutboxStatus.DELIVERY_UNKNOWN,
+            sent_samples=sent_samples,
+            state_revision=state_revision,
+        )
+
+    def mark_engine_outbox_cancelled(
+        self, call_id: str, action_id: str, *, state_revision: int
+    ) -> PersistResult:
+        return self._transition_engine_outbox(
+            call_id, action_id, ActionOutboxStatus.CANCELLED, state_revision=state_revision
+        )
+
+    def mark_engine_action_delivered(
+        self, call_id: str, action_id: str, *, state_revision: int
+    ) -> PersistResult:
+        """Engine delivery: outbox dispatch + pending pop, never Planner."""
+        dispatch = self.mark_engine_outbox_dispatching(
+            call_id, action_id, state_revision=state_revision
+        )
+        if not dispatch.ok:
+            return dispatch
+        snap = self._store.get_call_result(call_id, self._family_id)
+        if snap is None:
+            return PersistResult(
+                ok=False,
+                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                error="call missing",
+            )
+        metadata = dict(snap.metadata)
+        metadata.pop("pending_action", None)
+        metadata["state_version"] = state_revision
+        updated = snap.model_copy(update={"metadata": metadata})
+        return self._store.save_dialogue_snapshot(updated, self._family_id)
 
     def mark_action_delivered(
         self,

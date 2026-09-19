@@ -128,10 +128,11 @@ def test_exhausted_wellness_survives_public_result(
     assert wellness["value"] is None
     assert wellness["evidence"] == []
     assert "wellness" not in body["facts"]
-    legacy = body["metadata"]["dialogue_state"]
-    assert legacy["slots"]["wellness"] == "UNRESOLVED"
-    assert legacy["consent_declined"] is False
-    assert legacy["call_revoked"] is False
+    # No legacy dialogue_state dump in persisted metadata since Cut 3 — assert
+    # the same contract against the synced in-memory mirror instead.
+    assert session.state.slots["wellness"] == "UNRESOLVED"
+    assert session.state.consent_declined is False
+    assert session.state.call_revoked is False
     assert session.safety.active_risk == RiskLevel.NONE
     assert not any(
         "CONSENT" in event.event_type or event.event_type == "RED_SIGNAL"
@@ -159,7 +160,7 @@ def test_completed_call_with_unknown_wellness_is_still_partial(
     )
     assert wellness["lifecycle"] == "UNCLEAR"
     assert wellness["value"] is None
-    assert body["metadata"]["dialogue_state"]["consent_declined"] is False
+    assert session.state.consent_declined is False
     assert "wellness_unknown:Не знаю." in body["mission_result"]["observations"]
 
 

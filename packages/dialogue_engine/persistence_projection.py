@@ -29,6 +29,7 @@ from packages.dialogue_engine.mission_result import (
     build_call_outcomes,
     build_mission_result,
 )
+from packages.dialogue_engine.state import EngineState
 
 # Metadata keys owned by the transition store — excluded from parity by design.
 STORE_OWNED_METADATA_KEYS = frozenset(
@@ -39,6 +40,58 @@ STORE_OWNED_METADATA_KEYS = frozenset(
         "pending_action",
     }
 )
+
+
+def engine_fact_view(state: EngineState) -> tuple[dict[str, str], dict[str, str]]:
+    """Legacy-compatible fact surface from engine slots (decision b: verbatim).
+
+    Mirrors sync_to_legacy exactly: only FILLED slots present in slot_values.
+    Shared by the snapshot projection and the engine commit path.
+    """
+    facts: dict[str, str] = {}
+    quotes: dict[str, str] = {}
+    for slot, status in state.slots.items():
+        if status == SlotStatus.FILLED and slot in state.slot_values:
+            val = state.slot_values[slot]
+            facts[slot] = val
+            quotes[slot] = val
+    return facts, quotes
+
+
+def engine_mandatory_partial(state: EngineState) -> bool:
+    """Replicates the legacy 7-check rule from engine data.
+
+    sync_to_legacy marks a check only for FILLED slots in slot_values, so
+    identity/consent/can_talk stay open. Preserved quirk (commit + snapshot).
+    """
+    return bool(
+        [
+            key
+            for key in PILOT_MANDATORY_CHECKS
+            if not (
+                state.slots.get(key) == SlotStatus.FILLED and key in state.slot_values
+            )
+        ]
+    )
+
+
+def engine_termination(state: EngineState) -> TerminationReason | None:
+    """Termination mapping shared by commit path (open → None, like legacy)."""
+    if not state.call_closed:
+        return None
+    return (
+        TerminationReason.COMPLETED
+        if state.closing_reason == "goodbye"
+        else TerminationReason.PARTIAL
+    )
+
+
+def engine_finalize_termination(state: EngineState) -> TerminationReason:
+    """Finalize-envelope mapping: closed → mapping, else the finalize
+    default DISCONNECTED (replicates finalize_if_needed; parity, not verdict).
+    """
+    mapped = engine_termination(state)
+    return mapped if mapped is not None else TerminationReason.DISCONNECTED
 
 
 def project_call_result(
@@ -59,14 +112,7 @@ def project_call_result(
     that replace metadata wholesale (Postgres) as well as merging ones.
     """
     state = engine.state
-    facts: dict[str, str] = {}
-    quotes: dict[str, str] = {}
-    for slot, status in state.slots.items():
-        if status == SlotStatus.FILLED and slot in state.slot_values:
-            # Decision (b): verbatim legacy-compatible surface.
-            val = state.slot_values[slot]
-            facts[slot] = val
-            quotes[slot] = val
+    facts, quotes = engine_fact_view(state)
 
     metadata: dict[str, Any] = dict(base_metadata) if base_metadata else {}
     metadata["elder_display_name"] = elder_display_name
@@ -89,11 +135,7 @@ def project_call_result(
 
     if state.call_closed:
         call_ended = True
-        termination_reason = (
-            TerminationReason.COMPLETED
-            if state.closing_reason == "goodbye"
-            else TerminationReason.PARTIAL
-        )
+        termination_reason = engine_finalize_termination(state)
     else:
         # Replicates the finalize default (finalize_if_needed sets legacy
         # termination to DISCONNECTED when unset): parity, not a verdict.
@@ -101,17 +143,7 @@ def project_call_result(
         termination_reason = TerminationReason.DISCONNECTED
 
     if mission_is_daily_check:
-        # Replicates the legacy rule exactly: sync_to_legacy marks a check
-        # only for FILLED slots present in slot_values, so identity/consent/
-        # can_talk stay open and partial is True. Preserved quirk, not a fix.
-        remaining = [
-            key
-            for key in PILOT_MANDATORY_CHECKS
-            if not (
-                state.slots.get(key) == SlotStatus.FILLED and key in state.slot_values
-            )
-        ]
-        partial = bool(remaining)
+        partial = engine_mandatory_partial(state)
     else:
         partial = mission_result.status != "COMPLETED" if mission_result else True
 

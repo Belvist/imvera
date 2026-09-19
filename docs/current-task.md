@@ -1,4 +1,20 @@
-# Current task — Cut 2 hotfix: is_finalized() call + regression (2026-09-18)
+# Current task — A.5.3 Cut 3: engine TransitionStore boundary (2026-09-18)
+
+- Additive engine methods (commit/outbox/delivered) sourced from engine
+  values, no legacy dump; legacy methods intact for flag-off + resume tests.
+  Session engine branches + C4 switched (Planner.release stays legacy).
+  Shared parity helpers in projection (fact view, mandatory rule,
+  termination mappings); projection refactored onto them.
+- 3 wellness_contract tests migrated off persisted dump to synced mirror
+  (identical values/intent — dump absence is the Cut point).
+- VERIFIED: new 4 passed; full 1565/6/0; differential 92/4/4/0; corpus
+  500/500; touched ruff clean. Commit + push.
+- NEXT Cut 4: remaining sync_to_legacy removal. Scheduler out of A.5.3.
+- NOT VERIFIED: remote CI. B–J untouched.
+
+---
+
+# Historical — Cut 2 hotfix (2026-09-18)
 
 - Reviewer-caught live-call bug: `is_finalized` read as bound method
   (always truthy) → disconnect finalization never ran. Fixed to call.

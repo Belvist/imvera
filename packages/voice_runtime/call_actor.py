@@ -1441,32 +1441,68 @@ class CallActor:
             self.session.state.call_id,
             action_id,
         )
+        use_engine = self.session.uses_dialogue_engine() and self.session._engine is not None
+        revision = self.session._engine.revision if self.session._engine else 0
         if record is not None and record.status == ActionOutboxStatus.PENDING:
-            await asyncio.to_thread(
-                self.session.transitions.mark_outbox_dispatching,
-                self.session.state,
-                action_id,
-            )
+            if use_engine:
+                await asyncio.to_thread(
+                    self.session.transitions.mark_engine_outbox_dispatching,
+                    self.session.state.call_id,
+                    action_id,
+                    state_revision=revision,
+                )
+            else:
+                await asyncio.to_thread(
+                    self.session.transitions.mark_outbox_dispatching,
+                    self.session.state,
+                    action_id,
+                )
         if outcome == "success" and sent_samples > 0:
-            await asyncio.to_thread(
-                self.session.transitions.mark_outbox_transport_complete,
-                self.session.state,
-                action_id,
-                sent_samples=sent_samples,
-            )
+            if use_engine:
+                await asyncio.to_thread(
+                    self.session.transitions.mark_engine_outbox_transport_complete,
+                    self.session.state.call_id,
+                    action_id,
+                    sent_samples=sent_samples,
+                    state_revision=revision,
+                )
+            else:
+                await asyncio.to_thread(
+                    self.session.transitions.mark_outbox_transport_complete,
+                    self.session.state,
+                    action_id,
+                    sent_samples=sent_samples,
+                )
         elif sent_samples > 0:
-            await asyncio.to_thread(
-                self.session.transitions.mark_outbox_delivery_unknown,
-                self.session.state,
-                action_id,
-                sent_samples=sent_samples,
-            )
+            if use_engine:
+                await asyncio.to_thread(
+                    self.session.transitions.mark_engine_outbox_delivery_unknown,
+                    self.session.state.call_id,
+                    action_id,
+                    sent_samples=sent_samples,
+                    state_revision=revision,
+                )
+            else:
+                await asyncio.to_thread(
+                    self.session.transitions.mark_outbox_delivery_unknown,
+                    self.session.state,
+                    action_id,
+                    sent_samples=sent_samples,
+                )
         else:
-            await asyncio.to_thread(
-                self.session.transitions.mark_outbox_cancelled,
-                self.session.state,
-                action_id,
-            )
+            if use_engine:
+                await asyncio.to_thread(
+                    self.session.transitions.mark_engine_outbox_cancelled,
+                    self.session.state.call_id,
+                    action_id,
+                    state_revision=revision,
+                )
+            else:
+                await asyncio.to_thread(
+                    self.session.transitions.mark_outbox_cancelled,
+                    self.session.state,
+                    action_id,
+                )
             await asyncio.to_thread(
                 Planner.release_question_attempt,
                 self.session.state,

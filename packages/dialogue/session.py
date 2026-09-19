@@ -415,7 +415,7 @@ class CallSession:
                 wait_goal_id=goal.goal_id if goal else None,
             )
             validated = Validator.validate(proposal)
-            commit = self.transitions.commit_transition(self.state, proposal)
+            commit = self._commit_engine_turn(proposal)
             return SessionTurnResult(
                 user_text=user_text,
                 interpretation=interp,
@@ -488,7 +488,7 @@ class CallSession:
             self._playout_effect_meta[fx.generation_id] = fx.effect_id
         proposal = self._engine.effect_to_proposal(speak, self.turn_id, self.state)
         validated = Validator.validate(proposal)
-        commit = self.transitions.commit_transition(self.state, proposal)
+        commit = self._commit_engine_turn(proposal)
         return SessionTurnResult(
             user_text=user_text,
             interpretation=interp,
@@ -502,6 +502,31 @@ class CallSession:
             from_engine=True,
             followup_speak_effects=followups,
             speak_effect=speak,
+        )
+
+    def _commit_engine_turn(self, proposal: TurnProposal):
+        """Engine-path ledger commit sourced from EngineState (Cut 3).
+
+        Legacy commit_transition stays for flag-off branches.
+        """
+        from packages.dialogue_engine.persistence_projection import (
+            engine_fact_view,
+            engine_mandatory_partial,
+            engine_termination,
+        )
+
+        assert self._engine is not None
+        state = self._engine.state
+        facts, quotes = engine_fact_view(state)
+        return self.transitions.commit_engine_transition(
+            call_id=self.state.call_id,
+            facts=facts,
+            fact_quotes=quotes,
+            fsm_state=state.fsm_state,
+            partial=engine_mandatory_partial(state),
+            termination_reason=engine_termination(state),
+            state_revision=self._engine.revision,
+            proposal=proposal,
         )
 
     def handle_effect_failed(self, effect_id: str, *, stage: str, error: str = "") -> None:
@@ -1004,11 +1029,18 @@ class CallSession:
             ):
                 self._engine_playout_followup = followup
             self._engine.sync_to_legacy(self.state)
-        result = self.transitions.mark_action_delivered(
-            self.state,
-            generation_id,
-            skip_planner=self._engine is not None,
-        )
+        if self._engine is not None:
+            result = self.transitions.mark_engine_action_delivered(
+                self.state.call_id,
+                generation_id,
+                state_revision=self._engine.revision,
+            )
+        else:
+            result = self.transitions.mark_action_delivered(
+                self.state,
+                generation_id,
+                skip_planner=False,
+            )
         return result.ok
 
     def _failed_turn(
