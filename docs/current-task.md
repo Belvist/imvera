@@ -1,4 +1,13 @@
-# Current task — Cut 4a: engine-native TurnProposal (2026-09-18)
+# Current task — timer/wait regression added, Cut 4b next (2026-09-18)
+
+- Reviewer-asked insurance for Cut 4a ensure_goal(): backchannel →
+  TimerEffect → wait_for_continuation same slot/goal → expiry re-asks;
+  no spurious goals. Passed first run.
+- VERIFIED: new 1 passed; full 1570/6/0; differential 92/4/4/0; corpus
+  500/500; touched ruff clean. Commit + push.
+- NEXT Cut 4b: RED/safety ownership (migrate engine-path reads first,
+  then the sync). Scheduler/C14 untouched.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - effect_to_proposal() engine-only (fsm/mandatory already engine; goal ids
   slot-string, opaque downstream — proven); timer/wait proposal from engine.
