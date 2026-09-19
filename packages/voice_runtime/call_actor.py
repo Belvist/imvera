@@ -484,7 +484,7 @@ class CallActor:
                 await self._on_pcm(event.pcm, event.sample_rate)
 
     async def _finalize_disconnect(self) -> None:
-        if self.session.is_finalized:
+        if self.session.is_finalized():
             return
         try:
             self._tl().mark("hangup")

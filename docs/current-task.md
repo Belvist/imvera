@@ -1,4 +1,13 @@
-# Current task — A.5.3 Cut 2: finalization API (2026-09-18)
+# Current task — Cut 2 hotfix: is_finalized() call + regression (2026-09-18)
+
+- Reviewer-caught live-call bug: `is_finalized` read as bound method
+  (always truthy) → disconnect finalization never ran. Fixed to call.
+  NOT caught by suite — coverage gap closed by new regression:
+  unfinalized → finalize_disconnect runs + flags set; finalized → early
+  return, no repeat. Red-before-green proven via stash (1 failed → 2 passed).
+- VERIFIED: new 2 passed; full 1561/6/0; differential 92/4/4/0; corpus
+  500/500; touched ruff clean. Commit + push. Cut 3 stays paused.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - `CallSession.finalize_disconnect()` owns disconnect mutation; CallActor
   calls API (+ read-only is_finalized guard preserving telemetry order).
