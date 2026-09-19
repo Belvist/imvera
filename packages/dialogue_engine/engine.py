@@ -326,9 +326,10 @@ class DialogueEngine:
             and eng.slots.get(slot) != SlotStatus.FILLED
         ]
 
-    def effect_to_proposal(
+    def effect_to_proposal_legacy(
         self, effect: SpeakEffect, turn_id: int, legacy: DialogueState
     ) -> TurnProposal:
+        """Pre-Cut-4a builder via the legacy mirror (parity reference only)."""
         goal_id = None
         if effect.slot:
             goal_id = legacy.ensure_goal(effect.slot).goal_id
@@ -338,6 +339,23 @@ class DialogueEngine:
             speech=effect.text,
             intent=effect.intent,
             fsm_state=legacy.fsm_state,
+            mandatory_remaining=self.slot_mandatory_remaining(),
+            question_goal_id=goal_id,
+        )
+
+    def effect_to_proposal(self, effect: SpeakEffect, turn_id: int) -> TurnProposal:
+        """Engine-native proposal (Cut 4a). fsm/mandatory already engine-owned;
+        question_goal_id uses the engine goal contract (slot-string ids, NOT
+        legacy random uuids) — downstream consumers use it opaquely."""
+        goal_id = None
+        if effect.slot:
+            goal_id = self.state.ensure_goal(effect.slot).goal_id or effect.slot
+        return TurnProposal(
+            turn_id=turn_id,
+            generation_id=effect.generation_id,
+            speech=effect.text,
+            intent=effect.intent,
+            fsm_state=self.state.fsm_state,
             mandatory_remaining=self.slot_mandatory_remaining(),
             question_goal_id=goal_id,
         )

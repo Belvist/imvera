@@ -115,6 +115,40 @@ def _advance_slot(session: CallSession, text: str) -> str:
     return result.proposal.intent
 
 
+def _slots(session: CallSession):
+    """Slot map from the owning state: engine on engine path (Cut 4a —
+    the legacy mirror is no longer synced on speak turns), legacy else."""
+    if session._engine is not None:
+        return session._engine.state.slots
+    return session.state.slots
+
+
+def _slot_value(session: CallSession, slot: str) -> str:
+    if session._engine is not None:
+        return session._engine.state.slot_values.get(slot, "")
+    fact = session.state.facts.get(slot)
+    return fact.value if fact else ""
+
+
+def _fsm(session: CallSession):
+    if session._engine is not None:
+        return session._engine.state.fsm_state
+    return session.state.fsm_state
+
+
+def _mandatory_open(session: CallSession) -> list:
+    """Close-readiness: engine slot rule on engine path, legacy else."""
+    if session._engine is not None:
+        return session._engine.slot_mandatory_remaining()
+    return session.state.mandatory_remaining()
+
+
+def _goodbye_flag(session: CallSession, name: str):
+    if session._engine is not None:
+        return getattr(session._engine.state, name)
+    return getattr(session.state, name)
+
+
 WELLNESS_MOOD_VARIANTS = (
     "хорошо",
     "нормально",
@@ -146,12 +180,12 @@ def test_wellness_mood_variant_fills_slot_and_advances(wellness_answer: str) -> 
             answers_pending_question=True,
         ),
     )
-    assert session.state.slots["wellness"] == SlotStatus.FILLED
+    assert _slots(session)["wellness"] == SlotStatus.FILLED
     if wellness_answer in ("плохо", "не очень"):
         assert result.proposal.intent == "reflect_report"
     else:
         assert result.proposal.intent == "important_to_share"
-    assert wellness_answer in session.state.facts["wellness"].value.lower()
+    assert wellness_answer in _slot_value(session, "wellness").lower()
 
 
 @pytest.mark.parametrize("wellness_answer", WELLNESS_MOOD_VARIANTS)
@@ -172,8 +206,8 @@ def test_full_daily_check_to_goodbye(wellness_answer: str) -> None:
     if wellness_answer in ("хорошо", "нормально"):
         share_intent = _advance_slot(session, "Ничего.")
         assert share_intent == "summary"
-        assert session.state.fsm_state == FsmState.SUMMARY
-        assert session.state.slots["wellness"] == SlotStatus.FILLED
+        assert _fsm(session) == FsmState.SUMMARY
+        assert _slots(session)["wellness"] == SlotStatus.FILLED
     else:
         mood_answer, sleep_answer, plans_answer = FOLLOW_UP_BY_WELLNESS[wellness_answer]
         mood_intent = _advance_slot(session, mood_answer)
@@ -183,25 +217,25 @@ def test_full_daily_check_to_goodbye(wellness_answer: str) -> None:
         _advance_slot(session, "угу")
         plans_intent = _advance_slot(session, plans_answer)
         assert plans_intent == "summary"
-        assert session.state.fsm_state == FsmState.SUMMARY
+        assert _fsm(session) == FsmState.SUMMARY
         assert all(
-            session.state.slots[s] == SlotStatus.FILLED
+            _slots(session)[s] == SlotStatus.FILLED
             for s in ("wellness", "mood", "sleep", "plans")
         )
-        assert session.state.mandatory_remaining() == []
+        assert _mandatory_open(session) == []
 
     goodbye = session.handle_user_text("до свидания")
     if goodbye.proposal.intent == "goodbye_final":
-        assert session.state.goodbye_confirmed is True
-        assert not session.state.awaiting_goodbye_confirm
+        assert _goodbye_flag(session, "goodbye_confirmed") is True
+        assert not _goodbye_flag(session, "awaiting_goodbye_confirm")
     else:
         # Legacy planner path still confirms ambiguous closes.
         assert goodbye.proposal.intent == "goodbye_confirm"
-        assert session.state.awaiting_goodbye_confirm
+        assert _goodbye_flag(session, "awaiting_goodbye_confirm")
         final = session.handle_user_text("да")
         assert final.proposal.intent == "goodbye_final"
-        assert session.state.goodbye_confirmed is True
-    assert session.state.fsm_state == FsmState.FINAL_CLASSIFICATION
+        assert _goodbye_flag(session, "goodbye_confirmed") is True
+    assert _fsm(session) == FsmState.FINAL_CLASSIFICATION
 
 
 def test_mixed_answer_and_side_question_preserves_fact() -> None:
@@ -287,7 +321,7 @@ def test_rule_baseline_wellness_short_answers_still_work() -> None:
     for phrase, expected_intent in engine_cases:
         session = _daily_session()
         result = session.handle_user_text(phrase)
-        assert session.state.slots["wellness"] == SlotStatus.FILLED
+        assert _slots(session)["wellness"] == SlotStatus.FILLED
         assert result.proposal.intent == expected_intent
     for phrase in ("плохо", "не очень"):
         session = _planner_session()

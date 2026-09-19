@@ -1,4 +1,18 @@
-# Current task — Cut 3b: stale dump dropped on engine writes (2026-09-18)
+# Current task — Cut 4a: engine-native TurnProposal (2026-09-18)
+
+- effect_to_proposal() engine-only (fsm/mandatory already engine; goal ids
+  slot-string, opaque downstream — proven); timer/wait proposal from engine.
+  Removed sync #404-timer + #483-speak. effect_to_proposal_legacy kept as
+  parity reference for the test only.
+- Parity: intent/speech/fsm/mandatory/generation equal; wait mandatory-field
+  divergence analyzed inert (validator short-circuits empty-speech wait).
+  5 wellness tests migrated mirror→engine reads (flow intact, engine FILLED).
+- Syncs left: 4 (RED/safety, effect_failed, cancel/playout, mark_spoken? —
+  lines 536/615/771/1031) for cuts 4b–4d. Planner/DialogueState untouched
+  elsewhere; scheduler/C14/TransitionStore untouched.
+- VERIFIED: parity 2 passed; full 1569/6/0; differential 92/4/4/0; corpus
+  500/500; touched ruff clean. Commit + push.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - Rolling-update edge closed: engine commit/outbox/delivered pop legacy
   dialogue_state instead of preserving it stale; store-owned/unknown keys

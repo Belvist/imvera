@@ -401,17 +401,18 @@ class CallSession:
             else None
         )
         if speak is None and timer is not None:
-            self._engine.sync_to_legacy(self.state)
-            slot = self.state.waiting_on_goal or self.state.pending_slot
-            goal = self.state.get_goal(slot) if slot else None
+            engine = self._engine
+            assert engine is not None
+            slot = engine.state.waiting_on_slot or engine.pending_slot_name()
+            goal = engine.state.ensure_goal(slot) if slot else None
             gen = self._next_generation_id()
             proposal = TurnProposal(
                 turn_id=self.turn_id,
                 generation_id=gen,
                 speech="",
                 intent="wait_for_continuation",
-                fsm_state=self.state.fsm_state,
-                mandatory_remaining=self.state.mandatory_remaining(),
+                fsm_state=engine.state.fsm_state,
+                mandatory_remaining=engine.slot_mandatory_remaining(),
                 wait_goal_id=goal.goal_id if goal else None,
             )
             validated = Validator.validate(proposal)
@@ -480,13 +481,12 @@ class CallSession:
                 from_engine=True,
             )
         followups = self._engine.drain_speak_effects()
-        self._engine.sync_to_legacy(self.state)
         self._playout_meta[speak.generation_id] = (speak.generation, speak.question_id)
         self._playout_effect_meta[speak.generation_id] = speak.effect_id
         for fx in followups:
             self._playout_meta[fx.generation_id] = (fx.generation, fx.question_id)
             self._playout_effect_meta[fx.generation_id] = fx.effect_id
-        proposal = self._engine.effect_to_proposal(speak, self.turn_id, self.state)
+        proposal = self._engine.effect_to_proposal(speak, self.turn_id)
         validated = Validator.validate(proposal)
         commit = self._commit_engine_turn(proposal)
         return SessionTurnResult(
