@@ -1,4 +1,30 @@
-# Current task — FINAL HOTFIX closing A.5 (2026-09-18)
+# Current task — audit Q0.1+Q0.2+P0#4 done (2026-09-20)
+
+- Q0.1 facts/evidence: persist only on semantic (value, source) change;
+  quotes pair with current value from SlotValue.source_text (never bare
+  normalized labels); revision bumps only on change. Supersedes decision
+  (b) verbatim-quotes per full-repo audit order. Tests updated as contract.
+- Q0.2 exporter: tuple-order bug fixed; turn-by-turn Vera/User transcript
+  from .run/traces (214 calls with trace); live-calls.md regenerated.
+  Live fs-338ee6ab confirmed GOOD dialogue with stale persistence — the
+  exact Q0.1 bug, now fixed.
+- P0#4: StatusEngine wired in build_call_outcomes — completed check
+  resolves GREEN/YELLOW via mandatory+mission, never UNSET; RED/custom/
+  DECLINED branches untouched. wellness_result_contract expectation updated.
+- VERIFIED: full 1587/6/0; differential 92/4/4/0; corpus 500/500; ruff 0.
+- Q0.3 (LLM renderer) deferred as own track: lab LLM worker not running,
+  needs contract design + latency budget + measurement. P1 items untouched.
+- NOT VERIFIED: remote CI. NEXT: push, then owner call on Q0.3 vs Stage B.
+
+- All three lab processes were dead on dial (graceful SIGTERM, cause
+  unknown — uptime 10 days, no reboot). FS container healthy throughout.
+- Restarted on HEAD 9dceb64: STT pid 21114 200; TTS silero pid 21115 200;
+  bridge callactor pid 21511 ready. No code change.
+- NEXT: owner redials 7000 (Zoiper → .47:5060).
+
+---
+
+# Historical — FINAL HOTFIX closing A.5 (2026-09-18)
 
 - terminal_noop/end_call proposals from EngineState (divergent-states
   regression); interpret_user_turn fsm_override for RED gate + actor wiring

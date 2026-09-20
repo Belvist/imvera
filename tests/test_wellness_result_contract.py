@@ -152,7 +152,9 @@ def test_completed_call_with_unknown_wellness_is_still_partial(
     assert body["outcomes"] == {
         "call_outcome": "COMPLETED",
         "mission_status": "PARTIAL",
-        "family_status": "UNSET",
+        # P0#4: StatusEngine wired — completed partial check is YELLOW,
+        # no longer UNSET.
+        "family_status": "YELLOW",
     }
     assert body["partial"] is True
     wellness = next(

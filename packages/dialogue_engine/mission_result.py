@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from packages.contracts.enums import SlotStatus
 from packages.contracts.mission_result import (
     CallOutcomes,
     GoalResultSnapshot,
@@ -171,6 +172,39 @@ def build_call_outcomes(
         family = "RED" if family == "RED" else "UNSET"
     elif legacy_public_status:
         family = legacy_public_status  # type: ignore[assignment]
+    elif call_out == "COMPLETED" and not is_custom_mission(state):
+        # P0#4: wire StatusEngine for the engine path (no legacy status).
+        # A completed call is itself evidence of contact/consent/talk.
+        from packages.contracts.enums import (
+            CareState,
+            ConsentState,
+            DeliveryState,
+            TechnicalState,
+        )
+        from packages.contracts.status import CallStatusSnapshot, SafetySnapshot
+        from packages.status.engine import StatusEngine
+
+        checks = {
+            "identity": True,
+            "consent": True,
+            "can_talk": True,
+            "wellness": state.slots.get("wellness") == SlotStatus.FILLED,
+            "mood": state.slots.get("mood") == SlotStatus.FILLED,
+            "sleep": state.slots.get("sleep") == SlotStatus.FILLED,
+            "plans": state.slots.get("plans") == SlotStatus.FILLED,
+        }
+        snapshot = CallStatusSnapshot(
+            call_id=state.call_id,
+            delivery_state=DeliveryState.ANSWERED,
+            technical_state=TechnicalState.OK,
+            care_state=(
+                CareState.GREEN if mr.status == "COMPLETED" else CareState.YELLOW
+            ),
+            consent_state=ConsentState.UNKNOWN,
+            safety=SafetySnapshot(),
+            mandatory_checks=checks,
+        )
+        family = StatusEngine.resolve(snapshot).value
 
     return CallOutcomes(
         call_outcome=call_out,  # type: ignore[arg-type]
