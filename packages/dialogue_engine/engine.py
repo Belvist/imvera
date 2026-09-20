@@ -21,6 +21,7 @@ from packages.dialogue_engine.events import (
     CallStarted,
     DeliveryDeferred,
     EffectFailed,
+    FalseAlarmResolved,
     InterpretationCompleted,
     PlayoutCancelled,
     PlayoutCompleted,
@@ -243,6 +244,15 @@ class DialogueEngine:
             SafetyInterrupt(
                 level="RED" if level.upper() == "RED" else "YELLOW",
                 quote=quote,
+                episode_id=episode_id,
+                revision=self.state.revision,
+            )
+        )
+
+    def resolve_false_alarm(self, episode_id: str | None = None) -> None:
+        """Exit red handling after a confirmed false alarm (COMMIT 4)."""
+        self._apply(
+            FalseAlarmResolved(
                 episode_id=episode_id,
                 revision=self.state.revision,
             )

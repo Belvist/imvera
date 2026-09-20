@@ -1,4 +1,16 @@
-# Current task — COMMIT 3 audit: engine path clean, orphans retained (2026-09-18)
+# Current task — COMMIT 4: false-alarm engine exit fixed (2026-09-18)
+
+- FalseAlarmResolved event + reducer handler + engine.resolve_false_alarm +
+  session hook. Clears handling/mode/clarify-count, restores DAILY_CHECK
+  from RED_SIGNAL, resumes suspended obligation via pending_resume_goal_id
+  (obligation kept for retry). Episode-gated, history preserved, no speech.
+- VERIFIED: scenario test red→green; full 1581/6/0; differential 92/4/4/0;
+  corpus 500/500; repo-wide ruff 0. Commit + push. STOP — full A.5 report.
+- NOT VERIFIED: remote CI. B–J untouched.
+
+---
+
+# Historical — COMMIT 3 audit (2026-09-18)
 
 - Reachability audit: engine-path sync_to_legacy = 0; Planner decisions = 0
   (2 edge sites inlined via _terminal_noop_proposal helper + Cut-1 site

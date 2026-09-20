@@ -32,6 +32,7 @@ from packages.dialogue_engine.events import (
     DeliveryDeferred,
     DialogueEvent,
     EffectFailed,
+    FalseAlarmResolved,
     InterpretationCompleted,
     PlayoutCancelled,
     PlayoutCompleted,
@@ -120,6 +121,8 @@ def reduce(
         return _on_effect_failed(state, event)
     if isinstance(event, SafetyInterrupt):
         return _on_safety_interrupt(state, event)
+    if isinstance(event, FalseAlarmResolved):
+        return _on_false_alarm_resolved(state, event)
     return state, []
 
 
@@ -188,6 +191,32 @@ def _on_safety_interrupt(
         slot="safety",
         marks_question=True,
     )
+
+
+def _on_false_alarm_resolved(
+    state: EngineState,
+    event: FalseAlarmResolved,
+) -> tuple[EngineState, list[Effect]]:
+    """False alarm confirmed: leave red handling, resume suspended work.
+
+    Only resolves matching red handling — never clears another episode.
+    Episode history and observations are preserved; the suspended
+    obligation is kept so resume can retry (cancel pattern). No speech
+    emitted here; the scheduler routes the next turn.
+    """
+    if not state.risk_handling or state.safety_mode != "red":
+        return state, []
+    if event.episode_id is not None and state.risk_episode_id != event.episode_id:
+        return state, []
+    state.risk_handling = False
+    state.safety_mode = "none"
+    state.safety_clarify_count = 0
+    if state.suspended_obligation is not None:
+        state.pending_resume_goal_id = state.suspended_obligation.goal_id
+    if state.fsm_state == FsmState.RED_SIGNAL:
+        state.fsm_state = FsmState.DAILY_CHECK
+    state.bump_revision()
+    return state, []
 
 
 def _tag_effects(effects: list[Effect], state: EngineState) -> list[Effect]:

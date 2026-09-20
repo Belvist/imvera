@@ -803,6 +803,8 @@ class CallSession:
 
         if interp.risk_false_alarm and risk_episode_id:
             SafetyEngine.resolve_false_alarm(self.safety, episode_id=risk_episode_id)
+            if engine is not None:
+                engine.resolve_false_alarm(risk_episode_id)
 
         risk_obs_id: str | None = None
         if (

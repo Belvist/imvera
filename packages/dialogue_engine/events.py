@@ -100,6 +100,15 @@ class SafetyInterrupt(DialogueEvent):
     revision: int = 0
 
 
+class FalseAlarmResolved(DialogueEvent):
+    """False alarm confirmed → DialogueEngine leaves red handling and
+    resumes the suspended obligation (COMMIT 4, separate semantic fix)."""
+
+    kind: Literal["false_alarm_resolved"] = "false_alarm_resolved"
+    episode_id: str | None = None
+    revision: int = 0
+
+
 class BotOpeningDelivered(DialogueEvent):
     kind: Literal["bot_opening_delivered"] = "bot_opening_delivered"
     question_id: str = "opening-1"
