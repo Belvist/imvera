@@ -163,3 +163,84 @@
 {"question": "Как вы себя чувствуете?", "text": "Замолчи.", "act": "stop"}
 {"question": "Как вы себя чувствуете?", "text": "Не звоните больше.", "act": "stop"}
 {"question": "Как вы себя чувствуете?", "text": "Отстаньте.", "act": "stop"}
+{"question": "Как самочувствие?", "text": "Хорошо… хотя нет, так себе.", "act": "correction"}
+{"question": "Как самочувствие?", "text": "Нормально… хотя нет, плохо.", "act": "correction"}
+{"question": "Что болит?", "text": "Голова… нет, живот.", "act": "correction"}
+{"question": "Что болит?", "text": "Живот… ой, голова.", "act": "correction"}
+{"question": "Как самочувствие?", "text": "Так себе… хотя нет, хорошо.", "act": "correction"}
+{"question": "Давление какое?", "text": "Сто сорок… нет, сто двадцать.", "act": "correction"}
+{"question": "Спите как?", "text": "Хорошо… хотя нет, плохо спал.", "act": "correction"}
+{"question": "Голова болит?", "text": "Да… то есть нет.", "act": "correction"}
+{"question": "Голова болит?", "text": "Нет… хотя да, болит.", "act": "correction"}
+{"question": "Как самочувствие?", "text": "Вроде нормально… нет, плохо.", "act": "correction"}
+{"question": "", "text": "Всё, пока.", "act": "goodbye"}
+{"question": "", "text": "Ладно, до свидания.", "act": "goodbye"}
+{"question": "", "text": "Спасибо, пока.", "act": "goodbye"}
+{"question": "", "text": "До встречи.", "act": "goodbye"}
+{"question": "", "text": "Пойду я, до свидания.", "act": "goodbye"}
+{"question": "Как вы себя чувствуете?", "text": "Прекрати.", "act": "stop"}
+{"question": "Как вы себя чувствуете?", "text": "Да хватит уже.", "act": "stop"}
+{"question": "Как вы себя чувствуете?", "text": "Не хочу говорить.", "act": "stop"}
+{"question": "Как вы себя чувствуете?", "text": "Оставь меня.", "act": "stop"}
+{"question": "Как вы себя чувствуете?", "text": "Ну, нормально.", "act": "answer"}
+{"question": "Как вы себя чувствуете?", "text": "Да хорошо.", "act": "answer"}
+{"question": "Как вы себя чувствуете?", "text": "Вот плохо.", "act": "answer"}
+{"question": "Как вы себя чувствуете?", "text": "Ну плохо.", "act": "answer"}
+{"question": "Когда началось?", "text": "Ну вчера.", "act": "answer"}
+{"question": "Когда началось?", "text": "Вот с утра.", "act": "answer"}
+{"question": "Сильно болит?", "text": "Да, сильно.", "act": "answer"}
+{"question": "Сильно болит?", "text": "Ну терпимо.", "act": "answer"}
+{"question": "Как вы себя чувствуете?", "text": "Вы кто такие?", "act": "user_question"}
+{"question": "Как вы себя чувствуете?", "text": "Это поликлиника?", "act": "user_question"}
+{"question": "Как вы себя чувствуете?", "text": "Зачем звоните?", "act": "user_question"}
+{"question": "Как вы себя чувствуете?", "text": "Что надо?", "act": "user_question"}
+{"question": "Как вы себя чувствуете?", "text": "Когда врач придёт?", "act": "user_question"}
+{"question": "Как вы себя чувствуете?", "text": "Голова раскалывается.", "act": "complaint"}
+{"question": "Как вы себя чувствуете?", "text": "Живот крутит.", "act": "complaint"}
+{"question": "Как вы себя чувствуете?", "text": "Ноги болят.", "act": "complaint"}
+{"question": "Как вы себя чувствуете?", "text": "Спина ноет.", "act": "complaint"}
+{"question": "Как вы себя чувствуете?", "text": "Кашель замучил.", "act": "complaint"}
+{"question": "Как вы себя чувствуете?", "text": "Угу, да.", "act": "backchannel"}
+{"question": "Как вы себя чувствуете?", "text": "Да, слушаю.", "act": "backchannel"}
+{"question": "Как вы себя чувствуете?", "text": "Мгм.", "act": "backchannel"}
+{"question": "Когда началось?", "text": "Не упомню.", "act": "not_recalled"}
+{"question": "Когда началось?", "text": "Вылетело из головы.", "act": "not_recalled"}
+{"question": "Где болит?", "text": "Не пойму где.", "act": "not_recalled"}
+{"question": "", "text": "Здорово.", "act": "greeting"}
+{"question": "", "text": "Приветик.", "act": "greeting"}
+{"question": "", "text": "Слушаю вас.", "act": "greeting"}
+{"question": "", "text": "Да, слушаю вас.", "act": "greeting"}
+{"question": "Как вы себя чувствуете?", "text": "Слушаю.", "act": "backchannel"}
+{"question": "Давление какое?", "text": "Сто двадцать на восемьдесят.", "act": "answer"}
+{"question": "Давление какое?", "text": "Давление сто пятьдесят.", "act": "answer"}
+{"question": "Во сколько началось?", "text": "Часа в три.", "act": "answer"}
+{"question": "Во сколько началось?", "text": "Утром, часов в восемь.", "act": "answer"}
+{"question": "Сколько таблеток?", "text": "Две.", "act": "answer"}
+{"question": "Сколько таблеток?", "text": "Одну утром, одну вечером.", "act": "answer"}
+{"question": "Как вы себя чувствуете?", "text": "Алло, повторите?", "act": "repeat_request"}
+{"question": "Как вы себя чувствуете?", "text": "Алло, не слышно.", "act": "repeat_request"}
+{"question": "Спите как?", "text": "Хорошо… хотя нет, плохо спал.", "act": "correction"}
+{"question": "Как самочувствие?", "text": "Нормально… хотя нет, так себе.", "act": "correction"}
+{"question": "Что болит?", "text": "Живот… хотя нет, голова.", "act": "correction"}
+{"question": "Как самочувствие?", "text": "Хорошо… но на самом деле плохо.", "act": "correction"}
+{"question": "Когда началось?", "text": "Ну вчера.", "act": "answer"}
+{"question": "Когда началось?", "text": "Ну с утра.", "act": "answer"}
+{"question": "Как вы себя чувствуете?", "text": "Ну, нормально.", "act": "answer"}
+{"question": "Как вы себя чувствуете?", "text": "Ну, хорошо.", "act": "answer"}
+{"question": "Как вы себя чувствуете?", "text": "Отстань.", "act": "stop"}
+{"question": "Как вы себя чувствуете?", "text": "Отвали.", "act": "stop"}
+{"question": "Как вы себя чувствуете?", "text": "Заткнись.", "act": "stop"}
+{"question": "Как вы себя чувствуете?", "text": "Да отстань ты.", "act": "stop"}
+{"question": "Как вы себя чувствуете?", "text": "Не лезь.", "act": "stop"}
+{"question": "Как вы себя чувствуете?", "text": "До свидания.", "act": "goodbye"}
+{"question": "Что-то ещё беспокоит?", "text": "Нет, до свидания.", "act": "goodbye"}
+{"question": "Как вы себя чувствуете?", "text": "Всё, пока.", "act": "goodbye"}
+{"question": "Что-то ещё беспокоит?", "text": "Ничего, прощайте.", "act": "goodbye"}
+{"question": "Что-то ещё беспокоит?", "text": "Хватит.", "act": "stop"}
+{"question": "Давление мерили?", "text": "Отстань.", "act": "stop"}
+{"question": "Что-то ещё беспокоит?", "text": "Не хочу разговаривать.", "act": "stop"}
+{"question": "Спите как?", "text": "Не лезь.", "act": "stop"}
+{"question": "Что-то ещё беспокоит?", "text": "До свидания.", "act": "goodbye"}
+{"question": "Давление мерили?", "text": "Всё, пока.", "act": "goodbye"}
+{"question": "Спите как?", "text": "Спасибо, до свидания.", "act": "goodbye"}
+{"question": "Настроение как?", "text": "Ладно, пока.", "act": "goodbye"}

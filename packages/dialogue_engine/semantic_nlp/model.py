@@ -20,7 +20,7 @@ from pathlib import Path
 
 from packages.dialogue_engine.semantic_nlp.labels import ACTS, MODEL_ID
 
-ARTIFACT_VERSION = "v1"
+ARTIFACT_VERSION = "v2"
 LATENCY_BUDGET_MS = 300.0
 # 0.55: model is underconfident on short phrases (correct at 0.55+);
 # safety acts are excluded from override regardless of confidence.
