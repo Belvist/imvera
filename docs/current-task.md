@@ -1,4 +1,17 @@
-# Current task — COMMIT 2 Cut 4d done: engine sync count zero (2026-09-18)
+# Current task — COMMIT 3 audit: engine path clean, orphans retained (2026-09-18)
+
+- Reachability audit: engine-path sync_to_legacy = 0; Planner decisions = 0
+  (2 edge sites inlined via _terminal_noop_proposal helper + Cut-1 site
+  deduped); legacy FSM mutations = CallFsm legacy-RED only; legacy store
+  API = legacy branches + tests only.
+- Retained with reasons (doubt → keep): sync_to_legacy method (parity
+  tests), effect_to_proposal_legacy (parity test), C3 goal question_id
+  (no engine ledger ids), state_version in contracts, finalize flags,
+  Validator/SafetyEngine as contract layers, full legacy modules for
+  flag-off/tests. No deletions — nothing met the orphan bar.
+- VERIFIED: targeted 50 passed; full 1580/6/0; differential 92/4/4/0;
+  corpus 500/500; repo-wide ruff 0. Commit + push. STOP — await review.
+- NOT VERIFIED: remote CI. B–J untouched.
 
 - Removed last 2 syncs (effect_failed, cancel). Production engine path now
   has 0 sync_to_legacy calls (method itself kept for legacy/tests).

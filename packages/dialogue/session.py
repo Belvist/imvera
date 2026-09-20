@@ -496,17 +496,7 @@ class CallSession:
             )
         if speak is None:
             gen = self._next_generation_id()
-            # Engine-only fallback: identical to Planner._terminal_noop but
-            # without the legacy Planner dependency (pure construction from
-            # already-synced values; Validator semantics unchanged).
-            proposal = TurnProposal(
-                turn_id=self.turn_id,
-                generation_id=gen,
-                speech="",
-                intent="terminal_noop",
-                fsm_state=self.state.fsm_state,
-                mandatory_remaining=self.state.mandatory_remaining(),
-            )
+            proposal = self._terminal_noop_proposal(gen)
             validated = Validator.validate(proposal)
             return SessionTurnResult(
                 user_text=user_text,
@@ -542,6 +532,18 @@ class CallSession:
             from_engine=True,
             followup_speak_effects=followups,
             speak_effect=speak,
+        )
+
+    def _terminal_noop_proposal(self, gen: str) -> TurnProposal:
+        """Engine-safe terminal noop (Cut 1 pattern): identical fields to the
+        pure Planner._terminal_noop constructor, no Planner dependency."""
+        return TurnProposal(
+            turn_id=self.turn_id,
+            generation_id=gen,
+            speech="",
+            intent="terminal_noop",
+            fsm_state=self.state.fsm_state,
+            mandatory_remaining=self.state.mandatory_remaining(),
         )
 
     def _commit_engine_turn(self, proposal: TurnProposal):
@@ -729,7 +731,7 @@ class CallSession:
     ) -> SessionTurnResult:
         if self.state.call_finalized:
             gen = self._next_generation_id()
-            proposal = Planner._terminal_noop(self.state, self.turn_id, gen)
+            proposal = self._terminal_noop_proposal(gen)
             validated = Validator.validate(proposal)
             return SessionTurnResult(
                 user_text=user_text,
@@ -1105,7 +1107,7 @@ class CallSession:
         validated: ValidatedTurn | None = None,
     ) -> SessionTurnResult:
         if proposal is None:
-            proposal = Planner._terminal_noop(self.state, self.turn_id, self._next_generation_id())
+            proposal = self._terminal_noop_proposal(self._next_generation_id())
         if validated is None:
             validated = Validator.validate(proposal)
         return SessionTurnResult(
