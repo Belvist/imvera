@@ -99,6 +99,9 @@ class CallSession:
         self._event_seq = 0
         self._persisted_obs_ids: list[str] = []
         self._persisted_keys: set[str] = set()
+        # Q0.1: last persisted (value, source) per slot + revision. Facts
+        # persist only on semantic change, never on repeat passes.
+        self._persisted_fact_state: dict[str, tuple[str, str, int]] = {}
         self._engine: DialogueEngine | None = None
         self._playout_meta: dict[str, tuple[int, str]] = {}
         self._playout_effect_meta: dict[str, str] = {}
@@ -352,29 +355,27 @@ class CallSession:
     def _persist_new_facts(self, turn_id: int) -> tuple[list[str], bool, str | None]:
         ids: list[str] = []
         if self._engine is not None:
-            # Cut 4c: source facts from EngineState (the mirror is no longer
-            # synced on this path). Revision continuity derives from already
-            # persisted idempotency keys — identical key sequence to legacy.
-            from packages.contracts.enums import SlotStatus
+            # Q0.1: source facts from EngineState (the mirror is no longer
+            # synced on this path). Persist ONLY on semantic change:
+            # same (value, source) → same idempotency key → skip. Revision
+            # bumps only when the fact is new or corrected.
             from packages.dialogue.facts import FactRecord
+            from packages.dialogue_engine.persistence_projection import (
+                engine_fact_view,
+            )
 
             eng = self._engine.state
-            for slot, status in eng.slots.items():
-                if status != SlotStatus.FILLED or slot not in eng.slot_values:
+            facts, quotes = engine_fact_view(eng)
+            for slot, val in facts.items():
+                source = quotes[slot]
+                prev = self._persisted_fact_state.get(slot)
+                if prev is not None and prev[0] == val and prev[1] == source:
                     continue
-                val = eng.slot_values[slot]
-                prefix = f"{self.state.call_id}:fact:{slot}:r"
-                rev = 1
-                for key in self._persisted_keys:
-                    if key.startswith(prefix):
-                        try:
-                            rev = max(rev, int(key[len(prefix):]) + 1)
-                        except ValueError:
-                            continue
+                rev = (prev[2] + 1) if prev is not None else 1
                 fact = FactRecord(
                     field=slot,
                     value=val,
-                    source_quote=val,
+                    source_quote=source,
                     turn_id=eng.turn_seq,
                     revision=rev,
                 )
@@ -386,6 +387,7 @@ class CallSession:
                 if not result.ok:
                     return ids, False, result.error
                 self._persisted_keys.add(obs.idempotency_key)
+                self._persisted_fact_state[slot] = (val, source, rev)
                 ids.append(obs.observation_id)
                 self._persisted_obs_ids.append(obs.observation_id)
             return ids, True, None

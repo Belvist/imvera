@@ -92,7 +92,18 @@ def test_production_snapshot_contract(
     assert snap.fsm_state == FsmState.FINAL_CLASSIFICATION
     assert snap.termination_reason == TerminationReason.COMPLETED
     assert snap.call_ended is True
-    assert snap.fact_quotes == snap.facts
+    # Q0.1 evidence: quotes pair with the CURRENT value (correction flows
+    # may hold a later record — never fabricate evidence).
+    assert session._engine is not None
+    records = session._engine.state.slot_records
+    assert set(snap.fact_quotes) == set(snap.facts)
+    for slot, value in snap.facts.items():
+        record = records.get(slot)
+        if record is not None and record.value == value and record.source_text:
+            expected = record.source_text
+        else:
+            expected = value
+        assert snap.fact_quotes[slot] == expected
     assert snap.facts.get("wellness")
     assert len(snap.observations) > 0
     assert snap.mission_result is not None

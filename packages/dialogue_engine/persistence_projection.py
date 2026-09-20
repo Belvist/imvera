@@ -43,10 +43,14 @@ STORE_OWNED_METADATA_KEYS = frozenset(
 
 
 def engine_fact_view(state: EngineState) -> tuple[dict[str, str], dict[str, str]]:
-    """Legacy-compatible fact surface from engine slots (decision b: verbatim).
+    """Legacy-compatible fact surface from engine slots (Q0.1 evidence fix).
 
-    Mirrors sync_to_legacy exactly: only FILLED slots present in slot_values.
-    Shared by the snapshot projection and the engine commit path.
+    facts carry the normalized value; fact_quotes carry the GROUNDED source
+    text (SlotValue.source_text, falling back to value). This supersedes
+    decision (b) verbatim-quotes per the full-repo audit order: evidence
+    must be real user speech, never a normalized label like "positive".
+    Mirrors sync_to_legacy slot selection exactly: only FILLED slots
+    present in slot_values.
     """
     facts: dict[str, str] = {}
     quotes: dict[str, str] = {}
@@ -54,7 +58,14 @@ def engine_fact_view(state: EngineState) -> tuple[dict[str, str], dict[str, str]
         if status == SlotStatus.FILLED and slot in state.slot_values:
             val = state.slot_values[slot]
             facts[slot] = val
-            quotes[slot] = val
+            # Pair the quote with the CURRENT value: on correction flows the
+            # latest record may belong to a later answer than the stored
+            # value. Never fabricate evidence — fall back to verbatim.
+            record = state.slot_records.get(slot)
+            if record is not None and record.value == val and record.source_text:
+                quotes[slot] = record.source_text
+            else:
+                quotes[slot] = val
     return facts, quotes
 
 

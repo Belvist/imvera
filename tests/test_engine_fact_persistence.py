@@ -89,7 +89,9 @@ def test_engine_facts_persist_across_turns(
     assert snap is not None
     assert snap.facts.get("wellness") == "Хорошо."
     assert snap.facts.get("mood") == "positive"
-    assert snap.fact_quotes.get("mood") == "positive"
+    # Q0.1 evidence: quotes are grounded user speech, never normalized labels.
+    assert snap.fact_quotes.get("wellness") == "Хорошо."
+    assert snap.fact_quotes.get("mood") == "Хорошее."
     mood_keys = {k for k in session._persisted_keys if ":fact:mood:" in k}
     assert mood_keys, "mood fact revision key persisted"
     obs_after_second = list(session._persisted_obs_ids)
@@ -98,3 +100,16 @@ def test_engine_facts_persist_across_turns(
     keys_second = {k for k in session._persisted_keys if ":fact:" in k}
     assert len(keys_second) == len(set(keys_second)), "no revision key conflict"
     assert len(snap.observations) >= 2, "both facts observed"
+    # Q0.1 audit spec: 5 more turns (repeats + new slots). Repeats must not
+    # duplicate; genuinely new slots persist exactly once each.
+    for text in ("Хорошо.", "Дома.", "Ничего.", "ага", "до свидания"):
+        _say(session, text)
+    fact_keys = {k for k in session._persisted_keys if ":fact:" in k}
+    assert keys_second <= fact_keys, "previous observations lost"
+    assert "fact-persist:fact:wellness:r1" in fact_keys
+    assert "fact-persist:fact:mood:r1" in fact_keys
+    assert not any(k.startswith("fact-persist:fact:wellness:r2") for k in fact_keys)
+    assert not any(k.startswith("fact-persist:fact:mood:r2") for k in fact_keys)
+    snap = session.store.get_call_result("fact-persist", "fact-family")
+    assert snap is not None
+    assert snap.facts.get("wellness") == "Хорошо."

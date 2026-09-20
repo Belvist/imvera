@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+from datetime import UTC
 import json
 
 import psycopg
@@ -25,7 +26,7 @@ def main() -> None:
     lines: list[str] = [
         "# Live call log (lab, auto-exported from Postgres)",
         "",
-        f"Exported: {datetime.datetime.now(datetime.timezone.utc).isoformat()}",
+        f"Exported: {datetime.datetime.now(UTC).isoformat()}",
         f"Total calls: {len(calls)}",
         "",
     ]
