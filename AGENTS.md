@@ -280,6 +280,21 @@ Until these exist, agent reports exact commands run.
   then a production licensing decision. Until then Silero is lab-only
   in practice, without asserting which license applies.
 
+## Semantic NLP finding (2026-09-20)
+
+- RuModernBERT-base act classifier v1 live as candidate-only: 13 acts,
+  [Q]+[U] context input, frozen encoder + head, 165 expert seeds,
+  held mean ~0.95 (seeds 7/11/23), warm latency ~15ms, threshold 0.55.
+  Safety acts (stop/user_question) never overridden; deterministic
+  validator supreme; any error/timeout → legacy path. No off switch.
+- Proven by measurement: raw embeddings useless (all pairs 0.9+);
+  unfreezing collapses training; random splits make the gate luck
+  (stratified deterministic split locked). Artifact in models/semantic_nlp/v1
+  (gitignored per repo convention); seed + train script tracked.
+- LOOP: errors → seed rows → retrain → gate → promote version.
+- NEXT: live-call evidence (interpret.nlp_candidate stages in traces) →
+  expand seeds from misses → v2. Slot/entity heads after act proves out.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
