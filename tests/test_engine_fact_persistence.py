@@ -84,12 +84,17 @@ def test_engine_facts_persist_across_turns(
     assert keys_first, "wellness fact revision key persisted"
 
     _say(session, "Хорошее.")
+    assert engine.state.slots["mood"] == SlotStatus.FILLED
     snap = session.store.get_call_result("fact-persist", "fact-family")
     assert snap is not None
     assert snap.facts.get("wellness") == "Хорошо."
+    assert snap.facts.get("mood") == "positive"
+    assert snap.fact_quotes.get("mood") == "positive"
+    mood_keys = {k for k in session._persisted_keys if ":fact:mood:" in k}
+    assert mood_keys, "mood fact revision key persisted"
     obs_after_second = list(session._persisted_obs_ids)
     assert len(obs_after_second) >= len(obs_first := obs_after_first)
     assert set(obs_first) <= set(obs_after_second), "repeat pass loses nothing"
     keys_second = {k for k in session._persisted_keys if ":fact:" in k}
     assert len(keys_second) == len(set(keys_second)), "no revision key conflict"
-    assert len(snap.observations) >= 1, "fact observations stored on snapshot"
+    assert len(snap.observations) >= 2, "both facts observed"

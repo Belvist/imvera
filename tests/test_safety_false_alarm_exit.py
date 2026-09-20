@@ -94,3 +94,63 @@ def test_false_alarm_exits_engine_red_handling(
         intents.append(followup.speak_effect.intent)
     assert "safety_close" not in intents
     assert not engine.state.call_closed
+
+
+def test_resolve_restores_pending_resume_and_keeps_obligation() -> None:
+    """Resume contract: suspended obligation → pending_resume_goal_id."""
+    from packages.contracts.enums import FsmState
+    from packages.dialogue_engine.engine import DialogueEngine
+    from packages.dialogue_engine.state import SuspendedObligation
+
+    engine = DialogueEngine(call_id="fa-resume", elder_display_name="Тест")
+    engine.start()
+    state = engine.state
+    state.risk_handling = True
+    state.safety_mode = "red"
+    state.safety_clarify_count = 1
+    state.risk_episode_id = "ep-1"
+    state.fsm_state = FsmState.RED_SIGNAL
+    state.suspended_obligation = SuspendedObligation(
+        kind="goal_question", goal_id="mood", slot="mood",
+        intent="ask_mission_goal", reason="interrupted",
+    )
+    engine.resolve_false_alarm("ep-1")
+    assert state.risk_handling is False
+    assert state.safety_mode == "none"
+    assert state.safety_clarify_count == 0
+    assert state.pending_resume_goal_id == "mood"
+    assert state.suspended_obligation is not None
+    assert state.fsm_state == FsmState.DAILY_CHECK
+
+
+def test_resolve_ignores_mismatched_episode() -> None:
+    from packages.contracts.enums import FsmState
+    from packages.dialogue_engine.engine import DialogueEngine
+
+    engine = DialogueEngine(call_id="fa-mismatch", elder_display_name="Тест")
+    engine.start()
+    state = engine.state
+    state.risk_handling = True
+    state.safety_mode = "red"
+    state.risk_episode_id = "ep-1"
+    state.fsm_state = FsmState.RED_SIGNAL
+    engine.resolve_false_alarm("ep-other")
+    assert state.risk_handling is True
+    assert state.safety_mode == "red"
+
+
+def test_recognition_needs_engine_fsm_not_stale_mirror() -> None:
+    """Blocker #2: stale legacy fsm (DAILY_CHECK) hides false alarm; the
+    engine fsm override restores recognition at the exact actor call."""
+    from packages.contracts.enums import FsmState
+    from packages.dialogue.interpretation import interpret_user_turn
+    from packages.dialogue.state import DialogueState
+
+    legacy = DialogueState(
+        call_id="fa-rec", family_id="fam", fsm_state=FsmState.DAILY_CHECK
+    )
+    text = "Нет, это было про соседку"
+    plain = interpret_user_turn(legacy, text)
+    assert plain.risk_false_alarm is False
+    overridden = interpret_user_turn(legacy, text, fsm_override=FsmState.RED_SIGNAL)
+    assert overridden.risk_false_alarm is True

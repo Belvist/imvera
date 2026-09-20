@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from packages.contracts.enums import FsmState
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
@@ -58,6 +59,23 @@ def _deliver(session: CallSession, result: SessionTurnResult) -> None:
     for effect in effects:
         session._engine.on_playout_started(effect.generation, effect.question_id)
         assert session.mark_spoken_action(effect.generation_id)
+
+
+def test_terminal_noop_uses_engine_state_when_divergent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Final hotfix: with EngineState.fsm != DialogueState.fsm (stale mirror
+    since sync_to_legacy = 0), the noop proposal must come from Engine."""
+    session = _session(monkeypatch, tmp_path, "prop-divergent")
+    engine = session._engine
+    assert engine is not None
+    engine.state.fsm_state = FsmState.SUMMARY
+    session.state.fsm_state = FsmState.DAILY_CHECK
+    proposal = session._terminal_noop_proposal("g-div")
+    assert proposal.fsm_state == FsmState.SUMMARY
+    assert proposal.mandatory_remaining == engine.slot_mandatory_remaining()
+    assert proposal.intent == "terminal_noop"
+    assert proposal.speech == ""
 
 
 def _compare_proposals(session: CallSession, speak) -> None:

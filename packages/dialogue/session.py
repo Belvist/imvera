@@ -472,13 +472,14 @@ class CallSession:
             )
         if speak is None and hangup is not None:
             gen = self._next_generation_id()
+            assert self._engine is not None
             proposal = TurnProposal(
                 turn_id=self.turn_id,
                 generation_id=gen,
                 speech="",
                 intent="end_call",
-                fsm_state=self.state.fsm_state,
-                mandatory_remaining=self.state.mandatory_remaining(),
+                fsm_state=self._engine.state.fsm_state,
+                mandatory_remaining=self._engine.slot_mandatory_remaining(),
             )
             validated = Validator.validate(proposal)
             return SessionTurnResult(
@@ -535,15 +536,24 @@ class CallSession:
         )
 
     def _terminal_noop_proposal(self, gen: str) -> TurnProposal:
-        """Engine-safe terminal noop (Cut 1 pattern): identical fields to the
-        pure Planner._terminal_noop constructor, no Planner dependency."""
+        """Terminal noop sourced from the owning state (final hotfix).
+
+        Engine path uses EngineState (the legacy mirror is stale since
+        sync_to_legacy = 0); flag-off path keeps legacy values.
+        """
+        if self._engine is not None:
+            fsm_state = self._engine.state.fsm_state
+            mandatory = self._engine.slot_mandatory_remaining()
+        else:
+            fsm_state = self.state.fsm_state
+            mandatory = self.state.mandatory_remaining()
         return TurnProposal(
             turn_id=self.turn_id,
             generation_id=gen,
             speech="",
             intent="terminal_noop",
-            fsm_state=self.state.fsm_state,
-            mandatory_remaining=self.state.mandatory_remaining(),
+            fsm_state=fsm_state,
+            mandatory_remaining=mandatory,
         )
 
     def _commit_engine_turn(self, proposal: TurnProposal):

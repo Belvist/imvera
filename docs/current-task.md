@@ -1,4 +1,15 @@
-# Current task — COMMIT 4: false-alarm engine exit fixed (2026-09-18)
+# Current task — FINAL HOTFIX closing A.5 (2026-09-18)
+
+- terminal_noop/end_call proposals from EngineState (divergent-states
+  regression); interpret_user_turn fsm_override for RED gate + actor wiring
+  (recognition proven on stale mirror); resume unit tests (pending goal
+  restore, episode mismatch guard); persistence test strengthened to two
+  facts (wellness+mood, revision keys, no-repeat loss).
+- Re-scan: sync 0, Planner decisions 0 on engine path, actor writes only
+  C14 legacy-guarded. A.5 CLOSED pending remote CI.
+- VERIFIED: full 1585/6/0; differential 92/4/4/0; corpus 500/500; repo-wide
+  ruff 0. Commit + push.
+- NOT VERIFIED: remote CI. NEXT after green: Stage B live stop/ACK probe.
 
 - FalseAlarmResolved event + reducer handler + engine.resolve_false_alarm +
   session hook. Clears handling/mode/clarify-count, restores DAILY_CHECK

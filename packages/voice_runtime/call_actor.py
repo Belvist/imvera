@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-from packages.contracts.enums import AsrQuality
+from packages.contracts.enums import AsrQuality, FsmState
 from packages.contracts.interpretation import TurnInterpretation
 from packages.contracts.outbox import ActionOutboxStatus
 from packages.contracts.providers import TTSProvider
@@ -1403,6 +1403,18 @@ class CallActor:
             return self.session._engine.pending_slot_name()
         return self.session.state.pending_slot
 
+    def _interpret_fsm_override(self) -> FsmState | None:
+        """Engine fsm for the interpretation safety gate (final hotfix).
+
+        The legacy mirror fsm is stale since sync_to_legacy = 0; without
+        this, false-alarm recognition misses on the live path. Returns None
+        off engine path. Pinned by tests/test_engine_cancel_failed.py-adjacent
+        false-alarm recognition tests.
+        """
+        if self.session.uses_dialogue_engine() and self.session._engine:
+            return self.session._engine.state.fsm_state
+        return None
+
     async def _handle_backchannel_continuation(self, result: SessionTurnResult) -> None:
         goal_id = result.proposal.wait_goal_id
         if self._wait_state is None:
@@ -2067,12 +2079,18 @@ class CallActor:
                 ):
                     interp = semantic_to_interpretation(sem)
                 else:
-                    interp = interpret_user_turn(self.session.state, text)
+                    interp = interpret_user_turn(
+                        self.session.state, text,
+                        fsm_override=self._interpret_fsm_override(),
+                    )
             elif not fast_confident:
                 interpret_path = "rules_fallback"
                 from packages.dialogue.interpretation import interpret_user_turn
 
-                interp = interpret_user_turn(self.session.state, text)
+                interp = interpret_user_turn(
+                    self.session.state, text,
+                    fsm_override=self._interpret_fsm_override(),
+                )
             elif fast_confident:
                 interp = semantic_to_interpretation(sem)
             await self._emit_forensic_turn(

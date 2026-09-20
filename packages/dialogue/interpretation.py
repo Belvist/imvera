@@ -243,8 +243,19 @@ def _build_slot_fact(state: DialogueState, text: str) -> FactCandidate | None:
     )
 
 
-def interpret_user_turn(state: DialogueState, user_text: str) -> UserInterpretation:
-    """Derive structured meaning from transcript + dialogue context."""
+def interpret_user_turn(
+    state: DialogueState,
+    user_text: str,
+    *,
+    fsm_override: FsmState | None = None,
+) -> UserInterpretation:
+    """Derive structured meaning from transcript + dialogue context.
+
+    fsm_override (final hotfix): on the engine path the legacy mirror fsm
+    is stale since sync_to_legacy = 0, so CallActor passes the engine fsm
+    for the RED/CONFIRM safety gate only. Everything else still reads the
+    passed state; full engine-native interpretation is out of scope.
+    """
     text = user_text.strip()
     if not text:
         return UserInterpretation(
@@ -276,7 +287,8 @@ def interpret_user_turn(state: DialogueState, user_text: str) -> UserInterpretat
             wrong_person=True,
         )
 
-    if state.fsm_state in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
+    gate_fsm = fsm_override if fsm_override is not None else state.fsm_state
+    if gate_fsm in (FsmState.RED_SIGNAL, FsmState.CONFIRM_SITUATION):
         if _RISK_FALSE_ALARM.search(normalized):
             return UserInterpretation(
                 judgement=AnswerJudgement.VALID,
