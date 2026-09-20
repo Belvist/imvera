@@ -81,8 +81,8 @@ def test_delivery_exactly_once_with_attempts_and_timer(
     assert session.mark_spoken_action(gen) is True
     assert goal.delivered_attempts == attempts
     assert engine.state.delivered_question is delivered
-    # Answer context follows the delivered question.
-    assert engine.answer_context_slot() in ("mood", "wellness", None) or True
+    # Answer context follows the delivered question (not a stale slot).
+    assert engine.answer_context_slot() == (delivered.goal_id or delivered.slot)
     _deliver(session, result)
 
 
