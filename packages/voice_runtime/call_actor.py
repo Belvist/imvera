@@ -1985,6 +1985,29 @@ class CallActor:
                     fast_confident = rules_confident
                     if rules_confident and not kernel_has_meaning:
                         interpret_path = "fast_rules"
+                if not fast_confident and self.session._engine is not None:
+                    # Semantic NLP candidate (live, owner order: no off
+                    # switches). Model proposes; deterministic validator
+                    # downstream owns the decision. Safety acts excluded
+                    # inside nlp_candidate_turn.
+                    from packages.dialogue_engine.semantic_nlp.candidate import (
+                        nlp_candidate_turn,
+                    )
+
+                    question_text = (
+                        self.session._engine.pending_question_text() or ""
+                    )
+                    sem, nlp_confident, nlp_info = nlp_candidate_turn(
+                        question_text, text, answer_slot
+                    )
+                    await self._emit_stage(
+                        "interpret.nlp_candidate",
+                        utterance_id=utterance_id,
+                        **{k: v for k, v in nlp_info.items()},
+                    )
+                    if nlp_confident:
+                        fast_confident = True
+                        interpret_path = "semantic_nlp"
                 if fast_confident and not use_rich_deterministic:
                     interp = semantic_to_interpretation(sem)
                     await self._emit_stage(
