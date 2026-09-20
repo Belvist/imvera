@@ -1,3 +1,16 @@
+# Current task — COMMIT 2 Cut 4d done: engine sync count zero (2026-09-18)
+
+- Removed last 2 syncs (effect_failed, cancel). Production engine path now
+  has 0 sync_to_legacy calls (method itself kept for legacy/tests).
+  Regression: cancel clears playing/planned/active, no delivery, attempts
+  frozen, reservation freed, retry works, no Planner; failed bumps revision
+  and dialogue continues.
+- VERIFIED: new 2 passed; full 1580/6/0; differential 92/4/4/0; corpus
+  500/500; repo-wide ruff 0. Commit + push. STOP — await review.
+- NOT VERIFIED: remote CI. B–J untouched.
+
+---
+
 # Known semantic bug (NOT A.5 scope — separate patch after A.5)
 
 - False alarm clears SafetyEngine.active_risk → NONE but DialogueEngine

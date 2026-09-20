@@ -573,7 +573,6 @@ class CallSession:
         if self._engine is None:
             return
         self._engine.on_effect_failed(effect_id, stage=stage, error=error)
-        self._engine.sync_to_legacy(self.state)
 
     def defer_engine_turn(self, result: SessionTurnResult) -> None:
         if self._engine is None or result.speak_effect is None:
@@ -652,7 +651,6 @@ class CallSession:
             meta = self._playout_meta.pop(generation_id, None)
             if meta:
                 self._engine.on_playout_cancelled(meta[0], meta[1])
-                self._engine.sync_to_legacy(self.state)
             return
         Planner.release_question_attempt(self.state, generation_id)
 
