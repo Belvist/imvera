@@ -149,6 +149,7 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--unseen-goals", default="daughter_visit,utilities_paid")
     parser.add_argument("--eval-file", default=None)
+    parser.add_argument("--calib-file", default=None)
     parser.add_argument(
         "--heads",
         default="rel,val,act,corr",
@@ -362,6 +363,8 @@ def main() -> None:
                 "average_precision": round(average_precision, 3),
                 "f1_curve": curve,
                 "wrong_goal_fp": fp,
+                "brier": round(float(((scores - rel) ** 2).mean()), 4),
+                "ece": round(_ece(scores, rel), 4),
             }
             if val_m.any():
                 pred_val = head_val(X[val_m]).argmax(dim=1)
@@ -388,6 +391,95 @@ def main() -> None:
             print(f"{name}: {json.dumps({k: v for k, v in out.items() if k != 'errors'})}")
             return out
 
+    def _ece(scores, labels, bins: int = 10) -> float:
+        err = 0.0
+        for b in range(bins):
+            lo, hi = b / bins, (b + 1) / bins
+            mask = (scores >= lo) & (scores < hi if b < bins - 1 else scores <= hi)
+            if int(mask.sum()) == 0:
+                continue
+            err += abs(float(scores[mask].mean()) - float(labels[mask].mean())) * int(
+                mask.sum()
+            )
+        return err / max(len(scores), 1)
+
+    def calibrate(dev_rows: list[dict]) -> dict:
+        """Global threshold + Platt scaling fit on calibration_dev ONLY.
+
+        Never touches eval_fixed. Returns params + dev metrics.
+        """
+        import torch
+        import torch.nn as nn
+
+        pairs = [
+            {
+                "question": r["question"] or "",
+                "goal": r["goal"],
+                "utterance": r["utterance"],
+                "relevant": bool(r["relevant"]),
+                "value": r.get("value"),
+                "act": r.get("act"),
+                "correction": bool(r.get("correction", False)),
+                "group": "calib_dev",
+            }
+            for r in dev_rows
+        ]
+        heads.eval()
+        with torch.no_grad():
+            X = featurize(pairs)
+            if args.unfreeze_top > 0:
+                X = X.to(device)
+            logits = head_rel(X).squeeze(-1)
+            y = torch.tensor([1.0 if p["relevant"] else 0.0 for p in pairs])
+            if args.unfreeze_top > 0:
+                y = y.to(device)
+        # Global threshold sweep for best dev F1.
+        best_thr, best_f1 = 0.5, -1.0
+        for thr in [round(0.05 * i, 2) for i in range(1, 20)]:
+            pr = (torch.sigmoid(logits) >= thr).float()
+            t = int(((pr == 1) & (y == 1)).sum())
+            f = int(((pr == 1) & (y == 0)).sum())
+            n = int(((pr == 0) & (y == 1)).sum())
+            p = t / (t + f) if t + f else 0.0
+            r = t / (t + n) if t + n else 0.0
+            f1 = 2 * p * r / (p + r) if p + r else 0.0
+            if f1 > best_f1:
+                best_f1, best_thr = f1, thr
+        # Platt scaling: logistic fit on raw logits.
+        platt = nn.Linear(1, 1)
+        opt = torch.optim.LBFGS(platt.parameters(), max_iter=100)
+        targets = y.unsqueeze(-1)
+        feats = logits.detach().unsqueeze(-1)
+
+        def closure():
+            opt.zero_grad()
+            loss = nn.BCEWithLogitsLoss()(platt(feats), targets)
+            loss.backward()
+            return loss
+
+        try:
+            opt.step(closure)
+            with torch.no_grad():
+                cal_probs = torch.sigmoid(platt(feats)).squeeze(-1)
+            platt_a = float(platt.weight.squeeze())
+            platt_b = float(platt.bias.squeeze())
+        except Exception:
+            cal_probs = torch.sigmoid(logits)
+            platt_a, platt_b = 1.0, 0.0
+        report = {
+            "n": len(pairs),
+            "best_threshold": best_thr,
+            "best_f1": round(best_f1, 3),
+            "platt_a": round(platt_a, 4),
+            "platt_b": round(platt_b, 4),
+            "brier_raw": round(float(((torch.sigmoid(logits) - y) ** 2).mean()), 4),
+            "brier_cal": round(float(((cal_probs - y) ** 2).mean()), 4),
+            "ece_raw": round(_ece(torch.sigmoid(logits), y), 4),
+            "ece_cal": round(_ece(cal_probs, y), 4),
+        }
+        print(f"calibration: {json.dumps(report)}")
+        return report
+
     held_report = evaluate(held_pairs, "held")
     unseen_report = evaluate(unseen_pairs, "unseen-goal(diagnostic)")
     fixed_report: dict = {}
@@ -413,6 +505,15 @@ def main() -> None:
         fixed_report = evaluate(eval_pairs, "eval-fixed")
     else:
         fixed_report = {}
+    calib_report: dict = {}
+    if args.calib_file:
+        calib_report = calibrate(
+            [
+                json.loads(line)
+                for line in Path(args.calib_file).read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        )
 
     out_dir = ARTIFACT_ROOT / args.version
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -459,6 +560,7 @@ def main() -> None:
                 "held": held_report,
                 "unseen": unseen_report,
                 "eval_fixed": fixed_report,
+                "calibration": calib_report,
                 "model_id": MODEL_ID,
                 "seed": args.seed,
             },
