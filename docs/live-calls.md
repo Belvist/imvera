@@ -1,7 +1,7 @@
 # Live call log (lab, auto-exported from Postgres + traces)
 
-Exported: 2026-09-20T02:21:00.011478+00:00
-Total calls: 263
+Exported: 2026-09-21T14:25:00.195442+00:00
+Total calls: 264
 
 ## pg-8941eff458bd — 2026-09-06 13:44:36.926561+00:00 (fsm=FINAL_CLASSIFICATION, termination=CONSENT_DECLINED)
 
@@ -3694,4 +3694,19 @@ observations: 11
 key events: 1
 - #15 CALL_ENDED 2026-09-20 01:34:28.665852+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
 
-calls with trace transcript: 214
+## fs-2e6c76d0 — 2026-09-21 14:22:14.735563+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={"wellness": "Привет. Чувствую себя вроде бы нормально, но какое-то непонятное самочувствие. Вот живот что-то пучит."}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- User[u-1]: Привет. Чувствую себя вроде бы нормально, но какое-то непонятное самочувствие. Вот живот что-то пучит.
+- Vera: Что именно беспокоит?
+- User[u-2]: Я же сказал, живот пучит меня.
+- Vera: Скажите, что болит — голова, сердце, живот? Или что случилось?
+observations: 1
+- t2 [wellness] Привет. Чувствую себя вроде бы нормально, но какое-то непонятное самочувствие. Вот живот что-то пучит. | quote: Привет. Чувствую себя вроде бы нормально, но какое-то непонятное самочувствие. Вот живот что-то пучит.
+key events: 1
+- #6 CALL_ENDED 2026-09-21 14:22:14.739536+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+calls with trace transcript: 215
