@@ -246,6 +246,76 @@ def mine_curated_pairs() -> list[dict]:
     return rows
 
 
+def mine_curated_batch2() -> list[dict]:
+    """Expert batch 2 (2026-09-21): multi-goal, cross-slot negatives,
+    values, other-person. Every row hand-labeled."""
+    goal = GOALS
+    pairs: list[tuple[str, str, str, bool, str | None]] = [
+        # --- multi-goal: one utterance, all goals labeled ---
+        ("Что беспокоит?", "wellness", "Голова болит и тошнит.", True, None),
+        ("Что беспокоит?", "mood", "Голова болит и тошнит.", False, None),
+        ("Что беспокоит?", "sleep", "Голова болит и тошнит.", False, None),
+        ("Как дела?", "wellness", "Нормально, выспался, настроение хорошее.", True, None),
+        ("Как дела?", "sleep", "Нормально, выспался, настроение хорошее.", True, None),
+        ("Как дела?", "mood", "Нормально, выспался, настроение хорошее.", True, None),
+        ("Как дела?", "plans", "Нормально, выспался, настроение хорошее.", False, None),
+        ("Расскажи как ты?", "wellness", "Плохо спал, голова болит, настроения нет.", True, None),
+        ("Расскажи как ты?", "sleep", "Плохо спал, голова болит, настроения нет.", True, None),
+        ("Расскажи как ты?", "mood", "Плохо спал, голова болит, настроения нет.", True, None),
+        # --- other-person: never speaker goals ---
+        ("Как вы себя чувствуете?", "wellness", "Муж плохо себя чувствует.", False, None),
+        ("Как вы себя чувствуете?", "wellness", "У соседки давление скачет.", False, None),
+        ("Таблетки приняли?", "medications_taken", "Муж свои выпил.", False, None),
+        ("Таблетки приняли?", "medications_taken", "Дочке дала витамины.", False, None),
+        ("Дочь сегодня будет?", "daughter_visit", "Сын вчера был.", False, None),
+        # --- values yes/no/unknown mass ---
+        ("Таблетки приняли?", "medications_taken", "Да.", True, "yes"),
+        ("Таблетки приняли?", "medications_taken", "Нет.", True, "no"),
+        ("Таблетки приняли?", "medications_taken", "Не помню.", True, "unknown"),
+        ("Дочь сегодня будет?", "daughter_visit", "Да, приедет.", True, "yes"),
+        ("Дочь сегодня будет?", "daughter_visit", "Нет, не приедет.", True, "no"),
+        ("Дочь сегодня будет?", "daughter_visit", "Не знаю.", True, "unknown"),
+        ("Коммунальные услуги оплачены?", "utilities_paid", "Да, всё оплатила.", True, "yes"),
+        ("Коммунальные услуги оплачены?", "utilities_paid", "Нет, не успела.", True, "no"),
+        ("Коммунальные услуги оплачены?", "utilities_paid", "Не знаю.", True, "unknown"),
+        # --- onset values ---
+        ("Когда началось?", "onset", "Три дня назад.", True, None),
+        ("Когда началось?", "onset", "На прошлой неделе.", True, None),
+        ("Когда началось?", "onset", "Сегодня утром.", True, None),
+        ("Когда началось?", "onset", "Не могу сказать.", True, "unknown"),
+        # --- same-question negatives ---
+        ("Таблетки приняли?", "medications_taken", "Давление померила.", False, None),
+        ("Дочь сегодня будет?", "daughter_visit", "Хорошо себя чувствую.", False, None),
+        ("Коммунальные услуги оплачены?", "utilities_paid", "Дочь поможет.", False, None),
+        ("Когда началось?", "onset", "Голова болит.", False, None),
+        ("Когда началось?", "onset", "Таблетки выпила.", False, None),
+        # --- wellness positives variety ---
+        ("Как вы себя чувствуете?", "wellness", "Слабость.", True, None),
+        ("Как вы себя чувствуете?", "wellness", "Тошнит.", True, None),
+        ("Как вы себя чувствуете?", "wellness", "Кружится голова.", True, None),
+        ("Как вы себя чувствуете?", "wellness", "Давление высокое.", True, None),
+        # --- corrections with goals ---
+        ("Как самочувствие?", "wellness", "Хорошо… нет, плохо.", True, None),
+        ("Что болит?", "wellness", "Голова… то есть живот.", True, None),
+        # --- uncertainty with goals ---
+        ("Когда началось?", "onset", "Вроде вчера.", True, None),
+        ("Когда началось?", "onset", "Может, с утра.", True, None),
+        ("Как вы себя чувствуете?", "wellness", "Вроде нормально.", True, None),
+        # --- blood pressure positives ---
+        ("Давление какое?", "blood_pressure", "Сто шестьдесят на сто.", True, None),
+        ("Давление какое?", "blood_pressure", "Низкое сегодня.", True, None),
+        ("Давление какое?", "blood_pressure", "Нормальное.", True, None),
+    ]
+    rows = []
+    for question, goal_id, text, relevant, value in pairs:
+        row = _base(question, text, "curated2", "curated_pair")
+        row["goal"] = dict(goal[goal_id])
+        row["relevant"] = relevant
+        row["value"] = value
+        rows.append(row)
+    return rows
+
+
 def mine_hard_negatives() -> list[dict]:
     """True hard negatives AND counterfactuals killing Q/G shortcuts.
 
@@ -319,7 +389,8 @@ def main() -> None:
     live = mine_live_traces()
     negatives = mine_hard_negatives()
     curated = mine_curated_pairs()
-    all_rows = seeds + live + negatives + curated
+    curated2 = mine_curated_batch2()
+    all_rows = seeds + live + negatives + curated + curated2
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(
         "\n".join(json.dumps(r, ensure_ascii=False) for r in all_rows) + "\n",
@@ -328,7 +399,7 @@ def main() -> None:
     review = sum(1 for r in all_rows if r["relevant"] is None)
     print(
         f"wrote {len(all_rows)} rows ({len(seeds)} seeds, {len(live)} live, "
-        f"{len(negatives)} negatives, {len(curated)} curated); "
+        f"{len(negatives)} negatives, {len(curated) + len(curated2)} curated); "
         f"review queue: {review}"
     )
 
