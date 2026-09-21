@@ -301,6 +301,13 @@ Until these exist, agent reports exact commands run.
   mostly wellness over-fire), unseen-goal 0.0. Artifact metadata carries
   real counts + dataset sha256, no promoted claims. Priority queue for
   next labeling derived from errors (wellness-negatives, onset-positives).
+- CrossEncoderV2 round (frozen, counterfactuals, PR-AUC): relation STILL
+  not learned (held PR-AUC ~0.1→0.0). Unfreezing collapses (PR-AUC 0.059);
+  bi-encoder interaction features worse (53 unseen FPs). Verdict after 4
+  experiments: ~100 positive pairs cannot train goal↔utterance relation
+  regardless of head architecture. Path forward is DATA order-of-magnitude
+  (contrastive pairs), not architecture. Act classifier (0.95) stands as
+  the proven component; goal binding stays deterministic until data exists.
 - NEXT: live-call evidence (interpret.nlp_candidate stages in traces) →
   expand seeds from misses → v3. Slot/entity heads after act proves out.
 

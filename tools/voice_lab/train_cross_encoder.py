@@ -91,6 +91,26 @@ def encode_texts(tokenizer, model, texts: list[str], device: str):
     return torch.cat(vectors, dim=0)
 
 
+def encode_pair_features(tokenizer, model, pairs: list[dict], device: str):
+    """Bi-encoder inductive bias: separate U and [Q+G] encodings with
+    explicit interaction features [u; g; u*g; |u-g|]. Forces the head to
+    compare meanings instead of memorizing topic patterns."""
+    import torch
+
+    model.eval()
+    with torch.no_grad():
+        U = encode_texts(
+            tokenizer, model, [p["utterance"] for p in pairs], device
+        ).cpu()
+        G = encode_texts(
+            tokenizer,
+            model,
+            [f"[Q] {p['question']} [G] {p['goal']['description']}" for p in pairs],
+            device,
+        ).cpu()
+    return torch.cat([U, G, U * G, (U - G).abs()], dim=1)
+
+
 def format_input(question: str, goal: dict, utterance: str) -> str:
     allowed = ""
     if goal.get("allowed_values"):
@@ -106,6 +126,21 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--unseen-goals", default="daughter_visit,utilities_paid")
+    parser.add_argument(
+        "--heads",
+        default="rel,val,act,corr",
+        help="comma subset to train this run (reviewer: relevance+value first)",
+    )
+    parser.add_argument("--unfreeze-top", type=int, default=0)
+    parser.add_argument("--lr", type=float, default=2e-3)
+    parser.add_argument("--encoder-lr", type=float, default=2e-5)
+    parser.add_argument(
+        "--arch",
+        default="pair",
+        choices=["pair", "bi"],
+        help="pair: single [Q][G][U] encoding; bi: separate U and G+Q "
+        "encodings with explicit interaction features",
+    )
     args = parser.parse_args()
 
     import torch
@@ -164,15 +199,27 @@ def main() -> None:
     encoder = AutoModel.from_pretrained(MODEL_ID, trust_remote_code=False).to(device)
     for param in encoder.parameters():
         param.requires_grad = False
+    if args.unfreeze_top > 0:
+        for layer in encoder.layers[-args.unfreeze_top :]:
+            for param in layer.parameters():
+                param.requires_grad = True
     with torch.no_grad():
         probe = encode_texts(
             tokenizer, encoder, [format_input("q", {"description": "g"}, "u")], device
         )
     dim = probe.shape[1]
+    if args.arch == "bi":
+        dim = dim * 4
+
+    def featurize(subset: list[dict]):
+        if args.arch == "bi":
+            return encode_pair_features(tokenizer, encoder, subset, device)
+        texts = [format_input(p["question"], p["goal"], p["utterance"]) for p in subset]
+        return encode_texts(tokenizer, encoder, texts, device)
 
     tr_texts, tr_rel, tr_val, tr_val_m, tr_act, tr_act_m, tr_corr = tensors(train_pairs)
     with torch.no_grad():
-        Xtr = encode_texts(tokenizer, encoder, tr_texts, device)
+        Xtr = featurize(train_pairs)
     head_rel = nn.Linear(dim, 1)
     head_val = nn.Linear(dim, len(VALUE_LABELS))
     head_act = nn.Linear(dim, len(ACTS))
@@ -183,21 +230,45 @@ def main() -> None:
     n_pos_tr = float(tr_rel.sum())
     n_neg_tr = float(len(tr_rel) - n_pos_tr)
     pos_weight = torch.tensor([n_neg_tr / max(n_pos_tr, 1.0)])
-    optimizer = torch.optim.AdamW(heads.parameters(), lr=2e-3, weight_decay=1e-4)
+    if args.unfreeze_top > 0:
+        Xtr = None
+        optimizer = torch.optim.AdamW(
+            [
+                {"params": list(heads.parameters()), "lr": args.lr},
+                {
+                    "params": [p for p in encoder.parameters() if p.requires_grad],
+                    "lr": args.encoder_lr,
+                },
+            ],
+            weight_decay=1e-4,
+        )
+    else:
+        optimizer = torch.optim.AdamW(heads.parameters(), lr=args.lr, weight_decay=1e-4)
     bce = nn.BCEWithLogitsLoss()
     bce_rel = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     ce = nn.CrossEntropyLoss(ignore_index=-100)
     heads.train()
+    if args.unfreeze_top > 0:
+        encoder.train()
+    want = {h.strip() for h in args.heads.split(",")}
     for _epoch in range(args.epochs):
         optimizer.zero_grad()
-        loss = bce_rel(head_rel(Xtr).squeeze(-1), tr_rel)
-        if tr_val_m.any():
-            loss = loss + ce(head_val(Xtr[tr_val_m]), tr_val[tr_val_m])
-        if tr_act_m.any():
-            loss = loss + ce(head_act(Xtr[tr_act_m]), tr_act[tr_act_m])
-        loss = loss + bce(head_corr(Xtr).squeeze(-1), tr_corr)
+        if args.unfreeze_top > 0:
+            if args.arch == "bi":
+                raise SystemExit("--arch bi requires frozen encoder in this experiment")
+            Xb = encode_texts(tokenizer, encoder, tr_texts, device)
+        else:
+            Xb = Xtr
+        loss = bce_rel(head_rel(Xb).squeeze(-1), tr_rel)
+        if "val" in want and tr_val_m.any():
+            loss = loss + ce(head_val(Xb[tr_val_m]), tr_val[tr_val_m])
+        if "act" in want and tr_act_m.any():
+            loss = loss + ce(head_act(Xb[tr_act_m]), tr_act[tr_act_m])
+        if "corr" in want:
+            loss = loss + bce(head_corr(Xb).squeeze(-1), tr_corr)
         loss.backward()
         optimizer.step()
+    encoder.eval()
 
     def evaluate(subset: list[dict], name: str) -> dict:
         heads.eval()
@@ -205,19 +276,44 @@ def main() -> None:
             texts, rel, val, val_m, act, act_m, corr = tensors(subset)
             if not texts:
                 return {"n": 0}
-            X = encode_texts(tokenizer, encoder, texts, device)
-            pred_rel = (torch.sigmoid(head_rel(X)).squeeze(-1) >= 0.5).float()
+            X = featurize(subset)
+            scores = torch.sigmoid(head_rel(X)).squeeze(-1)
+            pred_rel = (scores >= 0.5).float()
             tp = int(((pred_rel == 1) & (rel == 1)).sum())
             fp = int(((pred_rel == 1) & (rel == 0)).sum())
             fn = int(((pred_rel == 0) & (rel == 1)).sum())
             precision = tp / (tp + fp) if tp + fp else 0.0
             recall = tp / (tp + fn) if tp + fn else 0.0
             f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+            # PR-AUC via ranked average precision (threshold-free).
+            order = torch.argsort(scores, descending=True)
+            ranked = rel[order]
+            cum_tp = torch.cumsum(ranked, dim=0)
+            precisions = cum_tp / torch.arange(1, len(ranked) + 1)
+            pr_auc = (
+                float((precisions * ranked).sum() / max(int(ranked.sum()), 1))
+                if int(ranked.sum())
+                else 0.0
+            )
+            # Threshold curve F1 @ 0.3/0.5/0.7/0.9.
+            curve = {}
+            for thr in (0.3, 0.5, 0.7, 0.9):
+                pr = (scores >= thr).float()
+                t = int(((pr == 1) & (rel == 1)).sum())
+                f = int(((pr == 1) & (rel == 0)).sum())
+                n = int(((pr == 0) & (rel == 1)).sum())
+                p = t / (t + f) if t + f else 0.0
+                r = t / (t + n) if t + n else 0.0
+                curve[str(thr)] = round(
+                    2 * p * r / (p + r) if p + r else 0.0, 3
+                )
             out: dict = {
                 "n": len(subset),
                 "rel_precision": round(precision, 3),
                 "rel_recall": round(recall, 3),
                 "rel_f1": round(f1, 3),
+                "pr_auc": round(pr_auc, 3),
+                "f1_curve": curve,
                 "wrong_goal_fp": fp,
             }
             if val_m.any():
@@ -251,6 +347,8 @@ def main() -> None:
     out_dir = ARTIFACT_ROOT / args.version
     out_dir.mkdir(parents=True, exist_ok=True)
     torch.save(heads.state_dict(), out_dir / "heads.pt")
+    if args.unfreeze_top > 0:
+        encoder.save_pretrained(out_dir / "encoder")
     (out_dir / "labels.json").write_text(
         json.dumps(
             {"acts": list(ACTS), "values": list(VALUE_LABELS), "model": "cross-encoder"},

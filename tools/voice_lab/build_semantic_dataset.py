@@ -176,36 +176,69 @@ def mine_live_traces() -> list[dict]:
 
 
 def mine_hard_negatives() -> list[dict]:
-    """True hard negatives: topically close but NOT answering the goal."""
-    pairs = [
-        ("medications_taken", "Таблетки купила вчера.", "bool"),
-        ("medications_taken", "Дочь привезёт лекарства вечером.", "bool"),
-        ("daughter_visit", "Дочь утром звонила.", "bool"),
-        ("daughter_visit", "С дочкой всё хорошо.", "bool"),
-        ("utilities_paid", "Квитанции достала, вечером разберусь.", "bool"),
-        ("utilities_paid", "Платёжки на тумбочке лежат.", "bool"),
-        ("blood_pressure", "Давление не мерила.", "free_text"),
-        ("onset", "Болит уже давно.", "free_text"),
-    ]
+    """True hard negatives AND counterfactuals killing Q/G shortcuts.
+
+    Counterfactual design: same question or same keywords, different
+    relation — the model cannot win from Q or topic alone. Includes
+    positive examples for unseen-goal candidates (daughter_visit,
+    utilities_paid) so the unseen split tests meaning, not emptiness.
+    """
     goal_defs = {
-        "medications_taken": "Принял ли человек лекарства",
-        "daughter_visit": "Придёт ли дочь сегодня",
-        "utilities_paid": "Оплачены ли коммунальные услуги",
-        "blood_pressure": "Какое давление у человека",
-        "onset": "Когда начался симптом",
+        "medications_taken": ("Принял ли человек лекарства", "bool"),
+        "daughter_visit": ("Придёт ли дочь сегодня", "bool"),
+        "utilities_paid": ("Оплачены ли коммунальные услуги", "bool"),
+        "blood_pressure": ("Какое давление у человека", "free_text"),
+        "onset": ("Когда начался симптом", "free_text"),
+        "wellness": (
+            "Как человек себя чувствует в целом прямо сейчас",
+            "free_text",
+        ),
     }
+    # (question, goal_id, utterance, relevant, value|None)
+    pairs: list[tuple[str, str, str, bool, str | None]] = [
+        # --- counterfactuals: same Q, different relation ---
+        ("Как вы себя чувствуете?", "wellness", "Дочь вечером обещала приехать.", False, None),
+        ("Как вы себя чувствуете?", "wellness", "Таблетки утром выпила.", False, None),
+        ("Как вы себя чувствуете?", "wellness", "Квитанции лежат на тумбочке.", False, None),
+        ("Лекарства сегодня приняли?", "medications_taken", "Таблетки лежат.", False, None),
+        ("Лекарства сегодня приняли?", "medications_taken", "Да, выпила.", True, "yes"),
+        ("Лекарства сегодня приняли?", "medications_taken", "Нет, забыла.", True, "no"),
+        # --- same words, different relation ---
+        ("", "daughter_visit", "Дочь звонила.", False, None),
+        ("", "daughter_visit", "Обещала быть после работы.", True, "yes"),
+        ("", "medications_taken", "Таблетки купил.", False, None),
+        ("", "medications_taken", "Таблетки выпил.", True, "yes"),
+        ("", "utilities_paid", "Квитанции забрала дочь.", False, None),
+        ("", "utilities_paid", "Квитанции так и лежат, руки не дошли.", True, "no"),
+        # --- unseen-goal positives (held out from train) ---
+        ("", "daughter_visit", "Дочка сказала, что заедет вечером.", True, "yes"),
+        ("", "daughter_visit", "Жду дочь, должна приехать.", True, "yes"),
+        ("", "daughter_visit", "Дочь не приедет, занята.", True, "no"),
+        ("", "utilities_paid", "За свет заплатила вчера.", True, "yes"),
+        ("", "utilities_paid", "Всё оплачено.", True, "yes"),
+        ("", "utilities_paid", "Пока не платила.", True, "no"),
+        # --- classic hard negatives ---
+        ("", "medications_taken", "Таблетки купила вчера.", False, None),
+        ("", "medications_taken", "Дочь привезёт лекарства вечером.", False, None),
+        ("", "daughter_visit", "Дочь утром звонила.", False, None),
+        ("", "utilities_paid", "Платёжки на тумбочке лежат.", False, None),
+        ("", "blood_pressure", "Давление не мерила.", False, None),
+        ("", "onset", "Болит уже давно.", False, None),
+    ]
     rows = []
-    for goal_id, text, answer_type in pairs:
-        row = _base("", text, "hardneg", "hard_negative")
+    for question, goal_id, text, relevant, value in pairs:
+        desc, answer_type = goal_defs[goal_id]
+        row = _base(question, text, "hardneg", "hard_negative")
         row["goal"] = {
             "goal_id": goal_id,
-            "description": goal_defs[goal_id],
+            "description": desc,
             "answer_type": answer_type,
             "allowed_values": ["yes", "no", "unknown"]
             if answer_type == "bool"
             else [],
         }
-        row["relevant"] = False
+        row["relevant"] = relevant
+        row["value"] = value
         rows.append(row)
     return rows
 
