@@ -148,6 +148,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--unseen-goals", default="daughter_visit,utilities_paid")
+    parser.add_argument("--eval-file", default=None)
     parser.add_argument(
         "--heads",
         default="rel,val,act,corr",
@@ -389,6 +390,29 @@ def main() -> None:
 
     held_report = evaluate(held_pairs, "held")
     unseen_report = evaluate(unseen_pairs, "unseen-goal(diagnostic)")
+    fixed_report: dict = {}
+    if args.eval_file:
+        eval_rows = [
+            json.loads(line)
+            for line in Path(args.eval_file).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        eval_pairs = [
+            {
+                "question": r["question"] or "",
+                "goal": r["goal"],
+                "utterance": r["utterance"],
+                "relevant": bool(r["relevant"]),
+                "value": r.get("value"),
+                "act": r.get("act"),
+                "correction": bool(r.get("correction", False)),
+                "group": "eval_fixed",
+            }
+            for r in eval_rows
+        ]
+        fixed_report = evaluate(eval_pairs, "eval-fixed")
+    else:
+        fixed_report = {}
 
     out_dir = ARTIFACT_ROOT / args.version
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -434,6 +458,7 @@ def main() -> None:
                 "unseen_goals": sorted(unseen),
                 "held": held_report,
                 "unseen": unseen_report,
+                "eval_fixed": fixed_report,
                 "model_id": MODEL_ID,
                 "seed": args.seed,
             },
