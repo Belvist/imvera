@@ -189,26 +189,44 @@ class FreeSwitchBridgeSession:
         }
 
     async def request_downstream_stop(self) -> dict[str, Any]:
-        """Best-effort downstream stop via FreeSWITCH + measurement.
+        """Best-effort downstream playback stop that MUST NOT close the media WS.
+
+        Sends ``uuid_audio_stream <uuid> break`` (clears the FS-side playback
+        queue; forward/uplink streaming continues) — NEVER ``... stop``, which
+        STOPS THE AUDIO STREAM AND CLOSES the WebSocket carrying this
+        CallActor session (a barge-in would then kill every later generation).
+
+        Evidence for ``break`` (running imvera-freeswitch, FS 1.10.12):
+        ``break`` verb + ``break_audio_queue`` / ``AudioProcessor::breakAudio``
+        symbols in mod_audio_stream.so; upstream v1.0.3 notes "drain mode
+        added to break api method". ``pause`` is NOT a substitute (it gates
+        the uplink/caller stream, not downlink playback); core ``uuid_break``
+        targets dialplan apps, not media-bug playback. Live audible effect is
+        NOT verified here — see the ack contract below.
 
         Returns requested_at/result — a transport measurement, NEVER an
-        audible-silence claim. Audible stop must be proven by live
-        measurement (barge-in probe), not by this return value.
+        audible-silence claim. ``acked_at`` is None on failure and ``result``
+        holds the raw ESL reply (e.g. "-ERR ..." when unsupported); the call
+        never raises and never closes the session. Local cancel
+        (cancel_generation/LOCAL_PURGE_ACK) is the guaranteed path and is
+        unaffected by this call's outcome.
         """
         from packages.telephony.freeswitch_esl import freeswitch_api
 
         requested_at = time.time()
         try:
-            result = await freeswitch_api(f"uuid_audio_stream {self.fs_uuid} stop")
+            result = await freeswitch_api(f"uuid_audio_stream {self.fs_uuid} break")
             return {
                 "requested_at": requested_at,
                 "acked_at": time.time(),
+                "command": "uuid_audio_stream break",
                 "result": str(result)[:200],
             }
         except Exception as exc:
             return {
                 "requested_at": requested_at,
                 "acked_at": None,
+                "command": "uuid_audio_stream break",
                 "error": str(exc)[:200],
             }
 

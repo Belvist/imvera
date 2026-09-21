@@ -212,6 +212,96 @@ def test_close_during_cancel_is_deterministic() -> None:
     asyncio.run(scenario())
 
 
+def test_cancel_mid_pump_session_survives_and_g2_flows() -> None:
+    """Barge-in shape: cancel lands mid-send; the pump/WS session must survive
+    and the next generation must flow. A normal barge-in NEVER closes the
+    media session (no session-killing `stop` on this path)."""
+    async def scenario() -> None:
+        bridge, ws = _bridge(), _Wire()
+        ws.release.clear()
+        await bridge.enqueue_outbound_pcm(b"\x01\x00" * 320, generation_id="g-1")
+        pump = asyncio.create_task(bridge._pump_outbound_to_ws(ws))
+        await asyncio.wait_for(ws.entered.wait(), timeout=2.0)
+        ack = bridge.cancel_generation("g-1")
+        assert ack["purged_frames"] == 0  # already extracted: in-flight only
+        ws.release.set()
+        # G2 arrives after the cancel while the same pump is still running.
+        for seq in range(3):
+            assert await bridge.enqueue_outbound_pcm(
+                b"\x02\x00" * 320, generation_id="g-2", sequence=seq
+            )
+        for _ in range(500):
+            if bridge._outbound_queue.empty() and len(ws.sent) >= 4:
+                break
+            await asyncio.sleep(0.005)
+        await asyncio.sleep(0.02)
+        pump.cancel()
+        try:
+            await pump
+        except asyncio.CancelledError:
+            pass
+        # Exactly the bounded in-flight race frame + all of G2.
+        assert len(ws.sent) == 4
+        assert [g for g, _ in ws.sent[1:]] == ["pcm:02"] * 3
+        assert bridge._closed is False
+        assert bridge.generation_report("g-2")["sent"] == 3
+        # Session still accepts new work after a cancel.
+        assert await bridge.enqueue_outbound_pcm(
+            b"\x03\x00" * 320, generation_id="g-3"
+        ) is True
+
+    asyncio.run(scenario())
+
+
+def test_request_downstream_stop_uses_break_never_stop(monkeypatch) -> None:
+    """request_downstream_stop must use the non-closing `break` primitive:
+    `stop` STOPS THE STREAM AND CLOSES the media WS (kills G2 and later)."""
+    import packages.telephony.freeswitch_esl as esl_mod
+
+    commands: list[str] = []
+
+    async def fake_api(command: str, *, timeout_s: float = 3.0) -> str:
+        commands.append(command)
+        return "+OK Success"
+
+    monkeypatch.setattr(esl_mod, "freeswitch_api", fake_api)
+
+    async def scenario() -> None:
+        bridge = _bridge()
+        ack = await bridge.request_downstream_stop()
+        assert commands == [f"uuid_audio_stream {bridge.fs_uuid} break"]
+        assert ack["command"] == "uuid_audio_stream break"
+        assert ack["acked_at"] is not None
+        assert "Success" in ack["result"]
+        assert bridge._closed is False
+
+    asyncio.run(scenario())
+
+
+def test_request_downstream_stop_failure_is_honest_and_session_open(monkeypatch) -> None:
+    """ESL failure is recorded honestly — no exception, no session close.
+    The local cancel path (LOCAL_PURGE_ACK) already guaranteed delivery stop."""
+    import packages.telephony.freeswitch_esl as esl_mod
+
+    async def fake_api(command: str, *, timeout_s: float = 3.0) -> str:
+        raise ConnectionError("ESL unreachable")
+
+    monkeypatch.setattr(esl_mod, "freeswitch_api", fake_api)
+
+    async def scenario() -> None:
+        bridge = _bridge()
+        ack = await bridge.request_downstream_stop()
+        assert ack["acked_at"] is None
+        assert "unreachable" in ack["error"]
+        assert ack["command"] == "uuid_audio_stream break"
+        assert bridge._closed is False
+        assert await bridge.enqueue_outbound_pcm(
+            b"\x02\x00" * 320, generation_id="g-next"
+        ) is True
+
+    asyncio.run(scenario())
+
+
 def test_thousand_cancel_cycles_zero_ghost() -> None:
     async def scenario() -> None:
         bridge, ws = _bridge(), _Wire()
