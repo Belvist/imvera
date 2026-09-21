@@ -33,6 +33,47 @@ _NOT_STARTED = frozenset(
     }
 )
 
+# Episodes that still describe a living complaint (resolved ones are history).
+_OPEN_EPISODE = frozenset({"open", "suspended"})
+
+
+def _has_open_complaints(state: EngineState) -> bool:
+    """Grounded complaint evidence — no text heuristics.
+
+    Counts speaker/unknown-subject issue episodes (other-person pain stays
+    informational in observations, it must not inflate the elder's status)
+    plus a probed wellness concern. Either floors care at YELLOW.
+    """
+    episodes = getattr(state, "issue_episodes", None) or {}
+    values = episodes.values() if hasattr(episodes, "values") else episodes
+    for ep in values:
+        if ep is None:
+            continue
+        if getattr(ep, "status", "open") not in _OPEN_EPISODE:
+            continue
+        if getattr(ep, "subject", "unknown") == "other_person":
+            continue
+        return True
+    if (getattr(state, "wellness_concern", "") or "").strip():
+        return True
+    return False
+
+
+def _care_state(state: EngineState, mission_status: str):
+    """Mission completion is not health evidence.
+
+    A suffering elder with a formally completed mission must never read
+    GREEN — grounded complaints floor care at YELLOW. RED still comes
+    only from the safety path (Core owns verdicts).
+    """
+    from packages.contracts.enums import CareState
+
+    if mission_status != "COMPLETED":
+        return CareState.YELLOW
+    if _has_open_complaints(state):
+        return CareState.YELLOW
+    return CareState.GREEN
+
 
 def _grounded_evidence_quotes(state: EngineState, goal) -> list[str]:
     """Public evidence = grounded quote text only (never synthetic ev-... IDs)."""
@@ -176,7 +217,6 @@ def build_call_outcomes(
         # P0#4: wire StatusEngine for the engine path (no legacy status).
         # A completed call is itself evidence of contact/consent/talk.
         from packages.contracts.enums import (
-            CareState,
             ConsentState,
             DeliveryState,
             TechnicalState,
@@ -197,9 +237,7 @@ def build_call_outcomes(
             call_id=state.call_id,
             delivery_state=DeliveryState.ANSWERED,
             technical_state=TechnicalState.OK,
-            care_state=(
-                CareState.GREEN if mr.status == "COMPLETED" else CareState.YELLOW
-            ),
+            care_state=_care_state(state, mr.status),
             consent_state=ConsentState.UNKNOWN,
             safety=SafetySnapshot(),
             mandatory_checks=checks,

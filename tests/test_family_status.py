@@ -83,3 +83,77 @@ def test_red_keeps_red_family_status(
     snap = session._snapshot()
     assert snap.outcomes is not None
     assert snap.outcomes.family_status == "RED"
+
+
+def _completed_suffering_engine(call_id: str):
+    """Default mission COMPLETED, but the elder complained (fs-1b34dc2b shape)."""
+    from packages.contracts.enums import FsmState
+    from packages.dialogue_engine.engine import DialogueEngine
+    from packages.dialogue_engine.policy import apply_slot_answer
+    from packages.dialogue_engine.state import GoalLifecycle
+
+    engine = DialogueEngine(call_id=call_id, elder_display_name="Тест")
+    engine.start()
+    for slot, val in (
+        ("wellness", "Всё болит"),
+        ("mood", "Плохо"),
+        ("sleep", "Не спал"),
+        ("plans", "Дома"),
+    ):
+        apply_slot_answer(
+            engine.state, slot, val, turn_id="t1", source_text=val, confidence=0.9
+        )
+    for goal in engine.state.goals.values():
+        goal.lifecycle = GoalLifecycle.SATISFIED
+    engine.state.call_closed = True
+    engine.state.fsm_state = FsmState.FINAL_CLASSIFICATION
+    return engine
+
+
+def test_open_complaint_floors_completed_mission_to_yellow() -> None:
+    from packages.dialogue_engine.mission_result import (
+        build_call_outcomes,
+        build_mission_result,
+    )
+    from packages.dialogue_engine.state import IssueEpisode
+
+    engine = _completed_suffering_engine("status-suffer")
+    assert build_mission_result(engine.state).status == "COMPLETED"
+    engine.state.issue_episodes["ep-1"] = IssueEpisode(
+        episode_id="ep-1",
+        primary_label="голова болит",
+        kind="issue",
+        subject="speaker",
+        status="open",
+    )
+    assert build_call_outcomes(engine.state).family_status == "YELLOW"
+
+
+def test_probed_concern_floors_completed_mission_to_yellow() -> None:
+    from packages.dialogue_engine.mission_result import build_call_outcomes
+
+    engine = _completed_suffering_engine("status-concern")
+    engine.state.wellness_concern = "тошнит"
+    assert build_call_outcomes(engine.state).family_status == "YELLOW"
+
+
+def test_resolved_or_other_person_complaint_keeps_green() -> None:
+    from packages.dialogue_engine.mission_result import build_call_outcomes
+    from packages.dialogue_engine.state import IssueEpisode
+
+    engine = _completed_suffering_engine("status-resolved")
+    engine.state.issue_episodes["ep-1"] = IssueEpisode(
+        episode_id="ep-1",
+        primary_label="голова болит",
+        kind="issue",
+        subject="speaker",
+        status="resolved",
+    )
+    engine.state.issue_episodes["ep-2"] = IssueEpisode(
+        episode_id="ep-2",
+        primary_label="нога болит",
+        kind="issue",
+        subject="other_person",
+        status="open",
+    )
+    assert build_call_outcomes(engine.state).family_status == "GREEN"
