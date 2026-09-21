@@ -308,6 +308,15 @@ Until these exist, agent reports exact commands run.
   regardless of head architecture. Path forward is DATA order-of-magnitude
   (contrastive pairs), not architecture. Act classifier (0.95) stands as
   the proven component; goal binding stays deterministic until data exists.
+- CrossEncoderV3 (reviewer-caught defects fixed): the v2 "unfreeze"
+  never trained (no_grad + CPU cut the gradient — invalid evidence);
+  auto-negatives were label poisoning (multi-intent utterances marked
+  false). Fixed with true gradient path (verified grad norms), pair-native
+  supervision (explicit labels only; auto-false solely for closed-world
+  control acts), curated contrastive pairs. Result: held F1 0.885,
+  AP 1.0, 0 wrong-goal FPs; unseen-goal F1 0.571, AP 0.909 (diagnostic).
+  Previous "data-only" verdict was premature — clean supervision +
+  real fine-tuning was never actually tested until now.
 - NEXT: live-call evidence (interpret.nlp_candidate stages in traces) →
   expand seeds from misses → v3. Slot/entity heads after act proves out.
 

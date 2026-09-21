@@ -175,6 +175,77 @@ def mine_live_traces() -> list[dict]:
     return rows
 
 
+def mine_curated_pairs() -> list[dict]:
+    """Expert-labeled explicit pairs (XEnc V3): positives, same-topic and
+    same-question negatives, multi-goal utterances labeled per goal.
+    Every row reviewed by the engineer 2026-09-21 — no autogeneration."""
+    goal = GOALS
+    # (question, goal_id, utterance, relevant, value)
+    pairs: list[tuple[str, str, str, bool, str | None]] = [
+        # --- onset positives, varied Q ---
+        ("Когда это началось?", "onset", "Вчера началось.", True, "yesterday"),
+        ("Когда заболела голова?", "onset", "С утра.", True, "morning"),
+        ("Давно болит?", "onset", "Уже третий день.", True, None),
+        ("Когда началось?", "onset", "Пару часов назад.", True, None),
+        ("Когда началось?", "onset", "Не помню.", True, "unknown"),
+        ("Когда началось?", "onset", "Не знаю.", True, "unknown"),
+        # --- onset same-question negatives ---
+        ("Когда началось?", "wellness", "Хорошо.", False, None),
+        ("Когда началось?", "sleep", "Спал нормально.", False, None),
+        # --- wellness positives ---
+        ("Как вы себя чувствуете?", "wellness", "Хорошо.", True, None),
+        ("Как вы себя чувствуете?", "wellness", "Плохо.", True, None),
+        ("Как вы себя чувствуете?", "wellness", "Так себе.", True, None),
+        ("Как вы себя чувствуете?", "wellness", "Отвратительно.", True, None),
+        # --- wellness same-question negatives ---
+        ("Как вы себя чувствуете?", "wellness", "Дочь вечером приедет.", False, None),
+        ("Как вы себя чувствуете?", "wellness", "Таблетки выпила.", False, None),
+        # --- mood/sleep/plans positives ---
+        ("Как настроение?", "mood", "Хорошее.", True, None),
+        ("Как настроение?", "mood", "Плохое.", True, None),
+        ("Как спали?", "sleep", "Плохо спал.", True, None),
+        ("Как спали?", "sleep", "Всю ночь не спал.", True, None),
+        ("Какие планы?", "plans", "Дома буду.", True, None),
+        ("Какие планы?", "plans", "Гулять пойду.", True, None),
+        # --- cross-slot negatives (similar goals) ---
+        ("Как настроение?", "mood", "Голова болит.", False, None),
+        ("Как спали?", "sleep", "Хорошо.", False, None),
+        ("Какие планы?", "plans", "Спал нормально.", False, None),
+        ("Как вы себя чувствуете?", "mood", "Плохо.", False, None),
+        ("Как вы себя чувствуете?", "sleep", "Плохо.", False, None),
+        # --- medications positives/negatives ---
+        ("Таблетки приняли?", "medications_taken", "Да, утром выпил.", True, "yes"),
+        ("Таблетки приняли?", "medications_taken", "Нет, забыл.", True, "no"),
+        ("Таблетки приняли?", "medications_taken", "Какие таблетки?", False, None),
+        # --- blood pressure ---
+        ("Давление какое?", "blood_pressure", "Сто сорок на девяносто.", True, None),
+        ("Давление какое?", "blood_pressure", "Не мерил.", True, "unknown"),
+        ("Давление какое?", "blood_pressure", "Голова болит.", False, None),
+    ]
+    # --- multi-goal utterance, labeled per goal ---
+    multi = "В целом нормально, таблетки утром выпила, а дочь вечером приедет."
+    bad_night = "Плохо, голова болит, не спал."
+    pairs.extend(
+        [
+            ("Как вы себя чувствуете?", "wellness", multi, True, None),
+            ("Как вы себя чувствуете?", "medications_taken", multi, True, "yes"),
+            ("Как вы себя чувствуете?", "daughter_visit", multi, True, "yes"),
+            ("Как вы себя чувствуете?", "sleep", multi, False, None),
+            ("Как вы себя чувствуете?", "wellness", bad_night, True, None),
+            ("Как вы себя чувствуете?", "mood", bad_night, False, None),
+            ("Как вы себя чувствуете?", "sleep", bad_night, False, None),
+        ]
+    )
+    rows = []
+    for question, goal_id, text, relevant, value in pairs:
+        row = _base(question, text, "curated", "curated_pair")
+        row["goal"] = dict(goal[goal_id])
+        row["relevant"] = relevant
+        row["value"] = value
+        rows.append(row)
+    return rows
+
+
 def mine_hard_negatives() -> list[dict]:
     """True hard negatives AND counterfactuals killing Q/G shortcuts.
 
@@ -247,7 +318,8 @@ def main() -> None:
     seeds = mine_act_seeds()
     live = mine_live_traces()
     negatives = mine_hard_negatives()
-    all_rows = seeds + live + negatives
+    curated = mine_curated_pairs()
+    all_rows = seeds + live + negatives + curated
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(
         "\n".join(json.dumps(r, ensure_ascii=False) for r in all_rows) + "\n",
@@ -256,7 +328,8 @@ def main() -> None:
     review = sum(1 for r in all_rows if r["relevant"] is None)
     print(
         f"wrote {len(all_rows)} rows ({len(seeds)} seeds, {len(live)} live, "
-        f"{len(negatives)} negatives); review queue: {review}"
+        f"{len(negatives)} negatives, {len(curated)} curated); "
+        f"review queue: {review}"
     )
 
 

@@ -38,6 +38,11 @@ def load_rows() -> tuple[list[dict], str]:
 def build_pairs(rows: list[dict]) -> list[dict]:
     from tools.voice_lab.build_semantic_dataset import GOALS
 
+    # Auto-negation is SOUND only for closed-world control acts (greeting,
+    # goodbye, backchannel, repeat, stop): nothing else can be relevant.
+    # Content answers may address several goals at once — auto-false there
+    # is label poisoning (reviewer catch).
+    CLOSED_ACTS = {"greeting", "goodbye", "backchannel", "repeat_request", "stop"}
     goal_ids = sorted(GOALS)
     pairs = []
     for row in rows:
@@ -56,7 +61,7 @@ def build_pairs(rows: list[dict]) -> list[dict]:
                 "group": row["split_group"],
             }
         )
-        if row["relevant"]:
+        if row["relevant"] and row.get("act") in CLOSED_ACTS:
             for other_id in goal_ids:
                 if other_id == goal["goal_id"]:
                     continue
@@ -88,6 +93,23 @@ def encode_texts(tokenizer, model, texts: list[str], device: str):
             hidden = model(**batch).last_hidden_state
             pooled = (hidden * mask.unsqueeze(-1)).sum(1) / mask.sum(1).unsqueeze(-1)
             vectors.append(pooled.cpu())
+    return torch.cat(vectors, dim=0)
+
+
+def encode_train(tokenizer, model, texts: list[str], device: str):
+    """Training encode WITH gradients (reviewer catch: the old path wrapped
+    everything in no_grad + .cpu(), so 'unfreezing' never trained)."""
+    import torch
+
+    model.train()
+    vectors = []
+    for text in texts:
+        batch = tokenizer(text, return_tensors="pt", truncation=True, max_length=192)
+        mask = batch["attention_mask"].to(device)
+        batch = {k: v.to(device) for k, v in batch.items()}
+        hidden = model(**batch).last_hidden_state
+        pooled = (hidden * mask.unsqueeze(-1)).sum(1) / mask.sum(1).unsqueeze(-1)
+        vectors.append(pooled)
     return torch.cat(vectors, dim=0)
 
 
@@ -231,6 +253,12 @@ def main() -> None:
     n_neg_tr = float(len(tr_rel) - n_pos_tr)
     pos_weight = torch.tensor([n_neg_tr / max(n_pos_tr, 1.0)])
     if args.unfreeze_top > 0:
+        heads.to(device)
+        tr_rel = tr_rel.to(device)
+        tr_val, tr_val_m = tr_val.to(device), tr_val_m.to(device)
+        tr_act, tr_act_m, tr_corr = tr_act.to(device), tr_act_m.to(device), tr_corr.to(device)
+        pos_weight = pos_weight.to(device)
+    if args.unfreeze_top > 0:
         Xtr = None
         optimizer = torch.optim.AdamW(
             [
@@ -256,7 +284,7 @@ def main() -> None:
         if args.unfreeze_top > 0:
             if args.arch == "bi":
                 raise SystemExit("--arch bi requires frozen encoder in this experiment")
-            Xb = encode_texts(tokenizer, encoder, tr_texts, device)
+            Xb = encode_train(tokenizer, encoder, tr_texts, device)
         else:
             Xb = Xtr
         loss = bce_rel(head_rel(Xb).squeeze(-1), tr_rel)
@@ -267,6 +295,14 @@ def main() -> None:
         if "corr" in want:
             loss = loss + bce(head_corr(Xb).squeeze(-1), tr_corr)
         loss.backward()
+        if args.unfreeze_top > 0 and _epoch == 0:
+            norms = [
+                p.grad.norm().item()
+                for p in encoder.parameters()
+                if p.requires_grad and p.grad is not None
+            ]
+            print(f"encoder grad check: {len(norms)} params, max_norm={max(norms):.2e}")
+            assert norms and max(norms) > 0, "no gradient reached the encoder"
         optimizer.step()
     encoder.eval()
 
@@ -277,6 +313,16 @@ def main() -> None:
             if not texts:
                 return {"n": 0}
             X = featurize(subset)
+            if args.unfreeze_top > 0:
+                X = X.to(device)
+                rel = rel.to(device)
+                val, val_m, act, act_m, corr = (
+                    val.to(device),
+                    val_m.to(device),
+                    act.to(device),
+                    act_m.to(device),
+                    corr.to(device),
+                )
             scores = torch.sigmoid(head_rel(X)).squeeze(-1)
             pred_rel = (scores >= 0.5).float()
             tp = int(((pred_rel == 1) & (rel == 1)).sum())
@@ -285,12 +331,12 @@ def main() -> None:
             precision = tp / (tp + fp) if tp + fp else 0.0
             recall = tp / (tp + fn) if tp + fn else 0.0
             f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-            # PR-AUC via ranked average precision (threshold-free).
+            # Average precision over the ranked list (threshold-free).
             order = torch.argsort(scores, descending=True)
             ranked = rel[order]
             cum_tp = torch.cumsum(ranked, dim=0)
-            precisions = cum_tp / torch.arange(1, len(ranked) + 1)
-            pr_auc = (
+            precisions = cum_tp / torch.arange(1, len(ranked) + 1).to(rel.device)
+            average_precision = (
                 float((precisions * ranked).sum() / max(int(ranked.sum()), 1))
                 if int(ranked.sum())
                 else 0.0
@@ -312,7 +358,7 @@ def main() -> None:
                 "rel_precision": round(precision, 3),
                 "rel_recall": round(recall, 3),
                 "rel_f1": round(f1, 3),
-                "pr_auc": round(pr_auc, 3),
+                "average_precision": round(average_precision, 3),
                 "f1_curve": curve,
                 "wrong_goal_fp": fp,
             }
