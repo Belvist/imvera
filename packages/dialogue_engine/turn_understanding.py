@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from pydantic import BaseModel
 
 from packages.contracts.semantic import (
@@ -62,6 +64,71 @@ class RichUserTurn(BaseModel):
     tiny_route: str | None = None
 
     model_config = {"frozen": True}
+
+
+@dataclass(frozen=True)
+class StrategyVote:
+    """One producer's proposal inside a single resolution (trace only)."""
+
+    strategy: str
+    elapsed_ms: float
+    confident: bool
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class ResolvedTurn:
+    """Single-resolver output (P2 Cut 1): the turn plus its trace.
+
+    The turn field set is IDENTICAL to RichUserTurn built by the legacy
+    entry points — the resolver only records how it was built, never
+    changes what was built (parity-harness enforced).
+    """
+
+    turn: RichUserTurn
+    trace: tuple[StrategyVote, ...]
+    interpret_path: str
+    total_elapsed_ms: float
+
+
+class TurnUnderstandingV2:
+    """Single resolution facade (P2 Cut 1): delegates 1:1 to the existing
+    builders, records the trace. No strategy moved, nothing deleted —
+    caller migration and producer folding come in later cuts."""
+
+    def resolve(
+        self,
+        text: str,
+        *,
+        utterance_id: str,
+        engine_state: object | None = None,
+        mission_provider: object | None = None,
+    ) -> ResolvedTurn:
+        import time
+
+        started = time.monotonic()
+        votes: list[StrategyVote] = []
+        step = time.monotonic()
+        turn = build_rich_turn_from_text(
+            text,
+            utterance_id=utterance_id,
+            engine_state=engine_state,
+            mission_provider=mission_provider,
+        )
+        votes.append(
+            StrategyVote(
+                strategy="build_rich_turn_from_text",
+                elapsed_ms=round((time.monotonic() - step) * 1000.0, 2),
+                confident=True,
+                detail="legacy canonical path, delegated verbatim",
+            )
+        )
+        return ResolvedTurn(
+            turn=turn,
+            trace=tuple(votes),
+            interpret_path="v2_resolve",
+            total_elapsed_ms=round((time.monotonic() - started) * 1000.0, 2),
+        )
 
 
 def enrich_payload_issue_mentions(

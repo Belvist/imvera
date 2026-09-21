@@ -1,4 +1,11 @@
-# Current task — agents closed P0-downstream + docs (2026-09-21)
+# Current task — P2 Cut 1: TurnUnderstandingV2 facade + parity (2026-09-21)
+
+- Single resolver facade delegating 1:1 to legacy builders + trace.
+  Parity harness: 12 phrases, byte-identical modulo wall-clock + random
+  ids (masked). Stable 3/3 runs. No caller switched, nothing deleted.
+- VERIFIED: new 12 passed; full 1615/6/0; differential 92/4/4/0; corpus
+  500/500; ruff 0. Commit + push.
+- NOT VERIFIED: remote CI.
 
 - 3 agents parallel: (1) P0 downstream `stop`→`break` + 3 tests, (2) docs
   debt + STATUS.json/gen_status.py + model MANIFEST, (3) TurnUnderstanding
