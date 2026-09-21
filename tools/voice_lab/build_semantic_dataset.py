@@ -1,13 +1,15 @@
-"""Mine semantic-NLU dataset v1: live traces + act seeds + hard negatives.
+"""Mine semantic-NLU dataset v2: fixed contract (reviewer order).
 
-Row schema (reviewer spec, adapted):
-  question, goal {goal_id, description, answer_type}, utterance,
-  relevant bool|null, value, act, subject, correction, certainty,
-  evidence_span [start,end] char offsets into utterance or null,
-  source (live_trace | act_seed | hard_negative | rule_corpus).
+Row schema:
+  question, goal {goal_id, description_ru, answer_type, allowed_values},
+  utterance, relevant bool|null, value, act, subject, polarity,
+  correction bool, certainty, ood bool, evidence_span [start,end]|null,
+  split_group (call_id or 'seed'), source.
 
-Output: datasets/semantic_nlu/v1.jsonl (gitignored, regenerable).
-Human review queue: rows with relevant=null.
+Rules: Russian goal descriptions (encoder is Russian); production
+answer_type/allowed_values (daily goals are free_text, NOT enum);
+act-only seeds never pretend to be goal examples (goal=null unless
+explicitly bound); missing labels stay null and must mask loss.
 """
 
 from __future__ import annotations
@@ -19,46 +21,76 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-OUT = ROOT / "datasets" / "semantic_nlu" / "v1.jsonl"
+OUT = ROOT / "datasets" / "semantic_nlu" / "v2.jsonl"
 
-DAILY_GOALS: dict[str, dict[str, str]] = {
+GOALS: dict[str, dict] = {
     "wellness": {
         "goal_id": "wellness",
-        "description": "How the person feels overall right now",
-        "answer_type": "enum",
+        "description": "Как человек себя чувствует в целом прямо сейчас",
+        "answer_type": "free_text",
+        "allowed_values": [],
     },
     "mood": {
         "goal_id": "mood",
-        "description": "Current mood of the person",
-        "answer_type": "enum",
+        "description": "Какое настроение у человека",
+        "answer_type": "free_text",
+        "allowed_values": [],
     },
     "sleep": {
         "goal_id": "sleep",
-        "description": "How the person slept",
-        "answer_type": "enum",
+        "description": "Как человек спал",
+        "answer_type": "free_text",
+        "allowed_values": [],
     },
     "plans": {
         "goal_id": "plans",
-        "description": "Plans for today / whereabouts",
-        "answer_type": "enum",
+        "description": "Какие планы на день, где находится",
+        "answer_type": "free_text",
+        "allowed_values": [],
     },
     "onset": {
         "goal_id": "onset",
-        "description": "When a symptom started",
+        "description": "Когда начался симптом",
         "answer_type": "free_text",
+        "allowed_values": [],
+    },
+    "medications_taken": {
+        "goal_id": "medications_taken",
+        "description": "Принял ли человек лекарства",
+        "answer_type": "bool",
+        "allowed_values": ["yes", "no", "unknown"],
+    },
+    "blood_pressure": {
+        "goal_id": "blood_pressure",
+        "description": "Какое давление у человека",
+        "answer_type": "free_text",
+        "allowed_values": [],
+    },
+    "daughter_visit": {
+        "goal_id": "daughter_visit",
+        "description": "Придёт ли дочь сегодня",
+        "answer_type": "bool",
+        "allowed_values": ["yes", "no", "unknown"],
+    },
+    "utilities_paid": {
+        "goal_id": "utilities_paid",
+        "description": "Оплачены ли коммунальные услуги",
+        "answer_type": "bool",
+        "allowed_values": ["yes", "no", "unknown"],
     },
 }
 
-# (question_substring | "" , text_substring, goal_id autonomously assigned)
+# (question_hint, text_hint, goal_id, value or None)
 SEED_GOAL_MAP: list[tuple[str, str, str, str | None]] = [
-    # (question_hint, text_hint, goal_id, value)
     ("Когда начал", "вчера", "onset", "yesterday"),
     ("Когда начал", "с утра", "onset", "morning"),
     ("Когда начал", "не помню", "onset", "unknown"),
     ("Когда начал", "не знаю", "onset", "unknown"),
-    ("Давление", "сто сорок", "wellness", None),
-    ("Таблетки", "выпил", "wellness", None),
-    ("Таблетки", "забыл", "wellness", None),
+    ("Давление", "сто сорок", "blood_pressure", None),
+    ("Давление", "сто двадцать", "blood_pressure", None),
+    ("Таблетки", "выпил", "medications_taken", "yes"),
+    ("Таблетки", "забыл", "medications_taken", "no"),
+    ("Таблетки", "не буду", "medications_taken", "no"),
     ("Спите", "спал", "sleep", None),
     ("Спите", "не спал", "sleep", None),
     ("Настроение", "настроение", "mood", None),
@@ -76,12 +108,53 @@ def _evidence_span(utterance: str, hint: str) -> list[int] | None:
     return [start, start + len(hint)]
 
 
+def _base(question: str, utterance: str, split_group: str, source: str) -> dict:
+    return {
+        "question": question,
+        "goal": None,
+        "utterance": utterance,
+        "relevant": None,
+        "value": None,
+        "act": None,
+        "subject": "speaker",
+        "polarity": None,
+        "correction": False,
+        "certainty": None,
+        "ood": False,
+        "evidence_span": None,
+        "split_group": split_group,
+        "source": source,
+    }
+
+
+def mine_act_seeds() -> list[dict]:
+    seed_path = ROOT / "packages" / "dialogue_engine" / "semantic_nlp" / "seed.jsonl"
+    rows = []
+    for line in seed_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        seed = json.loads(line)
+        question, text, act = seed["question"], seed["text"], seed["act"]
+        row = _base(question, text, "seed", "act_seed")
+        row["act"] = act
+        row["correction"] = act == "correction"
+        for q_hint, t_hint, goal_id, val in SEED_GOAL_MAP:
+            if q_hint.lower() in question.lower() and t_hint in text.lower():
+                row["goal"] = dict(GOALS[goal_id])
+                row["value"] = val
+                row["relevant"] = True
+                row["evidence_span"] = _evidence_span(text, text)
+                break
+        rows.append(row)
+    return rows
+
+
 def mine_live_traces() -> list[dict]:
-    """(vera prior, user text) pairs awaiting human review."""
     import glob
 
     rows = []
     for path in glob.glob(str(ROOT / ".run" / "traces" / "fs-*.jsonl")):
+        call_id = Path(path).stem
         last_vera = ""
         try:
             for line in open(path, encoding="utf-8"):
@@ -95,115 +168,52 @@ def mine_live_traces() -> list[dict]:
                 if row.get("type") == "renderer.phrase_ready" and payload.get("text"):
                     last_vera = payload["text"]
                 elif row.get("type") == "stt.final" and payload.get("text"):
-                    rows.append(
-                        {
-                            "question": last_vera,
-                            "goal": None,
-                            "utterance": payload["text"],
-                            "relevant": None,
-                            "value": None,
-                            "act": None,
-                            "subject": "speaker",
-                            "correction": False,
-                            "certainty": None,
-                            "evidence_span": None,
-                            "source": "live_trace",
-                        }
-                    )
+                    entry = _base(last_vera, payload["text"], call_id, "live_trace")
+                    rows.append(entry)
         except OSError:
             continue
     return rows
 
 
-def mine_act_seeds() -> list[dict]:
-    """Map act-seed rows to goal bindings where determinable."""
-    seed_path = ROOT / "packages" / "dialogue_engine" / "semantic_nlp" / "seed.jsonl"
-    rows = []
-    for line in seed_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        seed = json.loads(line)
-        question, text, act = seed["question"], seed["text"], seed["act"]
-        goal = None
-        value = None
-        relevant: bool | None = None
-        for q_hint, t_hint, goal_id, val in SEED_GOAL_MAP:
-            if q_hint.lower() in question.lower() and t_hint in text.lower():
-                goal = dict(DAILY_GOALS[goal_id])
-                value = val
-                relevant = True
-                break
-        if act in ("greeting", "goodbye", "backchannel", "stop", "repeat_request"):
-            relevant = False if goal is None else relevant
-        rows.append(
-            {
-                "question": question,
-                "goal": goal,
-                "utterance": text,
-                "relevant": relevant,
-                "value": value,
-                "act": act,
-                "subject": "speaker",
-                "correction": act == "correction",
-                "certainty": None,
-                "evidence_span": _evidence_span(text, text),
-                "source": "act_seed",
-            }
-        )
-    return rows
-
-
-def mine_hard_negatives(utterances: list[str]) -> list[dict]:
-    """Cross unrelated goals x utterances: model must learn to abstain."""
-    goals = [
-        {
-            "goal_id": "medications_taken",
-            "description": "Whether the person took their medicine",
-            "answer_type": "bool",
-        },
-        {
-            "goal_id": "utilities_paid",
-            "description": "Whether utility bills are paid",
-            "answer_type": "bool",
-        },
-        {
-            "goal_id": "daughter_visit",
-            "description": "Whether the daughter will visit",
-            "answer_type": "bool",
-        },
+def mine_hard_negatives() -> list[dict]:
+    """True hard negatives: topically close but NOT answering the goal."""
+    pairs = [
+        ("medications_taken", "Таблетки купила вчера.", "bool"),
+        ("medications_taken", "Дочь привезёт лекарства вечером.", "bool"),
+        ("daughter_visit", "Дочь утром звонила.", "bool"),
+        ("daughter_visit", "С дочкой всё хорошо.", "bool"),
+        ("utilities_paid", "Квитанции достала, вечером разберусь.", "bool"),
+        ("utilities_paid", "Платёжки на тумбочке лежат.", "bool"),
+        ("blood_pressure", "Давление не мерила.", "free_text"),
+        ("onset", "Болит уже давно.", "free_text"),
     ]
-    unrelated = [
-        "Голова сильно болит со вчера.",
-        "Спал нормально.",
-        "До свидания.",
-        "Ага.",
-        "Не помню.",
-    ]
+    goal_defs = {
+        "medications_taken": "Принял ли человек лекарства",
+        "daughter_visit": "Придёт ли дочь сегодня",
+        "utilities_paid": "Оплачены ли коммунальные услуги",
+        "blood_pressure": "Какое давление у человека",
+        "onset": "Когда начался симптом",
+    }
     rows = []
-    for goal in goals:
-        for text in unrelated:
-            rows.append(
-                {
-                    "question": "",
-                    "goal": goal,
-                    "utterance": text,
-                    "relevant": False,
-                    "value": None,
-                    "act": None,
-                    "subject": "speaker",
-                    "correction": False,
-                    "certainty": None,
-                    "evidence_span": None,
-                    "source": "hard_negative",
-                }
-            )
+    for goal_id, text, answer_type in pairs:
+        row = _base("", text, "hardneg", "hard_negative")
+        row["goal"] = {
+            "goal_id": goal_id,
+            "description": goal_defs[goal_id],
+            "answer_type": answer_type,
+            "allowed_values": ["yes", "no", "unknown"]
+            if answer_type == "bool"
+            else [],
+        }
+        row["relevant"] = False
+        rows.append(row)
     return rows
 
 
 def main() -> None:
     seeds = mine_act_seeds()
     live = mine_live_traces()
-    negatives = mine_hard_negatives([r["utterance"] for r in seeds])
+    negatives = mine_hard_negatives()
     all_rows = seeds + live + negatives
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(
