@@ -63,6 +63,7 @@ def nlp_candidate_turn(
         source_quote=text.strip(),
         value=text.strip(),
         correction=candidate.act == "correction",
+        not_recalled=candidate.act == "not_recalled",
     )
     info["used"] = True
     return turn, True, info

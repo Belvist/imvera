@@ -1281,6 +1281,53 @@ def _apply_rich_control(
     return None
 
 
+_NOT_RECALLED_PHRASES = frozenset(
+    {
+        "не помню",
+        "не помню уже",
+        "не могу вспомнить",
+        "хоть убей, не помню",
+        "затрудняюсь сказать",
+        "не помню вообще",
+    }
+)
+
+
+def _is_not_recalled_answer(semantic: object, user_text: str) -> bool:
+    """True when the turn declines to recall (model flag or exact short
+    phrase). Narrow by design: plain 'не знаю' alone is ambiguous."""
+    if getattr(semantic, "not_recalled", False):
+        return True
+    normalized = (user_text or "").strip().lower().rstrip(".!?…")
+    return normalized in _NOT_RECALLED_PHRASES
+
+
+def _resolve_unknown_answer(
+    state: EngineState, user_text: str, answer_slot: str | None
+) -> tuple[EngineState, list[Effect]]:
+    """Resolve the pending question as UNKNOWN: record evidence, close the
+    slot, clear pending markers, and advance. The question is never
+    re-asked after this point."""
+    delivered = state.delivered_question
+    slot = (delivered.slot if delivered and delivered.slot else None) or answer_slot
+    quote = (user_text or "").strip()
+    if slot:
+        state.slots[slot] = SlotStatus.UNRESOLVED
+        goal = state.goals.get(slot)
+        if goal is not None:
+            goal.lifecycle = GoalLifecycle.UNCLEAR
+            goal.status = SlotStatus.UNRESOLVED
+        state.observations[f"{slot}_unknown"] = quote
+        state.slot_unclear_counts.pop(slot, None)
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.waiting_on_slot = None
+    state.delivered_question = None
+    state.planned_question = None
+    state.bump_revision()
+    return _schedule_advance(state, user_text=user_text)
+
+
 def _apply_semantic(
     state: EngineState,
     semantic,
@@ -1434,6 +1481,12 @@ def _apply_semantic(
             state.planned_question = None
             state.bump_revision()
             return _schedule_advance(state, user_text=text)
+    if _is_not_recalled_answer(semantic, user_text) and (
+        state.delivered_question is not None or answer_slot
+    ):
+        # Not-recalled resolves the pending question as UNKNOWN — it must
+        # never be re-asked. Generalizes the wellness_unknown pattern.
+        return _resolve_unknown_answer(state, user_text, answer_slot)
     if is_topic_slot(answer_slot) and semantic.act == SemanticAct.ANSWER:
         state.processing_turn_id = None
         state.processing_effect_id = None

@@ -33,6 +33,7 @@ class SemanticTurn(BaseModel):
     correction: bool = False
     repair: bool = False
     backchannel: bool = False
+    not_recalled: bool = False
 
     model_config = {"frozen": True}
 

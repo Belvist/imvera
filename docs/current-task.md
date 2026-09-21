@@ -1,4 +1,17 @@
-# Current task — model-first live path (2026-09-21)
+# Current task — re-ask invariant: not-recalled resolves (2026-09-21)
+
+- Root cause found: not_recalled existed only as model label, engine had
+  no such concept → "Не помню" fell into re-ask loop. Fix: SemanticTurn
+  flag + reducer resolver (model flag or exact short phrases) closes slot
+  as UNRESOLVED with evidence and advances, never re-asks. Ambiguous
+  "Не знаю" alone explicitly NOT resolved.
+- VERIFIED: 4 new tests; full 1622/6/0; differential 92/4/4/0; corpus
+  500/500; ruff 0. Commit + push + deploy.
+- NOT VERIFIED: remote CI, live call.
+
+---
+
+# Historical — model-first live path (2026-09-21)
 
 - Inverted post-STT order: SemanticNLP candidate runs BEFORE
   contextual/rules on engine path. Safety acts excluded by construction;
