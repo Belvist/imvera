@@ -150,6 +150,7 @@ def main() -> None:
     parser.add_argument("--unseen-goals", default="daughter_visit,utilities_paid")
     parser.add_argument("--eval-file", default=None)
     parser.add_argument("--calib-file", default=None)
+    parser.add_argument("--extra-data", default=None)
     parser.add_argument(
         "--heads",
         default="rel,val,act,corr",
@@ -176,6 +177,26 @@ def main() -> None:
     torch.manual_seed(args.seed)
 
     rows, dataset_sha = load_rows()
+    if args.extra_data:
+        extra = [
+            json.loads(line)
+            for line in Path(args.extra_data).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        extra = [r for r in extra if r.get("split_group", "").startswith("train:")]
+        if args.eval_file:
+            eval_seen = {
+                json.loads(line)["utterance"].strip().lower()
+                for line in Path(args.eval_file).read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            }
+            before = len(extra)
+            extra = [
+                r for r in extra if r["utterance"].strip().lower() not in eval_seen
+            ]
+            print(f"extra-data: {before} -> {len(extra)} after eval-exclusion")
+        rows = rows + extra
+        print(f"extra-data: +{len(extra)} rows")
     pairs = build_pairs(rows)
     print(f"rows={len(rows)} pairs={len(pairs)} dataset_sha={dataset_sha[:12]}")
 
