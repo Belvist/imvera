@@ -680,9 +680,24 @@ def _bridge_ack_for_episode(ep) -> str:
         return "Хорошо."
     if ep.kind == "sleep_problem" or "сон" in label.lower():
         return "Хорошо. Про сон —"
-    if label:
+    if label and not _is_bare_verb_label(label):
         return f"Хорошо. Про {label} —"
     return "Хорошо."
+
+
+_BARE_VERBS = frozenset(
+    {"болит", "болят", "ноет", "ноют", "тянет", "колет", "давит", "ломит", "тошнит"}
+)
+
+
+def _is_bare_verb_label(label: str) -> bool:
+    """True when the label is a bare verb without topic (would render
+    broken 'Про болит'). Such mentions must not drive topic questions."""
+    words = [w.strip(".,!?").lower() for w in label.split()]
+    words = [w for w in words if w]
+    if not words:
+        return True
+    return all(w in _BARE_VERBS or w in ("и", "а") for w in words)
 
 
 def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) -> ResponsePlan:

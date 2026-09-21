@@ -1,4 +1,12 @@
-# Current task — speech variety without behavior change (2026-09-21)
+# Current task — live-call fixes: multi-issue, no broken topics, onset lands (2026-09-21)
+
+- Listened to fs-1b34dc2b turn by turn. Fixed: extractor keeps all 4
+  issues (ellipsis sharing for bare sites, buttocks/body sites, no FP on
+  pill phrases, negation split); bare-verb labels never render "Про болит";
+  onset answers ground into episode + advance ("Сегодня." works).
+- VERIFIED: 5 new tests; full 1627/6/0; differential 92/4/4/0; corpus
+  500/500; ruff 0. Commit + push + deploy.
+- NOT VERIFIED: remote CI, live call.
 
 - Ack tails rotated by turn_seq (default bare canonical); clarification
   re-asks rotate by attempts (first identical). No menu question added.

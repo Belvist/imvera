@@ -57,7 +57,17 @@ def _split_symptom_parts(text: str) -> list[str]:
     return out or [text.strip()]
 
 
-def _clause_mentions(raw: str, clause: str, *, first_symptom: bool) -> list[IssueMention]:
+_BARE_SITE_CLAUSE = re.compile(
+    r"^(?:и|а|но|вот|у\s+меня|меня)?\s*"
+    r"(голова|живот|спина|нога|ноги|рука|руки|грудь|шея|поясница|колено|горло)"
+    r"\s*$",
+    re.I,
+)
+
+
+def _clause_mentions(
+    raw: str, clause: str, *, first_symptom: bool, shared_verb: bool = False
+) -> list[IssueMention]:
     n = clause.lower()
     mentions: list[IssueMention] = []
     base = raw.lower().find(n)
@@ -94,7 +104,7 @@ def _clause_mentions(raw: str, clause: str, *, first_symptom: bool) -> list[Issu
             )
         )
 
-    if re.search(r"голов\w*", n) and _PAIN_VERB.search(n):
+    if re.search(r"голов\w*", n) and (_PAIN_VERB.search(n) or shared_verb):
         add(
             label="головная боль",
             kind="symptom",
@@ -111,11 +121,31 @@ def _clause_mentions(raw: str, clause: str, *, first_symptom: bool) -> list[Issu
             role="associated" if mentions else "primary",
             quote=clause,
         )
-    if re.search(r"\bживот\w*\b", n) and _PAIN_VERB.search(n):
+    if re.search(r"\bживот\w*\b", n) and (_PAIN_VERB.search(n) or shared_verb):
         add(
             label="боль в животе",
             kind="symptom",
             body_site="живот",
+            role="primary" if first_symptom else "independent",
+            quote=clause,
+        )
+        first_symptom = False
+    if re.search(r"\b(жоп\w*|ягодиц\w*|поп\w*)\b", n) and (
+        _PAIN_VERB.search(n) or shared_verb
+    ):
+        add(
+            label="боль в ягодицах",
+            kind="symptom",
+            body_site="ягодицы",
+            role="primary" if first_symptom else "independent",
+            quote=clause,
+        )
+        first_symptom = False
+    if re.search(r"\bтел\w*\b", n) and _PAIN_VERB.search(n):
+        add(
+            label="ломота в теле",
+            kind="symptom",
+            body_site="тело",
             role="primary" if first_symptom else "independent",
             quote=clause,
         )
@@ -156,9 +186,13 @@ def extract_issue_mentions(text: str) -> tuple[IssueMention, ...]:
         return ()
     parts = _split_symptom_parts(raw)
     all_mentions: list[IssueMention] = []
+    shared_verb = any(bool(_PAIN_VERB.search(p.lower())) for p in parts)
     first = True
     for part in parts:
-        found = _clause_mentions(raw, part, first_symptom=first)
+        bare_site = shared_verb and bool(_BARE_SITE_CLAUSE.match(part.strip().lower()))
+        found = _clause_mentions(
+            raw, part, first_symptom=first, shared_verb=bare_site
+        )
         if found and all_mentions:
             adjusted: list[IssueMention] = []
             for m in found:

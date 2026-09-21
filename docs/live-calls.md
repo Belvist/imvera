@@ -1,7 +1,7 @@
 # Live call log (lab, auto-exported from Postgres + traces)
 
-Exported: 2026-09-21T14:25:00.195442+00:00
-Total calls: 264
+Exported: 2026-09-21T22:08:45.509017+00:00
+Total calls: 277
 
 ## pg-8941eff458bd — 2026-09-06 13:44:36.926561+00:00 (fsm=FINAL_CLASSIFICATION, termination=CONSENT_DECLINED)
 
@@ -3709,4 +3709,180 @@ observations: 1
 key events: 1
 - #6 CALL_ENDED 2026-09-21 14:22:14.739536+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
 
-calls with trace transcript: 215
+## fs-e4ebd746 — 2026-09-21 20:59:36.628259+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={"wellness": "Ой, чувствую себя очень плохо."}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- User[u-1]: Ой, чувствую себя очень плохо.
+- Vera: Что именно беспокоит?
+observations: 1
+- t2 [wellness] Ой, чувствую себя очень плохо. | quote: Ой, чувствую себя очень плохо.
+key events: 1
+- #5 CALL_ENDED 2026-09-21 20:59:36.631590+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-76638311 — 2026-09-21 21:00:29.471233+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={"wellness": "Ой, непонятно, то ли хорошо себя чувствует, то ли плохо."}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- User[u-1]: Ой, непонятно, то ли хорошо себя чувствует, то ли плохо.
+- Vera: Что именно беспокоит?
+- User[u-2]: Мой понос меня беспокоит, и головная боль меня беспокоит.
+- Vera: Поняла вас. Голова боль — зафиксировала. Когда это началось — сегодня или раньше?
+- User[u-3]: Давно началось уже дня три.
+- Vera: Хорошо. Когда начала болеть голова — сегодня или раньше?
+observations: 2
+- t2 [wellness] negative | quote: Ой, непонятно, то ли хорошо себя чувствует, то ли плохо.
+- t3 [wellness] Мой понос меня беспокоит, и головная боль меня беспокоит. | quote: Мой понос меня беспокоит, и головная боль меня беспокоит.
+key events: 1
+- #7 CALL_ENDED 2026-09-21 21:00:29.473944+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-a7dcc6e9 — 2026-09-21 21:35:39.510803+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- User[u-1]: А-а, не знаю.
+- User[u-2]: Алло, не знаю, говорю.
+- Vera: Да, слышу. Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+observations: 0
+key events: 1
+- #5 CALL_ENDED 2026-09-21 21:35:39.514098+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-c3f183a2 — 2026-09-21 21:39:16.628862+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- Vera: Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.
+- Vera: Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.
+observations: 0
+key events: 2
+- #3 WAIT_EXPIRED 2026-09-21 21:38:57.133775+00:00 {"turn_id": 2, "wait_id": "wait-wellness", "pending_slot": null}
+- #6 CALL_ENDED 2026-09-21 21:39:16.632371+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-e8cea7e3 — 2026-09-21 21:41:21.940901+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- Vera: Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.
+- Vera: Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.
+observations: 0
+key events: 2
+- #3 WAIT_EXPIRED 2026-09-21 21:41:02.456098+00:00 {"turn_id": 2, "wait_id": "wait-wellness", "pending_slot": null}
+- #6 CALL_ENDED 2026-09-21 21:41:21.943858+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-72514d5a — 2026-09-21 21:43:16.554912+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- Vera: Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.
+- Vera: Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.
+observations: 0
+key events: 2
+- #3 WAIT_EXPIRED 2026-09-21 21:42:57.070896+00:00 {"turn_id": 2, "wait_id": "wait-wellness", "pending_slot": null}
+- #6 CALL_ENDED 2026-09-21 21:43:16.557261+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-f25de154 — 2026-09-21 21:44:37.241153+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- Vera: Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.
+- Vera: Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.
+observations: 0
+key events: 2
+- #3 WAIT_EXPIRED 2026-09-21 21:44:17.688510+00:00 {"turn_id": 2, "wait_id": "wait-wellness", "pending_slot": null}
+- #6 CALL_ENDED 2026-09-21 21:44:37.246672+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-c1863f50 — 2026-09-21 21:44:42.784224+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- Vera: Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.
+- Vera: Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.
+observations: 0
+key events: 2
+- #3 WAIT_EXPIRED 2026-09-21 21:44:23.231182+00:00 {"turn_id": 2, "wait_id": "wait-wellness", "pending_slot": null}
+- #6 CALL_ENDED 2026-09-21 21:44:42.787964+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-43a14aa2 — 2026-09-21 21:46:07.830853+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+observations: 0
+key events: 1
+- #4 CALL_ENDED 2026-09-21 21:46:07.832945+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-69836269 — 2026-09-21 21:46:23.459880+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+observations: 0
+key events: 1
+- #4 CALL_ENDED 2026-09-21 21:46:23.461757+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-79259c97 — 2026-09-21 21:47:36.948836+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+observations: 0
+key events: 1
+- #4 CALL_ENDED 2026-09-21 21:47:36.951026+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-99e85ef4 — 2026-09-21 21:50:41.684849+00:00 (fsm=DAILY_CHECK, termination=DISCONNECTED)
+
+family=fam-voice ended=True
+facts={"mood": "positive", "plans": "Дома посижу.", "wellness": "Хорошо себя чувствую."}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- User[u-1]: Хорошо себя чувствую.
+- Vera: Как сегодня с едой — нормально поели?
+- User[u-2]: Настроение хорошее.
+- Vera: Скажите, а у вас есть лекарства, которые вы принимаете обычно?
+- User[u-3]: Ну хорошо.
+- User[u-4]: Дома посижу.
+- Vera: Поняла вас. Есть ли сейчас ещё что-то важное в вашем самочувствии или дома, на что мне стоит обратить внимание?
+observations: 3
+- t2 [wellness] Хорошо себя чувствую. | quote: Хорошо себя чувствую.
+- t3 [mood] positive | quote: Настроение хорошее.
+- t4 [plans] Дома посижу. | quote: Дома посижу.
+key events: 1
+- #7 CALL_ENDED 2026-09-21 21:50:41.687013+00:00 {"partial": true, "termination_reason": "DISCONNECTED"}
+
+## fs-1b34dc2b — 2026-09-21 22:07:35.796435+00:00 (fsm=FINAL_CLASSIFICATION, termination=PARTIAL)
+
+family=fam-voice ended=True
+facts={"wellness": "Ой, Вер, не знаю, как сказать. И тошнит, и жопа болит, и голова, и всё-всё-всё болит у меня, всё тело ломит."}
+dialogue:
+- Vera: Здравствуйте. Это сервис Амвера. Даниил, как вы себя чувствуете?
+- User[u-1]: Ой, Вер, не знаю, как сказать. И тошнит, и жопа болит, и голова, и всё-всё-всё болит у меня, всё тело ломит.
+- Vera: Поняла вас. Тошнит — зафиксировала. Когда это началось — сегодня или раньше?
+- User[u-2]: Я же сказал, не только тошнит. Я говорю: «У меня и голова болит, и тошнит, и тело ломит меня всё».
+- Vera: Хорошо. Про болит — когда это началось — сегодня или раньше?
+- User[u-3]: Сегодня.
+- Vera: Сейчас не получилось узнать, как у вас дела. До свидания.
+observations: 1
+- t2 [wellness] Ой, Вер, не знаю, как сказать. И тошнит, и жопа болит, и голова, и всё-всё-всё болит у меня, всё тело ломит. | quote: Ой, Вер, не знаю, как сказать. И тошнит, и жопа болит, и голова, и всё-всё-всё болит у меня, всё тело ломит.
+key events: 1
+- #7 CALL_ENDED 2026-09-21 22:07:35.805594+00:00 {"partial": true, "termination_reason": "PARTIAL"}
+
+calls with trace transcript: 228

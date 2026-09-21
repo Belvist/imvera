@@ -1293,6 +1293,39 @@ _NOT_RECALLED_PHRASES = frozenset(
 )
 
 
+def _is_onset_answer(semantic: object, user_text: str) -> bool:
+    """True when this turn answers a pending onset probe. The caller checks
+    pending state; here we only require an answer-like act so complaints
+    and questions never route into onset grounding."""
+    act = getattr(semantic, "act", None)
+    return act == SemanticAct.ANSWER
+
+
+def _resolve_onset_answer(
+    state: EngineState, user_text: str
+) -> tuple[EngineState, list[Effect]] | None:
+    """Ground an onset answer into the active episode. Returns None when
+    the text carries no temporal anchor (caller falls through)."""
+    from packages.dialogue_engine.issue_memory import (
+        extract_grounded_onset_value,
+        get_active_episode,
+    )
+
+    value = extract_grounded_onset_value(user_text or "")
+    if not value:
+        return None
+    episode = get_active_episode(state)
+    if episode is not None:
+        episode.known_attributes["onset"] = value
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.waiting_on_slot = None
+    state.delivered_question = None
+    state.planned_question = None
+    state.bump_revision()
+    return _schedule_advance(state, user_text=user_text)
+
+
 def _is_not_recalled_answer(semantic: object, user_text: str) -> bool:
     """True when the turn declines to recall (model flag or exact short
     phrase). Narrow by design: plain 'не знаю' alone is ambiguous."""
@@ -1487,6 +1520,28 @@ def _apply_semantic(
         # Not-recalled resolves the pending question as UNKNOWN — it must
         # never be re-asked. Generalizes the wellness_unknown pattern.
         return _resolve_unknown_answer(state, user_text, answer_slot)
+    delivered = state.delivered_question
+    delivered_is_onset = (
+        delivered is not None
+        and (
+            (delivered.slot or "") == "onset"
+            or "onset" in (delivered.intent or "")
+            or "duration" in (delivered.intent or "")
+        )
+    )
+    if (
+        _is_onset_answer(semantic, user_text)
+        and (
+            delivered_is_onset
+            or state.pending_episode_attribute == "onset"
+            or answer_slot == "onset"
+        )
+    ):
+        # Onset answers fill the active episode (onset is an episode
+        # attribute, not a fillable slot) — "Сегодня." must land.
+        resolved = _resolve_onset_answer(state, user_text)
+        if resolved is not None:
+            return resolved
     if is_topic_slot(answer_slot) and semantic.act == SemanticAct.ANSWER:
         state.processing_turn_id = None
         state.processing_effect_id = None
