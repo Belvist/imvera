@@ -1,4 +1,12 @@
-# Current task — P0-B/C transport cancel done, live pending (2026-09-20)
+# Current task — agents closed P0-downstream + docs (2026-09-21)
+
+- 3 agents parallel: (1) P0 downstream `stop`→`break` + 3 tests, (2) docs
+  debt + STATUS.json/gen_status.py + model MANIFEST, (3) TurnUnderstanding
+  consolidation DESIGN (read-only, no code). Commits 30a9af5 + 628292c.
+- VERIFIED: transport 11 passed; full 1603/6/0; differential 92/4/4/0;
+  corpus 500/500; ruff 0. main=feature=origin=628292c, tree clean.
+- NOT VERIFIED: live audible `break` effect + live barge-in (owner dial),
+  remote CI on 628292c.
 
 - Generation identity end-to-end: AudioEnvelope through actor pump →
   typed OutboundAudioFrame bridge queue. Enqueue + send gates, addressable
