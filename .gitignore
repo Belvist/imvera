@@ -36,3 +36,4 @@ infra/freeswitch/conf/generated/
 
 # Logs
 *.log
+datasets/
