@@ -155,6 +155,7 @@ def kernel_to_rich_turn(
     answer_slot: str | None = None,
     engine_state=None,
     mission_provider=None,
+    attach_mission: bool = True,
 ):
     from packages.dialogue_engine.turn_understanding import RichUserTurn
     from packages.voice_perception.post_stt_gate import filter_phantom_generic_issues
@@ -247,6 +248,10 @@ def kernel_to_rich_turn(
         )
     elif tiny_route:
         turn = turn.model_copy(update={"tiny_route": tiny_route})
+    if not attach_mission:
+        # Caller (build_rich_turn_from_text) attaches itself right after —
+        # exactly-once per turn (P2 Cut 3).
+        return turn
     return attach_mission_understanding(
         turn, engine_state=engine_state, provider=mission_provider
     )

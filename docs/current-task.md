@@ -1,4 +1,11 @@
-# Current task — P2 Cut 2: adjudication in resolver (2026-09-21)
+# Current task — P2 Cut 3: single mission-attach (2026-09-21)
+
+- Measured 2-3 understand_mission calls/turn (identical results — pure
+  provider). Removed redundant attaches; kernel_to_rich_turn gained
+  attach_mission flag (live direct callers keep default True).
+- VERIFIED: attach-count test; parity 12 stable; full 1617/6/0;
+  differential 92/4/4/0; corpus 500/500; ruff 0. Commit + push.
+- NOT VERIFIED: remote CI.
 
 - Final choice (use_rich/not-fast/fast) moved to adjudicate_final with
   verbatim precedence; producers untouched. Fixed sem-unbound crash the

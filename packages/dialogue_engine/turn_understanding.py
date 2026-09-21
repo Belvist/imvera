@@ -341,6 +341,7 @@ def build_rich_turn_from_text(
         answer_slot=answer_slot,
         engine_state=engine_state,
         mission_provider=mission_provider,
+        attach_mission=False,
     )
     turn = attach_mission_understanding(
         turn, engine_state=engine_state, provider=mission_provider
@@ -399,9 +400,9 @@ def build_rich_turn_from_text(
                 )
         if harvested:
             turn = turn.model_copy(update={"goal_facts": tuple(harvested.values())})
-            return attach_mission_understanding(
-                turn, engine_state=engine_state, provider=mission_provider
-            )
+            # Single attach (P2 Cut 3): the attach above already ran with
+            # identical inputs; re-attaching only recomputes the same result.
+            return turn
         return turn
     if turn.goal_facts or not answer_slot:
         return turn
@@ -416,9 +417,7 @@ def build_rich_turn_from_text(
         harvested = extract_goal_facts(text.strip(), answer_slot=answer_slot)
         if harvested:
             turn = turn.model_copy(update={"goal_facts": harvested})
-        return attach_mission_understanding(
-            turn, engine_state=engine_state, provider=mission_provider
-        )
+        return turn
     value = sem.value or text.strip()
     fact = FactCandidate(
         field=sem.target_slot,
@@ -431,9 +430,7 @@ def build_rich_turn_from_text(
     harvested = {f.field: f for f in extract_goal_facts(text.strip(), answer_slot=answer_slot)}
     harvested.setdefault(fact.field, fact)
     turn = turn.model_copy(update={"goal_facts": tuple(harvested.values())})
-    return attach_mission_understanding(
-        turn, engine_state=engine_state, provider=mission_provider
-    )
+    return turn
 
 
 def build_rich_turn_from_text_legacy(text: str, *, utterance_id: str) -> RichUserTurn:
