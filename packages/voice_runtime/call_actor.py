@@ -1977,6 +1977,7 @@ class CallActor:
                     or kernel_result.corrections
                 )
             )
+            sem = None
             if self.session.uses_dialogue_engine():
                 ctx = InterpretContext.from_engine_state(
                     self.session._engine.state, turn_id=utterance_id
@@ -2099,30 +2100,23 @@ class CallActor:
                         utterance_id=utterance_id,
                         raw_text=text,
                     )
-            elif use_rich_deterministic and rich_turn is not None:
-                from packages.dialogue.interpretation import interpret_user_turn
+            else:
+                # P2 Cut 2: final choice owned by the single resolver.
+                from packages.dialogue_engine.turn_understanding import (
+                    TurnUnderstandingV2,
+                )
 
-                if (
-                    fast_confident
-                    and not rich_turn.issue_mentions
-                    and not kernel_has_meaning
-                ):
-                    interp = semantic_to_interpretation(sem)
-                else:
-                    interp = interpret_user_turn(
-                        self.session.state, text,
-                        fsm_override=self._interpret_fsm_override(),
-                    )
-            elif not fast_confident:
-                interpret_path = "rules_fallback"
-                from packages.dialogue.interpretation import interpret_user_turn
-
-                interp = interpret_user_turn(
-                    self.session.state, text,
+                interp, interpret_path = TurnUnderstandingV2().adjudicate_final(
+                    use_rich_deterministic=use_rich_deterministic,
+                    rich_turn=rich_turn,
+                    fast_confident=fast_confident,
+                    kernel_has_meaning=kernel_has_meaning,
+                    sem=sem,
+                    incoming_path=interpret_path,
+                    legacy_state=self.session.state,
+                    text=text,
                     fsm_override=self._interpret_fsm_override(),
                 )
-            elif fast_confident:
-                interp = semantic_to_interpretation(sem)
             await self._emit_forensic_turn(
                 utterance_id=utterance_id,
                 stt_text=text,

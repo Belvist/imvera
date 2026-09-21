@@ -1,4 +1,11 @@
-# Current task — P2 Cut 1: TurnUnderstandingV2 facade + parity (2026-09-21)
+# Current task — P2 Cut 2: adjudication in resolver (2026-09-21)
+
+- Final choice (use_rich/not-fast/fast) moved to adjudicate_final with
+  verbatim precedence; producers untouched. Fixed sem-unbound crash the
+  move exposed (legacy paths never bind sem; now None-initialized).
+- VERIFIED: branch unit test; full 1616/6/0; differential 92/4/4/0;
+  corpus 500/500; ruff 0. Commit + push.
+- NOT VERIFIED: remote CI.
 
 - Single resolver facade delegating 1:1 to legacy builders + trace.
   Parity harness: 12 phrases, byte-identical modulo wall-clock + random

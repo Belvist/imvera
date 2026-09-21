@@ -92,9 +92,8 @@ class ResolvedTurn:
 
 
 class TurnUnderstandingV2:
-    """Single resolution facade (P2 Cut 1): delegates 1:1 to the existing
-    builders, records the trace. No strategy moved, nothing deleted —
-    caller migration and producer folding come in later cuts."""
+    """Single resolution facade (P2): delegates to existing builders and
+    owns the final choice. Producers move in later cuts; nothing deleted."""
 
     def resolve(
         self,
@@ -129,6 +128,47 @@ class TurnUnderstandingV2:
             interpret_path="v2_resolve",
             total_elapsed_ms=round((time.monotonic() - started) * 1000.0, 2),
         )
+
+    def adjudicate_final(
+        self,
+        *,
+        use_rich_deterministic: bool,
+        rich_turn: RichUserTurn | None,
+        fast_confident: bool,
+        kernel_has_meaning: bool,
+        sem: object,
+        incoming_path: str,
+        legacy_state: object,
+        text: str,
+        fsm_override: object = None,
+    ) -> tuple[object, str]:
+        """Single-resolver final choice, verbatim precedence of the CallActor
+        inline branches (P2 Cut 2). Returns (interp, interpret_path).
+        No producer moved here — only the choice."""
+        from packages.dialogue.interpretation import interpret_user_turn
+        from packages.dialogue_engine.semantic import semantic_to_interpretation
+
+        if use_rich_deterministic and rich_turn is not None:
+            if (
+                fast_confident
+                and not rich_turn.issue_mentions
+                and not kernel_has_meaning
+            ):
+                return semantic_to_interpretation(sem), incoming_path
+            return (
+                interpret_user_turn(
+                    legacy_state, text, fsm_override=fsm_override
+                ),
+                incoming_path,
+            )
+        if not fast_confident:
+            return (
+                interpret_user_turn(
+                    legacy_state, text, fsm_override=fsm_override
+                ),
+                "rules_fallback",
+            )
+        return semantic_to_interpretation(sem), incoming_path
 
 
 def enrich_payload_issue_mentions(

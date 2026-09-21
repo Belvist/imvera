@@ -55,3 +55,39 @@ def test_resolve_matches_legacy_build(text: str) -> None:
     assert resolved.interpret_path == "v2_resolve"
     assert len(resolved.trace) == 1
     assert resolved.total_elapsed_ms >= 0.0
+
+
+def test_adjudicate_final_branches() -> None:
+    from packages.dialogue.state import DialogueState
+    from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
+    from packages.dialogue_engine.turn_understanding import TurnUnderstandingV2
+
+    v2 = TurnUnderstandingV2()
+    sem = SemanticTurn(act=SemanticAct.BACKCHANNEL, source_quote="Ага.")
+    from types import SimpleNamespace
+
+    legacy = DialogueState(call_id="adj", family_id="fam")
+    rich_empty = SimpleNamespace(issue_mentions=[])
+
+    interp, path = v2.adjudicate_final(
+        use_rich_deterministic=True, rich_turn=rich_empty, fast_confident=True,
+        kernel_has_meaning=False, sem=sem, incoming_path="fast_rules",
+        legacy_state=legacy, text="Ага.", fsm_override=None,
+    )
+    assert path == "fast_rules"
+    assert interp.dialogue_act.value == "backchannel"
+
+    interp2, path2 = v2.adjudicate_final(
+        use_rich_deterministic=False, rich_turn=None, fast_confident=False,
+        kernel_has_meaning=False, sem=sem, incoming_path="fast_rules",
+        legacy_state=legacy, text="хм", fsm_override=None,
+    )
+    assert path2 == "rules_fallback"
+
+    interp3, path3 = v2.adjudicate_final(
+        use_rich_deterministic=False, rich_turn=None, fast_confident=True,
+        kernel_has_meaning=False, sem=sem, incoming_path="fast_rules",
+        legacy_state=legacy, text="Ага.", fsm_override=None,
+    )
+    assert path3 == "fast_rules"
+    assert interp3.dialogue_act.value == "backchannel"
