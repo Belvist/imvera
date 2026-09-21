@@ -549,6 +549,14 @@ def main() -> None:
         ),
         encoding="utf-8",
     )
+    extra_info: dict = {}
+    if args.extra_data:
+        extra_bytes = Path(args.extra_data).read_bytes()
+        extra_info = {
+            "extra_path": args.extra_data,
+            "extra_sha256": hashlib.sha256(extra_bytes).hexdigest(),
+            "extra_rows": len(extra),
+        }
     by_goal: dict[str, int] = {}
     by_act: dict[str, int] = {}
     n_pos = n_neg = n_val = 0
@@ -566,6 +574,7 @@ def main() -> None:
         json.dumps(
             {
                 "dataset_sha256": dataset_sha,
+                "extra_data": extra_info,
                 "n_total_rows": len(rows),
                 "n_train_pairs": len(train_pairs),
                 "n_held_pairs": len(held_pairs),

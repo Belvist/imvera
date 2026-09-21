@@ -1,4 +1,16 @@
-# Current task — review debt closed: ACK honesty + STATUS truth (2026-09-21)
+# Current task — relation shadow live, MPS abort fixed (2026-09-21)
+
+- Shadow: RelationScorer (xenc_v3) scores all 9 goals per engine turn in
+  background, log-only via interpret.relation_shadow. Loader verified
+  faithful (AP 0.941 reproduced). CRITICAL FIX: MPS Metal aborts in worker
+  threads — shadow uses dedicated CPU instance; main-thread MPS untouched.
+  Full suite aborted before fix, green after.
+- VERIFIED: full 1618/6/0; differential 92/4/4/0; corpus 500/500; ruff 0.
+- NOT VERIFIED: live shadow evidence (needs calls), remote CI.
+
+---
+
+# Historical — review debt closed (2026-09-21)
 
 - -ERR replies no longer produce acked_at (ok=false); +OK only. Regression
   added. STATUS regenerated on HEAD; held_acc null when n_held=0. NLU

@@ -1399,7 +1399,6 @@ class CallActor:
         await self._emit_uplink_summary("answer_wait_timeout")
         expired = await asyncio.to_thread(self.session.handle_wait_expired, wait_id)
         await self._post_apply_turn(expired)
-
     def _engine_pending_slot(self) -> str | None:
         """Pending slot from EngineState on the engine path, else legacy mirror.
 
@@ -1408,6 +1407,35 @@ class CallActor:
         if self.session.uses_dialogue_engine() and self.session._engine:
             return self.session._engine.pending_slot_name()
         return self.session.state.pending_slot
+
+    async def _relation_shadow_task(self, *, utterance_id: str, text: str) -> None:
+        """Background relation scoring for shadow evidence. Never raises,
+        never decides, never blocks the turn."""
+        try:
+            from packages.dialogue_engine.semantic_nlp.goals import (
+                GOALS as RELATION_GOALS,
+            )
+            from packages.dialogue_engine.semantic_nlp.relation import (
+                RelationScorer,
+            )
+
+            engine = self.session._engine
+            if engine is None:
+                return
+            question = engine.pending_question_text() or ""
+            scores, latency_ms = await asyncio.to_thread(
+                RelationScorer.get_cpu().score_all, question, text, RELATION_GOALS
+            )
+            await self._emit_stage(
+                "interpret.relation_shadow",
+                utterance_id=utterance_id,
+                top_goal=scores[0].goal_id if scores else None,
+                top_score=scores[0].score if scores else None,
+                scores={g.goal_id: g.score for g in scores},
+                latency_ms=round(latency_ms, 1),
+            )
+        except Exception:
+            pass
 
     def _interpret_fsm_override(self) -> FsmState | None:
         """Engine fsm for the interpretation safety gate (final hotfix).
@@ -2016,6 +2044,15 @@ class CallActor:
                     if nlp_confident:
                         fast_confident = True
                         interpret_path = "semantic_nlp"
+                # Relation shadow (log-only, never decides, never blocks the
+                # turn): all-goal scores vs deterministic outcome feed the
+                # next data batch.
+                if self.session._engine is not None:
+                    asyncio.create_task(
+                        self._relation_shadow_task(
+                            utterance_id=utterance_id, text=text
+                        )
+                    )
                 if fast_confident and not use_rich_deterministic:
                     interp = semantic_to_interpretation(sem)
                     await self._emit_stage(
