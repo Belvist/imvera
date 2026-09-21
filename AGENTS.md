@@ -295,7 +295,12 @@ Until these exist, agent reports exact commands run.
   low conf (safe: stop excluded → rules answer correctly). Needs
   contrastive Q-fixed sets in v3. "No failure" = pipeline always answers
   (fallback chain), model fires where confident+right.
-- LOOP: errors → seed rows → retrain → gate → promote version.
+- CrossEncoderV1 first experiment (offline/shadow only, no cutover):
+  [Q]+[G]+[U] input, frozen encoder, masked heads
+  (relevance/value/act/correction). Held rel F1 0.292 (39 wrong-goal FPs,
+  mostly wellness over-fire), unseen-goal 0.0. Artifact metadata carries
+  real counts + dataset sha256, no promoted claims. Priority queue for
+  next labeling derived from errors (wellness-negatives, onset-positives).
 - NEXT: live-call evidence (interpret.nlp_candidate stages in traces) →
   expand seeds from misses → v3. Slot/entity heads after act proves out.
 

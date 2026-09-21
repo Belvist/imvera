@@ -1,0 +1,313 @@
+"""Train CrossEncoderV1: [Q] question [G] goal description [U] utterance.
+
+Frozen RuModernBERT encoder + masked multi-task heads (relevance, value,
+act, correction). All-goal scoring (no retriever yet): every labeled row
+is paired with its goal (positive) plus all other catalog goals
+(negatives). Splits by split_group (no call leakage) + unseen-goal
+diagnostic split. Artifact: models/semantic_nlu/xenc_v1/ with real-count
+metadata (n_total, positives, negatives, by-goal, dataset sha256).
+Offline/shadow only — no live cutover.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import random
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT))
+
+ARTIFACT_ROOT = ROOT / "models" / "semantic_nlp"
+
+VALUE_LABELS = ("yes", "no", "unknown", "yesterday", "morning", "other")
+
+
+def load_rows() -> tuple[list[dict], str]:
+
+    path = ROOT / "datasets" / "semantic_nlu" / "v2.jsonl"
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    rows = [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
+    return rows, digest
+
+
+def build_pairs(rows: list[dict]) -> list[dict]:
+    from tools.voice_lab.build_semantic_dataset import GOALS
+
+    goal_ids = sorted(GOALS)
+    pairs = []
+    for row in rows:
+        if row["goal"] is None or row["relevant"] is None:
+            continue
+        goal = row["goal"]
+        pairs.append(
+            {
+                "question": row["question"] or "",
+                "goal": goal,
+                "utterance": row["utterance"],
+                "relevant": bool(row["relevant"]),
+                "value": row.get("value"),
+                "act": row.get("act"),
+                "correction": bool(row.get("correction", False)),
+                "group": row["split_group"],
+            }
+        )
+        if row["relevant"]:
+            for other_id in goal_ids:
+                if other_id == goal["goal_id"]:
+                    continue
+                pairs.append(
+                    {
+                        "question": row["question"] or "",
+                        "goal": dict(GOALS[other_id]),
+                        "utterance": row["utterance"],
+                        "relevant": False,
+                        "value": None,
+                        "act": row.get("act"),
+                        "correction": bool(row.get("correction", False)),
+                        "group": row["split_group"],
+                    }
+                )
+    return pairs
+
+
+def encode_texts(tokenizer, model, texts: list[str], device: str):
+    import torch
+
+    model.eval()
+    vectors = []
+    with torch.no_grad():
+        for text in texts:
+            batch = tokenizer(text, return_tensors="pt", truncation=True, max_length=192)
+            mask = batch["attention_mask"].to(device)
+            batch = {k: v.to(device) for k, v in batch.items()}
+            hidden = model(**batch).last_hidden_state
+            pooled = (hidden * mask.unsqueeze(-1)).sum(1) / mask.sum(1).unsqueeze(-1)
+            vectors.append(pooled.cpu())
+    return torch.cat(vectors, dim=0)
+
+
+def format_input(question: str, goal: dict, utterance: str) -> str:
+    allowed = ""
+    if goal.get("allowed_values"):
+        allowed = f" ({'/'.join(goal['allowed_values'])})"
+    return (
+        f"[Q] {question} [G] {goal['description']}{allowed} [U] {utterance}"
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--version", default="xenc_v1")
+    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--epochs", type=int, default=40)
+    parser.add_argument("--unseen-goals", default="daughter_visit,utilities_paid")
+    args = parser.parse_args()
+
+    import torch
+    import torch.nn as nn
+
+    from packages.dialogue_engine.semantic_nlp.labels import ACT_INDEX, ACTS, MODEL_ID
+
+    random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
+    rows, dataset_sha = load_rows()
+    pairs = build_pairs(rows)
+    print(f"rows={len(rows)} pairs={len(pairs)} dataset_sha={dataset_sha[:12]}")
+
+    unseen = {g.strip() for g in args.unseen_goals.split(",") if g.strip()}
+    train_pairs, held_pairs, unseen_pairs = [], [], []
+    groups = sorted({p["group"] for p in pairs})
+    rng = random.Random(args.seed)
+    rng.shuffle(groups)
+    held_groups = set(groups[: max(1, len(groups) // 5)])
+    for pair in pairs:
+        if pair["goal"]["goal_id"] in unseen:
+            unseen_pairs.append(pair)
+        elif pair["group"] in held_groups:
+            held_pairs.append(pair)
+        else:
+            train_pairs.append(pair)
+    print(
+        f"train={len(train_pairs)} held={len(held_pairs)} unseen={len(unseen_pairs)} "
+        f"held_groups={sorted(held_groups)}"
+    )
+
+    value_index = {v: i for i, v in enumerate(VALUE_LABELS)}
+
+    def tensors(subset: list[dict]):
+        texts = [format_input(p["question"], p["goal"], p["utterance"]) for p in subset]
+        rel = torch.tensor([1.0 if p["relevant"] else 0.0 for p in subset])
+        val = torch.tensor(
+            [
+                value_index.get(p["value"], value_index["other"]) if p["value"] else -100
+                for p in subset
+            ]
+        )
+        val_mask = torch.tensor([p["value"] is not None for p in subset])
+        act = torch.tensor(
+            [ACT_INDEX[p["act"]] if p["act"] in ACT_INDEX else -100 for p in subset]
+        )
+        act_mask = torch.tensor([p["act"] in ACT_INDEX for p in subset])
+        corr = torch.tensor([1.0 if p["correction"] else 0.0 for p in subset])
+        return texts, rel, val, val_mask, act, act_mask, corr
+
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    from transformers import AutoModel, AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=False)
+    encoder = AutoModel.from_pretrained(MODEL_ID, trust_remote_code=False).to(device)
+    for param in encoder.parameters():
+        param.requires_grad = False
+    with torch.no_grad():
+        probe = encode_texts(
+            tokenizer, encoder, [format_input("q", {"description": "g"}, "u")], device
+        )
+    dim = probe.shape[1]
+
+    tr_texts, tr_rel, tr_val, tr_val_m, tr_act, tr_act_m, tr_corr = tensors(train_pairs)
+    with torch.no_grad():
+        Xtr = encode_texts(tokenizer, encoder, tr_texts, device)
+    head_rel = nn.Linear(dim, 1)
+    head_val = nn.Linear(dim, len(VALUE_LABELS))
+    head_act = nn.Linear(dim, len(ACTS))
+    head_corr = nn.Linear(dim, 1)
+    heads = nn.ModuleDict(
+        {"rel": head_rel, "val": head_val, "act": head_act, "corr": head_corr}
+    )
+    n_pos_tr = float(tr_rel.sum())
+    n_neg_tr = float(len(tr_rel) - n_pos_tr)
+    pos_weight = torch.tensor([n_neg_tr / max(n_pos_tr, 1.0)])
+    optimizer = torch.optim.AdamW(heads.parameters(), lr=2e-3, weight_decay=1e-4)
+    bce = nn.BCEWithLogitsLoss()
+    bce_rel = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    ce = nn.CrossEntropyLoss(ignore_index=-100)
+    heads.train()
+    for _epoch in range(args.epochs):
+        optimizer.zero_grad()
+        loss = bce_rel(head_rel(Xtr).squeeze(-1), tr_rel)
+        if tr_val_m.any():
+            loss = loss + ce(head_val(Xtr[tr_val_m]), tr_val[tr_val_m])
+        if tr_act_m.any():
+            loss = loss + ce(head_act(Xtr[tr_act_m]), tr_act[tr_act_m])
+        loss = loss + bce(head_corr(Xtr).squeeze(-1), tr_corr)
+        loss.backward()
+        optimizer.step()
+
+    def evaluate(subset: list[dict], name: str) -> dict:
+        heads.eval()
+        with torch.no_grad():
+            texts, rel, val, val_m, act, act_m, corr = tensors(subset)
+            if not texts:
+                return {"n": 0}
+            X = encode_texts(tokenizer, encoder, texts, device)
+            pred_rel = (torch.sigmoid(head_rel(X)).squeeze(-1) >= 0.5).float()
+            tp = int(((pred_rel == 1) & (rel == 1)).sum())
+            fp = int(((pred_rel == 1) & (rel == 0)).sum())
+            fn = int(((pred_rel == 0) & (rel == 1)).sum())
+            precision = tp / (tp + fp) if tp + fp else 0.0
+            recall = tp / (tp + fn) if tp + fn else 0.0
+            f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+            out: dict = {
+                "n": len(subset),
+                "rel_precision": round(precision, 3),
+                "rel_recall": round(recall, 3),
+                "rel_f1": round(f1, 3),
+                "wrong_goal_fp": fp,
+            }
+            if val_m.any():
+                pred_val = head_val(X[val_m]).argmax(dim=1)
+                out["value_acc"] = round(float((pred_val == val[val_m]).float().mean()), 3)
+                out["value_n"] = int(val_m.sum())
+            if act_m.any():
+                pred_act = head_act(X[act_m]).argmax(dim=1)
+                out["act_acc"] = round(float((pred_act == act[act_m]).float().mean()), 3)
+            errors = []
+            with torch.no_grad():
+                for i, pair in enumerate(subset):
+                    if bool(pred_rel[i]) != bool(rel[i]):
+                        errors.append(
+                            {
+                                "utterance": pair["utterance"][:100],
+                                "goal": pair["goal"]["goal_id"],
+                                "true_rel": bool(rel[i]),
+                                "pred_rel": bool(pred_rel[i]),
+                            }
+                        )
+                        if len(errors) >= 40:
+                            break
+            out["errors"] = errors
+            print(f"{name}: {json.dumps({k: v for k, v in out.items() if k != 'errors'})}")
+            return out
+
+    held_report = evaluate(held_pairs, "held")
+    unseen_report = evaluate(unseen_pairs, "unseen-goal(diagnostic)")
+
+    out_dir = ARTIFACT_ROOT / args.version
+    out_dir.mkdir(parents=True, exist_ok=True)
+    torch.save(heads.state_dict(), out_dir / "heads.pt")
+    (out_dir / "labels.json").write_text(
+        json.dumps(
+            {"acts": list(ACTS), "values": list(VALUE_LABELS), "model": "cross-encoder"},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    by_goal: dict[str, int] = {}
+    by_act: dict[str, int] = {}
+    n_pos = n_neg = n_val = 0
+    for pair in train_pairs:
+        by_goal[pair["goal"]["goal_id"]] = by_goal.get(pair["goal"]["goal_id"], 0) + 1
+        if pair["act"]:
+            by_act[pair["act"]] = by_act.get(pair["act"], 0) + 1
+        if pair["relevant"]:
+            n_pos += 1
+        else:
+            n_neg += 1
+        if pair["value"]:
+            n_val += 1
+    (out_dir / "metrics.json").write_text(
+        json.dumps(
+            {
+                "dataset_sha256": dataset_sha,
+                "n_total_rows": len(rows),
+                "n_train_pairs": len(train_pairs),
+                "n_held_pairs": len(held_pairs),
+                "n_unseen_pairs": len(unseen_pairs),
+                "n_positive": n_pos,
+                "n_negative": n_neg,
+                "n_value_labels": n_val,
+                "n_by_goal": by_goal,
+                "n_by_act": by_act,
+                "train_groups": sorted({p["group"] for p in train_pairs}),
+                "held_groups": sorted({p["group"] for p in held_pairs}),
+                "unseen_goals": sorted(unseen),
+                "held": held_report,
+                "unseen": unseen_report,
+                "model_id": MODEL_ID,
+                "seed": args.seed,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (out_dir / "errors.jsonl").write_text(
+        "\n".join(
+            json.dumps(e, ensure_ascii=False)
+            for e in held_report.get("errors", []) + unseen_report.get("errors", [])
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"wrote {out_dir}")
+
+
+if __name__ == "__main__":
+    main()
