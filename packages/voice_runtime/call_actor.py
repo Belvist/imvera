@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import re
@@ -1686,6 +1687,7 @@ class CallActor:
             pcm_bytes=len(pcm),
             duration_ms=duration_ms,
             pcm_rms=pcm_rms,
+            pcm_sha256=hashlib.sha256(pcm).hexdigest()[:16],
             dump_path=dump_path or "",
             pending_slot=self._engine_pending_slot() or "",
         )

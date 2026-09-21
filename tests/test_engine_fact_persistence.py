@@ -102,6 +102,8 @@ def test_engine_facts_persist_across_turns(
     assert len(snap.observations) >= 2, "both facts observed"
     # Q0.1 audit spec: 5 more turns (repeats + new slots). Repeats must not
     # duplicate; genuinely new slots persist exactly once each.
+    # Live proof (fs-338ee6ab): pre-Q0.1 code recorded the frozen wellness
+    # fact 11 times (r1..r11); post-fix it must stay exactly one.
     for text in ("Хорошо.", "Дома.", "Ничего.", "ага", "до свидания"):
         _say(session, text)
     fact_keys = {k for k in session._persisted_keys if ":fact:" in k}
@@ -110,6 +112,8 @@ def test_engine_facts_persist_across_turns(
     assert "fact-persist:fact:mood:r1" in fact_keys
     assert not any(k.startswith("fact-persist:fact:wellness:r2") for k in fact_keys)
     assert not any(k.startswith("fact-persist:fact:mood:r2") for k in fact_keys)
+    wellness_obs = [k for k in fact_keys if ":fact:wellness:" in k]
+    assert len(wellness_obs) == 1, f"frozen fact duplicated: {wellness_obs}"
     snap = session.store.get_call_result("fact-persist", "fact-family")
     assert snap is not None
     assert snap.facts.get("wellness") == "Хорошо."

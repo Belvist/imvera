@@ -1,4 +1,15 @@
-# Current task — audit Q0.1+Q0.2+P0#4 done (2026-09-20)
+# Current task — P0 stale-audio ROOT CAUSE: persistence, not audio (2026-09-20)
+
+- Offline repro through live VAD+builder on fs-338ee6ab audio: 14 unique
+  segments, zero repeats — segmentation chain CLEAN. Trace stt.final: all
+  11 transcripts unique and correct. NO stale PCM anywhere in audio path.
+- Real cause: pre-Q0.1 _persist_new_facts re-recorded the frozen wellness
+  fact every turn (r1..r11). Q0.1 (persist-on-change) already fixed it in
+  code but was never deployed to the running bridge. Red-proven on pre-Q0.1
+  tree, green after; frozen-fact-single-observation assertion added.
+- Added pcm_sha256 to stt.request forensic stage for future diagnosis.
+- VERIFIED: full 1592/6/0; differential 92/4/4/0; corpus 500/500; ruff 0.
+- NEXT: commit+push, restart lab bridge (deploy Q0.1), live 7000 call.
 
 - Q0.1 facts/evidence: persist only on semantic (value, source) change;
   quotes pair with current value from SlotValue.source_text (never bare
