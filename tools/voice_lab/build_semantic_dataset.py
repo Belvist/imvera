@@ -316,6 +316,59 @@ def mine_curated_batch2() -> list[dict]:
     return rows
 
 
+def mine_curated_batch3() -> list[dict]:
+    """Expert batch 3 (2026-09-21): value yes/no/unknown, other-person,
+    short contextual answers, multi-goal, same-topic hard negatives.
+    Every row hand-labeled."""
+    goal = GOALS
+    pairs: list[tuple[str, str, str, bool, str | None]] = [
+        # --- value yes/no/unknown ---
+        ("Принимаете лекарства?", "medications_taken", "Да, принимаю.", True, "yes"),
+        ("Принимаете лекарства?", "medications_taken", "Нет, не принимаю.", True, "no"),
+        ("Принимаете лекарства?", "medications_taken", "Не помню.", True, "unknown"),
+        ("Дочь была?", "daughter_visit", "Была вчера.", True, "yes"),
+        ("Дочь была?", "daughter_visit", "Никого не было.", True, "no"),
+        ("Счета оплатили?", "utilities_paid", "Оплатил всё.", True, "yes"),
+        ("Счета оплатили?", "utilities_paid", "Ещё нет.", True, "no"),
+        ("Счета оплатили?", "utilities_paid", "Не знаю.", True, "unknown"),
+        # --- other-person ---
+        ("Как самочувствие?", "wellness", "Сын болеет.", False, None),
+        ("Как спали?", "sleep", "Внук не спал.", False, None),
+        ("Как настроение?", "mood", "У жены плохое.", False, None),
+        ("Давление какое?", "blood_pressure", "У мужа высокое.", False, None),
+        # --- short contextual answers ---
+        ("Таблетки приняли?", "medications_taken", "Да.", True, "yes"),
+        ("Таблетки приняли?", "medications_taken", "Нет.", True, "no"),
+        ("Дочь сегодня будет?", "daughter_visit", "Да.", True, "yes"),
+        ("Дочь сегодня будет?", "daughter_visit", "Нет.", True, "no"),
+        ("Как вы себя чувствуете?", "wellness", "Ага.", False, None),
+        ("Что болит?", "wellness", "Да.", False, None),
+        # --- multi-goal ---
+        ("Что беспокоит?", "wellness", "Голова болит и тошнит.", True, None),
+        ("Что беспокоит?", "mood", "Голова болит и тошнит.", False, None),
+        ("Как дела?", "wellness", "Спал плохо, настроение никакое.", True, None),
+        ("Как дела?", "sleep", "Спал плохо, настроение никакое.", True, None),
+        ("Как дела?", "mood", "Спал плохо, настроение никакое.", True, None),
+        ("Как дела?", "plans", "Спал плохо, настроение никакое.", False, None),
+        # --- same-topic hard negatives ---
+        ("Как настроение?", "mood", "Давление высокое.", False, None),
+        ("Как спали?", "sleep", "Голова болит.", False, None),
+        ("Какие планы?", "plans", "Настроение хорошее.", False, None),
+        ("Давление какое?", "blood_pressure", "Пульс частый.", False, None),
+        ("Таблетки приняли?", "medications_taken", "Врач приходил.", False, None),
+        ("Дочь сегодня будет?", "daughter_visit", "Сын звонил.", False, None),
+        ("Коммунальные услуги оплачены?", "utilities_paid", "Пенсию получила.", False, None),
+    ]
+    rows = []
+    for question, goal_id, text, relevant, value in pairs:
+        row = _base(question, text, "curated3", "curated_pair")
+        row["goal"] = dict(goal[goal_id])
+        row["relevant"] = relevant
+        row["value"] = value
+        rows.append(row)
+    return rows
+
+
 def mine_hard_negatives() -> list[dict]:
     """True hard negatives AND counterfactuals killing Q/G shortcuts.
 
@@ -390,7 +443,8 @@ def main() -> None:
     negatives = mine_hard_negatives()
     curated = mine_curated_pairs()
     curated2 = mine_curated_batch2()
-    all_rows = seeds + live + negatives + curated + curated2
+    curated3 = mine_curated_batch3()
+    all_rows = seeds + live + negatives + curated + curated2 + curated3
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(
         "\n".join(json.dumps(r, ensure_ascii=False) for r in all_rows) + "\n",
@@ -399,7 +453,7 @@ def main() -> None:
     review = sum(1 for r in all_rows if r["relevant"] is None)
     print(
         f"wrote {len(all_rows)} rows ({len(seeds)} seeds, {len(live)} live, "
-        f"{len(negatives)} negatives, {len(curated) + len(curated2)} curated); "
+        f"{len(negatives)} negatives, {len(curated) + len(curated2) + len(curated3)} curated); "
         f"review queue: {review}"
     )
 
