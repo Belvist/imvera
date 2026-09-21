@@ -2007,29 +2007,15 @@ class CallActor:
             )
             sem = None
             if self.session.uses_dialogue_engine():
-                ctx = InterpretContext.from_engine_state(
-                    self.session._engine.state, turn_id=utterance_id
+                # Model FIRST for non-safety acts (owner order: NLP must
+                # actually decide, not wait behind overconfident rules).
+                # Safety acts are excluded inside nlp_candidate_turn;
+                # deterministic validator downstream still owns decisions.
+                from packages.dialogue_engine.semantic_nlp.candidate import (
+                    nlp_candidate_turn,
                 )
-                sem, contextual_confident = contextual_interpret(text, ctx)
-                fast_confident = contextual_confident
-                if contextual_confident and not kernel_has_meaning:
-                    interpret_path = "fast_contextual"
-                if not fast_confident:
-                    sem, rules_confident = fast_interpret_semantic(
-                        text, answer_slot=answer_slot
-                    )
-                    fast_confident = rules_confident
-                    if rules_confident and not kernel_has_meaning:
-                        interpret_path = "fast_rules"
-                if not fast_confident and self.session._engine is not None:
-                    # Semantic NLP candidate (live, owner order: no off
-                    # switches). Model proposes; deterministic validator
-                    # downstream owns the decision. Safety acts excluded
-                    # inside nlp_candidate_turn.
-                    from packages.dialogue_engine.semantic_nlp.candidate import (
-                        nlp_candidate_turn,
-                    )
 
+                if self.session._engine is not None:
                     question_text = (
                         self.session._engine.pending_question_text() or ""
                     )
@@ -2044,6 +2030,21 @@ class CallActor:
                     if nlp_confident:
                         fast_confident = True
                         interpret_path = "semantic_nlp"
+            if self.session.uses_dialogue_engine() and not fast_confident:
+                ctx = InterpretContext.from_engine_state(
+                    self.session._engine.state, turn_id=utterance_id
+                )
+                sem, contextual_confident = contextual_interpret(text, ctx)
+                fast_confident = contextual_confident
+                if contextual_confident and not kernel_has_meaning:
+                    interpret_path = "fast_contextual"
+                if not fast_confident:
+                    sem, rules_confident = fast_interpret_semantic(
+                        text, answer_slot=answer_slot
+                    )
+                    fast_confident = rules_confident
+                    if rules_confident and not kernel_has_meaning:
+                        interpret_path = "fast_rules"
                 # Relation shadow (log-only, never decides, never blocks the
                 # turn): all-goal scores vs deterministic outcome feed the
                 # next data batch.

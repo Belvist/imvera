@@ -1,4 +1,10 @@
-# Current task — relation shadow live, MPS abort fixed (2026-09-21)
+# Current task — model-first live path (2026-09-21)
+
+- Inverted post-STT order: SemanticNLP candidate runs BEFORE
+  contextual/rules on engine path. Safety acts excluded by construction;
+  deterministic validator downstream unchanged. Rules are fallback now.
+- VERIFIED: full 1618/6/0; differential 92/4/4/0; corpus 500/500; ruff 0.
+- NOT VERIFIED: live model-fire rate (needs calls), remote CI.
 
 - Shadow: RelationScorer (xenc_v3) scores all 9 goals per engine turn in
   background, log-only via interpret.relation_shadow. Loader verified
