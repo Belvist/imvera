@@ -12,7 +12,9 @@
   DialogueEngine, ActionPolicy, mission, safety, persistence, renderer.
 - VERIFIED: 8 transport scenarios incl. 1000-cycle 0-ghost; full 1600/6/0;
   differential 92/4/4/0; corpus 500/500; ruff 0. Commit + push.
-- NOT VERIFIED: live Zoiper barge-in (needs owner dial), remote CI.
+- Remote CI VERIFIED green on main@544cce4 (run 35556063735,
+  headSha 544cce4c79e326b73dbd84b0586ca8229e183aed, 2026-09-21T03:01:12Z).
+  NOT VERIFIED: live Zoiper barge-in (needs owner dial).
 
 ---
 

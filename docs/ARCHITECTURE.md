@@ -1,6 +1,6 @@
 # VoiseUp — System Architecture
 
-> **Historical:** Architecture Freeze v1 / PLAN.md v1.2 (Phase 1 spec; Asterisk diagrams below are **not** the production path).  
+> **Historical:** Architecture Freeze v1 / PLAN.md v1.2 (Phase 1 spec; early drafts used Asterisk — superseded by the FreeSWITCH production path below).
 > **Production path (chosen, not accepted):** [ADR-013](adr/013-production-telephony-freeswitch.md) + [ADR-014](adr/014-architecture-freeze-acceptance-gates.md).  
 > **Do not start a fourth system.** Acceptance stamps (`ARCHITECTURE = FROZEN`, `TELEPHONY = ACCEPTED`, …) only after ADR-014 gates.
 
@@ -30,8 +30,8 @@ Real-time voice + telephony layer for [IMVERA](https://imvera.ru/): phone calls 
 ```text
 ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
 │  telephony  │────▶│  voice-runtime   │────▶│ speech-services │     │ backend-mock │
-│  Asterisk   │     │  CallSession     │     │ STT TTS LLM     │     │ (Phase 6)    │
-│  ARI app    │◀────│  TurnManager     │◀────│ providers       │     │ events API   │
+│  FreeSWITCH │     │  CallSession     │     │ STT TTS LLM     │     │ (Phase 6)    │
+│  WS bridge  │◀────│  TurnManager     │◀────│ providers       │     │ events API   │
 └─────────────┘     └──────────────────┘     └─────────────────┘     └──────────────┘
 ```
 
@@ -40,7 +40,7 @@ Real-time voice + telephony layer for [IMVERA](https://imvera.ru/): phone calls 
 ```mermaid
 sequenceDiagram
   participant PSTN
-  participant Asterisk
+  participant FS as FreeSWITCH
   participant Runtime as voice_runtime
   participant STT as STTProvider
   participant Dial as dialogue
@@ -48,8 +48,8 @@ sequenceDiagram
   participant TTS as TTSProvider
   participant Safety as SafetyEngine
 
-  PSTN->>Asterisk: far_end_audio_8k
-  Asterisk->>Runtime: inbound_PCM_only
+  PSTN->>FS: far_end_audio_8k
+  FS->>Runtime: inbound_PCM_only
   Runtime->>STT: partial_and_final
   STT-->>Runtime: STTResult
   Runtime->>Safety: transcript_signals
@@ -60,8 +60,8 @@ sequenceDiagram
   Dial->>Runtime: validated_speech
   Runtime->>TTS: synthesize_chunks
   TTS-->>Runtime: AudioChunk_stream
-  Runtime->>Asterisk: outbound_PCM_only
-  Asterisk->>PSTN: Vera_audio
+  Runtime->>FS: outbound_PCM_only
+  FS->>PSTN: Vera_audio
 ```
 
 ## Ownership (non-negotiable)
@@ -88,7 +88,7 @@ packages/
   status/        # StatusEngine (Phase 2)
   incident/      # incident state machine (Phase 2)
   voice_runtime/ # CallSession, TurnManager (Phase 4)
-  telephony/     # Asterisk adapter (Phase 5)
+  telephony/     # FreeSWITCH adapter, production per ADR-013 (Phase 5)
 
 services/
   stt/           # WhisperSTTProvider (Phase 3)

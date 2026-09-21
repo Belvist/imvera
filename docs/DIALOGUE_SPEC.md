@@ -1,6 +1,6 @@
 # Dialogue Specification — Вера
 
-> Phase 1 spec. Implementation: `packages/dialogue/` (Phase 2).
+> Phase 1 spec. Live implementation: `packages/dialogue_engine/` (`DialogueEngine`, single-writer when `IMVERA_DIALOGUE_ENGINE=1`, the default per `packages/dialogue_engine/runtime.py`). `packages/dialogue/` (Planner/Validator/Session) remains in the call path via `CallSession` but is not the live brain.
 
 ## Principles
 

@@ -1,0 +1,56 @@
+{
+  "generated_by": "tools/voice_lab/gen_status.py",
+  "git": {
+    "head_sha": "544cce4c79e326b73dbd84b0586ca8229e183aed",
+    "branch": "feature/voice-zoiper-m5",
+    "tree_clean": false
+  },
+  "ci": {
+    "workflow": ".github/workflows/ci.yml",
+    "jobs": [
+      "contracts",
+      "legacy-lint",
+      "lint-dialogue",
+      "dialogue-rich",
+      "semantic-kernel",
+      "dialogue-runtime",
+      "action-policy-shadow",
+      "test"
+    ]
+  },
+  "action_policy": {
+    "frozen_policy_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
+    "policy_version": "action-policy-phase1-v9",
+    "source": "packages/dialogue_engine/action_policy_shadow_config.py"
+  },
+  "corpus": {
+    "version": "1.1.0",
+    "source": "packages/dialogue_engine/corpus/generator.py:CORPUS_VERSION"
+  },
+  "semantic_nlp": {
+    "version": "v2",
+    "artifact_dir": "models/semantic_nlp/v2",
+    "model_id": "deepvk/RuModernBERT-base",
+    "metrics_file": "models/semantic_nlp/v2/metrics.json",
+    "held_acc": 1.0,
+    "train_acc": 0.9715447425842285,
+    "n_train": 246,
+    "n_held": 0,
+    "labels_acts": 13,
+    "head_pt": {
+      "sha256": "7ac7bb265b467bb0dc399271c651f16524ebc6be1eeb0e738ca5c03533dd6901",
+      "bytes": 41741
+    },
+    "seed": {
+      "path": "packages/dialogue_engine/semantic_nlp/seed.jsonl",
+      "sha256": "34c6f372f51c7a2764b5da06b802e5dfa3428f13bd81cba1d19b14d55cb9ff5b",
+      "lines": 246,
+      "training_commit": "4f7d1014e051fe7b794215a15d0dd23cb1397b4b"
+    }
+  },
+  "tests": {
+    "status": "not_run",
+    "reason": "generator does not execute the suite; run pytest separately"
+  },
+  "manifest": "models/semantic_nlp/v2/MANIFEST.json"
+}
