@@ -1,4 +1,10 @@
-# Current task — re-ask invariant: not-recalled resolves (2026-09-21)
+# Current task — speech variety without behavior change (2026-09-21)
+
+- Ack tails rotated by turn_seq (default bare canonical); clarification
+  re-asks rotate by attempts (first identical). No menu question added.
+  Zero test churn by construction (defaults byte-identical).
+- VERIFIED: full 1622/6/0; differential 92/4/4/0; corpus 500/500; ruff 0.
+- NOT VERIFIED: remote CI, live call.
 
 - Root cause found: not_recalled existed only as model label, engine had
   no such concept → "Не помню" fell into re-ask loop. Fix: SemanticTurn

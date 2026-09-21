@@ -47,6 +47,26 @@ _SLOT_CLARIFICATIONS: dict[str, str] = {
     "probe_pain_night": "А ночью было больно или спокойно?",
 }
 
+# Re-ask variants: index 0 is always the canonical text above (byte-stable
+# first ask). Later attempts rotate — no identical repeats within a call.
+_SLOT_CLARIFICATION_TAILS: dict[str, list[str]] = {
+    "wellness": ["", "Попробуйте иначе: хорошо, нормально или плохо?"],
+    "mood": ["", "Одним словом: хорошее или плохое?"],
+    "sleep": ["", "С уточнением: хорошо спали или плохо?"],
+    "plans": ["", "Например: дома, гуляете, к врачу?"],
+    "probe_concern": ["", "Опишите своими словами, что чувствуете."],
+    "probe_duration": ["", "Хотя бы примерно: сегодня, вчера, давно?"],
+    "probe_pain_night": ["", "Так было больно или нет?"],
+}
+
+# Ack tails appended after the canonical ack, rotated by turn_seq.
+# Index 0 is "" (bare canonical) so default/short calls stay identical.
+_WELLNESS_ACK_TAILS: dict[str, list[str]] = {
+    "negative": ["", "Я вас внимательно слушаю.", "Расскажите, что беспокоит сильнее всего."],
+    "uncertain": ["", "Я запишу это.", "Уточните чуть подробнее, пожалуйста."],
+    "positive": ["", "Очень хорошо.", "Рада за вас."],
+}
+
 _REPAIR_ACK = "Да, слышу."
 _PARTIAL_CLOSE = "Сейчас не получилось узнать, как у вас дела. До свидания."
 _WRONG_PERSON_FINAL = "Извините, видимо, ошибились номером. До свидания."
@@ -224,26 +244,40 @@ def plans_question(state: EngineState | None = None) -> str:
     return _SLOT_QUESTIONS["plans"]
 
 
-def wellness_ack(*, polarity: str | None = None, value: str = "") -> str:
-    """Short ack after wellness slot fill — polarity-aware."""
+def wellness_ack(
+    *, polarity: str | None = None, value: str = "", turn_seq: int = 0
+) -> str:
+    """Short ack after wellness slot fill — polarity-aware.
+
+    turn_seq rotates an appended tail (index 0 = bare canonical, so
+    default calls stay byte-identical).
+    """
     from packages.dialogue_engine.fast_interpreter import _detect_polarity, _normalize_core
 
     pol = polarity or _detect_polarity(value)
     core = _normalize_core(value)
     if pol == "negative":
-        return _WELLNESS_ACK_NEGATIVE
-    if pol == "uncertain" or re.match(
+        base = _WELLNESS_ACK_NEGATIVE
+        tails = _WELLNESS_ACK_TAILS["negative"]
+    elif pol == "uncertain" or re.match(
         r"^(так\s+себе|сойд[её]т|пойд[её]t|средн\w*|терпимо|ну\s+такое)\.?$", core, re.I
     ):
-        return _WELLNESS_ACK_UNCERTAIN
-    if re.match(r"^(пойд[её]т|терпимо|более-менее)\.?$", core, re.I):
-        return _WELLNESS_ACK_OKAY
-    normal_short = re.match(r"^(нормально|обычно|ничего|обычное)\.?$", core, re.I)
-    if normal_short or "нормально" in value.lower():
-        return _WELLNESS_ACK_NORMAL
-    if pol == "positive":
-        return _WELLNESS_ACK_GOOD
-    return _WELLNESS_ACK
+        base = _WELLNESS_ACK_UNCERTAIN
+        tails = _WELLNESS_ACK_TAILS["uncertain"]
+    elif re.match(r"^(пойд[её]т|терпимо|более-менее)\.?$", core, re.I):
+        base = _WELLNESS_ACK_OKAY
+        tails = _WELLNESS_ACK_TAILS["positive"]
+    else:
+        normal_short = re.match(r"^(нормально|обычно|ничего|обычное)\.?$", core, re.I)
+        if normal_short or "нормально" in value.lower():
+            base = _WELLNESS_ACK_NORMAL
+        elif pol == "positive":
+            base = _WELLNESS_ACK_GOOD
+        else:
+            base = _WELLNESS_ACK
+        tails = _WELLNESS_ACK_TAILS["positive"]
+    tail = tails[turn_seq % len(tails)] if turn_seq > 0 else ""
+    return f"{base} {tail}".strip() if tail else base
 
 
 def opening_speech(elder_display_name: str, prior_context: dict[str, str] | None = None) -> str:
@@ -260,6 +294,18 @@ def opening_speech(elder_display_name: str, prior_context: dict[str, str] | None
     return f"Здравствуйте. Это сервис {brand}. {name}, {wellness}"
 
 
+def _clarification_attempt(state: EngineState | None, slot: str) -> int:
+    """Attempt index for clarification variety. First clarification keeps
+    the canonical text (index 0); later ones rotate. Backward compatible
+    by construction."""
+    if state is None:
+        return 0
+    goal = state.goals.get(slot)
+    if goal is None:
+        return 0
+    return max(0, int(goal.delivered_attempts) - 1)
+
+
 def slot_question(
     slot: str,
     *,
@@ -268,10 +314,18 @@ def slot_question(
 ) -> str:
     if slot == "plans":
         if clarification:
-            return _SLOT_CLARIFICATIONS["plans"]
+            base = _SLOT_CLARIFICATIONS["plans"]
+            tails = _SLOT_CLARIFICATION_TAILS.get("plans", [""])
+            tail = tails[_clarification_attempt(state, slot) % len(tails)]
+            return f"{base} {tail}".strip() if tail else base
         return plans_question(state)
     if clarification:
-        return _SLOT_CLARIFICATIONS.get(slot, "Повторите, пожалуйста, коротко.")
+        base = _SLOT_CLARIFICATIONS.get(slot, "Повторите, пожалуйста, коротко.")
+        tails = _SLOT_CLARIFICATION_TAILS.get(slot)
+        if not tails:
+            return base
+        tail = tails[_clarification_attempt(state, slot) % len(tails)]
+        return f"{base} {tail}".strip() if tail else base
     if slot.startswith("probe_"):
         return probe_question(slot.removeprefix("probe_"))
     if slot.startswith("episode_") or slot.startswith("topic_"):

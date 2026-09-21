@@ -177,7 +177,7 @@ def _acknowledge_fills(state: EngineState, filled: list[str]) -> str:
         rec = state.slot_records.get("wellness")
         pol = rec.polarity if rec else None
         val = rec.value if rec else state.slot_values.get("wellness", "")
-        return questions.wellness_ack(polarity=pol, value=val)
+        return questions.wellness_ack(polarity=pol, value=val, turn_seq=state.turn_seq)
 
     if "sleep" in filled:
         rec = state.slot_records.get("sleep")
