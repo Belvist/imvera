@@ -2,10 +2,15 @@
 UtteranceBuilder chain. Reports per-segment index/bytes/sha256/timing.
 A repeat of an earlier segment's sha256 == the stale-audio bug in the
 segmentation chain (P0, before Stage B).
+
+Usage:
+  python3 tools/voice_lab/repro_stale_audio.py --call-id fs-338ee6ab
+  python3 tools/voice_lab/repro_stale_audio.py --wav path/to/ws_raw_inbound.wav
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import sys
 import wave
@@ -19,7 +24,19 @@ from packages.voice_runtime.utterance_builder import UtteranceBuilder
 
 
 def main() -> None:
-    wav_path = ROOT / ".run" / "freeswitch-forensic" / "fs-338ee6ab" / "ws_raw_inbound.wav"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--call-id", default=None)
+    parser.add_argument("--wav", default=None)
+    args = parser.parse_args()
+    if args.wav:
+        wav_path = Path(args.wav)
+    elif args.call_id:
+        wav_path = (
+            ROOT / ".run" / "freeswitch-forensic" / args.call_id / "ws_raw_inbound.wav"
+        )
+    else:
+        parser.error("pass --call-id or --wav")
+        return
     w = wave.open(str(wav_path))
     raw = w.readframes(w.getnframes())
     sr = w.getframerate()
