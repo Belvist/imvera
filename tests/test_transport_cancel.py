@@ -271,6 +271,7 @@ def test_request_downstream_stop_uses_break_never_stop(monkeypatch) -> None:
         ack = await bridge.request_downstream_stop()
         assert commands == [f"uuid_audio_stream {bridge.fs_uuid} break"]
         assert ack["command"] == "uuid_audio_stream break"
+        assert ack["ok"] is True
         assert ack["acked_at"] is not None
         assert "Success" in ack["result"]
         assert bridge._closed is False
@@ -320,5 +321,25 @@ def test_thousand_cancel_cycles_zero_ghost() -> None:
             if report["cancelled"]:
                 assert report["sent"] == 0, f"ghost frame of {gid} reached wire"
                 assert report["sent_race"] == 0
+
+    asyncio.run(scenario())
+
+
+def test_downstream_err_is_not_ack(monkeypatch) -> None:
+    """-ERR reply must not produce acked_at (observability bug fix)."""
+    import packages.telephony.freeswitch_esl as esl_mod
+
+    async def fake_api(command: str, *, timeout_s: float = 3.0) -> str:
+        return "-ERR invalid command"
+
+    monkeypatch.setattr(esl_mod, "freeswitch_api", fake_api)
+
+    async def scenario() -> None:
+        bridge = _bridge()
+        ack = await bridge.request_downstream_stop()
+        assert ack["acked_at"] is None
+        assert ack["ok"] is False
+        assert "-ERR" in ack["result"]
+        assert bridge._closed is False
 
     asyncio.run(scenario())

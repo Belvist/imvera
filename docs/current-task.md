@@ -1,4 +1,11 @@
-# Current task — P2 Cut 3: single mission-attach (2026-09-21)
+# Current task — review debt closed: ACK honesty + STATUS truth (2026-09-21)
+
+- -ERR replies no longer produce acked_at (ok=false); +OK only. Regression
+  added. STATUS regenerated on HEAD; held_acc null when n_held=0. NLU
+  frozen — no cuts beyond adjudication/single-attach.
+- VERIFIED: transport 12 passed; full 1618/6/0; differential 92/4/4/0;
+  corpus 500/500; ruff 0. Commit + push.
+- NOT VERIFIED: live audible break/barge-in (owner dial), remote CI.
 
 - Measured 2-3 understand_mission calls/turn (identical results — pure
   provider). Removed redundant attaches; kernel_to_rich_turn gained

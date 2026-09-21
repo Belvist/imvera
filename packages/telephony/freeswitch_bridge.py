@@ -216,19 +216,32 @@ class FreeSwitchBridgeSession:
         requested_at = time.time()
         try:
             result = await freeswitch_api(f"uuid_audio_stream {self.fs_uuid} break")
-            return {
-                "requested_at": requested_at,
-                "acked_at": time.time(),
-                "command": "uuid_audio_stream break",
-                "result": str(result)[:200],
-            }
         except Exception as exc:
             return {
                 "requested_at": requested_at,
                 "acked_at": None,
+                "ok": False,
                 "command": "uuid_audio_stream break",
                 "error": str(exc)[:200],
             }
+        text = str(result)[:200]
+        # +OK only counts as ACK. -ERR (e.g. unknown verb in this build)
+        # is an honest failure, never an ack.
+        if text.lstrip().startswith("+OK"):
+            return {
+                "requested_at": requested_at,
+                "acked_at": time.time(),
+                "ok": True,
+                "command": "uuid_audio_stream break",
+                "result": text,
+            }
+        return {
+            "requested_at": requested_at,
+            "acked_at": None,
+            "ok": False,
+            "command": "uuid_audio_stream break",
+            "result": text,
+        }
 
     async def _pump_outbound_to_ws(self, websocket: Any) -> None:
         try:

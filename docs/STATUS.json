@@ -1,7 +1,7 @@
 {
   "generated_by": "tools/voice_lab/gen_status.py",
   "git": {
-    "head_sha": "544cce4c79e326b73dbd84b0586ca8229e183aed",
+    "head_sha": "a213730acf89b30178d7c358b26d9d7822cf7edd",
     "branch": "feature/voice-zoiper-m5",
     "tree_clean": false
   },
@@ -32,7 +32,7 @@
     "artifact_dir": "models/semantic_nlp/v2",
     "model_id": "deepvk/RuModernBERT-base",
     "metrics_file": "models/semantic_nlp/v2/metrics.json",
-    "held_acc": 1.0,
+    "held_acc": null,
     "train_acc": 0.9715447425842285,
     "n_train": 246,
     "n_held": 0,

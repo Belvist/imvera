@@ -138,7 +138,9 @@ def build_status(write_manifest: bool) -> dict:
             "artifact_dir": artifact_rel,
             "model_id": metrics.get("model_id"),
             "metrics_file": f"{artifact_rel}/metrics.json",
-            "held_acc": metrics.get("held_acc"),
+            # held_acc is null (not 1.0) when the artifact was trained on
+            # all rows with no held-out set — 1.0 would be a lie.
+            "held_acc": metrics.get("held_acc") if metrics.get("n_held") else None,
             "train_acc": metrics.get("train_acc"),
             "n_train": metrics.get("n_train"),
             "n_held": metrics.get("n_held"),
