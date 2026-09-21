@@ -18,6 +18,25 @@ class StreamTrack(StrEnum):
 
 
 @dataclass(frozen=True)
+class OutboundAudioFrame:
+    """One downlink chunk with transport identity (P0-B/C).
+
+    generation_id must survive from CallActor to the last transport queue
+    item. Frames of a cancelled generation are dropped at enqueue AND send
+    gates; cross-generation deletion is forbidden. epoch is diagnostic
+    (actor control epoch at send); enforcement is the cancelled set.
+    """
+
+    pcm_s16le: bytes
+    generation_id: str
+    call_id: str = ""
+    phrase_id: str = ""
+    sequence: int = 0
+    sample_rate: int = 16000
+    epoch: int = 0
+
+
+@dataclass(frozen=True)
 class InboundMediaFrame:
     """One decoded uplink chunk from telephony adapter → AudioIngress."""
 

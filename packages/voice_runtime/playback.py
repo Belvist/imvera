@@ -86,6 +86,10 @@ class PlaybackQueue:
             state=PlaybackState.GENERATING,
         )
 
+    def is_cancelled(self, generation_id: str) -> bool:
+        """Public send-gate check (P0-B/C pump race)."""
+        return generation_id in self._cancelled_generations
+
     def cancel_generation(self, generation_id: str) -> None:
         self._cancelled_generations.add(generation_id)
         if self._active_generation == generation_id:

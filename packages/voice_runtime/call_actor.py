@@ -14,6 +14,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from packages.contracts.enums import AsrQuality, FsmState
 from packages.contracts.interpretation import TurnInterpretation
@@ -122,6 +123,10 @@ class MediaCallbacks:
     emit: EmitFn
     prime_downlink: Callable[[], Awaitable[None]] | None = None
     finish: Callable[[], Awaitable[None]] | None = None
+    # P0-B/C generation transport (optional; None → legacy bare-bytes path).
+    send_frame: Callable[[AudioEnvelope], Awaitable[None]] | None = None
+    cancel_generation: Callable[[str], Awaitable[dict[str, Any]]] | None = None
+    request_downstream_stop: Callable[[], Awaitable[dict[str, Any]]] | None = None
 
 
 class ActorEventType(StrEnum):
@@ -2430,7 +2435,6 @@ class CallActor:
     async def _interrupt_playback(self, *, flush: bool) -> None:
         if flush:
             self._bump_control_epoch()
-            asyncio.create_task(self.media.flush())
         await self._cancel_active_llm()
         self._hold_turn_finalize = False
         self._render_generation = None
@@ -2455,6 +2459,30 @@ class CallActor:
         asyncio.create_task(self.tts.cancel(gen))
         if self._tts_task and not self._tts_task.done():
             self._tts_task.cancel()
+        # P0-B/C: addressable transport cancel (never global flush) with a
+        # LOCAL_PURGE_ACK distinct from the downstream stop measurement.
+        cancel_requested_at = utc_now_iso()
+        local_ack: dict[str, Any] = {}
+        if self.media.cancel_generation is not None:
+            try:
+                local_ack = await self.media.cancel_generation(gen)
+            except Exception as exc:
+                local_ack = {"generation_id": gen, "error": str(exc)[:200]}
+        else:
+            asyncio.create_task(self.media.flush())
+        downstream: dict[str, Any] = {}
+        if self.media.request_downstream_stop is not None:
+            try:
+                downstream = await self.media.request_downstream_stop()
+            except Exception as exc:
+                downstream = {"error": str(exc)[:200]}
+        await self._emit_stage(
+            "transport.cancel",
+            generation_id=gen,
+            cancel_requested_at=cancel_requested_at,
+            local_purge_ack=local_ack,
+            downstream_ack=downstream,
+        )
         await self.media.emit(
             RuntimeEvent(
                 self.call_id,
@@ -2769,8 +2797,15 @@ class CallActor:
                     await self._on_playback_drained()
                 await asyncio.sleep(0.01)
                 continue
+            # P0-B/C: identity travels with the frame; cancelled generations
+            # never reach the transport sender (bridge enforces its own gate).
+            if self._playback.is_cancelled(chunk.generation_id):
+                continue
             try:
-                await self.media.send_pcm(chunk.pcm_s16le)
+                if self.media.send_frame is not None:
+                    await self.media.send_frame(chunk)
+                else:
+                    await self.media.send_pcm(chunk.pcm_s16le)
             except Exception as exc:
                 if self._playback._ledger:
                     self._playback._ledger.generation_outcome = "failed"

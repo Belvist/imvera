@@ -1,9 +1,13 @@
-"""Downstream cancel gap — CallActor → FreeSwitchBridgeSession boundary.
+"""Downstream cancel gap — LEGACY bare-bytes fallback path only.
 
-Local generation cancel clears the in-actor queue, but PCM already handed to
-the bridge (or in-flight in send_pcm) has no generation identity downstream:
-no purge API exists, flush is a no-op in the lab adapter. This test pins the
-current behavior: a cancelled generation's audio still reaches the wire.
+Local generation cancel clears the in-actor queue, but PCM handed to the
+bridge via bare send_pcm (no send_frame/cancel_generation wired) has no
+generation identity downstream. This test pins the legacy fallback: a
+cancelled generation's audio still reaches the wire there.
+
+Production path uses send_frame + cancel_generation (see
+test_transport_cancel.py: 0 ghost frames). Do not "fix" this file by
+wiring the new callbacks — that would duplicate the new suite.
 """
 
 from __future__ import annotations

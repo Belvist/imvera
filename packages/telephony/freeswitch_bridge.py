@@ -16,6 +16,7 @@ from typing import Any
 
 from packages.telephony.adapter import (
     InboundMediaFrame,
+    OutboundAudioFrame,
     StreamTrack,
     TelephonyMediaCounters,
 )
@@ -46,7 +47,7 @@ class FreeSwitchBridgeSession:
     capture_sample_rate: int = TARGET_SAMPLE_RATE
     playback_sample_rate: int = TARGET_SAMPLE_RATE
     counters: TelephonyMediaCounters = field(default_factory=TelephonyMediaCounters)
-    _outbound_queue: asyncio.Queue[bytes] = field(default_factory=asyncio.Queue)
+    _outbound_queue: asyncio.Queue[OutboundAudioFrame] = field(default_factory=asyncio.Queue)
     _outbound_task: asyncio.Task | None = None
     uplink_only: bool = True
     outbound_mode: FreeSwitchOutboundMode = FreeSwitchOutboundMode.NONE
@@ -55,6 +56,15 @@ class FreeSwitchBridgeSession:
     first_outbound_pcm_at: float | None = None
     first_inbound_pcm_at: float | None = None
     _raw_inbound: bytearray = field(default_factory=bytearray)
+    # P0-B/C generation transport: cancelled set enforces drops at enqueue
+    # AND send gates; per-generation counters prove 0 ghost frames.
+    _cancelled_generations: set[str] = field(default_factory=set)
+    _transport_epoch: int = 0
+    _gen_enqueued: dict[str, int] = field(default_factory=dict)
+    _gen_sent: dict[str, int] = field(default_factory=dict)
+    _gen_dropped: dict[str, int] = field(default_factory=dict)
+    _gen_cancel_at: dict[str, float] = field(default_factory=dict)
+    _gen_send_race: dict[str, int] = field(default_factory=dict)
 
     def _duplex_enabled(self) -> bool:
         return not self.uplink_only or self.outbound_mode is not FreeSwitchOutboundMode.NONE
@@ -102,15 +112,121 @@ class FreeSwitchBridgeSession:
                     pass
             await self.close()
 
-    async def enqueue_outbound_pcm(self, pcm: bytes) -> None:
+    async def enqueue_outbound_pcm(
+        self,
+        pcm: bytes,
+        *,
+        generation_id: str = "",
+        phrase_id: str = "",
+        sequence: int = 0,
+        epoch: int = 0,
+    ) -> bool:
+        """Enqueue one typed downlink frame. Returns False when dropped
+        (closed or generation cancelled) — never raises on cancel."""
         if self._closed:
-            return
-        await self._outbound_queue.put(pcm)
+            return False
+        if generation_id and generation_id in self._cancelled_generations:
+            self._gen_dropped[generation_id] = self._gen_dropped.get(generation_id, 0) + 1
+            return False
+        frame = OutboundAudioFrame(
+            pcm_s16le=pcm,
+            generation_id=generation_id,
+            call_id=self.call_id,
+            phrase_id=phrase_id,
+            sequence=sequence,
+            sample_rate=self.playback_sample_rate,
+            epoch=epoch,
+        )
+        await self._outbound_queue.put(frame)
+        if generation_id:
+            self._gen_enqueued[generation_id] = self._gen_enqueued.get(generation_id, 0) + 1
+        return True
+
+    def cancel_generation(self, generation_id: str) -> dict[str, Any]:
+        """Addressable cancel (never global): purge queued frames of exactly
+        this generation, reject future enqueues. Idempotent. Returns the
+        LOCAL_PURGE_ACK payload — local only, see request_downstream_stop
+        for the separate downstream measurement."""
+        now = time.time()
+        already = generation_id in self._cancelled_generations
+        self._cancelled_generations.add(generation_id)
+        self._transport_epoch += 1
+        purged_frames = 0
+        purged_bytes = 0
+        kept: list[OutboundAudioFrame] = []
+        while True:
+            try:
+                frame = self._outbound_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            if frame.generation_id == generation_id:
+                purged_frames += 1
+                purged_bytes += len(frame.pcm_s16le)
+            else:
+                kept.append(frame)
+        for frame in kept:
+            self._outbound_queue.put_nowait(frame)
+        if generation_id not in self._gen_cancel_at:
+            self._gen_cancel_at[generation_id] = now
+        return {
+            "generation_id": generation_id,
+            "purged_frames": purged_frames,
+            "purged_bytes": purged_bytes,
+            "already_cancelled": already,
+            "transport_epoch": self._transport_epoch,
+            "local_purge_ack_at": now,
+        }
+
+    def generation_report(self, generation_id: str) -> dict[str, Any]:
+        return {
+            "generation_id": generation_id,
+            "enqueued": self._gen_enqueued.get(generation_id, 0),
+            "sent": self._gen_sent.get(generation_id, 0),
+            "dropped": self._gen_dropped.get(generation_id, 0),
+            "sent_race": self._gen_send_race.get(generation_id, 0),
+            "cancelled": generation_id in self._cancelled_generations,
+            "cancel_requested_at": self._gen_cancel_at.get(generation_id),
+        }
+
+    async def request_downstream_stop(self) -> dict[str, Any]:
+        """Best-effort downstream stop via FreeSWITCH + measurement.
+
+        Returns requested_at/result — a transport measurement, NEVER an
+        audible-silence claim. Audible stop must be proven by live
+        measurement (barge-in probe), not by this return value.
+        """
+        from packages.telephony.freeswitch_esl import freeswitch_api
+
+        requested_at = time.time()
+        try:
+            result = await freeswitch_api(f"uuid_audio_stream {self.fs_uuid} stop")
+            return {
+                "requested_at": requested_at,
+                "acked_at": time.time(),
+                "result": str(result)[:200],
+            }
+        except Exception as exc:
+            return {
+                "requested_at": requested_at,
+                "acked_at": None,
+                "error": str(exc)[:200],
+            }
 
     async def _pump_outbound_to_ws(self, websocket: Any) -> None:
         try:
             while not self._closed:
-                pcm = await self._outbound_queue.get()
+                frame = await self._outbound_queue.get()
+                # Send gate: a frame extracted before cancel must still drop.
+                if frame.generation_id and frame.generation_id in self._cancelled_generations:
+                    self._gen_dropped[frame.generation_id] = (
+                        self._gen_dropped.get(frame.generation_id, 0) + 1
+                    )
+                    continue
+                pcm = frame.pcm_s16le
+                send_started_cancelled = bool(
+                    frame.generation_id
+                    and frame.generation_id in self._cancelled_generations
+                )
                 if self.outbound_mode is FreeSwitchOutboundMode.STREAM_AUDIO_JSON:
                     message = encode_stream_audio_json(pcm, self.playback_sample_rate)
                     await websocket.send_text(message)
@@ -118,8 +234,24 @@ class FreeSwitchBridgeSession:
                 else:
                     await websocket.send_bytes(pcm)
                     tx_bytes = len(pcm)
+                # Race accounting: cancel landed DURING the send await (after
+                # the gate). Bytes are already handed to the socket — this is
+                # why LOCAL_PURGE_ACK never claims audible silence; only the
+                # measured downstream stop does. Bounded to in-flight frames.
+                if (
+                    frame.generation_id
+                    and not send_started_cancelled
+                    and frame.generation_id in self._cancelled_generations
+                ):
+                    self._gen_send_race[frame.generation_id] = (
+                        self._gen_send_race.get(frame.generation_id, 0) + 1
+                    )
                 self.counters.carrier_tx_frames += 1
                 self.counters.carrier_tx_bytes += tx_bytes
+                if frame.generation_id:
+                    self._gen_sent[frame.generation_id] = (
+                        self._gen_sent.get(frame.generation_id, 0) + 1
+                    )
                 if self.first_outbound_pcm_at is None:
                     self.first_outbound_pcm_at = time.time()
         except asyncio.CancelledError:

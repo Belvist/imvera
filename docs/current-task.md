@@ -1,15 +1,22 @@
-# Current task — P0 stale-audio ROOT CAUSE: persistence, not audio (2026-09-20)
+# Current task — P0-B/C transport cancel done, live pending (2026-09-20)
 
-- Offline repro through live VAD+builder on fs-338ee6ab audio: 14 unique
-  segments, zero repeats — segmentation chain CLEAN. Trace stt.final: all
-  11 transcripts unique and correct. NO stale PCM anywhere in audio path.
-- Real cause: pre-Q0.1 _persist_new_facts re-recorded the frozen wellness
-  fact every turn (r1..r11). Q0.1 (persist-on-change) already fixed it in
-  code but was never deployed to the running bridge. Red-proven on pre-Q0.1
-  tree, green after; frozen-fact-single-observation assertion added.
-- Added pcm_sha256 to stt.request forensic stage for future diagnosis.
-- VERIFIED: full 1592/6/0; differential 92/4/4/0; corpus 500/500; ruff 0.
-- NEXT: commit+push, restart lab bridge (deploy Q0.1), live 7000 call.
+- Generation identity end-to-end: AudioEnvelope through actor pump →
+  typed OutboundAudioFrame bridge queue. Enqueue + send gates, addressable
+  cancel_generation (purge + reject-future + LOCAL_PURGE_ACK), downstream
+  stop measured separately (never claims audible). Race accounting:
+  cancel-during-send bounded to in-flight frame + counted (sent_race).
+- Prior P0 finding kept: fs-338ee6ab "stale audio" was stale FACT
+  persistence (Q0.1 fixed, red-proven); audio chain proven clean (14/14
+  unique segments, 11/11 unique transcripts).
+- Scope kept: telephony/services/playback/call-actor/tests only. No NLP,
+  DialogueEngine, ActionPolicy, mission, safety, persistence, renderer.
+- VERIFIED: 8 transport scenarios incl. 1000-cycle 0-ghost; full 1600/6/0;
+  differential 92/4/4/0; corpus 500/500; ruff 0. Commit + push.
+- NOT VERIFIED: live Zoiper barge-in (needs owner dial), remote CI.
+
+---
+
+# Historical — audit Q0.1+Q0.2+P0#4 (2026-09-20)
 
 - Q0.1 facts/evidence: persist only on semantic (value, source) change;
   quotes pair with current value from SlotValue.source_text (never bare

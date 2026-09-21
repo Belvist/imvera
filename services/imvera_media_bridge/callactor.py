@@ -164,7 +164,23 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
     async def send_pcm(pcm: bytes) -> None:
         await bridge.enqueue_outbound_pcm(pcm)
 
+    async def send_frame(frame: Any) -> None:
+        await bridge.enqueue_outbound_pcm(
+            frame.pcm_s16le,
+            generation_id=frame.generation_id,
+            phrase_id=frame.phrase_id,
+            sequence=frame.sequence,
+        )
+
+    async def cancel_generation(generation_id: str) -> dict[str, Any]:
+        return bridge.cancel_generation(generation_id)
+
+    async def request_downstream_stop() -> dict[str, Any]:
+        return await bridge.request_downstream_stop()
+
     async def flush() -> None:
+        # Legacy global flush: no longer used on the generation path
+        # (see cancel_generation). Kept for MediaCallbacks compatibility.
         return
 
     async def hangup() -> None:
@@ -199,7 +215,15 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
         stt,
         tts,
         llm,
-        MediaCallbacks(send_pcm=send_pcm, flush=flush, hangup=hangup, emit=emit),
+        MediaCallbacks(
+            send_pcm=send_pcm,
+            flush=flush,
+            hangup=hangup,
+            emit=emit,
+            send_frame=send_frame,
+            cancel_generation=cancel_generation,
+            request_downstream_stop=request_downstream_stop,
+        ),
         mission=mission_obj,
         store=create_call_record_store(),
     )
