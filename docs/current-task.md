@@ -1,4 +1,22 @@
-# Current task — conversation-model benchmark verdict (2026-09-22)
+# Current task — Cut A done: tinyllm out, rest verified-kept (2026-09-22)
+
+- A1: kernel live call + repair/qback remaps removed (b9167bf); module kept
+  for bench tool. A2 env: IMVERA_TINYLLM_MODEL='' in repo env (plist inert
+  value stays till next bridge restart — nothing reads it live).
+- A4 numbers: corpus second-tier hit-rate 0/500; isolated slotclf on 224 real
+  lines trigger-happy (125–169 'answer' incl. greetings) BUT live-funnel probe
+  clean (onset None, advanced). Keep → Cut B revisit with new log
+  (dialogue.second_tier: attribute+verdict, no PII).
+- Deferred with verified reasons: topic_tracker live-wired (Cut C);
+  router inline blocked by test_mission_slice2 bypass-stats pin (dies in Cut D);
+  shadow persist pinned by shadow tests + no-ops in legacy prod.
+- VERIFIED: full 1651/4/1; differential 92/4/4/0; corpus 500/500; ruff 0.
+  Commit 663383b pushed. No tests removed.
+- NOT VERIFIED: live call with tinyllm gone (reluctance +1 votes stop — watch
+  live reluctance behavior); remote CI.
+- NEXT: Cut B (understanding owner) after second-tier log data; Cut C state.
+
+---
 
 - Fish-style hope tested by measurement (tools/voice_lab/bench_conversation_models.py,
   commit dd4c33e). Same prompt, alternating messages[], max 40 tokens, this Mac:
