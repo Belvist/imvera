@@ -1,4 +1,18 @@
-# Current task — speech variety by day (2026-09-22)
+# Current task — harness baselines: both models 8/20 (2026-09-22)
+
+- Prompt-contract v1 + 20-case harness committed (a54e925). Baselines:
+  1.7B 8/20 avg ~310 ms (filler «давайте посмотрим», thread-miss, «давай»);
+  4B 8/20 avg ~592 ms (threads better BUT promise «Могу прийти, если
+  захочете» + «у тебя» + «Спокойной ночи» днём). Bar not passed by either.
+- Verdict: speed is NOT the problem (1.7B first phrase ~200–300 ms);
+  out-of-box quality is. Path: prompt v2 iterations and/or LoRA on tone
+  against this bar; unconstrained replies never go live (validator supreme).
+- NLP retrain queue (understanding, NOT dialogs): value/span heads,
+  unseen-goal generalization, /v1/interpret evidence repair. Dialogs change
+  only via speaking layer (pools live, composer flagged, harness here).
+- NOT VERIFIED: prompt v2+, LoRA, live. NEXT: prompt v2 round or dataset spec.
+
+---
 
 - Owner: same questions + greeting daily, zero variety. Fixed with
   deterministic pools (pool[0] canonical): greeting time-of-day + odd-day
