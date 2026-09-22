@@ -1,4 +1,22 @@
-# Current task — Cut A done: tinyllm out, rest verified-kept (2026-09-22)
+# Current task — live fs-8a64bac9 dissected, ghost killed (2026-09-22)
+
+- Owner dialed (6 turns). Good: ack «Голова болит — зафиксировала» clean,
+  buttocks normalized, summary listed both, ITS worked, turns 2–6 interpret
+  0.07–0.27 s (warmup holds), no repeats beyond one re-ask.
+- Defects found + fixed: (1) ghost 'болеть' episode from refusal echo stole
+  the floor + leaked «и заболела» into summary → creation gate (ещё/опять
+  still opens leads); (2) позавчера onset missed → anchors added;
+  (3) turn-1 6.3 s inside nlp_candidate_turn, model 15 ms locally →
+  exception logging + nlp_error/nlp_get_ms in traced stage.
+- VERIFIED: ghost/позавчера/nlp_error tests; full 1657/4/1; differential
+  92/4/4/0; corpus 500/500; ruff 0. Commit abefe44 pushed.
+  Own overreach («ещё болит» killed) caught by frozen pack test, fixed same turn.
+- NOT VERIFIED: next live call (ghost gone? nlp_error names 6.3 s?);
+  family_status still not in export; «на работу» hook ignored (Cut 2);
+  remote CI.
+- NEXT: owner dial → confirm ghost gone + read nlp_error in trace.
+
+---
 
 - A1: kernel live call + repair/qback remaps removed (b9167bf); module kept
   for bench tool. A2 env: IMVERA_TINYLLM_MODEL='' in repo env (plist inert
