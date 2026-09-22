@@ -1,4 +1,16 @@
-# Current task — live fs-8a64bac9 dissected, ghost killed (2026-09-22)
+# Current task — speech variety by day (2026-09-22)
+
+- Owner: same questions + greeting daily, zero variety. Fixed with
+  deterministic pools (pool[0] canonical): greeting time-of-day + odd-day
+  intro (prior-call followup keeps precedence), wellness/mood/sleep/plans +
+  probes + ITS rotate by day ordinal, bare acks rotate by utterance,
+  episode bridges rotate with progress. Same day = same phrasing.
+- VERIFIED: 6 new tests; full 1663/4/1; differential 92/4/4/0 (clean by
+  construction); corpus 500/500; ruff 0. Commit 2b4d8d8 pushed.
+- NOT VERIFIED: live ear check (tomorrow's greeting differs); remote CI.
+- NEXT: prompt-contract v1 + judge harness (thread continuity), live dial.
+
+---
 
 - Owner dialed (6 turns). Good: ack «Голова болит — зафиксировала» clean,
   buttocks normalized, summary listed both, ITS worked, turns 2–6 interpret
