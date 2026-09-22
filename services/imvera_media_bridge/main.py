@@ -37,6 +37,23 @@ async def startup() -> None:
     from packages.dialogue_engine.runtime import log_runtime_truth
 
     log_runtime_truth(log)
+    if _bridge_mode() == "callactor":
+        # NLP models must be hot before any call: lazy singletons used to
+        # load mid-call on turn 1 (measured 6.2 s hole). Synchronous here =
+        # loop thread = MPS-safe. Either hot or honestly refusing (readiness
+        # 503 + WS 1013 while cold).
+        from packages.dialogue_engine.semantic_nlp.warmup import warmup_all
+
+        report = warmup_all()
+        for m in report.models:
+            log.info(
+                "nlp.warm name=%s ok=%s latency_ms=%.1f device=%s err=%s",
+                m.name,
+                m.ok,
+                m.latency_ms,
+                m.device,
+                m.error,
+            )
 
 
 async def _noop_inbound(_frame) -> None:
@@ -65,8 +82,33 @@ async def ready() -> JSONResponse | dict:
         tts = os.environ.get("IMVERA_TTS_URL", "http://127.0.0.1:9102")
         llm = os.environ.get("IMVERA_LLM_URL", "http://127.0.0.1:9103")
         from packages.dialogue_engine.runtime import runtime_truth
+        from packages.dialogue_engine.semantic_nlp.warmup import warmth
 
-        payload.update({"stt": stt, "tts": tts, "llm": llm, "dialogue": runtime_truth()})
+        report = warmth()
+        payload.update(
+            {
+                "stt": stt,
+                "tts": tts,
+                "llm": llm,
+                "dialogue": runtime_truth(),
+                "nlp": (
+                    {
+                        "all_hot": report.all_hot,
+                        "models": [
+                            {
+                                "name": m.name,
+                                "ok": m.ok,
+                                "latency_ms": round(m.latency_ms, 1),
+                                "device": m.device,
+                            }
+                            for m in report.models
+                        ],
+                    }
+                    if report is not None
+                    else {"all_hot": False, "models": []}
+                ),
+            }
+        )
     return payload
 
 

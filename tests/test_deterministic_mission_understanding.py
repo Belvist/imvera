@@ -355,6 +355,12 @@ def test_media_bridge_readiness_green_without_llm(monkeypatch: pytest.MonkeyPatc
             return httpx.Response(200, json={"status": "ok"}, request=req)
 
     monkeypatch.setattr(httpx, "AsyncClient", Client)
+    # Readiness now requires hot NLP models (bridge warms them at startup;
+    # cold bridge must refuse calls instead of serving a 6 s hole).
+    from packages.dialogue_engine.semantic_nlp.warmup import warmup_all
+
+    report = warmup_all()
+    assert report.all_hot
     blockers = asyncio.run(ca.inference_blockers())
     assert blockers == []
     # Prove LLM URL was never required: even if only stt/tts checked, empty blockers.

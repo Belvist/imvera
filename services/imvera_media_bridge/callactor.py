@@ -92,8 +92,10 @@ def _resolve_product_mission(websocket: WebSocket, fs_uuid: str):
 
 async def inference_blockers() -> list[str]:
     """Product CallActor readiness: STT + TTS required; LLM is not required."""
+    from packages.dialogue_engine.semantic_nlp.warmup import nlp_blockers
+
     stt, tts, _llm = _gateway_urls()
-    blockers: list[str] = []
+    blockers: list[str] = nlp_blockers()
     async with httpx.AsyncClient(timeout=2.0) as client:
         for name, base in (("stt", stt), ("tts", tts)):
             try:
