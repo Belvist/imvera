@@ -1,0 +1,84 @@
+"""Speech variety: greeting/questions/acks rotate, canonical pinned by day.
+
+Same day = same phrasing (redials consistent, differential/corpus stable).
+New day = new phrasing. pool[0] is always canonical — tests pin
+IMVERA_SPEECH_DAY to a multiple of the pool size for byte-identical asserts.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+pytestmark = pytest.mark.dialogue_engine
+
+
+def test_day_zero_yields_canonical(monkeypatch: pytest.MonkeyPatch) -> None:
+    from packages.dialogue_engine import questions
+
+    monkeypatch.setenv("IMVERA_SPEECH_DAY", "99")  # 99 % 3 == 0
+    assert questions.slot_question("wellness") == "Как вы себя чувствуете?"
+    assert questions.slot_question("mood") == "А какое у вас сегодня настроение?"
+    assert questions.slot_question("sleep") == "Как вы спали?"
+    assert questions.probe_question("concern") == "Что именно беспокоит?"
+    assert questions.important_to_share_question().startswith("Поняла вас. Есть ли")
+
+
+def test_rotation_varies_by_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    from packages.dialogue_engine import questions
+
+    seen = set()
+    for day in ("99", "100", "101"):
+        monkeypatch.setenv("IMVERA_SPEECH_DAY", day)
+        seen.add(questions.slot_question("wellness"))
+        seen.add(questions.important_to_share_question())
+    assert len(seen) >= 4, seen
+
+
+def test_greeting_has_brand_name_and_question(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from packages.dialogue_engine import questions
+
+    for day in ("99", "100", "101"):
+        monkeypatch.setenv("IMVERA_SPEECH_DAY", day)
+        g = questions.opening_speech("Даниил")
+        assert "Амвера" in g and "Даниил" in g and g.rstrip().endswith("?")
+        assert ". Даниил," in g
+
+
+def test_greeting_prior_followup_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    from packages.dialogue_engine import questions
+
+    monkeypatch.setenv("IMVERA_SPEECH_DAY", "100")
+    g = questions.opening_speech("Даниил", {"wellness_concern": "голова болит"})
+    assert "голов" in g.lower()
+
+
+def test_bare_ack_rotates_no_immediate_repeat() -> None:
+    from types import SimpleNamespace
+
+    from packages.dialogue_engine.conversation_policy import (
+        _grounded_ack_for_mentions,
+    )
+
+    acks = {
+        _grounded_ack_for_mentions(
+            SimpleNamespace(
+                issue_mentions=[
+                    SimpleNamespace(label="болеть", body_site="", role="primary")
+                ],
+                utterance_id=f"u-{i}",
+            )
+        )
+        for i in (3, 4)
+    }
+    assert len(acks) == 2, acks
+
+
+def test_bridge_ack_fresh_episode_stays_canonical() -> None:
+    from types import SimpleNamespace
+
+    from packages.dialogue_engine.conversation_policy import _bridge_ack_for_episode
+
+    ep = SimpleNamespace(body_site=None, primary_label="болит", kind="symptom")
+    assert _bridge_ack_for_episode(ep) == "Хорошо."

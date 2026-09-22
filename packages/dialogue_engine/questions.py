@@ -15,6 +15,73 @@ _SLOT_QUESTIONS: dict[str, str] = {
     "plans": "Какие у вас планы на сегодня?",
 }
 
+# Variety pools: index 0 is ALWAYS the canonical text above (stable default,
+# tests pin it via IMVERA_SPEECH_DAY). Live rotation picks by day ordinal —
+# same day same phrasing (redials consistent), new day new phrasing.
+# Deterministic: differential/corpus see identical picks on both sides.
+_SLOT_QUESTION_VARIANTS: dict[str, list[str]] = {
+    "wellness": [
+        "Как вы себя чувствуете?",
+        "Как ваше самочувствие сегодня?",
+        "Как себя чувствуете — всё нормально?",
+    ],
+    "mood": [
+        "А какое у вас сегодня настроение?",
+        "Настроение сегодня как?",
+        "Как настроение — ничего не тревожит?",
+    ],
+    "sleep": [
+        "Как вы спали?",
+        "Как спалось сегодня?",
+        "Ночью как спали — выспались?",
+    ],
+    "plans": [
+        "Какие у вас планы на сегодня?",
+        "Что сегодня планируете?",
+        "Чем сегодня займётесь?",
+    ],
+}
+
+_PROBE_QUESTION_VARIANTS: dict[str, list[str]] = {
+    "concern": [
+        "Что именно беспокоит?",
+        "Что вас беспокоит сильнее всего?",
+        "На что жалуетесь?",
+    ],
+    "duration": [
+        "Как давно это продолжается?",
+        "Как давно началось?",
+        "Давно это у вас?",
+    ],
+    "pain_night": [
+        "А ночью не болело?",
+        "Ночью как — болело или спокойно?",
+        "А ночью беспокоит?",
+    ],
+}
+
+_ITS_QUESTION_VARIANTS: tuple[str, ...] = (
+    "Поняла вас. Есть ли сейчас ещё что-то важное в вашем самочувствии "
+    "или дома, на что мне стоит обратить внимание?",
+    "Поняла вас. А кроме этого — есть ли ещё что-то важное, о чём мне стоит знать?",
+    "Записала. Подскажите, есть ли ещё что-то важное по здоровью или дома?",
+)
+
+
+def _speech_day() -> int:
+    """Day ordinal driving rotation. IMVERA_SPEECH_DAY pins it in tests."""
+    import os
+    from datetime import date
+
+    raw = (os.environ.get("IMVERA_SPEECH_DAY", "") or "").strip()
+    if raw.lstrip("-").isdigit():
+        return int(raw)
+    return date.today().toordinal()
+
+
+def _rotate(pool: list[str] | tuple[str, ...]) -> str:
+    return pool[_speech_day() % len(pool)]
+
 _PROBE_QUESTIONS: dict[str, str] = {
     "concern": "Что именно беспокоит?",
     "duration": "Как давно это продолжается?",
@@ -213,7 +280,7 @@ def goodbye_final_speech(state: EngineState) -> str:
 
 
 def important_to_share_question() -> str:
-    return _IMPORTANT_TO_SHARE_QUESTION
+    return _rotate(_ITS_QUESTION_VARIANTS)
 
 
 def topic_question(intent: str) -> str:
@@ -224,6 +291,9 @@ def probe_question(phase: str, *, clarification: bool = False) -> str:
     key = f"probe_{phase}"
     if clarification:
         return _SLOT_CLARIFICATIONS.get(key, _PROBE_QUESTIONS.get(phase, "Повторите, пожалуйста."))
+    pool = _PROBE_QUESTION_VARIANTS.get(phase)
+    if pool:
+        return _rotate(pool)
     return _PROBE_QUESTIONS.get(phase, "Расскажите, пожалуйста.")
 
 
@@ -289,9 +359,29 @@ def opening_speech(elder_display_name: str, prior_context: dict[str, str] | None
     if follow:
         q = follow[0].lower() + follow[1:] if follow and follow[0].isupper() else follow
         return f"Здравствуйте. Это сервис {brand}. {name}, {q}"
-    wellness = _SLOT_QUESTIONS["wellness"]
+    wellness = _rotate(_SLOT_QUESTION_VARIANTS["wellness"])
     wellness = wellness[0].lower() + wellness[1:] if wellness else wellness
-    return f"Здравствуйте. Это сервис {brand}. {name}, {wellness}"
+    hello, intro = _greeting_parts()
+    return f"{hello}. {intro}. {name}, {wellness}"
+
+
+def _greeting_parts() -> tuple[str, str]:
+    """Time-of-day greeting + alternate intro on odd days. Same day = same
+    greeting (redials consistent). System tz = lab Mac (Moscow)."""
+    import os
+    from datetime import datetime
+
+    raw = (os.environ.get("IMVERA_SPEECH_DAY", "") or "").strip()
+    now = datetime.now()
+    day = int(raw) if raw.lstrip("-").isdigit() else now.toordinal()
+    brand = _SERVICE_SPOKEN_NAME
+    intro = f"Это Вера из сервиса {brand}" if day % 2 == 1 else f"Это сервис {brand}"
+    hour = now.hour
+    if 5 <= hour <= 10:
+        return "Доброе утро", intro
+    if 18 <= hour <= 22:
+        return "Добрый вечер", intro
+    return "Здравствуйте", intro
 
 
 def _clarification_attempt(state: EngineState | None, slot: str) -> int:
@@ -330,6 +420,9 @@ def slot_question(
         return probe_question(slot.removeprefix("probe_"))
     if slot.startswith("episode_") or slot.startswith("topic_"):
         return "Расскажите, пожалуйста, чуть подробнее."
+    pool = _SLOT_QUESTION_VARIANTS.get(slot)
+    if pool:
+        return _rotate(pool)
     return _SLOT_QUESTIONS.get(slot, "Повторите, пожалуйста, коротко.")
 
 

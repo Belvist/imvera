@@ -67,7 +67,7 @@ _IDENTITY_ANSWER = (
     "Я Вера, голосовой помощник сервиса Амвера. "
     "Звоню, чтобы узнать, как вы себя чувствуете."
 )
-_IMPORTANT_TO_SHARE_QUESTION = questions.important_to_share_question()
+_IMPORTANT_TO_SHARE_QUESTION = questions._ITS_QUESTION_VARIANTS[0]
 
 
 def _is_important_to_share_decline(text: str) -> bool:
@@ -522,7 +522,7 @@ def _important_to_share_plan(state: EngineState) -> ResponsePlan | None:
     return ResponsePlan(
         obligation=ConversationObligation.IMPORTANT_TO_SHARE,
         action="speak",
-        mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
+        mandatory_question=questions.important_to_share_question(),
         intent="important_to_share",
         slot="important_to_share",
         marks_question=True,
@@ -685,7 +685,7 @@ def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
         and not _is_broken_glue_label(label)
     ):
         return f"Поняла вас. {label[0].upper() + label[1:]} — зафиксировала."
-    return "Поняла вас."
+    return _BARE_ACK_ROTATION[_utterance_seq(turn) % len(_BARE_ACK_ROTATION)]
 
 
 _STRONG_PAIN = re.compile(
@@ -718,7 +718,19 @@ def _bridge_ack_for_episode(ep, prev=None) -> str:
         return "Хорошо. Про сон —"
     if label and not _is_bare_verb_label(label):
         return f"Хорошо. Про {label} —"
-    return "Хорошо."
+    progress = len(getattr(ep, "known_attributes", None) or {})
+    return _BRIDGE_ACK_ROTATION[progress % len(_BRIDGE_ACK_ROTATION)]
+
+
+_BARE_ACK_ROTATION = ("Поняла вас.", "Поняла вас, записываю.", "Хорошо, поняла вас.")
+_BRIDGE_ACK_ROTATION = ("Хорошо.", "Поняла вас.", "Так, поняла вас.")
+
+
+def _utterance_seq(turn) -> int:
+    import re
+
+    m = re.search(r"(\d+)$", str(getattr(turn, "utterance_id", "") or ""))
+    return int(m.group(1)) if m else 0
 
 
 _BARE_VERBS = frozenset(
@@ -1116,7 +1128,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             return ResponsePlan(
                 obligation=ConversationObligation.IMPORTANT_TO_SHARE,
                 action="speak",
-                mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
+                mandatory_question=questions.important_to_share_question(),
                 intent="important_to_share",
                 slot="important_to_share",
                 marks_question=True,
@@ -1395,7 +1407,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     return ResponsePlan(
                         obligation=ConversationObligation.IMPORTANT_TO_SHARE,
                         action="speak",
-                        mandatory_question=_IMPORTANT_TO_SHARE_QUESTION,
+                        mandatory_question=questions.important_to_share_question(),
                         intent="important_to_share",
                         slot="important_to_share",
                         marks_question=True,
