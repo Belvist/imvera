@@ -13,7 +13,7 @@ Metrics per script:
 
 Usage:
   python3 scripts/dialogue_stress_soak.py --minutes 25
-  IMVERA_COVERAGE_LADDER=1 IMVERA_TINYLLM_MODEL=route_clf \
+  IMVERA_COVERAGE_LADDER=1 \
     python3 scripts/dialogue_stress_soak.py --minutes 25 --report .run/stress.json
 """
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -15,6 +16,8 @@ from packages.dialogue_engine.topic_tracker import (
     is_topic_slot,
 )
 from packages.dialogue_engine.turn_understanding import RichUserTurn
+
+_log = logging.getLogger("dialogue.second_tier")
 
 _UNKNOWN_ATTRIBUTE_ANSWER = re.compile(
     r"\b(не\s+знаю|не\s+помню|затрудня\w*(?:\s+сказ\w*)?|"
@@ -868,6 +871,13 @@ def _second_tier_judgement(
             return True
 
     verdict = judge(attribute, turn.raw_text)
+    # Cut A4: observability for the Cut B decision (attribute+verdict only,
+    # no raw text — PII stays out of logs).
+    _log.info(
+        "second_tier attribute=%s verdict=%s",
+        attribute,
+        verdict,
+    )
     if verdict == "answer":
         if client_id:
             # Learn in process: high-confidence global resolution becomes a

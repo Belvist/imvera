@@ -53,7 +53,8 @@ def build_freeswitch_voice_lab_env() -> dict[str, str]:
     # classifier route_clf (231KB sklearn, <1ms; deterministic RED/decline
     # checks always first; +1 bounded vote, never closes alone).
     env.setdefault("IMVERA_COVERAGE_LADDER", "1")
-    env.setdefault("IMVERA_TINYLLM_MODEL", "route_clf")
+    # Cut A: tinyllm removed from the live path — no consumer left, default off.
+    env.setdefault("IMVERA_TINYLLM_MODEL", "")
     env.setdefault("IMVERA_NEGOTIATED_CODEC", "G722")
     env.setdefault("PYTHONPATH", str(ROOT))
     return env

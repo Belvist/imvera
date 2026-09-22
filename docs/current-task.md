@@ -1,4 +1,22 @@
-# Current task — Docker corrected: lab FS is the container (2026-09-22)
+# Current task — conversation-model benchmark verdict (2026-09-22)
+
+- Fish-style hope tested by measurement (tools/voice_lab/bench_conversation_models.py,
+  commit dd4c33e). Same prompt, alternating messages[], max 40 tokens, this Mac:
+  1.7B TTFT 142 / first-phrase 191 ms @66 tok/s; 0.6B 84/111 ms @143 tok/s;
+  4B 277/697 ms @32 tok/s. Speed: door open (TTFT <200 ms for small).
+- Quality out-of-box: door SHUT on all sizes. 0.6B parrots the greeting from
+  history; 1.7B garbles («Давай постаримся», familiar tone to elder); 4B leaks
+  raw state labels («лекарства и визит дочери — всё на месте») + wrong
+  time-of-day («Спокойной ночи»). Raw continuation is NOT a Vera.
+- Verdict: needed before any live use — (a) prompt contract (natural-language
+  objectives, no raw goal-id dump, forbidden list), (b) extended validator
+  (no greeting repeat, no state-label leak, no time claims, ≤1 question),
+  (c) offline judge harness (Fish agent-tests style) with pass bar. Then Cut 1
+  scope grows from bridge to reply. No prod behavior changed by this.
+- NOT VERIFIED: prompt iterations (next), judge harness (next), live.
+- NEXT: prompt-contract v1 + validator extension + 20-case offline harness.
+
+---
 
 - User reminder: Docker counts too. Found: db/cache/storage healthy;
   imvera-freeswitch (lab conf: zoiper-voice profile, 7000, mod_audio_stream

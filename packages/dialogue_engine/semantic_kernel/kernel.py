@@ -204,14 +204,6 @@ def kernel_to_rich_turn(
     # IMVERA_TINYLLM_MODEL=route_clf; repair/question_back votes + reluctance
     # advisory now come from the model-first act classifier + rules only).
     # Module kept for the offline bench tool (tools/voice_lab/ambiguity_bench.py).
-    tiny_route: str | None = None
-    _abstained = (
-        needs_clarify
-        and not mentions
-        and not goal_facts
-        and not result.user_question
-        and result.dialogue_act == "answer"
-    )
     if not attach_mission:
         # Caller (build_rich_turn_from_text) attaches itself right after —
         # exactly-once per turn (P2 Cut 3).
