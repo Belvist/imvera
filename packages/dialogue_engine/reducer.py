@@ -375,6 +375,9 @@ def _emit_speak(
     slot: str | None,
     marks_question: bool,
     goal_id: str | None = None,
+    bridge_text: str = "",
+    question_text: str = "",
+    bridge_llm_allowed: bool = False,
 ) -> tuple[EngineState, list[Effect]]:
     # Anti-loop: same onset/duration probe must never go out 3x in a row
     # (fuzz I3; live question_back/vague/garbage while temporal pending).
@@ -460,6 +463,9 @@ def _emit_speak(
         question_id=gen_id if marks_question else "",
         slot=slot,
         marks_question=marks_question,
+        bridge_text=bridge_text,
+        question_text=question_text,
+        bridge_llm_allowed=bridge_llm_allowed,
     )
     return state, [effect]
 
@@ -837,7 +843,34 @@ def _emit_from_plan(
         slot=rendered.slot,
         marks_question=rendered.marks_question,
         goal_id=goal_id,
+        bridge_text=getattr(rendered, "acknowledge", "") or "",
+        question_text=getattr(rendered, "mandatory_question", "") or "",
+        bridge_llm_allowed=_bridge_llm_eligible(rendered),
     )
+
+
+def _bridge_llm_eligible(rendered) -> bool:
+    """Cut 1 (ADR-020): only clinical episode questions may have their bridge
+    rewritten by the composer. Safety/terminal/summary/goodbye/urgent/control
+    and anything without a fixed question are NEVER eligible."""
+    intent = str(getattr(rendered, "intent", "") or "")
+    if not intent.startswith("episode_"):
+        return False
+    if not (getattr(rendered, "acknowledge", "") or "").strip():
+        return False
+    if not (getattr(rendered, "mandatory_question", "") or "").strip():
+        return False
+    action = str(getattr(rendered, "action", "") or "")
+    if action in {
+        "close_urgent",
+        "close_summary",
+        "close_partial",
+        "control",
+        "goodbye",
+        "summary",
+    }:
+        return False
+    return True
 
 
 def _schedule_advance(
@@ -1361,6 +1394,65 @@ def _resolve_unknown_answer(
     return _schedule_advance(state, user_text=user_text)
 
 
+RELATION_FILL_THRESHOLD = 0.6
+
+
+def _relation_fallback_fill(
+    state: EngineState, user_text: str, answer_slot: str | None
+) -> list[str]:
+    """Relation-model fallback: when normal fill fails on a pending slot
+    question, ask the cross-encoder whether this utterance answers it.
+    Fires only at precision-gated confidence (>= 0.6 measured). Returns
+    filled slots or []. Never raises; never touches probes/safety."""
+    from packages.dialogue_engine.policy import apply_slot_answer
+
+    try:
+        if state.probe_phase:
+            return []
+        if state.risk_handling or state.safety_mode == "red":
+            return []
+        delivered = state.delivered_question
+        slot = (delivered.slot if delivered and delivered.slot else None) or answer_slot
+        if not slot:
+            return []
+        if delivered is not None and delivered.intent in (
+            "probe_concern",
+            "probe_concern_options",
+        ):
+            return []
+        if state.slots.get(slot) != SlotStatus.OPEN:
+            return []
+        from packages.dialogue_engine.semantic_nlp.goals import GOALS as RELATION_GOALS
+
+        goal = next((g for g in RELATION_GOALS if g["goal_id"] == slot), None)
+        if goal is None:
+            return []
+        if slot in ("wellness", "mood", "sleep"):
+            from packages.dialogue_engine.policy import _is_other_person_only
+
+            if _is_other_person_only(user_text or ""):
+                return []
+        from packages.dialogue_engine.semantic_nlp.relation import RelationScorer
+
+        question = (delivered.text if delivered else "") or ""
+        scores, _latency = RelationScorer.get().score_all(
+            question, user_text or "", [goal]
+        )
+        if not scores or scores[0].score < RELATION_FILL_THRESHOLD:
+            return []
+        apply_slot_answer(
+            state,
+            slot,
+            (user_text or "").strip(),
+            turn_id=state.processing_turn_id or "",
+            source_text=(user_text or "").strip(),
+            confidence=scores[0].score,
+        )
+        return [slot]
+    except Exception:
+        return []
+
+
 def _apply_semantic(
     state: EngineState,
     semantic,
@@ -1580,6 +1672,13 @@ def _apply_semantic(
         state.processing_effect_id = None
         state.waiting_on_slot = None
         return _advance_after_fills(state, filled, user_text=user_text)
+
+    relation_filled = _relation_fallback_fill(state, user_text, answer_slot)
+    if relation_filled:
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.waiting_on_slot = None
+        return _advance_after_fills(state, relation_filled, user_text=user_text)
 
     state.processing_turn_id = None
     state.processing_effect_id = None
