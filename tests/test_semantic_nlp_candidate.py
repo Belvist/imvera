@@ -50,8 +50,27 @@ def test_model_error_falls_through(monkeypatch: pytest.MonkeyPatch) -> None:
             raise RuntimeError("no backend")
 
     monkeypatch.setattr(cand_mod.SemanticNLP, "get", classmethod(lambda cls: _Boom()))
-    turn, used, _info = cand_mod.nlp_candidate_turn("?", "Привет.", None)
+    turn, used, info = cand_mod.nlp_candidate_turn("?", "Привет.", None)
     assert turn is None and used is False
+
+
+def test_model_error_traced_for_live_diagnosis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Live fs-8a64bac9 turn 1: 6.3 s inside predict, no latency recorded.
+    The failure must name itself in info (traced via interpret.nlp_candidate)."""
+
+    class _SlowBoom:
+        def predict(self, question, text):
+            raise TimeoutError("mps stall")
+
+    monkeypatch.setattr(
+        cand_mod.SemanticNLP, "get", classmethod(lambda cls: _SlowBoom())
+    )
+    turn, used, info = cand_mod.nlp_candidate_turn("?", "Привет.", None)
+    assert turn is None and used is False
+    assert info.get("nlp_error") == "TimeoutError"
+    assert float(info.get("nlp_get_ms", -1)) >= 0
 
 
 def test_correction_flag_and_polarity(monkeypatch: pytest.MonkeyPatch) -> None:

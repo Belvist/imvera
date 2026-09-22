@@ -8,8 +8,13 @@ contract, so the reducer/validator path is unchanged.
 
 from __future__ import annotations
 
+import logging
+import time
+
 from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
 from packages.dialogue_engine.semantic_nlp.model import CONFIDENCE_THRESHOLD, SemanticNLP
+
+_log = logging.getLogger("dialogue.nlp_candidate")
 
 # Acts the model may resolve. stop/user_question stay deterministic.
 USABLE_ACTS: dict[str, SemanticAct] = {
@@ -42,8 +47,20 @@ def nlp_candidate_turn(
     """Return (turn|None, used, info). Never raises; None on any doubt."""
     info: dict[str, object] = {"nlp_act": None, "nlp_conf": 0.0, "used": False}
     try:
-        candidate = SemanticNLP.get().predict(question, text)
-    except Exception:
+        t0 = time.monotonic()
+        inst = SemanticNLP.get()
+        info["nlp_get_ms"] = round((time.monotonic() - t0) * 1000.0, 1)
+        candidate = inst.predict(question, text)
+    except Exception as exc:
+        # Live fs-8a64bac9 turn 1: 6.3 s inside this call, no latency recorded.
+        # Log so the next live call names it (load? MPS? input-specific?).
+        _log.warning(
+            "nlp_candidate failed len=%d err=%s:%s",
+            len(text or ""),
+            type(exc).__name__,
+            str(exc)[:200],
+        )
+        info["nlp_error"] = f"{type(exc).__name__}"
         return None, False, info
     if candidate is None:
         return None, False, info

@@ -24,9 +24,59 @@ _UNKNOWN_ATTRIBUTE_ANSWER = re.compile(
     r"не\s+могу\s+сказ|сложно\s+сказ|не\s+уверен\w*|не\s+скажу)\b",
     re.I,
 )
+# Site-less bare verbs are echoes, not complaints («болеть» inside
+# «не помню, во сколько начала болеть»). Shared by the answering-path
+# filter and the creation gate below.
+_SITELESS_BARE_LABELS = frozenset(
+    {
+        "болит",
+        "болят",
+        "боль",
+        "ноет",
+        "ноют",
+        "ломит",
+        "давит",
+        "тянет",
+        "колет",
+        "тошнит",
+        "болеть",
+        "ныть",
+        "ломить",
+        "давить",
+        "тянуть",
+        "колоть",
+        "тошнить",
+        "беспокоит",
+        "беспокоить",
+    }
+)
+
+
+def _is_ghost_primary(mention, raw_text: str = "") -> bool:
+    """Site-less bare verb with real episodes around: echo, not a complaint.
+
+    «Ещё/также/опять» marks a NEW lead («ещё болит» must be probed, frozen
+    contract test_pack_multi_symptom_reaches_its_without_hangup) — never echo.
+    """
+    if (getattr(mention, "body_site", "") or "").strip():
+        return False
+    if (getattr(mention, "label", "") or "").strip().lower() not in _SITELESS_BARE_LABELS:
+        return False
+    if _NEW_LEAD_MARKER.search(raw_text or ""):
+        return False
+    return True
+
+
+_NEW_LEAD_MARKER = re.compile(
+    r"\b(ещё|еще|также|кроме\s+того|дополнительно|опять|снова)\b",
+    re.I,
+)
+
+
 _TEMPORAL_ANCHOR = re.compile(
     r"\b(давно|раньше|дня|дней|недел\w*|месяц\w*|час\w*|минут\w*|минуту|полчаса|"
-    r"утр\w*|вчерашн\w*|вчера|сегодня|сейчас|уже|назад|только\s+что|"
+    r"утр\w*|вчерашн\w*|вчера|позавчерашн\w*|позавчера|позапозавчера|"
+    r"позапрошл\w*|сегодня|сейчас|уже|назад|только\s+что|"
     r"понедельн\w*|вторник\w*|сред\w*|четверг\w*|пятниц\w*|суббот\w*|воскресен\w*|"
     r"второй\s+день|третий\s+день|пару\s+дней|несколько|с\s+утра|"
     r"со?\s+вчерашн\w*|уже\s+\w+\s+дн|в\s+четыре|в\s+\d+|"
@@ -577,29 +627,7 @@ def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
                     _merge_mention(target, assoc, turn.utterance_id)
                 continue
             if mention.body_site or (
-                label
-                and label
-                not in {
-                    "болит",
-                    "болят",
-                    "боль",
-                    "ноет",
-                    "ноют",
-                    "ломит",
-                    "давит",
-                    "тянет",
-                    "колет",
-                    "тошнит",
-                    "болеть",
-                    "ныть",
-                    "ломить",
-                    "давить",
-                    "тянуть",
-                    "колоть",
-                    "тошнить",
-                    "беспокоит",
-                    "беспокоить",
-                }
+                label and label not in _SITELESS_BARE_LABELS
             ):
                 kept_mentions.append(mention)
         turn = turn.model_copy(update={"issue_mentions": tuple(kept_mentions)})
@@ -627,6 +655,11 @@ def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
             for extra in associated:
                 _merge_mention(ep, extra, turn.utterance_id)
             created.append(existing)
+        elif _is_ghost_primary(primary, turn.raw_text) and state.issue_episodes:
+            # Live fs-8a64bac9: bare «болеть» echo inside a refusal spawned a
+            # ghost episode that stole the floor («когда это началось» for
+            # nothing). With real episodes around, echoes don't create.
+            continue
         else:
             ep = _episode_from_mention(primary, turn.utterance_id)
             for extra in associated:

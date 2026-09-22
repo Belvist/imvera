@@ -33,6 +33,11 @@ pytestmark = pytest.mark.dialogue_engine
         "С полчаса.",
         "Со вчерашнего дня.",
         "С утра.",
+        # Live fs-8a64bac9: «позавчера начала болеть» was re-asked.
+        "Позавчера начала болеть.",
+        "Позавчера.",
+        "Позапозавчера началось.",
+        "Не знаю, позавчера начала болеть голова из-за магнитной бури.",
     ],
 )
 def test_after_event_answers_ground_onset(text: str) -> None:
@@ -78,3 +83,37 @@ def test_abdominal_food_anchored_onset_fills_and_advances() -> None:
         getattr(e, "intent", "") in {"episode_abdominal_onset", "episode_onset"}
         for e in result.effects
     )
+
+
+def test_live_ghost_episode_never_steals_floor() -> None:
+    """Live fs-8a64bac9 shape: two real complaints + bare «болеть» echo in a
+    refusal must not spawn a site-less ghost episode that steals the floor
+    («когда это началось» for nothing). Head onset lands."""
+    r = ScenarioRunner(call_id="ghost-episode", elder_display_name="Тест")
+    r.run(
+        [
+            CallStarted(),
+            "То ли голова болит, то ли жопа болит.",
+            "Не знаю, позавчера начала болеть голова из-за магнитной бури.",
+            "Я же говорю, не знаю, вчера, наверное, что-то из-за магнитной бури.",
+        ]
+    )
+    labels = [ep.primary_label for ep in r.state.issue_episodes.values()]
+    assert labels, "real complaints must create episodes"
+    for ep in r.state.issue_episodes.values():
+        label = (ep.primary_label or "").strip().lower()
+        if not (ep.body_site or "").strip():
+            assert label not in {
+                "болит",
+                "болят",
+                "боль",
+                "болеть",
+                "беспокоит",
+                "беспокоить",
+            }, f"ghost episode: {label!r}"
+    head = next(
+        ep
+        for ep in r.state.issue_episodes.values()
+        if (ep.body_site or "") == "голова" or "голов" in (ep.primary_label or "")
+    )
+    assert head.known_attributes.get("onset") == "позавчера"
