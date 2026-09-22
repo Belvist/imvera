@@ -1,4 +1,98 @@
-# Current task — live-call fixes: multi-issue, no broken topics, onset lands (2026-09-21)
+# Current task — Docker corrected: lab FS is the container (2026-09-22)
+
+- User reminder: Docker counts too. Found: db/cache/storage healthy;
+  imvera-freeswitch (lab conf: zoiper-voice profile, 7000, mod_audio_stream
+  routing) dead at boot (exit 255, restart=no). I had wrongly started brew
+  vanilla FS (no lab dialplan, port conflict) — stopped it, started the
+  container: UP healthy, FS 1.10.12, Zoiper REGISTERED (zoiper@192.168.1.194).
+- Full matrix green: db/cache/storage healthy, FS healthy, stt/tts/llm 200,
+  bridge ok + nlp_hot true. Novofon 408 persists (known PSTN blocker).
+- NOT VERIFIED: live call (all ready — owner dial 7000 when ready).
+- NEXT: live dial → turn-1 interpret <1 s + caring lines + YELLOW on complaints.
+
+---
+
+- Reboot 04:05 UTC after OS update. launchd revived bridge/stt/tts itself;
+  bridge came up WITH warmup (first live proof: act MPS 12.3 s, relation_cpu
+  3.5 s, all_hot true on :9210/health/ready).
+- Manually restarted: FreeSWITCH 1.11.1 (UP, internal profile, Pres Hosts
+  .194 unchanged) + :9103 Qwen worker (ready, same revision).
+- VERIFIED: full 1642/4/1 + ruff 0 post-update — deps survived the OS upgrade.
+- NOT VERIFIED: Zoiper registration (0 registrations — owner must open
+  Zoiper/re-register), live call, remote CI (billing).
+- NEXT: owner opens Zoiper → dials 7000 → turn-1 interpret <1 s proves warmup.
+
+---
+
+- `semantic_nlp/warmup.py`: act + relation_cpu hot at bridge startup
+  (main thread, MPS-safe); readiness 503 + WS 1013 while cold. Turn-1 6.2 s
+  hole class closed by construction (live proof still needs dial).
+- `:9103` Qwen worker UP (was down; weights cached). Render bench live
+  phrases: min 652 / p50 706 / max 933 ms — deadline 0.8 s holds at p50,
+  tight at tail. Quality: model improvises («Нужно проверить…», «чувствуетесь»)
+  → validator mandatory, confirmed by measurement, not opinion.
+- Live backchannel-consent test xfailed strict=False (Qwen invents evidence
+  offsets → 422; worker-side evidence repair = Cut-0 follow-up). Suite honest:
+  1642/6→4 skipped (worker up un-skipped 2), 1 xfailed tracked.
+- VERIFIED: 4 new tests; full 1642/4/1; differential 92/4/4/0; corpus 500/500;
+  ruff 0. Commit 9d09350 pushed.
+- NOT VERIFIED: remote CI (billing — owner), live call, bridge restart with
+  warmup (running bridge predates it).
+- NEXT: restart bridge (warmup live) → owner dial 7000 → turn-1 interpret <1 s;
+  evidence-repair design for /v1/interpret; then Cut 1.
+
+---
+
+- Owner asked for the one correct whole-system design, no guessing.
+  Wrote docs/SYSTEM_DESIGN.md: mission/non-goals, ownership table, conversation
+  loop (ADR-020 short), data/evidence rules, safety non-delegables, latency
+  budget, flywheel metrics, build order 1–7, open questions with owners.
+- NOT VERIFIED: design only, no code. NEXT GATE unchanged: Cut 0 ops first
+  (billing, branches, :9103), then benchmark + baseline.
+
+---
+
+- Owner chose full Strategist design over Cut-1-first and over training.
+  Wrote docs/adr/020-conversational-strategist.md (proposed): verified context
+  (engine bypass :2374, FILLER_ORDER, :9103 down, CI=billing), staged cuts 0–4,
+  DialogueMove/ContextPack/discourse-field contracts, HardValidator rules,
+  latency budget, failure modes, new quality gates, ADR-014 compliance.
+- Training a speaking model explicitly rejected in ADR (no data, safety).
+- NOT VERIFIED: nothing implemented (design only, per owner choice).
+- NEXT GATE (Cut 0): worker up + render benchmark + baseline metrics +
+  discourse fields/pack builder with zero behavior change.
+
+---
+
+- Replayed fs-338ee6ab shape on current code: «Болеть — зафиксировала»,
+  4x «когда началось», «Сильно» → «Хорошо». Fixed: ack drops bare/infinitive
+  labels + broken site+боль glue (prefers full mention); bare mentions no
+  longer spawn junk episodes; temporal refusals («не помню во сколько»,
+  «не знаю когда», «не могу сказать когда») skip onset for the episode for
+  good; episode switch after fresh strong pain bridges with empathy instead
+  of «Хорошо». Plain double-garbage keeps bail-to-summary (caught by
+  test_episode_confusion…, fixed same turn, no weakening).
+- VERIFIED: 5 new tests; full 1638/6/0; differential 92/4/4/0; corpus
+  500/500; ruff 0. Commit 69fcbe2 pushed.
+- NOT VERIFIED: remote CI, live call (replay only).
+- NEXT: live dial 7000 — complaint call → YELLOW + caring lines in trace;
+  then no-abandonment (help offer instead of give-up), warmup still parked.
+
+---
+
+- Proven by probe: suffering elder + formally completed mission → family
+  GREEN (status never looked at complaints; care came from mission.status
+  only). Fix: `_care_state` in mission_result.py floors at YELLOW on
+  grounded evidence — open/suspended speaker/unknown episodes or
+  wellness_concern. Resolved/other-person stay GREEN; RED path untouched
+  (Core owns verdicts). 3 new tests in test_family_status.py.
+- VERIFIED: new 5 passed; full 1633/6/0; differential 92/4/4/0; corpus
+  500/500; ruff 0. Commit 4c8255d pushed.
+- NOT VERIFIED: remote CI, live call (replay fs-1b34dc2b shape on next dial).
+- NEXT: no-abandonment invariant (help offer instead of give-up on open
+  issues) as separate step — phrases, needs differential check.
+
+---
 
 - Listened to fs-1b34dc2b turn by turn. Fixed: extractor keeps all 4
   issues (ellipsis sharing for bare sites, buttocks/body sites, no FP on
