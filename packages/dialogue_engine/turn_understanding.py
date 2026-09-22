@@ -59,8 +59,8 @@ class RichUserTurn(BaseModel):
     kernel_route: str = ""
     kernel_elapsed_ms: float = 0.0
     kernel_corrections: tuple = ()
-    # Tiny-model assist (ADR-009: disambiguation only). None when disabled
-    # or deterministic was confident. One of tinyllm.ROUTES, advisory.
+    # Cut A: retired from the live path (always None now). Field kept for
+    # trace/contract compatibility (reluctance.py reads it defensively).
     tiny_route: str | None = None
 
     model_config = {"frozen": True}

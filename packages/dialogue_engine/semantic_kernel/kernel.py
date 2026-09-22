@@ -200,27 +200,11 @@ def kernel_to_rich_turn(
     )
     from packages.dialogue_engine.turn_understanding import attach_mission_understanding
 
-    # Tiny-model assist (default OFF): only on low-confidence turns, only
-    # short utterances, advisory route only. Deterministic RED / control /
-    # goodbye checks upstream are unaffected; validator clamps the enum.
-    # Real job: when deterministic ABSTAINS (clarify, no mentions/facts,
-    # no question, plain answer act), a repair/question_back vote is
-    # applied — everything else stays advisory (reluctance consumed
-    # downstream, bounded). Route tagged for traceability.
+    # Cut A: tiny-model assist removed from the live path (was lab-enabled via
+    # IMVERA_TINYLLM_MODEL=route_clf; repair/question_back votes + reluctance
+    # advisory now come from the model-first act classifier + rules only).
+    # Module kept for the offline bench tool (tools/voice_lab/ambiguity_bench.py).
     tiny_route: str | None = None
-    if needs_clarify and len(result.raw_text.split()) <= 4:
-        try:
-            from packages.dialogue_engine import tinyllm
-
-            if tinyllm.enabled():
-                tiny_route = tinyllm.classify(
-                    result.raw_text, pending_question=answer_slot,
-                    # Remaps ACT on this vote: require high confidence
-                    # (route group-fold is only 0.62 mean).
-                    min_proba=0.8,
-                )
-        except Exception:  # noqa: BLE001 — assist must never break NLU
-            tiny_route = None
     _abstained = (
         needs_clarify
         and not mentions
@@ -228,26 +212,6 @@ def kernel_to_rich_turn(
         and not result.user_question
         and result.dialogue_act == "answer"
     )
-    if tiny_route == "repair" and _abstained:
-        turn = turn.model_copy(
-            update={
-                "dialogue_act": "repair",
-                "answers_pending_question": False,
-                "tiny_route": tiny_route,
-                "kernel_route": (result.route or "") + "+tiny_repair",
-            }
-        )
-    elif tiny_route == "question_back" and _abstained:
-        turn = turn.model_copy(
-            update={
-                "user_question": result.raw_text.strip(),
-                "answers_pending_question": False,
-                "tiny_route": tiny_route,
-                "kernel_route": (result.route or "") + "+tiny_qback",
-            }
-        )
-    elif tiny_route:
-        turn = turn.model_copy(update={"tiny_route": tiny_route})
     if not attach_mission:
         # Caller (build_rich_turn_from_text) attaches itself right after —
         # exactly-once per turn (P2 Cut 3).
