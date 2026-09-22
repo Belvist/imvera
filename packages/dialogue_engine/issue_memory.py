@@ -53,7 +53,9 @@ _SEVERITY_ANCHOR = re.compile(
 # anti-loop divert so a single skip moves on instead of re-asking.
 _SKIP_TEMPORAL = re.compile(
     r"\b(дальше|давай\s+дальше|пропусти|пропустим|"
-    r"следующий\s+вопрос|не\s+важно|неважно|не\s+помню\s+когда)\b",
+    r"следующий\s+вопрос|не\s+важно|неважно|не\s+помню\s+когда|"
+    r"не\s+помню\s*,?\s*во\s+сколько|не\s+знаю\s*,?\s*когда|"
+    r"не\s+могу\s+сказать\s*,?\s*когда|не\s+могу\s+вспомнить\s*,?\s*когда)\b",
     re.I,
 )
 
@@ -572,7 +574,29 @@ def ingest_rich_turn(state: EngineState, turn: RichUserTurn) -> IngestResult:
                     _merge_mention(target, assoc, turn.utterance_id)
                 continue
             if mention.body_site or (
-                label and label not in {"болит", "боль", "ноет", "ломит", "давит"}
+                label
+                and label
+                not in {
+                    "болит",
+                    "болят",
+                    "боль",
+                    "ноет",
+                    "ноют",
+                    "ломит",
+                    "давит",
+                    "тянет",
+                    "колет",
+                    "тошнит",
+                    "болеть",
+                    "ныть",
+                    "ломить",
+                    "давить",
+                    "тянуть",
+                    "колоть",
+                    "тошнить",
+                    "беспокоит",
+                    "беспокоить",
+                }
             ):
                 kept_mentions.append(mention)
         turn = turn.model_copy(update={"issue_mentions": tuple(kept_mentions)})
@@ -739,8 +763,10 @@ def _fill_pending_attribute_for_episode(
                 state.slot_unclear_counts.pop(key, None)
                 _maybe_clear_pending_attribute(state, episode_id, attribute)
                 if step >= 2:
-                    # Honest skip telemetry so the scheduler does not re-ask
-                    # onset on the very next turn (live fs-16d22975 «Дальше»).
+                    # Explicit refusal («не помню когда», «дальше»): temporal
+                    # is done for this episode — advance, never re-arm.
+                    # Plain double-garbage keeps the old bail-to-summary path
+                    # (test_episode_confusion_never_fabricates_nor_hangs_up).
                     _mark_temporal_asked(state, ep)
         return
     if attribute == "severity":

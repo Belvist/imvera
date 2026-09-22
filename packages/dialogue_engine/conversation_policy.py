@@ -425,6 +425,7 @@ def _next_episode_plan(state: EngineState) -> ResponsePlan | None:
     if call_cap_reached(state):
         return None
     bridge_next = False
+    prev_ep = None
     guard = 0
     while guard < 8:
         guard += 1
@@ -449,6 +450,7 @@ def _next_episode_plan(state: EngineState) -> ResponsePlan | None:
             finalize_episode_if_complete(ep)
             if ep.status != "resolved":
                 ep.status = "resolved"
+            prev_ep = ep
             activate_next_pending_episode(state)
             bridge_next = True
             continue
@@ -460,11 +462,12 @@ def _next_episode_plan(state: EngineState) -> ResponsePlan | None:
             finalize_episode_if_complete(ep)
             if ep.status != "resolved":
                 ep.status = "resolved"
+            prev_ep = ep
             activate_next_pending_episode(state)
             bridge_next = True
             continue
 
-        bridge = _bridge_ack_for_episode(ep) if bridge_next else ""
+        bridge = _bridge_ack_for_episode(ep, prev_ep) if bridge_next else ""
         return _episode_plan(state, ep, need, bridge=bridge)
     return None
 
@@ -663,15 +666,48 @@ def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
         for m in turn.issue_mentions
         if m.role in ("primary", "independent", "unknown")
     ]
-    primary = next(iter(_sited or _any_primary or turn.issue_mentions))
+    candidates = list(_sited or _any_primary or turn.issue_mentions)
+    # Prefer a speakable label: skip bare verbs and broken glue when a
+    # fuller mention of the same complaint exists («голова боль» next to
+    # «головная боль» must not win the acknowledgment).
+    speakable = [
+        m
+        for m in candidates
+        if not _is_bare_verb_label(m.label or "")
+        and not _is_broken_glue_label(m.label or "")
+    ]
+    primary = next(iter(speakable or candidates))
     label = (primary.label or "").strip().rstrip(".")
-    if label and len(label) > 4:
+    if (
+        label
+        and len(label) > 4
+        and not _is_bare_verb_label(label)
+        and not _is_broken_glue_label(label)
+    ):
         return f"Поняла вас. {label[0].upper() + label[1:]} — зафиксировала."
     return "Поняла вас."
 
 
-def _bridge_ack_for_episode(ep) -> str:
+_STRONG_PAIN = re.compile(
+    r"(сильн|очень|невыносим|ужасн|нестерпим|адск|не\s+могу\s+терпеть)",
+    re.I,
+)
+
+
+def _prev_episode_reported_strong_pain(prev) -> bool:
+    """True when the episode we switch away from just grounded strong pain."""
+    if prev is None:
+        return False
+    severity = str((prev.known_attributes or {}).get("severity", ""))
+    return bool(severity and _STRONG_PAIN.search(severity))
+
+
+def _bridge_ack_for_episode(ep, prev=None) -> str:
     """Warm bridge when switching to a pending episode — never repeat «когда началось»."""
+    if _prev_episode_reported_strong_pain(prev):
+        # Never answer «Сильно [болит]» with «Хорошо» — acknowledge the pain
+        # first, then ask the next episode's question (collects, cares).
+        return "Понимаю, сильная боль — это тяжело."
     site = (ep.body_site or "").strip()
     label = (ep.primary_label or "").strip()
     if site == "живот" or "живот" in label.lower():
@@ -686,8 +722,63 @@ def _bridge_ack_for_episode(ep) -> str:
 
 
 _BARE_VERBS = frozenset(
-    {"болит", "болят", "ноет", "ноют", "тянет", "колет", "давит", "ломит", "тошнит"}
+    {
+        "болит",
+        "болят",
+        "ноет",
+        "ноют",
+        "тянет",
+        "колет",
+        "давит",
+        "ломит",
+        "тошнит",
+        "болеть",
+        "ныть",
+        "тянуть",
+        "колоть",
+        "давить",
+        "ломить",
+        "тошнить",
+        "беспокоить",
+        "беспокоит",
+    }
 )
+
+# Body sites whose bare glue with «боль» is ungrammatical
+# («голова боль» — never render; «голова болит» is fine).
+_BROKEN_GLUE_SITES = frozenset(
+    {
+        "голова",
+        "живот",
+        "нога",
+        "ноги",
+        "рука",
+        "руки",
+        "спина",
+        "грудь",
+        "сердце",
+        "горло",
+        "ухо",
+        "уши",
+        "зуб",
+        "зубы",
+        "поясница",
+        "колено",
+        "плечо",
+        "шея",
+    }
+)
+
+
+def _is_broken_glue_label(label: str) -> bool:
+    """True for ungrammatical site+боль glue («голова боль»)."""
+    words = [w.strip(".,!?").lower() for w in label.split()]
+    words = [w for w in words if w]
+    return (
+        len(words) == 2
+        and words[0] in _BROKEN_GLUE_SITES
+        and words[1] in ("боль", "боли")
+    )
 
 
 def _is_bare_verb_label(label: str) -> bool:
