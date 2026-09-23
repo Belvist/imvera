@@ -5,14 +5,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from packages.contracts.enums import AsrQuality, FsmState, SlotStatus
+from packages.contracts.enums import AnswerJudgement, AsrQuality, FsmState, SlotStatus
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession
 from packages.dialogue_engine.context import InterpretContext
 from packages.dialogue_engine.contextual_interpreter import contextual_interpret
 from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
 from packages.dialogue_engine.semantic import SemanticAct
-from packages.voice_runtime import call_actor
 from packages.voice_runtime.call_actor import CallActor, MediaCallbacks
 
 pytestmark = pytest.mark.dialogue_engine
@@ -113,19 +112,12 @@ async def _runtime_turns(monkeypatch: pytest.MonkeyPatch, texts: list[str]):
     assert session._engine is not None
     assert session._engine.answer_context_slot() == "wellness"
     delivered = []
-    fallback_results = []
     outcomes = []
 
     async def deliver(result):
         delivered.append(result)
         assert session.mark_spoken_action(result.proposal.generation_id)
 
-    def fast_spy(text, *, answer_slot):
-        result = fast_interpret_semantic(text, answer_slot=answer_slot)
-        fallback_results.append((text, result))
-        return result
-
-    monkeypatch.setattr(call_actor, "fast_interpret_semantic", fast_spy)
     stt = AsyncMock(side_effect=[
         SimpleNamespace(text=text, asr_quality=AsrQuality.GOOD, model_revision="test")
         for text in texts
@@ -155,7 +147,7 @@ async def _runtime_turns(monkeypatch: pytest.MonkeyPatch, texts: list[str]):
     assert len(outcomes) == len(texts)
     assert all(outcome.ok and outcome.rich_turn is not None for outcome in outcomes)
     assert len(delivered) == len(texts)
-    return session._engine.state, delivered, fallback_results, outcomes
+    return session._engine.state, delivered, outcomes
 
 
 @pytest.mark.usefixtures("runtime_flags")
@@ -166,7 +158,7 @@ async def test_runtime_positive_with_clause_never_probes_concern(
     greeting → mission path recorded polarity 'uncertain' (judge 'answer') →
     safety net asked «Что вас беспокоит» of a healthy person. Clear valence
     beats the boundary: positive → routine ladder, never the concern probe."""
-    state, delivered, _, _ = await _runtime_turns(
+    state, delivered, _ = await _runtime_turns(
         monkeypatch, ["Ну хорошо, только что покушала."]
     )
     assert state.slots["wellness"] == SlotStatus.FILLED
@@ -179,23 +171,23 @@ async def test_runtime_positive_with_clause_never_probes_concern(
 
 @pytest.mark.usefixtures("runtime_flags")
 async def test_runtime_explicit_uncertainty_keeps_wellness_open(monkeypatch) -> None:
-    state, delivered, fallback, outcomes = await _runtime_turns(monkeypatch, ["не знаю"])
+    state, delivered, outcomes = await _runtime_turns(monkeypatch, ["не знаю"])
     assert state.slots["wellness"] == SlotStatus.OPEN
     assert "wellness" not in state.slot_records
     assert state.answer_context_slot() == "wellness"
     assert not state.call_closed
     assert [result.proposal.intent for result in delivered] == ["clarify_wellness"]
-    assert len(fallback) == 1
-    semantic, confident = fallback[0][1]
-    assert semantic.act == SemanticAct.UNCLEAR
-    assert not confident
+    # New fallback point (Cut B): legacy interpreter decides, observed here.
+    # (Pre-existing quirk: act is SIDE_TOPIC/question, judgement carries the
+    # uncertainty — routing outcomes below prove correct handling.)
+    assert outcomes[0].interp.judgement != AnswerJudgement.VALID
     assert not outcomes[0].interp.fills_pending_slot
 
 
 @pytest.mark.usefixtures("runtime_flags")
 @pytest.mark.parametrize("text", ["так себе", "Голова болит.", "Не знаю, но голова болит."])
 async def test_runtime_substantive_wellness_remains_recorded(monkeypatch, text) -> None:
-    state, delivered, _, _ = await _runtime_turns(monkeypatch, [text])
+    state, delivered, _ = await _runtime_turns(monkeypatch, [text])
     assert state.slots["wellness"] == SlotStatus.FILLED
     assert state.slot_records["wellness"].polarity in ("uncertain", "negative")
     assert not state.call_closed
@@ -209,11 +201,7 @@ async def test_runtime_substantive_wellness_remains_recorded(monkeypatch, text) 
 @pytest.mark.usefixtures("runtime_flags")
 @pytest.mark.parametrize("texts", [["Меня знобит."], ["Хорошо.", "Меня знобит."]])
 async def test_runtime_no_match_does_not_suppress_new_concern(monkeypatch, texts) -> None:
-    state, delivered, fallback, outcomes = await _runtime_turns(monkeypatch, texts)
-    assert len(fallback) == 1
-    semantic, confident = fallback[0][1]
-    assert semantic.act == SemanticAct.UNCLEAR
-    assert not confident
+    state, delivered, outcomes = await _runtime_turns(monkeypatch, texts)
     assert outcomes[-1].rich_turn.issue_mentions
     assert state.issue_episodes
     assert not state.call_closed
@@ -235,10 +223,8 @@ def test_no_answer_slot_retains_existing_fast_behavior() -> None:
 
 @pytest.mark.usefixtures("runtime_flags")
 async def test_runtime_uncertainty_can_recover_with_valid_answer(monkeypatch) -> None:
-    state, delivered, fallback, _ = await _runtime_turns(monkeypatch, ["не знаю", "так себе"])
-    semantic, confident = fallback[0][1]
-    assert semantic.act == SemanticAct.UNCLEAR
-    assert not confident
+    state, delivered, outcomes = await _runtime_turns(monkeypatch, ["не знаю", "так себе"])
+    assert outcomes[0].interp.judgement != AnswerJudgement.VALID
     assert [result.proposal.intent for result in delivered] == [
         "clarify_wellness", "probe_concern",
     ]

@@ -513,8 +513,14 @@ def _polarity_model_vote(text: str) -> str | None:
     """Polarity v1 vote or None (abstain/error/model missing).
 
     Candidate-only: called solely where rules abstained. Never raises.
+    Bare backchannels («ага» ≠ answer) never get a vote — the invariant
+    outranks any model confidence.
     """
     try:
+        from packages.dialogue.interpretation import _is_backchannel_only
+
+        if _is_backchannel_only(text or ""):
+            return None
         from packages.dialogue_engine.semantic_nlp.polarity import PolarityModel
 
         cand = PolarityModel.get().predict(text)

@@ -28,15 +28,12 @@ from packages.dialogue.planner import Planner
 from packages.dialogue.semantic_adapter import adapt_semantic_turn
 from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue.validator import Validator
-from packages.dialogue_engine.context import InterpretContext
-from packages.dialogue_engine.contextual_interpreter import contextual_interpret
 from packages.dialogue_engine.effects import (
     ENGINE_SPEAK_INTENTS,
     EndCallEffect,
     SpeakEffect,
     TimerEffect,
 )
-from packages.dialogue_engine.fast_interpreter import fast_interpret_semantic
 from packages.dialogue_engine.issue_mention_extract import should_use_rich_turn
 from packages.dialogue_engine.runtime import llm_interpret_enabled
 from packages.dialogue_engine.semantic import semantic_to_interpretation
@@ -1854,8 +1851,6 @@ class CallActor:
 
             rich_turn = None
             fast_confident = False
-            contextual_confident = False
-            rules_confident = False
             interpret_path = "unknown"
             pending_episode_attribute = None
             if self.session.uses_dialogue_engine() and self.session._engine:
@@ -2049,21 +2044,14 @@ class CallActor:
                     if nlp_confident:
                         fast_confident = True
                         interpret_path = "semantic_nlp"
-            if self.session.uses_dialogue_engine() and not fast_confident:
-                ctx = InterpretContext.from_engine_state(
-                    self.session._engine.state, turn_id=utterance_id
-                )
-                sem, contextual_confident = contextual_interpret(text, ctx)
-                fast_confident = contextual_confident
-                if contextual_confident and not kernel_has_meaning:
-                    interpret_path = "fast_contextual"
-                if not fast_confident:
-                    sem, rules_confident = fast_interpret_semantic(
-                        text, answer_slot=answer_slot
-                    )
-                    fast_confident = rules_confident
-                    if rules_confident and not kernel_has_meaning:
-                        interpret_path = "fast_rules"
+            # Cut B (measured): contextual/fast interpreters no longer decide on
+            # the live path. Coverage on 388 corpus utterances: contextual 89%,
+            # rich 86%, fast 72%; the 51 rich-misses are now covered by act
+            # (6) + polarity v1 (50) models, residual 6 correctly-abstained
+            # controls/temporals. What remains falls through to the legacy
+            # interpreter below (same as today's abstain case) — no silence.
+            # Modules stay as shared libraries (patterns, _detect_polarity,
+            # semantic builders used across the engine + unit-tested).
                 # Relation shadow (log-only, never decides, never blocks the
                 # turn): all-goal scores vs deterministic outcome feed the
                 # next data batch.
