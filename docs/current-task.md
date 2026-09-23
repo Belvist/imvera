@@ -1,4 +1,24 @@
-# Current task — покушала FIXED at the real author (2026-09-23)
+# Current task — polarity v1 live, emo measured (2026-09-23)
+
+- Retrained, not patched: polarity v1 (frozen RuModernBERT + head, 556
+  expert seeds 207/186/165, dataset sha256 03a934b9, reproducible via
+  build_polarity_dataset.py; held 0.882/0.873/0.927, release train-all).
+  Candidate-only (0.55, MPS ~15 ms): replaces judge→uncertain in mission
+  fallback (rules first, judge last). Live shapes: покушала+ 0.75,
+  ничего+ 0.67, плохо- 0.90, так себе? 0.56. Tests red/green verified.
+- Negated site-less mentions dropped («Ничего меня не беспокоит» →
+  no episode; sited kept). E2E verified on live path.
+- Emo (GigaAMEmo 484MB, hash ok): 0.3–0.45 s CPU, sensible (покушала
+  positive 0.73). NOT wired — background-signal design next.
+- Cut B verdict by measurement: contextual 89 / rich 86 / fast 72% on 388
+  corpus utterances; 51 (13%) only old code catches (средне/вроде/алло).
+  Deletion today = regression → kept. Revisit after polarity coverage proof.
+- VERIFIED: full 1668/4/1; differential 92/4/4/0; corpus 500/500; ruff 0.
+  Commit ce9d4ff pushed; bridge on it (ok, 3 models hot).
+- NOT VERIFIED: redial (покушала + «ничего» — owner); remote CI.
+- NEXT: emo background wiring; prompt v2; live proof.
+
+---
 
 - Fresh redial on new bridge STILL asked concern → not version lag. Forensic
   named the cell: interp VALID/fills + rich wellness=positive, yet concern.
