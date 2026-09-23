@@ -1,4 +1,18 @@
-# Current task — silence reprompts, polarity fix proven live (2026-09-23)
+# Current task — Cut B done: one understanding chain (2026-09-23)
+
+- Measured, then cut: contextual 89 / rich 86 / fast 72% on 388 corpus
+  utterances; 51 rich-misses covered by act (6) + polarity v1 (50);
+  residual 6 correctly-abstained controls/temporals. Live chain now:
+  model-first → rich/kernel → legacy (no new silence). polarity retrained
+  on 584 (controls→uncertain, backchannel vote guard for «ага» invariant).
+- Harness migrated (spy→outcomes); exposed pre-existing legacy quirk
+  (SIDE_TOPIC on «не знаю», routing proven correct). No behavior weakened.
+- VERIFIED: full 1670/4/1; differential 92/4/4/0; corpus 500/500; ruff 0.
+  Commit 540c623 pushed; bridge on it (ok, 3 models hot).
+- NOT VERIFIED: live redial across shapes (owner); remote CI.
+- NEXT: emo background wiring; prompt v2; Cut C state (topic/check_path).
+
+---
 
 - Fresh redial proved the polarity fix: «покушала» → meds question (no
   concern). New live defect in the same calls: 7 s silence after one
