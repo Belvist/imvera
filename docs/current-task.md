@@ -1,4 +1,20 @@
-# Current task — покушала root-caused to version lag + forensic (2026-09-23)
+# Current task — покушала FIXED at the real author (2026-09-23)
+
+- Fresh redial on new bridge STILL asked concern → not version lag. Forensic
+  named the cell: interp VALID/fills + rich wellness=positive, yet concern.
+  Bisect found the author: mission path (observation_memory) records polarity
+  via slotclf judge 'answer' → 'uncertain' when _detect_polarity misses
+  positives with extra clauses → safety net fired on a healthy person.
+  Fix: negative markers → negative; clear positive words w/o negation →
+  positive; valenceless answers keep judge→uncertain («Плохо»/«Так себе»
+  behavior verified unchanged). Regression test on the real CallActor path
+  (delivered greeting) red-without/green-with.
+- VERIFIED: full 1664/4/1; differential 92/4/4/0; corpus 500/500; ruff 0.
+  Commit 521b946 pushed; bridge restarted on it (ok, nlp_hot true).
+- NOT VERIFIED: redial (owner, now — the actual proof); remote CI.
+- NEXT: redial покушала → food question. Then prompt v2 / dataset spec.
+
+---
 
 - 3-hour bisect (worktree 9d09350 vs HEAD, every cell: kernel/rich/interp/
   adjudicate/session/mirror/tinyllm/provider): identical inputs give nutrition
