@@ -11,7 +11,7 @@ def test_warmup_all_hot() -> None:
     from packages.dialogue_engine.semantic_nlp.warmup import nlp_blockers, warmup_all
 
     report = warmup_all()
-    assert [m.name for m in report.models] == ["act", "relation_cpu"]
+    assert [m.name for m in report.models] == ["act", "relation_cpu", "polarity"]
     assert report.all_hot, [(m.name, m.error) for m in report.models]
     assert all(m.latency_ms > 0 for m in report.models)
     assert not _with_report(report, nlp_blockers)
@@ -50,6 +50,7 @@ def test_blockers_report_cold_model() -> None:
         models=[
             ModelWarmth(name="act", ok=True, latency_ms=15.0, device="mps"),
             ModelWarmth(name="relation_cpu", ok=False, latency_ms=1.0, error="boom"),
+            ModelWarmth(name="polarity", ok=True, latency_ms=12.0, device="mps"),
         ]
     )
     assert not report.all_hot

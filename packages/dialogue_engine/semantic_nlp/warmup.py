@@ -98,6 +98,30 @@ def warmup_all() -> WarmupReport:
             )
         )
 
+    started = time.monotonic()
+    try:
+        from packages.dialogue_engine.semantic_nlp.polarity import PolarityModel
+
+        pol = PolarityModel.get()
+        pol.predict(_WARM_UTTERANCE)
+        models.append(
+            ModelWarmth(
+                name="polarity",
+                ok=True,
+                latency_ms=(time.monotonic() - started) * 1000.0,
+                device=str(getattr(pol, "_device", "?")),
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 — warmth must never break startup
+        models.append(
+            ModelWarmth(
+                name="polarity",
+                ok=False,
+                latency_ms=(time.monotonic() - started) * 1000.0,
+                error=f"{type(exc).__name__}: {exc}"[:300],
+            )
+        )
+
     _report = WarmupReport(models=models)
     return _report
 

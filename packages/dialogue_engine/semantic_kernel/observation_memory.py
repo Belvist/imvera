@@ -29,8 +29,7 @@ if TYPE_CHECKING:
     from packages.dialogue_engine.turn_understanding import RichUserTurn
 
 
-def _oid() -> str:
-    return f"obs-{uuid.uuid4().hex[:8]}"
+def _oid() -> str:    return f"obs-{uuid.uuid4().hex[:8]}"
 
 
 def _span_by_id(spans: tuple[SemanticSpan, ...], sid: str) -> SemanticSpan | None:
@@ -494,6 +493,35 @@ def _apply_bound_observations_to_episodes(
         if obs.body_site and not ep.body_site:
             ep.body_site = obs.body_site
 
+_CLAUSE_NEGATION = re.compile(r"\b(не|ни|нет|без|никак)\b", re.I)
+_CLAUSE_NOT_ONLY = re.compile(r"\bне\s+(только|столько|лишь)\b", re.I)
+
+
+def _mention_negated(raw_text: str, start: int, end: int) -> bool:
+    """True when the mention's own clause negates it («Ничего меня не
+    беспокоит», «Голова не болит»). «Не только X, но и Y» is not negation."""
+    clauses = clause_bounds(raw_text)
+    clause = clause_for_position(clauses, start)
+    text = clause if clause else raw_text[max(0, start - 30) : end + 30]
+    low = (text or "").lower()
+    if _CLAUSE_NOT_ONLY.search(low):
+        return False
+    return bool(_CLAUSE_NEGATION.search(low))
+
+
+def _polarity_model_vote(text: str) -> str | None:
+    """Polarity v1 vote or None (abstain/error/model missing).
+
+    Candidate-only: called solely where rules abstained. Never raises.
+    """
+    try:
+        from packages.dialogue_engine.semantic_nlp.polarity import PolarityModel
+
+        cand = PolarityModel.get().predict(text)
+    except Exception:  # noqa: BLE001 — model missing or failed: abstain
+        return None
+    return cand.polarity if cand is not None else None
+
 
 def atomic_semantic_apply(state: EngineState, turn: RichUserTurn) -> None:
     """Atomic: episodes first, bind observations, persist, project this turn only."""
@@ -680,15 +708,20 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
                     ):
                         _pol = "positive"
                     else:
-                        try:
-                            from packages.dialogue_engine.slotclf import (
-                                judge as _wellness_pol_judge,
-                            )
+                        # Learned boundary (polarity v1, 554 expert seeds) before
+                        # the judge heuristic: fires on clear live shapes
+                        # (покушала 0.75), abstains on hedges (так себе 0.52).
+                        _pol = _polarity_model_vote(str(ans.value))
+                        if _pol is None:
+                            try:
+                                from packages.dialogue_engine.slotclf import (
+                                    judge as _wellness_pol_judge,
+                                )
 
-                            if _wellness_pol_judge("wellness", str(ans.value)) == "answer":
-                                _pol = "uncertain"
-                        except Exception:  # noqa: BLE001 — keep None
-                            pass
+                                if _wellness_pol_judge("wellness", str(ans.value)) == "answer":
+                                    _pol = "uncertain"
+                            except Exception:  # noqa: BLE001 — keep None
+                                pass
                 state.slot_records[ans.goal_id] = SlotValue(
                     value=str(ans.value),
                     confidence=float(ans.confidence),
@@ -858,6 +891,12 @@ def observations_to_issue_mentions(
         if start < 0:
             start = 0
         end = min(len(raw_text), start + len(obs.evidence))
+        if not body_site and _mention_negated(raw_text, start, end):
+            # Live 2257cab2: «Ничего меня не беспокоит» spawned a 'беспокоит'
+            # episode + onset probe. A negated site-less mention is a denied
+            # complaint, not a new one (meaning already in polarity/wellness).
+            # Sited mentions keep current behavior (separate concern).
+            continue
         role = "primary" if not primary_set else "independent"
         primary_set = True
         temporal = "now"

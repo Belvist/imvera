@@ -61,6 +61,17 @@ def test_surface_label_with_morphology(morph_present) -> None:
     assert mentions[0].canonical_key == "живот болеть"
 
 
+def test_negated_siteless_mention_spawns_no_episode() -> None:
+    """Live 2257cab2: «Ничего меня не беспокоит» built a 'беспокоит'
+    episode + onset probe. A negated site-less mention is a denied
+    complaint — no mention, no episode. Sited mentions keep behavior."""
+    assert _kernel_mentions("Ничего меня не беспокоит.") == ()
+    assert _kernel_mentions("Ничего не болит.") == ()
+    kept = _kernel_mentions("Голова не болит, а живот болит.")
+    sites = {(m.label, m.body_site) for m in kept}
+    assert any(site == "живот" for _, site in sites), sites
+
+
 def test_surface_label_without_morphology(morph_absent) -> None:
     mentions = _kernel_mentions("У меня живот болит.")
     assert mentions
