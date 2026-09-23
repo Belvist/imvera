@@ -41,7 +41,11 @@ def _last_text(r: ScenarioRunner) -> str:
 # --- Product contract (MVP test_product_dialogue_contract) ---
 
 
-def test_pack_its_is_status_check_not_message_relay() -> None:
+def test_pack_its_is_status_check_not_message_relay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Canonical pool[0] pinned by day (variety rotates live by date).
+    monkeypatch.setenv("IMVERA_SPEECH_DAY", "99")
     q = important_to_share_question()
     assert q == IMPORTANT_TO_SHARE_QUESTION
     low = q.lower()

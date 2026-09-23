@@ -305,6 +305,13 @@ class CallActor:
         interpret_latency_ms: int,
         stt_request_ts: str,
         stt_result_ts: str,
+        interp_judgement: str = "",
+        interp_act: str = "",
+        interp_fills_pending: str = "",
+        rich_facts: str = "",
+        rich_mentions: str = "",
+        kernel_confidence: str = "",
+        answer_slot: str = "",
     ) -> None:
         last_bot = self._delivered_phrases[-1] if self._delivered_phrases else ""
         snapshot = ForensicTurnSnapshot(
@@ -326,6 +333,13 @@ class CallActor:
             interpret_path=interpret_path,
             interpret_latency_ms=interpret_latency_ms,
             dump_path=dump_path,
+            interp_judgement=interp_judgement,
+            interp_act=interp_act,
+            interp_fills_pending=interp_fills_pending,
+            rich_facts=rich_facts,
+            rich_mentions=rich_mentions,
+            kernel_confidence=kernel_confidence,
+            answer_slot=answer_slot,
         )
         await self._emit_stage("forensic.turn", **snapshot.as_payload())
         self._forensic_vad_start_ts = None
@@ -2172,6 +2186,21 @@ class CallActor:
                 interpret_latency_ms=interpret_ready_ms,
                 stt_request_ts=stt_request_ts,
                 stt_result_ts=stt_result_ts,
+                interp_judgement=getattr(getattr(interp, "judgement", ""), "value", ""),
+                interp_act=getattr(getattr(interp, "dialogue_act", ""), "value", ""),
+                interp_fills_pending=str(bool(getattr(interp, "fills_pending_slot", False))),
+                rich_facts=";".join(
+                    f"{f.field}={str(f.value)[:40]}"
+                    for f in (getattr(rich_turn, "goal_facts", None) or [])
+                )[:300],
+                rich_mentions=";".join(
+                    f"{m.label}|{m.body_site}"
+                    for m in (getattr(rich_turn, "issue_mentions", None) or [])
+                )[:300],
+                kernel_confidence=str(
+                    round(float(getattr(kernel_result, "confidence", 0.0) or 0.0), 3)
+                ),
+                answer_slot=answer_slot or "",
             )
             if stt_result.asr_quality in (AsrQuality.LOW, AsrQuality.UNUSABLE):
                 await self._emit_stage(

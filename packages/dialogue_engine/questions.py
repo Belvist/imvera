@@ -376,7 +376,8 @@ def _greeting_parts() -> tuple[str, str]:
     day = int(raw) if raw.lstrip("-").isdigit() else now.toordinal()
     brand = _SERVICE_SPOKEN_NAME
     intro = f"Это Вера из сервиса {brand}" if day % 2 == 1 else f"Это сервис {brand}"
-    hour = now.hour
+    hour_raw = (os.environ.get("IMVERA_SPEECH_HOUR", "") or "").strip()
+    hour = int(hour_raw) if hour_raw.lstrip("-").isdigit() else now.hour
     if 5 <= hour <= 10:
         return "Доброе утро", intro
     if 18 <= hour <= 22:

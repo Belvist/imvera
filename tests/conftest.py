@@ -8,6 +8,18 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def pin_speech_variety_to_canonical(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Speech variety rotates live by date/hour; tests pin pool[0] canonical
+    (day 102: idx 0 + even intro; hour 14: day bucket). Tests covering
+    rotation set their own IMVERA_SPEECH_DAY. Body of a test wins over this
+    fixture (both use function-scoped monkeypatch, body runs later)."""
+    monkeypatch.setenv("IMVERA_SPEECH_DAY", "102")
+    monkeypatch.setenv("IMVERA_SPEECH_HOUR", "14")
+
+
+@pytest.fixture(autouse=True)
 def disable_dialogue_engine_by_default(
     monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> None:

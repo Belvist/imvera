@@ -45,6 +45,15 @@ class ForensicTurnSnapshot:
     interpret_path: str
     interpret_latency_ms: int
     dump_path: str
+    # Live-diagnosis fields (fs-9a5cfc31 class: traced inputs clean, answer
+    # wrong — the adjudicated picture must be visible, not reconstructed).
+    interp_judgement: str = ""
+    interp_act: str = ""
+    interp_fills_pending: str = ""
+    rich_facts: str = ""
+    rich_mentions: str = ""
+    kernel_confidence: str = ""
+    answer_slot: str = ""
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -66,6 +75,13 @@ class ForensicTurnSnapshot:
             "interpret_path": self.interpret_path,
             "interpret_latency_ms": self.interpret_latency_ms,
             "dump_path": self.dump_path,
+            "interp_judgement": self.interp_judgement,
+            "interp_act": self.interp_act,
+            "interp_fills_pending": self.interp_fills_pending,
+            "rich_facts": self.rich_facts,
+            "rich_mentions": self.rich_mentions,
+            "kernel_confidence": self.kernel_confidence,
+            "answer_slot": self.answer_slot,
         }
 
 
