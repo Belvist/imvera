@@ -255,6 +255,10 @@ class EngineState(BaseModel):
     asked_history: list[str] = Field(default_factory=list)
     # Wellness clarify asked once after a mute/garbled first answer.
     wellness_clarify_asked: bool = False
+    # Silence reprompts used (max 1 per call): a 7 s silence is not an answer
+    # attempt — the first timeout re-asks («Алло. …») without consuming caps,
+    # only the second one may close (live fs-51d62138 gave up at first silence).
+    silence_reprompts: int = 0
     # Red state («умираю» without a site): concern still being clarified —
     # escalate after the second vague answer even with nothing concrete.
     red_state_pending: bool = False

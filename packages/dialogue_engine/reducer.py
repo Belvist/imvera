@@ -2348,6 +2348,28 @@ def _on_timer_expired(state: EngineState, event: TimerExpired) -> tuple[EngineSt
     if slot.startswith("probe_"):
         phase = slot.removeprefix("probe_")
         return _speak_probe(state, phase, clarification=True)
+    if (
+        state.silence_reprompts < 1
+        and state.delivered_question is not None
+        and (state.delivered_question.text or "").strip()
+    ):
+        # First silence: reprompt, don't give up. Silence is not an answer
+        # attempt — refund the cap the unanswered ask consumed, re-speak the
+        # same question with «Алло.» (phone-natural, not nagging: nothing was
+        # answered yet). Delivery re-arms the wait timer via PlayoutCompleted.
+        state.silence_reprompts += 1
+        goal = state.ensure_goal(slot)
+        if goal.delivered_attempts > 0:
+            goal.delivered_attempts -= 1
+        last_q = state.delivered_question
+        state.bump_revision()
+        return _emit_speak(
+            state,
+            text=f"Алло. {(last_q.text or '').strip()}",
+            intent=last_q.intent,
+            slot=slot,
+            marks_question=True,
+        )
     if not can_ask_slot(state, slot):
         return _close_partial(state)
     return _speak_slot_question(state, slot, clarification=True)
