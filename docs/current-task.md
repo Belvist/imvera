@@ -1,4 +1,18 @@
-# Current task — harness baselines: both models 8/20 (2026-09-22)
+# Current task — 10 dialogs reviewed, покушала bug = version lag (2026-09-23)
+
+- Owner dialed ~10 calls. 5x systematic: «Всё хорошо, только что покушала»
+  → «Что именно беспокоит?!» (+2257cab2 escalation interrogating body parts
+  of a healthy person). Headache flows clean; heart+ambulance → urgent ✓.
+- Diagnosis (worktree 9d09350 vs HEAD, since removed): identical inputs give
+  nutrition on HEAD full-live-path; live bridge ran 9d09350 (6 commits behind:
+  no ghost-gate/variety/Cut-1). Fix = deployment, not new code.
+- Bridge restarted on 612b8d7 (ok, nlp_hot true). Variety + ghost-gate now live.
+- NOT VERIFIED: redial of the exact покушала probe on new bridge (owner).
+- NEXT: owner redials «Привет. Всё хорошо. Только что покушала.» → expect
+  food question, never «что беспокоит». If concern persists → live forensic
+  (rich_turn dump) same day.
+
+---
 
 - Prompt-contract v1 + 20-case harness committed (a54e925). Baselines:
   1.7B 8/20 avg ~310 ms (filler «давайте посмотрим», thread-miss, «давай»);
