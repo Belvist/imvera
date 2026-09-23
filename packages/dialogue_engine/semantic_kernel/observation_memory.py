@@ -663,15 +663,32 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
                     # boundary but no clear valence → uncertain-middle (probe,
                     # never the routine ladder which needs explicit positive).
                     # judge() returns None with the flag off → stays None.
-                    try:
-                        from packages.dialogue_engine.slotclf import (
-                            judge as _wellness_pol_judge,
-                        )
+                    # Clear valence beats the boundary (live fs-27a3ced4: «Ну
+                    # хорошо, только что покушала» → judge 'answer' →
+                    # 'uncertain' → concern probe on a healthy person).
+                    from packages.dialogue_engine.fast_interpreter import (
+                        _WELLNESS_NEGATIVE as _MISSION_WELL_NEG,
+                    )
 
-                        if _wellness_pol_judge("wellness", str(ans.value)) == "answer":
-                            _pol = "uncertain"
-                    except Exception:  # noqa: BLE001 — keep None
-                        pass
+                    _low = str(ans.value).lower()
+                    if _MISSION_WELL_NEG.search(_low):
+                        _pol = "negative"
+                    elif re.search(
+                        r"неплохо|хорошо|нормально|отлично|прекрасно", _low
+                    ) and not re.search(
+                        r"\bне\s+(хорошо|нормально|отлично|прекрасно)\b", _low
+                    ):
+                        _pol = "positive"
+                    else:
+                        try:
+                            from packages.dialogue_engine.slotclf import (
+                                judge as _wellness_pol_judge,
+                            )
+
+                            if _wellness_pol_judge("wellness", str(ans.value)) == "answer":
+                                _pol = "uncertain"
+                        except Exception:  # noqa: BLE001 — keep None
+                            pass
                 state.slot_records[ans.goal_id] = SlotValue(
                     value=str(ans.value),
                     confidence=float(ans.confidence),

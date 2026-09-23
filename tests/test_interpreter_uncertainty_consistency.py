@@ -159,6 +159,25 @@ async def _runtime_turns(monkeypatch: pytest.MonkeyPatch, texts: list[str]):
 
 
 @pytest.mark.usefixtures("runtime_flags")
+async def test_runtime_positive_with_clause_never_probes_concern(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Live fs-27a3ced4: «Ну хорошо, только что покушала.» after a delivered
+    greeting → mission path recorded polarity 'uncertain' (judge 'answer') →
+    safety net asked «Что вас беспокоит» of a healthy person. Clear valence
+    beats the boundary: positive → routine ladder, never the concern probe."""
+    state, delivered, _, _ = await _runtime_turns(
+        monkeypatch, ["Ну хорошо, только что покушала."]
+    )
+    assert state.slots["wellness"] == SlotStatus.FILLED
+    assert state.slot_records["wellness"].polarity == "positive"
+    intents = [result.proposal.intent for result in delivered]
+    assert "probe_concern" not in intents
+    assert "probe_concern_options" not in intents
+    assert not state.call_closed
+
+
+@pytest.mark.usefixtures("runtime_flags")
 async def test_runtime_explicit_uncertainty_keeps_wellness_open(monkeypatch) -> None:
     state, delivered, fallback, outcomes = await _runtime_turns(monkeypatch, ["не знаю"])
     assert state.slots["wellness"] == SlotStatus.OPEN
