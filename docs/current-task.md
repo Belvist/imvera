@@ -1,4 +1,12 @@
-# Current task — understand-everything: dark spots closed (2026-09-23)
+# Current task — plain-language reports remembered (2026-09-23)
+
+- Owner order: no more CHANGED/VERIFIED cryptoblocks as the main text.
+  Report in plain Russian: what was done, what it gives, what to dial.
+  Keep numbers (tests/latency) as one short line, not the body.
+  Explained the full dialogue loop in plain words (ear → 3 understanders →
+  memory → guard → move → speech check → voice → journal).
+
+---
 
 - Coverage measured on 355 live STT + 388 corpus utterances (full chain:
   kernel meaning + act + polarity). Closed: pressure/temperature conditions
