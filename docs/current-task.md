@@ -1,3 +1,18 @@
+# Current task — покушала root-caused to version lag + forensic (2026-09-23)
+
+- 3-hour bisect (worktree 9d09350 vs HEAD, every cell: kernel/rich/interp/
+  adjudicate/session/mirror/tinyllm/provider): identical inputs give nutrition
+  on BOTH — live bridge ran 9d09350 (6 commits behind), fix = deployment.
+- forensic.turn extended (interp judgement/act/fills, rich_facts/mentions,
+  kernel_confidence, answer_slot) — next redial fully evidenced either way.
+- Variety tests date-proofed (conftest pins day 102 + hour 14; ITS test pins
+  day) — caught 1 real rotation-vs-assert failure, fixed by pinning.
+- VERIFIED: full 1663/4/1; differential 92/4/4/0; corpus 500/500; ruff 0.
+  Commit 23b9dea pushed. :9103 restarted.
+- NOT VERIFIED: redial of покушала probe on fresh bridge (owner, now).
+- NEXT: redial → nutrition (fixed) or forensic names the cell (fix same day).
+
+---
 # Current task — 10 dialogs reviewed, покушала bug = version lag (2026-09-23)
 
 - Owner dialed ~10 calls. 5x systematic: «Всё хорошо, только что покушала»
