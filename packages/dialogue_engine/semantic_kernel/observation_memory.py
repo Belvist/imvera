@@ -495,6 +495,13 @@ def _apply_bound_observations_to_episodes(
 
 _CLAUSE_NEGATION = re.compile(r"\b(не|ни|нет|без|никак)\b", re.I)
 _CLAUSE_NOT_ONLY = re.compile(r"\bне\s+(только|столько|лишь)\b", re.I)
+# Vital-sign nouns (span_parser _CONDITION): «давление нормальное» reports
+# no complaint — must not open an episode. Pains keep current behavior.
+_CONDITION_NOUNS = frozenset({"давление", "пульс", "сахар", "температура"})
+_CLAUSE_NORMAL = re.compile(
+    r"\b(нормальное|нормальный|нормальная|нормально|в\s+норме|хорошее|хороший|хорошая)\b",
+    re.I,
+)
 
 
 def _mention_negated(raw_text: str, start: int, end: int) -> bool:
@@ -903,6 +910,16 @@ def observations_to_issue_mentions(
             # complaint, not a new one (meaning already in polarity/wellness).
             # Sited mentions keep current behavior (separate concern).
             continue
+        if (
+            not body_site
+            and (obs.value or "").strip().lower() in _CONDITION_NOUNS
+        ):
+            clauses = clause_bounds(raw_text)
+            clause = clause_for_position(clauses, start) or ""
+            if _CLAUSE_NORMAL.search(clause):
+                # «Давление нормальное» — a no-complaint report, not an onset
+                # to collect. (Pains keep current behavior.)
+                continue
         role = "primary" if not primary_set else "independent"
         primary_set = True
         temporal = "now"

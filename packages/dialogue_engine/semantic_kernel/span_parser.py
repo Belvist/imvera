@@ -88,6 +88,12 @@ _ISSUE_BEFORE_BODY = re.compile(
     r"(?:в|на|у)\s+([а-яё\-]+)",
     re.I,
 )
+# Vital-sign conditions without a verb («давление высокое», «температура»):
+# invisible otherwise (live: lone pressure complaints dropped entirely).
+_CONDITION = re.compile(
+    r"\b(давление|давленьице|пульс|сахар|температура|температурка)\w*",
+    re.I,
+)
 _BODY_PREP = re.compile(
     r"\b(?:в|на|у)\s+([а-яё\-]+(?:\s+[а-яё\-]+){0,2})\b",
     re.I,
@@ -236,6 +242,18 @@ def parse_spans(text: str) -> tuple[SemanticSpan, ...]:
                     break
 
         _pair_clause_body_issues(acc, clause, cstart)
+
+        for m in _CONDITION.finditer(clause):
+            ctext, cstart_m, cend_m = (
+                m.group(0),
+                cstart + m.start(),
+                cstart + m.end(),
+            )
+            if not any(
+                s.type == SpanType.ISSUE and s.start <= cstart_m < s.end
+                for s in acc.spans
+            ):
+                acc.add(SpanType.ISSUE, ctext, cstart_m, cend_m, 0.86)
 
         tokens = list(_TOKEN.finditer(clause))
         for tm in tokens:

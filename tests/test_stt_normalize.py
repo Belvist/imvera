@@ -26,3 +26,11 @@ def test_critical_terms_safety() -> None:
 def test_critical_terms_empty() -> None:
     assert match_critical_terms("") == []
     assert match_critical_terms("хорошо") == []
+
+
+def test_endpointing_truncations_completed() -> None:
+    """Live endpointing cuts single-token answers («Пло.») — complete them,
+    they are unambiguous in isolation."""
+    assert normalize_transcript("Пло.") == "плохо"
+    assert normalize_transcript("Пло") == "плохо"
+    assert normalize_transcript("Хоро.") == "хорошо"

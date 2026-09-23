@@ -10,9 +10,13 @@ _WHOLE_PHRASE_FIXES: dict[str, str] = {
     "ниотин.": "не очень",
     "неотин": "не очень",
     "не отин": "не очень",
-    "не отын": "не очень",
     "нэ очень": "не очень",
     "не оч": "не очень",
+    # Live endpointing truncations (single-token answers cut mid-word).
+    "пло.": "плохо",
+    "пло": "плохо",
+    "хоро.": "хорошо",
+    "хоро": "хорошо",
 }
 
 _SUBSTRING_FIXES: tuple[tuple[re.Pattern[str], str], ...] = (

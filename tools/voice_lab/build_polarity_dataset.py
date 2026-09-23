@@ -163,6 +163,49 @@ LIVE_POSITIVE = [
     "Умираю.",
     "Помогите.",
 ]
+# Slang/food positives, vitals, greeting-prefixed, valence collocations.
+# (label, text) — explicit expert rows, reproducible by construction.
+EXPERT_ROWS: list[tuple[str, str]] = [
+    ("Классно.", "positive"),
+    ("Ура.", "positive"),
+    ("Супер.", "positive"),
+    ("Бодрячком.", "positive"),
+    ("Бодро.", "positive"),
+    ("Шикарно.", "positive"),
+    ("Жив-здоров.", "positive"),
+    ("Отлично чувствую себя.", "positive"),
+    ("Я покушала.", "positive"),
+    ("Я поела.", "positive"),
+    ("Покушала только что.", "positive"),
+    ("Поела недавно.", "positive"),
+    ("Я пообедал.", "positive"),
+    ("Давление высокое.", "negative"),
+    ("Давление низкое.", "negative"),
+    ("Давление скачет.", "negative"),
+    ("Давление поднялось.", "negative"),
+    ("Температура.", "negative"),
+    ("Температура поднялась.", "negative"),
+    ("Пульс высокий.", "negative"),
+    ("Сахар высокий.", "negative"),
+    ("Давление в норме.", "positive"),
+    ("Давление нормальное.", "positive"),
+    ("Температуры нет.", "positive"),
+    ("Привет. Плохо мне.", "negative"),
+    ("Добрый день. Всё болит.", "negative"),
+    ("Доброе утро. Спал плохо.", "negative"),
+    ("Привет. Так себе.", "uncertain"),
+    ("Здравствуйте. Не знаю.", "uncertain"),
+    ("Жалоб нет, всё хорошо.", "positive"),
+    ("Нет жалоб, всё отлично.", "positive"),
+    ("Самочувствие хорошее.", "positive"),
+    ("Самочувствие отличное.", "positive"),
+    ("Самочувствие нормальное.", "positive"),
+    ("Моё самочувствие хорошее.", "positive"),
+    ("По самочувствию всё хорошо.", "positive"),
+    ("Давление повышенное.", "negative"),
+    ("Высокое давление.", "negative"),
+    ("Давление подскочило.", "negative"),
+]
 
 
 def prelabel(text: str) -> str | None:
@@ -253,6 +296,41 @@ def main() -> None:
                     "source": "expert-live-shapes",
                 }
             )
+    for text, label in EXPERT_ROWS:
+        if text not in {r["text"] for r in rows}:
+            rows.append({"text": text, "label": label, "source": "expert-table"})
+    for text, label in [
+        ("Да, средне. В целом всё стабильно.", "uncertain"),
+        ("Ну такое вроде.", "uncertain"),
+        ("Так обычно вроде.", "uncertain"),
+        ("Средне вроде да.", "uncertain"),
+        ("Обычное вроде.", "uncertain"),
+        ("Пойдёт вроде.", "uncertain"),
+        ("Вроде нормально.", "positive"),
+        ("Вроде хорошо.", "positive"),
+        ("пока", "uncertain"),
+        ("Пока.", "uncertain"),
+        ("До свидания.", "uncertain"),
+        ("Ну, пока.", "uncertain"),
+        ("Так обычно, вроде.", "uncertain"),
+        ("Ну так обычно.", "uncertain"),
+        ("Что?", "uncertain"),
+        ("Что такое?", "uncertain"),
+        ("А?", "uncertain"),
+        ("М?", "uncertain"),
+        ("всего доброго", "uncertain"),
+        ("всего хорошего", "uncertain"),
+        ("хорошего дня", "uncertain"),
+        ("ага", "uncertain"),
+        ("угу", "uncertain"),
+        ("мгм", "uncertain"),
+        ("ага, понятно", "uncertain"),
+        ("Алло, слышишь?", "uncertain"),
+        ("Повтори вопрос.", "uncertain"),
+        ("Не слышно.", "uncertain"),
+    ]:
+        if text not in {r["text"] for r in rows}:
+            rows.append({"text": text, "label": label, "source": "expert-table"})
     if review:
         print(f"UNRESOLVED REVIEW: {len(review)}")
         for t in review[:40]:

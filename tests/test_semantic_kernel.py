@@ -333,3 +333,34 @@ def test_kernel_latency_p95_under_50ms_on_unique_sample() -> None:
     times.sort()
     p95 = times[int(len(times) * 0.95)]
     assert p95 < 50, f"p95={p95:.1f}ms"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Давление высокое.", "Давление скачет.", "Температура.", "У меня давление."],
+)
+def test_condition_without_verb_spans_issue(text: str) -> None:
+    """Vital-sign conditions («давление высокое») were invisible: no verb,
+    no site → no span → dropped entirely. They must span as issues."""
+    from packages.dialogue_engine.semantic_kernel.span_parser import SpanType
+
+    spans = parse_spans(text)
+    assert any(s.type == SpanType.ISSUE for s in spans), text
+
+
+@pytest.mark.parametrize(
+    ("text", "expect_episode"),
+    [
+        ("Давление высокое.", True),
+        ("Давление нормальное.", False),
+        ("Температура.", True),
+    ],
+)
+def test_condition_episode_only_on_complaint(text: str, expect_episode: bool) -> None:
+    """«Давление нормальное» reports no complaint — no episode, no onset probe."""
+    turn = kernel_to_rich_turn(interpret(text, utterance_id="u-cond"))
+    labels = [m.label for m in (turn.issue_mentions or [])]
+    if expect_episode:
+        assert labels, text
+    else:
+        assert labels == [], labels
