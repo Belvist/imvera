@@ -1,4 +1,19 @@
-# Current task — Cut B done: one understanding chain (2026-09-23)
+# Current task — understand-everything: dark spots closed (2026-09-23)
+
+- Coverage measured on 355 live STT + 388 corpus utterances (full chain:
+  kernel meaning + act + polarity). Closed: pressure/temperature conditions
+  without verbs («Давление высокое» → episode; «нормальное» → none);
+  самочувствие±хорошее/плохое collocations; STT truncations («Пло.»);
+  slang/food/vitals/greeting seeds (polarity 623 rows, reproducible).
+- Honest keeps with numbers: contextual/fast stay (13% unique); «Да/Нет»
+  need live [Q] (fixed-Q probe invalid); STT-garbled («будем в 12:00»),
+  «Пло»-style beyond 2 words, true sighs (text has none — emo next).
+- VERIFIED: 8 new tests; full 1678/4/1; differential 92/4/4/0; corpus
+  500/500; ruff 0. Commit 51d97ff pushed.
+- NOT VERIFIED: bridge restart with this (owner redial after); remote CI.
+- NEXT: restart → redial pressure/покушала; emo background wiring.
+
+---
 
 - Measured, then cut: contextual 89 / rich 86 / fast 72% on 388 corpus
   utterances; 51 rich-misses covered by act (6) + polarity v1 (50);
