@@ -11,6 +11,7 @@ Artifact: models/semantic_nlp/polarity_v1/{head.pt, labels.json, metrics.json}.
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,18 @@ LATENCY_BUDGET_MS = 300.0
 # Same bar as act (0.55): fires on live shapes (покушала 0.75, ничего 0.67),
 # abstains on hedges (так себе 0.52 → existing judge chain).
 CONFIDENCE_THRESHOLD = 0.55
+
+
+_GREETING_PREFIX = re.compile(
+    r"^(привет|здравствуйте|добрый\s+(день|вечер)|доброе\s+утро)[\s,.!]*",
+    re.I,
+)
+
+
+def _strip_leading_greeting(text: str) -> str:
+    """Greetings carry no valence («Здравствуйте. Самочувствие хорошее» kept
+    misfiring on the hello). Strip one leading greeting clause."""
+    return _GREETING_PREFIX.sub("", text or "", count=1)
 
 
 @dataclass(frozen=True)
@@ -77,14 +90,15 @@ class PolarityModel:
 
     def predict(self, text: str) -> PolarityCandidate | None:
         """Return polarity candidate or None (abstain / error / over budget)."""
-        if not (text or "").strip():
+        cleaned = _strip_leading_greeting(text)
+        if not cleaned.strip():
             return None
         started = time.monotonic()
         try:
             torch = self._torch
             with torch.no_grad():
                 batch = self._tokenizer(
-                    f"[U] {text.strip()}",
+                    f"[U] {cleaned.strip()}",
                     return_tensors="pt",
                     truncation=True,
                     max_length=128,
