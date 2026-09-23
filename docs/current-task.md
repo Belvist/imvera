@@ -1,4 +1,17 @@
-# Current task — polarity v1 live, emo measured (2026-09-23)
+# Current task — silence reprompts, polarity fix proven live (2026-09-23)
+
+- Fresh redial proved the polarity fix: «покушала» → meds question (no
+  concern). New live defect in the same calls: 7 s silence after one
+  unanswered question → straight give-up. Root: silence consumed the
+  question cap like an answer attempt → timer re-ask refused → close.
+  Fix: first silence refunds the cap + «Алло. {вопрос}» (delivery re-arms
+  timer); second silence → normal clarify/close path. Tests red/green.
+- VERIFIED: 2 new tests; full 1670/4/1; differential 92/4/4/0; corpus
+  500/500; ruff 0. Commit 32a7cf9 pushed; bridge restarted on it.
+- NOT VERIFIED: redial with silence (owner); remote CI.
+- NEXT: warm close instead of «не получилось» (no-abandonment); prompt v2.
+
+---
 
 - Retrained, not patched: polarity v1 (frozen RuModernBERT + head, 556
   expert seeds 207/186/165, dataset sha256 03a934b9, reproducible via
