@@ -1360,7 +1360,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         from packages.dialogue_engine.coverage import (
             coverage_met,
             domain_question,
-            next_uncovered_domain,
+            scored_next_domain,
         )
         from packages.dialogue_engine.product import call_cap_reached
         from packages.dialogue_engine.runtime import coverage_ladder_enabled
@@ -1371,10 +1371,14 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             and not call_cap_reached(state)
             and _routine_ladder_allowed(state)
         ):
-            # No re-ask of debris: garbage moves on uncovered (asked-once is
-            # strict — repeats are nagging, live fe57cba6/e2c73edf/780904ae).
-            # Repair («Что?») still re-speaks via _speak_repair, not here.
-            _domain = next_uncovered_domain(state)
+            # Utility-scored coverage (Cut D start): the person's own topic
+            # wins over line position («спал плохо» → sleep next, never
+            # nutrition-by-default). Ties → FILLER_ORDER. No re-ask of debris.
+            _turn = turn_context.turn
+            _last_text = turn_context.user_text or (
+                _turn.raw_text if _turn is not None else ""
+            )
+            _domain = scored_next_domain(state, _last_text)
             if _domain is not None:
                 import zlib
 

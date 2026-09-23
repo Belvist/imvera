@@ -135,6 +135,60 @@ def next_uncovered_domain(
     return None
 
 
+_DOMAIN_MARKERS: dict[str, re.Pattern[str]] = {
+    "mood": _MOOD_MARKERS,
+    "sleep": _SLEEP_MARKERS,
+    "medication": _MEDICATION_MARKERS,
+    "nutrition": _NUTRITION_MARKERS,
+}
+
+# Thread bonus: mentioning a domain is worth more than position in line.
+# Mission weights stay equal (all required) — order follows the person,
+# ties fall back to FILLER_ORDER. Deterministic, microseconds, traced.
+THREAD_BONUS = 2.0
+
+
+def score_domain(
+    domain: str, *, last_user_text: str, order_index: int
+) -> tuple[float, dict[str, float]]:
+    """Utility score + feature breakdown (explainable in trace/tests)."""
+    features = {
+        "information": 1.0,
+        "thread": (
+            THREAD_BONUS
+            if _DOMAIN_MARKERS[domain].search(last_user_text or "")
+            else 0.0
+        ),
+        "position": -0.1 * order_index,
+    }
+    return sum(features.values()), features
+
+
+def scored_next_domain(
+    state: EngineState, last_user_text: str, *, skip_asked: bool = True
+) -> str | None:
+    """Next coverage domain by utility, not by fixed order.
+
+    Same candidates as next_uncovered_domain; the person’s own topic wins
+    («спал плохо» → sleep next, not nutrition). Ties → FILLER_ORDER.
+    """
+    covered = covered_domains(state)
+    asked = state.coverage_asked_domains if skip_asked else frozenset()
+    best: str | None = None
+    best_key: tuple[float, int] | None = None
+    for order_index, domain in enumerate(FILLER_ORDER):
+        if domain in covered or domain in asked:
+            continue
+        score, _ = score_domain(
+            domain, last_user_text=last_user_text, order_index=order_index
+        )
+        key = (score, -order_index)
+        if best_key is None or key > best_key:
+            best_key = key
+            best = domain
+    return best
+
+
 def domain_question(domain: str, *, variant: int = 0) -> tuple[str, str, str]:
     """(text, intent, slot) for one baseline filler — asked at most once.
 
