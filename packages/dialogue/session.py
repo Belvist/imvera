@@ -1005,7 +1005,9 @@ class CallSession:
             persist_error=commit.error,
         )
 
-    def handle_wait_expired(self, wait_id: str | None = None) -> SessionTurnResult:
+    def handle_wait_expired(
+        self, wait_id: str | None = None, uplink_frames: int | None = None
+    ) -> SessionTurnResult:
         """Answer-wait timer — DialogueEngine when active, else legacy planner (tests only)."""
         self.turn_id += 1
         self._append_event(
@@ -1030,7 +1032,7 @@ class CallSession:
             dialogue_act=DialogueAct.UNCLEAR,
         )
         if self._engine is not None:
-            self._engine.on_timer_expired(wait_id or "")
+            self._engine.on_timer_expired(wait_id or "", uplink_frames=uplink_frames)
             _log.info(
                 "ENGINE_DECISION call_id=%s turn=%s event=timer_expired skip_planner=true",
                 self.state.call_id,

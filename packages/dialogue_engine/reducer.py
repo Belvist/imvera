@@ -2345,6 +2345,29 @@ def _on_timer_expired(state: EngineState, event: TimerExpired) -> tuple[EngineSt
     state.bump_revision()
     if not slot or state.fsm_state != FsmState.DAILY_CHECK:
         return state, []
+    if getattr(event, "uplink_frames", 0) == 0 and not state.mic_check_spoken:
+        # No audio frames at all (live: 4 calls 20:25–20:29 heard nothing —
+        # mic permission lost after macOS update). The person isn't silent,
+        # they're inaudible: say so honestly, keep the question pending.
+        state.mic_check_spoken = True
+        state.waiting_on_slot = slot
+        state.bump_revision()
+        speak_state, speak_effects = _emit_speak(
+            state,
+            text="Вас не слышно. Проверьте, пожалуйста, микрофон.",
+            intent="mic_check",
+            slot=None,
+            marks_question=True,
+        )
+        return speak_state, speak_effects + [
+            TimerEffect(
+                effect_id=_new_effect_id(),
+                revision=speak_state.revision,
+                timer_id=f"wait-{slot}",
+                wait_ms=questions._ANSWER_WAIT_MS,
+                reason="answer_wait",
+            )
+        ]
     if slot.startswith("probe_"):
         phase = slot.removeprefix("probe_")
         return _speak_probe(state, phase, clarification=True)

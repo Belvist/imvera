@@ -66,6 +66,10 @@ class TimerExpired(DialogueEvent):
     kind: Literal["timer_expired"] = "timer_expired"
     timer_id: str = ""
     revision: int = 0
+    # Uplink PCM frames received this call. None = unknown (tests, legacy
+    # callers → old behavior). 0 = microphone dead/muted, not a silent
+    # person — mic check, not reprompt/close.
+    uplink_frames: int | None = None
 
 
 class DeliveryDeferred(DialogueEvent):

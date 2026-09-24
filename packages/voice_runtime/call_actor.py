@@ -209,6 +209,7 @@ class CallActor:
     _render_generation: str | None = None
     _tts_task: asyncio.Task | None = None
     _utterance_seq: int = 0
+    _uplink_frames_received: int = 0
     _delivered_phrases: list[str] = field(default_factory=list)
     _stopped: bool = False
     _media_ready: bool = False
@@ -463,6 +464,7 @@ class CallActor:
     async def push_pcm(self, pcm: bytes, sample_rate: int) -> None:
         if self._stopped or self._transport_closed or self._capture_lost:
             return
+        self._uplink_frames_received += 1
         await self._queue.put(ActorEvent(ActorEventType.PCM, pcm=pcm, sample_rate=sample_rate))
 
     async def on_capture_lost(self) -> None:
@@ -1318,7 +1320,11 @@ class CallActor:
             return
         if not self.session.uses_dialogue_engine():
             return
-        expired = await asyncio.to_thread(self.session.handle_wait_expired, timer_id)
+        expired = await asyncio.to_thread(
+            self.session.handle_wait_expired,
+            timer_id,
+            uplink_frames=self._uplink_frames_received,
+        )
         await self._post_apply_turn(expired)
 
     async def _cancel_wait_timer(self) -> None:
@@ -1413,7 +1419,11 @@ class CallActor:
             return
         self._media_health.set_waiting_for_answer(False, now=self._monotonic())
         await self._emit_uplink_summary("answer_wait_timeout")
-        expired = await asyncio.to_thread(self.session.handle_wait_expired, wait_id)
+        expired = await asyncio.to_thread(
+            self.session.handle_wait_expired,
+            wait_id,
+            uplink_frames=self._uplink_frames_received,
+        )
         await self._post_apply_turn(expired)
     def _engine_pending_slot(self) -> str | None:
         """Pending slot from EngineState on the engine path, else legacy mirror.

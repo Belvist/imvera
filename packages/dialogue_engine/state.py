@@ -262,6 +262,9 @@ class EngineState(BaseModel):
     # Volunteered-topic ack spoken once per call («Хорошо, что поели» before
     # moving on — volunteered food/sleep must be acknowledged, not skipped).
     volunteered_ack_done: bool = False
+    # Mic-check spoken once per call (uplink dead: zero PCM frames received —
+    # say «Вас не слышно», not the question again and not goodbye).
+    mic_check_spoken: bool = False
     # Red state («умираю» without a site): concern still being clarified —
     # escalate after the second vague answer even with nothing concrete.
     red_state_pending: bool = False

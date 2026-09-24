@@ -258,8 +258,16 @@ class DialogueEngine:
             )
         )
 
-    def on_timer_expired(self, timer_id: str = "") -> list[Effect]:
-        return self._apply(TimerExpired(timer_id=timer_id, revision=self.state.revision))
+    def on_timer_expired(
+        self, timer_id: str = "", uplink_frames: int | None = None
+    ) -> list[Effect]:
+        return self._apply(
+            TimerExpired(
+                timer_id=timer_id,
+                revision=self.state.revision,
+                uplink_frames=uplink_frames,
+            )
+        )
 
     def on_delivery_deferred(self, effect: SpeakEffect) -> list[Effect]:
         if self._outbox.get_record(effect.effect_id) is None:
