@@ -494,6 +494,40 @@ def _wellness_entry_covered(state: EngineState) -> bool:
     return False
 
 
+_VOLUNTEERED_ACKS: tuple[tuple[str, str], ...] = (
+    ("nutrition", "Хорошо, что поели."),
+    ("sleep", "Хорошо, что выспались."),
+)
+
+_DISTRESS_MARKERS = re.compile(
+    r"(очень\s+плохо|ужасн\w*|не\s+могу|невыносим\w*|умира\w*|помогите|"
+    r"кошмар\w*|страшно|очень\s+болит|сильно\s+болит|болит\s+сильно|"
+    r"помира\w*|нет\s+сил|болезненн\w*)",
+    re.I,
+)
+
+
+def _has_distress_markers(text: str) -> bool:
+    return bool(_DISTRESS_MARKERS.search(text or ""))
+
+
+def _with_volunteered_ack(state: EngineState, text: str) -> str:
+    """Acknowledge a volunteered topic once before moving on (live 30a2a638:
+    «покушала» → silence about food felt wrong). Asked domains excluded —
+    only volunteered ones get the ack."""
+    if state.volunteered_ack_done:
+        return text
+    from packages.dialogue_engine.coverage import covered_domains
+
+    covered = covered_domains(state)
+    asked = state.coverage_asked_domains
+    for domain, ack in _VOLUNTEERED_ACKS:
+        if domain in covered and domain not in asked:
+            state.volunteered_ack_done = True
+            return f"{ack} {text}"
+    return text
+
+
 def _turn_reports_fresh_negative(turn) -> bool:
     """This turn carries a fresh negative wellness signal.
 
@@ -1337,10 +1371,16 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 )
             else:
                 state.concern_probe_count = 1
+                _q = questions.probe_question("concern")
+                _turn_text = turn.raw_text if turn is not None else ""
+                if _has_distress_markers(_turn_text):
+                    # Live fs-2d8153a8: «очень плохо» → bare «Что беспокоит».
+                    # Name the pain first, then ask — pools intact.
+                    _q = f"Сочувствую. {_q}"
                 return ResponsePlan(
                     obligation=ConversationObligation.NEVER_SILENT,
                     action="speak",
-                    mandatory_question=questions.probe_question("concern"),
+                    mandatory_question=_q,
                     intent="probe_concern",
                     slot="wellness",
                     marks_question=True,
@@ -1386,6 +1426,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 state.pending_coverage_domain = _domain
                 _variant = zlib.crc32((state.call_id or "").encode()) % 2
                 _text, _intent, _slot = domain_question(_domain, variant=_variant)
+                _text = _with_volunteered_ack(state, _text)
                 return ResponsePlan(
                     obligation=ConversationObligation.BACKGROUND_GOAL,
                     action="speak",

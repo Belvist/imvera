@@ -259,6 +259,9 @@ class EngineState(BaseModel):
     # attempt — the first timeout re-asks («Алло. …») without consuming caps,
     # only the second one may close (live fs-51d62138 gave up at first silence).
     silence_reprompts: int = 0
+    # Volunteered-topic ack spoken once per call («Хорошо, что поели» before
+    # moving on — volunteered food/sleep must be acknowledged, not skipped).
+    volunteered_ack_done: bool = False
     # Red state («умираю» without a site): concern still being clarified —
     # escalate after the second vague answer even with nothing concrete.
     red_state_pending: bool = False

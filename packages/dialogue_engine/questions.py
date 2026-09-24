@@ -380,7 +380,7 @@ def _greeting_parts() -> tuple[str, str]:
     hour = int(hour_raw) if hour_raw.lstrip("-").isdigit() else now.hour
     if 5 <= hour <= 10:
         return "Доброе утро", intro
-    if 18 <= hour <= 22:
+    if 18 <= hour <= 23:
         return "Добрый вечер", intro
     return "Здравствуйте", intro
 
