@@ -1,4 +1,21 @@
-# Current task — volunteered ack + distress empathy live (2026-09-24)
+# Current task — name Тамара Андреевна + mic-death handled (2026-09-24)
+
+- Name: host plist ProgramArguments had IMVERA_ELDER_DISPLAY_NAME=Даниил
+  inline (beats EnvironmentVariables) — set to Тамара Андреевна, bridge
+  reloaded, env verified in process. (Repo default Даниил untouched —
+  tests pin it.)
+- Yesterday 20:25–20:29 four calls heard zero audio (no VAD/STT, downlink
+  fine) — mic permission lost after macOS update. Owner: check System
+  Settings → Privacy → Microphone → Zoiper. System now detects dead
+  uplink (zero PCM frames → «Вас не слышно. Проверьте микрофон.» once,
+  caps intact) instead of questioning the void.
+- Bare «Плохо.» joins distress markers («Сочувствую. На что жалуетесь?»).
+- VERIFIED: 3 new tests; full 1688/4/1; diff 92/4/4/0; corpus 500/500;
+  ruff 0. Commit e38a359 pushed; bridge on it.
+- NOT VERIFIED: redial as Тамара Андреевна (owner); remote CI.
+- NEXT: warm close; prompt v2; emo wiring.
+
+---
 
 - Owner live notes: food question vanishes after «покушала»; concern flow
   «вроде норм, но не очень»; greeting at 14/16/23 verified (Здравствуйте;
