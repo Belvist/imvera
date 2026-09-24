@@ -1,3 +1,18 @@
+# Current task — volunteered ack + distress empathy live (2026-09-24)
+
+- Owner live notes: food question vanishes after «покушала»; concern flow
+  «вроде норм, но не очень»; greeting at 14/16/23 verified (Здравствуйте;
+  evening bucket extended to 23:00). Ladder now acks volunteered food/sleep
+  once («Хорошо, что поели.»); first probe_concern with distress markers
+  opens «Сочувствую.»; :9103 restarted (was down).
+- Note: ScenarioRunner diverges from live (own rich builder, no delivered
+  greeting) — new tests drive the live-faithful CallSession path.
+- VERIFIED: 3 new tests; full 1684/6/0+1xfail; diff 92/4/4/0; corpus 500/500;
+  ruff 0. Commit ce6a2de pushed.
+- NOT VERIFIED: redial (owner); remote CI.
+- NEXT: warm close (no-abandonment); prompt v2.
+
+---
 # Current task — plain-language reports remembered (2026-09-23)
 
 - Owner order: no more CHANGED/VERIFIED cryptoblocks as the main text.
