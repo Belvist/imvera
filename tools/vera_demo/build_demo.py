@@ -95,7 +95,7 @@ def _run_dialogue(key: str, turns: list[str]) -> list[str]:
     """
     session = CallSession(
         call_id=f"demo-{key}", family_id="demo-family",
-        elder_display_name="Тамара Андреевна",
+        elder_display_name="Тамара Юрьевна",
         store=InMemoryCallRecordStore(),
     )
     opening = session.start()

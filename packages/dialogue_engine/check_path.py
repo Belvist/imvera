@@ -333,6 +333,29 @@ def _probe_duration(state: EngineState, text: str) -> ProbeStep:
     )
 
 
+def _probe_severity(state: EngineState, text: str) -> ProbeStep:
+    from packages.dialogue_engine.issue_memory import (
+        extract_grounded_severity_value,
+        get_active_episode,
+    )
+    from packages.dialogue_engine.state import CheckPath
+
+    # Emergency verbs hijack any probe phase — never ask severity on red.
+    if is_urgent_concern(text) or is_urgent_concern(state.wellness_concern):
+        state.check_path = CheckPath.URGENT
+        state.probe_phase = None
+        return ProbeStep(action=ProbeAction.URGENT_CLOSE)
+    severity = extract_grounded_severity_value(text)
+    if severity is not None:
+        episode = get_active_episode(state)
+        if episode is not None:
+            episode.known_attributes["severity"] = severity
+        state.observations["concern_severity"] = severity
+        state.probe_phase = None
+        return ProbeStep(action=ProbeAction.CONTINUE_LADDER)
+    return ProbeStep(action=ProbeAction.SPEAK_PROBE, probe_phase="severity")
+
+
 def _probe_pain_night(state: EngineState, text: str) -> ProbeStep:
     from packages.dialogue_engine.state import CheckPath
 
@@ -348,6 +371,7 @@ def _probe_pain_night(state: EngineState, text: str) -> ProbeStep:
 
 _register_probe("concern", _probe_concern)
 _register_probe("duration", _probe_duration)
+_register_probe("severity", _probe_severity)
 _register_probe("pain_night", _probe_pain_night)
 
 

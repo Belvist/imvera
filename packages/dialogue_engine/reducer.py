@@ -1391,10 +1391,15 @@ def _backchannel_reask(state: EngineState) -> tuple[str, str, str] | None:
     else:
         return None
     asked = (delivered.text or "").strip()
+    recent = {(q or "").strip() for q in (state.asked_history or [])}
     alts = [v for v in pool if v.strip() and v.strip() != asked]
-    if not alts:
+    fresh = [v for v in alts if v.strip() not in recent]
+    # Per-call anti-repeat: prefer variants unheard this call; when all
+    # were heard, repeat the pool head (distance, never silence).
+    picks = fresh or alts
+    if not picks:
         return None
-    rephrase = alts[questions._speech_day() % len(alts)]
+    rephrase = picks[questions._speech_day() % len(picks)]
     ack = _BACKCHANNEL_ACKS[questions._speech_day() % len(_BACKCHANNEL_ACKS)]
     intent = (delivered.intent or "").strip() or slot
     return (f"{ack} {rephrase}", slot, intent)
@@ -1437,9 +1442,10 @@ def _coerce_unclear_by_content(
         episode = get_active_episode(state)
         if episode is not None:
             episode.known_attributes["severity"] = recorded_severity
+        state.observations["concern_severity"] = recorded_severity
     if state.probe_phase == "duration" and looks_like_duration_answer(user_text):
         return SemanticAct.ANSWER
-    if state.probe_phase in ("duration", "pain_night"):
+    if state.probe_phase in ("duration", "pain_night", "severity"):
         severity = extract_grounded_severity_value(user_text)
         if severity:
             episode = get_active_episode(state)
@@ -1586,6 +1592,26 @@ def _fill_background_answer(state: EngineState, user_text: str) -> bool:
     state.processing_turn_id = None
     state.processing_effect_id = None
     state.bump_revision()
+    return True
+
+
+def _severity_probe_due(state: EngineState) -> bool:
+    """Severity probe is due: active non-urgent complaint, severity unknown.
+
+    Yellow path is concern → duration → severity → ITS. Red/urgent never
+    waits for severity — it goes straight to ITS/urgent close.
+    """
+    from packages.dialogue_engine.check_path import is_urgent_concern
+    from packages.dialogue_engine.issue_memory import get_active_episode
+
+    concern = (state.wellness_concern or "").strip()
+    if not concern or is_urgent_concern(concern):
+        return False
+    episode = get_active_episode(state)
+    if episode is not None and episode.known_attributes.get("severity"):
+        return False
+    if state.observations.get("concern_severity"):
+        return False
     return True
 
 
@@ -1777,6 +1803,29 @@ def _apply_semantic(
             and not state.awaiting_goodbye_confirm
         ):
             return state, []
+        stripped_in = user_text.strip().lower().rstrip(".!?…")
+        if stripped_in in _GREETING_ONLY and state.delivered_question is not None:
+            # Greeting back ("Привет" to a just-asked question): soft ack,
+            # never re-ask what was asked two seconds ago. The wait timer
+            # re-asks on real silence.
+            slot = state.delivered_question.slot or answer_slot or "wellness"
+            state, effects = _emit_speak(
+                state,
+                text="Здравствуйте! Я вас слушаю.",
+                intent="greeting_ack",
+                slot=slot,
+                marks_question=False,
+            )
+            effects.append(
+                TimerEffect(
+                    effect_id=_new_effect_id(),
+                    revision=state.revision,
+                    timer_id=f"wait-{slot}",
+                    wait_ms=7000,
+                    reason="backchannel",
+                )
+            )
+            return state, effects
         reask = _backchannel_reask(state)
         if reask is not None:
             text, slot, intent = reask
@@ -1905,6 +1954,8 @@ def _apply_semantic(
 
             if looks_like_duration_answer(text):
                 advance_probe_phase(state, text)
+                if _severity_probe_due(state):
+                    return _speak_probe(state, "severity")
                 return _schedule_advance(state, user_text=text)
         if should_start_topic_flow(
             state, text, answer_slot=f"probe_{state.probe_phase}"

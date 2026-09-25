@@ -65,7 +65,8 @@ def test_flow_fs_f534c2e6_soft_no_closes_warm() -> None:
     assert "коротко" not in texts
     summary = next(e for e in result.speak_effects if e.intent == "summary")
     assert "Даниил" in summary.text
-    assert "до свидания" in summary.text.lower()
+    # Single-goodbye contract: farewell lives in goodbye_final only.
+    assert "до свидания" not in summary.text.lower()
     assert "берегите" in summary.text.lower() or "на сегодня всё" in summary.text.lower()
     assert result.state.slots["plans"].name == "FILLED"
 

@@ -504,6 +504,7 @@ def test_session_summary_allowed_after_probe_path_plans_fill() -> None:
         "Плохо.",
         "Беспокоит головная боль, тошнота.",
         "в течение часа",
+        "Терпимая.",
         "Ничего.",
     ]
     for i, text in enumerate(turns, 1):

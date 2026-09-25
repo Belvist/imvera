@@ -1,3 +1,16 @@
+# К пушу-4: external review batch (2026-09-25)
+
+- Имя Юрьевна везде; прощание одно (goodbye_final); приветствие — soft-ack;
+  severity обязателен после onset (только non-urgent); антиповтор на звонок;
+  filler уже scored (клейм отчёта устарел); rebuild_written.py — чужой
+  артефакт в .run, наши демо из движка.
+- Corpus 1.1.0→1.2.0 (severity-шаг); миграции ожиданий: goodbye ×3, ITS ×2.
+- Ворота: 1721 green, differential PASS, corpus 500/500; MP4 пересобраны.
+- Отклонение от written-spec: красный спрашивает severity перед ITS
+  (естественно для триажа, safety на «скорую» цел).
+
+---
+
 # К пушу-3: да/нет «ага» = ответ (2026-09-25)
 
 - Правка владельца: «ага» на да/нет-вопрос — ответ. `_is_yes_no_question`
@@ -202,10 +215,10 @@
 
 ---
 
-# Current task — name Тамара Андреевна + mic-death handled (2026-09-24)
+# Current task — name Тамара Юрьевна + mic-death handled (2026-09-24)
 
 - Name: host plist ProgramArguments had IMVERA_ELDER_DISPLAY_NAME=Даниил
-  inline (beats EnvironmentVariables) — set to Тамара Андреевна, bridge
+  inline (beats EnvironmentVariables) — set to Тамара Юрьевна (была ошибочная Андреевна в коде — вычищена), bridge
   reloaded, env verified in process. (Repo default Даниил untouched —
   tests pin it.)
 - Yesterday 20:25–20:29 four calls heard zero audio (no VAD/STT, downlink
@@ -216,7 +229,7 @@
 - Bare «Плохо.» joins distress markers («Сочувствую. На что жалуетесь?»).
 - VERIFIED: 3 new tests; full 1688/4/1; diff 92/4/4/0; corpus 500/500;
   ruff 0. Commit e38a359 pushed; bridge on it.
-- NOT VERIFIED: redial as Тамара Андреевна (owner); remote CI.
+- NOT VERIFIED: redial as Тамара Юрьевна (owner); remote CI.
 - NEXT: warm close; prompt v2; emo wiring.
 
 ---

@@ -32,7 +32,7 @@ from services.llm.http_provider import HttpLLMProvider
 from services.stt.http_provider import HttpSTTProvider
 from services.tts.http_provider import HttpTTSProvider
 
-PHRASE = "Здравствуйте, Тамара Андреевна. Как вы себя чувствуете?"
+PHRASE = "Здравствуйте, Тамара Юрьевна. Как вы себя чувствуете?"
 TEXT = "Чувствую себя хорошо, спасибо."
 
 

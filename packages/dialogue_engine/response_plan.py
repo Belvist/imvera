@@ -164,7 +164,7 @@ def _question_for_need(state: EngineState, plan: ResponsePlan, need: QuestionNee
         plan.slot = intent
         plan.marks_question = True
         return text
-    if need.attribute in ("concern", "pain_night", "duration"):
+    if need.attribute in ("concern", "pain_night", "duration", "severity"):
         return questions.probe_question(need.attribute)
     return questions.slot_question(need.attribute, state=state)
 

@@ -288,4 +288,5 @@ def test_pack_good_path_warm_close() -> None:
     assert "partial_unresolved_close" not in intents
     assert "important_to_share" in intents or "summary" in intents
     if "summary" in intents:
-        assert "до свидания" in _last_text(r).lower()
+        # Single-goodbye contract: farewell lives in goodbye_final only.
+        assert "до свидания" not in _last_text(r).lower()

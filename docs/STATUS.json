@@ -24,7 +24,7 @@
     "source": "packages/dialogue_engine/action_policy_shadow_config.py"
   },
   "corpus": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "source": "packages/dialogue_engine/corpus/generator.py:CORPUS_VERSION"
   },
   "semantic_nlp": {

@@ -6,17 +6,17 @@ real CallSession: no repeats, no scolds, no give-ups mid-flow.
 
 from __future__ import annotations
 
+import pytest
+
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession
-
-import pytest
 
 pytestmark = pytest.mark.dialogue_engine
 
 
 def _session(call_id: str) -> CallSession:
     session = CallSession(
-        call_id=call_id, family_id="f", elder_display_name="Тамара Андреевна",
+        call_id=call_id, family_id="f", elder_display_name="Тамара Юрьевна",
         store=InMemoryCallRecordStore(),
     )
     opening = session.start()
@@ -43,13 +43,14 @@ def _say(session: CallSession, text: str) -> str:
     return speech
 
 
-def test_greeting_gets_kind_reask_not_scold() -> None:
+def test_greeting_gets_soft_ack_not_reask() -> None:
     session = _session("demo-greet")
-    result_speech = _say(session, "Привет.")
-    assert "двух словах" not in result_speech
-    assert "Расскажите, пожалуйста, о самочувствии" not in result_speech
-    # Either a kind spoken re-ask or a wait timer that re-speaks the question.
-    assert "?" in result_speech or result_speech.strip() == ""
+    speech = _say(session, "Привет.")
+    assert "двух словах" not in speech
+    assert "Расскажите, пожалуйста, о самочувствии" not in speech
+    # Soft ack, never an immediate re-ask of the just-asked question.
+    assert "слушаю" in speech.lower()
+    assert "?" not in speech
 
 
 def test_duration_probe_does_not_repeat_on_onset() -> None:
@@ -65,14 +66,29 @@ def test_duration_probe_does_not_repeat_on_onset() -> None:
     assert "Как давно" not in speech
 
 
-def test_severity_answer_does_not_give_up() -> None:
-    session = _session("demo-sev")
+def test_severity_probe_follows_onset() -> None:
+    session = _session("demo-sev-probe")
     _say(session, "Привет.")
     _say(session, "Да не очень, голова болит.")
     _say(session, "Утром как проснулась.")
+    engine = session._engine
+    assert engine is not None
+    assert engine.state.probe_phase == "severity"
+    last = session._engine.state.delivered_question
+    assert last is not None and "сильн" in (last.text or "").lower()
+
+
+def test_severity_answer_accepted_not_repeated() -> None:
+    session = _session("demo-sev-acc")
+    _say(session, "Привет.")
+    _say(session, "Да не очень, голова болит.")
+    _say(session, "Утром как проснулась.")
+    dq = session._engine.state.delivered_question
+    first_sev_q = (dq.text or "") if dq else ""
     speech = _say(session, "Боль, ну, терпимая.")
+    assert speech.strip() != first_sev_q.strip()
+    assert "Повторите" not in speech
     assert "не получилось" not in speech
-    assert "До свидания" not in speech
 
 
 def test_meds_mention_pivots_to_today_question() -> None:

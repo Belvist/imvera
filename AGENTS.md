@@ -397,6 +397,23 @@ Until these exist, agent reports exact commands run.
 - Open в dialogue track: prompt v2, emo wiring; run_dialogue_corpus
   clarify-спор закрыт rephrase-поведением.
 
+## Live-dialogue bugfix batch from external review (2026-09-25)
+
+- Verified report claims before acting: name Андреевна→Юрьевна swept
+  (code/tests/scripts; history notes corrected); summary farewell removed
+  (single goodbye in goodbye_final only); greeting → soft-ack
+  («Здравствуйте! Я вас слушаю.», no re-ask, wait-timer fallback);
+  severity probe mandatory after onset (concern→duration→severity→ITS,
+  non-urgent only); per-call anti-repeat via asked_history in rephrase
+  picker; stale claims corrected (coverage filler already scored, not
+  rigid; no rebuild_written.py in repo — written-copy MP4s are a separate
+  artifact in .run, engine demos built by build_demo.py).
+- Corpus contract bumped 1.1.0→1.2.0 (severity step in concern splice);
+  expectation migrations: single-goodbye asserts ×3, severity step ×2.
+- Gates: 1721 green, differential PASS, corpus 500/500; demo MP4s rebuilt.
+- Deviation noted: red flow now asks severity before ITS (triage-natural,
+  safety hijack on «скорую» intact) — differs from written-spec demo.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)

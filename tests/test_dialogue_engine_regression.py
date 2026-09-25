@@ -229,7 +229,8 @@ def test_plans_none_fast_path_to_summary() -> None:
     assert summary, "expected summary after important_to_share"
     text = summary[-1].text
     assert "спасибо" in text.lower()
-    assert "до свидания" in text.lower()
+    # Single-goodbye contract: farewell lives in goodbye_final only.
+    assert "до свидания" not in text.lower()
     assert "Даниил" in text
     assert text != "Спасибо за разговор."
 

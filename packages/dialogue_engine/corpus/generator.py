@@ -13,7 +13,7 @@ from packages.dialogue_engine.corpus.schema import (
     WellnessCategory,
 )
 
-CORPUS_VERSION = "1.1.0"
+CORPUS_VERSION = "1.2.0"
 CORPUS_SEED = 42
 
 WELLNESS_CATEGORIES: tuple[WellnessCategory, ...] = (

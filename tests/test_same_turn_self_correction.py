@@ -161,6 +161,10 @@ def test_delivered_concern_probe_consuming_answer_fixes_concern(
     duration = runner._pending_speaks.pop(0)
     runner._deliver_speak(duration)
     runner._user_turn("Вчера началось.", delayed=False)
+    assert [e.intent for e in runner._pending_speaks] == ["probe_severity"]
+    severity = runner._pending_speaks.pop(0)
+    runner._deliver_speak(severity)
+    runner._user_turn("Терпимая.", delayed=False)
     assert [e.intent for e in runner._pending_speaks] == ["important_to_share"]
 
 

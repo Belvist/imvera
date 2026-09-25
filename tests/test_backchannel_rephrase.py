@@ -16,7 +16,7 @@ pytestmark = pytest.mark.dialogue_engine
 
 def _session(call_id: str, full: bool = False) -> CallSession:
     session = CallSession(
-        call_id=call_id, family_id="f", elder_display_name="Тамара Андреевна",
+        call_id=call_id, family_id="f", elder_display_name="Тамара Юрьевна",
         store=InMemoryCallRecordStore(),
     )
     opening = session.start()

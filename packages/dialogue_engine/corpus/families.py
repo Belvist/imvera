@@ -99,6 +99,8 @@ _CONCERN_COMPLAINT = "Голова болит."
 
 _CONCERN_DURATION = "Вчера началось."
 
+_CONCERN_SEVERITY = "Терпимая."
+
 
 def _with_concern_probe(
     steps: tuple[CorpusStep, ...], family: str, wellness_category: str
@@ -129,6 +131,9 @@ def _with_concern_probe(
         ExpectSpeakIntent(intent="probe_duration"),
         DeliverPlayout(),
         UserStep(text=_CONCERN_DURATION),
+        ExpectSpeakIntent(intent="probe_severity"),
+        DeliverPlayout(),
+        UserStep(text=_CONCERN_SEVERITY),
         steps[idx],
         *steps[idx + 1 :],
     )

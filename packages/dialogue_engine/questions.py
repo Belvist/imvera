@@ -53,6 +53,11 @@ _PROBE_QUESTION_VARIANTS: dict[str, list[str]] = {
         "Как давно началось?",
         "Давно это у вас?",
     ],
+    "severity": [
+        "Насколько сильная боль?",
+        "Боль сильная или терпимая?",
+        "Сейчас это сильно беспокоит или терпимо?",
+    ],
     "pain_night": [
         "А ночью не болело?",
         "Ночью как — болело или спокойно?",
@@ -85,6 +90,7 @@ def _rotate(pool: list[str] | tuple[str, ...]) -> str:
 _PROBE_QUESTIONS: dict[str, str] = {
     "concern": "Что именно беспокоит?",
     "duration": "Как давно это продолжается?",
+    "severity": "Насколько сильная боль?",
     "pain_night": "А ночью не болело?",
 }
 
@@ -111,6 +117,7 @@ _SLOT_CLARIFICATIONS: dict[str, str] = {
     "plans": "Какие у вас планы на сегодня — в двух словах?",
     "probe_concern": "Расскажите коротко, что именно беспокоит.",
     "probe_duration": "Как давно это длится — хотя бы примерно?",
+    "probe_severity": "Насколько сильная боль — сильная или терпимая?",
     "probe_pain_night": "А ночью было больно или спокойно?",
 }
 
@@ -231,7 +238,10 @@ def summary_close_speech(
     *,
     acknowledge: str = "",
 ) -> str:
-    """Warm terminal close — MVP tone: записала + На сегодня всё + Берегите себя."""
+    """Warm close: записала + На сегодня всё + Берегите себя.
+
+    No farewell here — the single goodbye belongs to goodbye_final.
+    """
     name = (state.elder_display_name or "").strip()
     concerns = concern_summary_phrase(state)
     ack = acknowledge.strip()
@@ -241,31 +251,31 @@ def summary_close_speech(
         if name:
             core = (
                 f"Спасибо, {name}. Я записала: сегодня беспокоили {concerns}. "
-                "На сегодня всё. Берегите себя. До свидания."
+                "На сегодня всё. Берегите себя."
             )
         else:
             core = (
                 f"Спасибо. Я записала: сегодня беспокоили {concerns}. "
-                "На сегодня всё. Берегите себя. До свидания."
+                "На сегодня всё. Берегите себя."
             )
     elif name:
         core = (
             f"Спасибо, {name}. На сегодня всё. "
-            "Берегите себя. До свидания."
+            "Берегите себя."
         )
     else:
-        core = "Спасибо. На сегодня всё. Берегите себя. До свидания."
+        core = "Спасибо. На сегодня всё. Берегите себя."
 
     if next_hint and "записала" not in core.lower():
         if name:
             core = (
                 f"Спасибо, {name}. {next_hint} "
-                "На сегодня всё. Берегите себя. До свидания."
+                "На сегодня всё. Берегите себя."
             )
         else:
             core = (
                 f"Спасибо. {next_hint} "
-                "На сегодня всё. Берегите себя. До свидания."
+                "На сегодня всё. Берегите себя."
             )
     if ack:
         return f"{ack} {core}"
