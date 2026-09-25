@@ -69,7 +69,8 @@ def test_completed_check_resolves_green_or_yellow(
     assert snap.outcomes is not None
     assert snap.outcomes.candidate_family_status in ("GREEN", "YELLOW")
     assert snap.outcomes.candidate_family_status != "UNSET"
-    assert snap.metadata["outcomes"]["candidate_family_status"] == snap.outcomes.candidate_family_status
+    got = snap.metadata["outcomes"]["candidate_family_status"]
+    assert got == snap.outcomes.candidate_family_status
 
 
 def test_red_keeps_red_candidate_family_status(

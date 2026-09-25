@@ -96,6 +96,30 @@ jobs:
       - name: ActionPolicy Shadow M1 gate
         run: make test-action-policy-shadow
 
+  dialogue-corpus-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev,test]"
+      - name: Dialogue corpus gate (500 trajectories)
+        run: make dialogue-corpus-gate
+
+  policy-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev,test]"
+      - name: Policy differential gate
+        run: python3 tools/voice_lab/policy_diff_v8_v9.py
+
   test:
     runs-on: ubuntu-latest
     needs: contracts
