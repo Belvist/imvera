@@ -24,6 +24,7 @@ from services.inference.common import (
     QueueFullError,
     WorkerState,
     check_deadline,
+    executor_http_error,
     mount_health,
     new_request_id,
 )
@@ -265,7 +266,10 @@ mount_health(app, state, "tts")
 
 
 async def _ndjson_stream(req: SynthesizeRequest) -> AsyncIterator[bytes]:
-    check_deadline(req.deadline)
+    try:
+        check_deadline(req.deadline)
+    except (TimeoutError, QueueFullError) as exc:
+        raise executor_http_error(exc) from exc
     out_q: queue.Queue = queue.Queue(maxsize=8)
 
     def produce() -> None:
@@ -274,8 +278,8 @@ async def _ndjson_stream(req: SynthesizeRequest) -> AsyncIterator[bytes]:
     try:
         fut = executor.submit(produce)
     except QueueFullError as exc:
-        yield (json.dumps({"done": True, "error": str(exc)}, ensure_ascii=False) + "\n").encode()
-        return
+        # Raised before the first byte: fail over cleanly with 429.
+        raise executor_http_error(exc) from exc
     got_audio = False
     try:
         while True:

@@ -17,8 +17,10 @@ from pydantic import BaseModel, Field
 
 from services.inference.common import (
     InferenceExecutor,
+    QueueFullError,
     WorkerState,
     check_deadline,
+    executor_http_error,
     mount_health,
     new_request_id,
 )
@@ -142,7 +144,10 @@ async def transcribe(req: TranscribeRequest) -> dict[str, Any]:
         raise HTTPException(503, detail=state.warmup_error or "not ready")
     if req.request_id in state.cancelled_requests:
         raise HTTPException(499, detail="cancelled")
-    check_deadline(req.deadline)
+    try:
+        check_deadline(req.deadline)
+    except (TimeoutError, QueueFullError) as exc:
+        raise executor_http_error(exc) from exc
     try:
         pcm = base64.b64decode(req.pcm_b64)
     except Exception as exc:
@@ -171,6 +176,8 @@ async def transcribe(req: TranscribeRequest) -> dict[str, Any]:
                 asr_cfg=cfg["models"]["asr"],
             )
         )
+    except (TimeoutError, QueueFullError) as exc:
+        raise executor_http_error(exc) from exc
     finally:
         wav_path.unlink(missing_ok=True)
     pcm_rms = round(pcm_rms_s16le(pcm), 1)

@@ -69,6 +69,27 @@ def test_healthy_store_passes_through_without_spool(tmp_path) -> None:
     assert list((tmp_path / "spool").glob("spill-*.jsonl")) == []
 
 
+def test_poison_row_does_not_block_others(tmp_path) -> None:
+    from packages.core.spill import replay_spool
+
+    spool = tmp_path / "spool"
+    spool.mkdir()
+    live = InMemoryCallRecordStore()
+    live.ensure_call("c1", "f1")
+    store = SpillingCallRecordStore(_DownStore(), spool)
+    store.ensure_call("c2", "f1")
+    path = next(spool.glob("spill-*.jsonl"))
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write("not-json{{{\n")
+        fh.write('{"op": "nope_unknown", "data": {}}\n')
+
+    counts = replay_spool(spool, live)
+    assert counts["applied"] == 1
+    assert counts["quarantined"] == 2
+    assert counts["stopped"] == 0
+    assert live.get_call_result("c2", "f1") is not None
+
+
 def test_finalize_spills_and_replays(tmp_path) -> None:
     spool_store = _spilling(tmp_path)
     snap = CallResultSnapshot(

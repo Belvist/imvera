@@ -18,8 +18,10 @@ from pydantic import BaseModel, Field
 from packages.contracts.semantic import SemanticPayload
 from services.inference.common import (
     InferenceExecutor,
+    QueueFullError,
     WorkerState,
     check_deadline,
+    executor_http_error,
     mount_health,
     new_request_id,
 )
@@ -134,7 +136,10 @@ async def interpret(req: InterpretRequest) -> dict[str, Any]:
     if req.request_id in _cancelled:
         raise HTTPException(499, detail="cancelled")
     local_deadline = _local_deadline(req)
-    check_deadline(local_deadline)
+    try:
+        check_deadline(local_deadline)
+    except (TimeoutError, QueueFullError) as exc:
+        raise executor_http_error(exc) from exc
     cfg = _load_config()
     ctx = req.context
     user_content = (
@@ -160,6 +165,8 @@ async def interpret(req: InterpretRequest) -> dict[str, Any]:
             raw = await executor.run(_interpret_step)
         except _RequestCancelled:
             raise HTTPException(499, detail="cancelled") from None
+        except (TimeoutError, QueueFullError) as exc:
+            raise executor_http_error(exc) from exc
         try:
             from packages.contracts.semantic import SemanticPayload
 
@@ -191,7 +198,10 @@ async def render(req: RenderRequest) -> StreamingResponse:
     if req.request_id in _cancelled:
         raise HTTPException(499, detail="cancelled")
     local_deadline = _local_deadline(req)
-    check_deadline(local_deadline)
+    try:
+        check_deadline(local_deadline)
+    except (TimeoutError, QueueFullError) as exc:
+        raise executor_http_error(exc) from exc
 
     async def stream():
         cfg = _load_config()

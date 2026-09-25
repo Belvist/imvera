@@ -2703,8 +2703,18 @@ def _has_urgent_evidence(state: EngineState) -> bool:
 
 
 def _close_partial(state: EngineState) -> tuple[EngineState, list[Effect]]:
-    if state.playing_question or state.planned_question:
+    playing = state.playing_question
+    if playing is not None and playing.phase == QuestionPhase.PLAYING:
+        # Vera is audibly speaking — never cut her off with a close.
         return state, []
+    if playing is not None or state.planned_question is not None:
+        # Stale emit (playout died without started/completed events):
+        # release so close cannot stall forever (P0 G-18).
+        if playing is not None:
+            release_reservation(state, playing.slot)
+        state.playing_question = None
+        state.planned_question = None
+        state.bump_revision()
     # While clarifying WHAT is red, the probe ladder owns the turn — never
     # cut it off with a close (partial text is wrong on red, and the urgent
     # verdict belongs to the ladder's third step, honestly marked).
@@ -2804,6 +2814,17 @@ def _on_timer_expired(state: EngineState, event: TimerExpired) -> tuple[EngineSt
     slot = state.waiting_on_slot
     if event.timer_id.startswith("wait-") and not slot:
         slot = event.timer_id.removeprefix("wait-")
+        delivered = state.delivered_question
+        if delivered is not None and (delivered.slot or "") != slot:
+            # Stale timer: the user already moved on to another question.
+            # Resurrecting the old slot re-asks an answered question (P0 G-18).
+            return state, []
+    if (
+        slot
+        and not slot.startswith("probe_")
+        and state.slots.get(slot) == SlotStatus.FILLED
+    ):
+        return state, []
     state.waiting_on_slot = None
     state.bump_revision()
     if not slot or state.fsm_state != FsmState.DAILY_CHECK:

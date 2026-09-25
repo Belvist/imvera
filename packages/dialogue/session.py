@@ -968,17 +968,23 @@ class CallSession:
             if risk_obs_id:
                 obs_ids.append(risk_obs_id)
             if not ok:
-                return self._failed_turn(
-                    user_text, interp, contract, err or "fact persist"
+                # Durability failed, dialogue computed: speak from engine
+                # state degraded (spool covers the write) — never drop
+                # a computed turn into terminal_noop (P0 G-06).
+                _log.warning(
+                    "fact persist failed call_id=%s, continuing degraded: %s",
+                    self.state.call_id,
+                    err,
                 )
             fin_ok, fin_err = self._finalize_call_if_needed()
+            persist_err = "; ".join(e for e in (err, fin_err) if e) or None
             return self._build_engine_turn_result(
                 user_text,
                 interp,
                 contract,
                 observation_ids=obs_ids,
-                persist_ok=fin_ok,
-                persist_error=fin_err,
+                persist_ok=ok and fin_ok,
+                persist_error=persist_err,
             )
         gen = self._next_generation_id()
         proposal = Planner.plan_after_user(

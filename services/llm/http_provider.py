@@ -52,21 +52,24 @@ class HttpLLMProvider:
         return min(self._timeout_s, remaining)
 
     async def cancel_request(self, request_id: str) -> None:
-        try:
-            if self._client is not None:
-                await self._client.post(
-                    f"{self._base_url}/v1/cancel",
-                    json={"request_id": request_id},
-                    timeout=2.0,
-                )
-            else:
-                async with httpx.AsyncClient(timeout=2.0) as client:
-                    await client.post(
-                        f"{self._base_url}/v1/cancel",
+        # Broadcast: after failover the working replica is unknown, and a
+        # stale generation must never speak (P0 G-15).
+        for url in self._pool.urls:
+            try:
+                if self._client is not None:
+                    await self._client.post(
+                        f"{url}/v1/cancel",
                         json={"request_id": request_id},
+                        timeout=2.0,
                     )
-        except httpx.HTTPError:
-            pass
+                else:
+                    async with httpx.AsyncClient(timeout=2.0) as client:
+                        await client.post(
+                            f"{url}/v1/cancel",
+                            json={"request_id": request_id},
+                        )
+            except httpx.HTTPError:
+                pass
 
     async def interpret_turn(
         self,

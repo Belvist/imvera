@@ -113,3 +113,18 @@ def mount_health(
 def check_deadline(deadline: float | None) -> None:
     if deadline is not None and time.monotonic() > deadline:
         raise TimeoutError("deadline exceeded")
+
+
+def executor_http_error(exc: Exception) -> Exception:
+    """Map executor saturation to retryable HTTP codes (never 500).
+
+    429 = try another replica now; 503 = server overloaded/slow.
+    Both are in the providers' retryable set; model verdicts never land here.
+    """
+    from fastapi import HTTPException
+
+    if isinstance(exc, QueueFullError):
+        return HTTPException(status_code=429, detail="inference queue full")
+    if isinstance(exc, TimeoutError):
+        return HTTPException(status_code=503, detail="deadline exceeded")
+    return exc

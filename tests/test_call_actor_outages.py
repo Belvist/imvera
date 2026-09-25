@@ -55,6 +55,57 @@ def _actor(session: CallSession, **overrides) -> CallActor:
     )
 
 
+def test_store_outage_turn_still_speaks() -> None:
+    """PG down must not mute Vera (P0 G-06): the engine turn is delivered
+    from engine state with a degraded marker, same generation, sent once."""
+
+    async def scenario() -> None:
+        from packages.contracts.providers import AudioChunk
+
+        session = CallSession(
+            call_id="outage-store-speaks",
+            family_id="audit-family",
+            store=_DownStore(),
+        )
+        session.start()
+        session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
+        session.state.greeted = True
+
+        async def stt(_pcm, *_a, **_k):
+            return SimpleNamespace(text="хорошо", asr_quality=AsrQuality.GOOD)
+
+        async def synthese_ok(*_a, **_k):
+            yield AudioChunk(pcm_s16le=b"\x01\x00" * 320, sample_rate=16000, sequence=0)
+
+        sent: list[bytes] = []
+
+        async def send_pcm(data: bytes) -> None:
+            sent.append(data)
+
+        actor = _actor(
+            session,
+            stt=SimpleNamespace(transcribe_final=stt),
+            tts=SimpleNamespace(synthesize=synthese_ok, cancel=_noop),
+            llm=SimpleNamespace(interpret_turn=_down("llm")),
+        )
+        actor._playback = PlaybackQueue(call_id=session.state.call_id)
+        actor.media = MediaCallbacks(send_pcm, _noop, _noop, _noop)
+        pump = asyncio.create_task(actor._playback_pump())
+
+        await asyncio.wait_for(actor._handle_utterance(b"u1", 1), TIMEOUT_S)
+        if actor._tts_task is not None:
+            await asyncio.wait_for(asyncio.shield(actor._tts_task), TIMEOUT_S)
+        # Let the playback pump deliver to media.
+        for _ in range(100):
+            if sent:
+                break
+            await asyncio.sleep(0.05)
+        pump.cancel()
+        assert sent, "Vera must speak on store outage"
+
+    asyncio.run(scenario())
+
+
 def test_stt_outage_utterance_returns_and_next_turn_works() -> None:
     async def scenario() -> None:
         session = _wellness_session("outage-stt")

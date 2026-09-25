@@ -1603,10 +1603,17 @@ class CallActor:
                     {"error": result.persist_error},
                 )
             )
-            return
-        await self.media.emit(
-            RuntimeEvent(self.call_id, RuntimeEventType.PERSISTENCE_COMMITTED, {})
-        )
+            # Degraded but vocal: the turn was computed from engine state
+            # (same generation, sent once below); only persistence failed.
+            await self._emit_stage(
+                "dialogue.persist_degraded",
+                intent=result.proposal.intent,
+                turn_id=result.proposal.turn_id,
+            )
+        else:
+            await self.media.emit(
+                RuntimeEvent(self.call_id, RuntimeEventType.PERSISTENCE_COMMITTED, {})
+            )
         if result.from_engine:
             await self._emit_stage(
                 "dialogue.engine_decision",

@@ -152,22 +152,37 @@ class SpillingCallRecordStore(CallRecordStore):
 
 
 def replay_spool(spool_dir: Path | str, store: CallRecordStore) -> dict[str, int]:
-    """Re-apply spooled writes in order. Returns {applied, files_done, stopped}.
+    """Re-apply spooled writes in order. Returns counts.
 
-    Stops at the first failing row (leaves the rest for the next run).
+    Poison rows (bad JSON, unknown op, invalid payload) are quarantined
+    into `<file>.quarantine.jsonl` and SKIPPED — one bad row never blocks
+    other calls' data (P0 G-10). A store failure on a valid row still
+    stops the run (store down); the rest waits for the next run.
     Fully replayed files are renamed to *.done.
     """
     spool = Path(spool_dir)
-    counts = {"applied": 0, "files_done": 0, "stopped": 0}
+    counts = {"applied": 0, "files_done": 0, "stopped": 0, "quarantined": 0}
     for path in sorted(spool.glob("spill-*.jsonl")):
         rows = path.read_text(encoding="utf-8").splitlines()
         ok = True
         for line in rows:
             if not line.strip():
                 continue
-            row = json.loads(line)
             try:
-                _apply_row(store, row["op"], row["data"])
+                row = json.loads(line)
+                op, data = row["op"], row["data"]
+            except (json.JSONDecodeError, KeyError, TypeError):
+                _quarantine(path, line, "unparseable")
+                counts["quarantined"] += 1
+                continue
+            try:
+                _apply_row(store, op, data)
+            except ValueError as exc:
+                # Unknown op / invalid payload: never retryable.
+                _log.exception("replay quarantined row in %s", path.name)
+                _quarantine(path, line, str(exc))
+                counts["quarantined"] += 1
+                continue
             except Exception:
                 _log.exception("replay stopped at %s row", path.name)
                 counts["stopped"] += 1
@@ -178,6 +193,15 @@ def replay_spool(spool_dir: Path | str, store: CallRecordStore) -> dict[str, int
             path.rename(path.with_suffix(".jsonl.done"))
             counts["files_done"] += 1
     return counts
+
+
+def _quarantine(path: Path, line: str, reason: str) -> None:
+    with path.with_suffix(".jsonl.quarantine").open(
+        "a", encoding="utf-8"
+    ) as fh:
+        fh.write(json.dumps({"reason": reason, "row": line}) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
 
 
 def _apply_row(store: CallRecordStore, op: str, data: dict[str, Any]) -> None:
