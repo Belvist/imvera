@@ -33,6 +33,11 @@ from packages.voice_runtime.trace import record_event
 log = logging.getLogger("imvera_media_bridge.callactor")
 ROOT = Path(__file__).resolve().parents[2]
 
+# P0 plan 4a: live actors by fs_uuid. A second WS for the same channel is
+# rejected (two actors would split audio/state) — reconnect needs a new
+# channel or an explicit resume window (not yet implemented).
+_live_actors: dict[str, str] = {}
+
 _teardown_executor: concurrent.futures.ThreadPoolExecutor | None = None
 _teardown_lock = threading.Lock()
 
@@ -155,6 +160,17 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
     bridge_holder: dict[str, FreeSwitchBridgeSession] = {}
     _nonzero_logged = False
 
+    if fs_uuid in _live_actors:
+        log.error(
+            "callactor.duplicate_rejected fs_uuid=%s live_call_id=%s new_call_id=%s",
+            fs_uuid,
+            _live_actors[fs_uuid],
+            call_id,
+        )
+        await websocket.close(code=1008, reason="duplicate channel session")
+        return
+    _live_actors[fs_uuid] = call_id
+
     async def on_inbound(frame: InboundMediaFrame) -> None:
         rms = pcm_rms_s16le(frame.pcm_s16le)
         actor_holder["actor"].note_capture_ingress(len(frame.pcm_s16le), rms)
@@ -276,12 +292,9 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
         await bridge.handle_ws(websocket)
     finally:
         await actor.stop()
+        _live_actors.pop(fs_uuid, None)
         _teardown_in_background(call_id, bridge, fs_uuid)
         log.info("callactor.session.closed call_id=%s", call_id)
-
-
-_teardown_executor: concurrent.futures.ThreadPoolExecutor | None = None
-_teardown_lock = None
 
 
 def _teardown_in_background(

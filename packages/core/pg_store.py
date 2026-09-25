@@ -67,6 +67,8 @@ class PostgresCallRecordStore(CallRecordStore):
         self._pool_timeout = pool_timeout
         self._pool = None
         self._pool_lock = threading.Lock()
+        self._call_locks: dict[str, threading.Lock] = {}
+        self._call_locks_guard = threading.Lock()
 
     def _pool_or_open(self):
         pool = self._pool
@@ -99,12 +101,51 @@ class PostgresCallRecordStore(CallRecordStore):
         if pool is not None:
             pool.close()
 
-    def _connect(self):
-        return self._pool_or_open().connection()
+    def _call_lock(self, call_id: str) -> threading.RLock:
+        """Per-call mutex serializing read-modify-write (P0 plan 4e).
+
+        Concurrent to_threads for one call interleave across statements;
+        the lock makes each method's read+write atomic. Multi-host needs
+        a real version-column CAS (deferred, documented).
+        """
+        with self._call_locks_guard:
+            lock = self._call_locks.get(call_id)
+            if lock is None:
+                lock = threading.RLock()
+                self._call_locks[call_id] = lock
+            return lock
+
+    def _release_call_lock(self, call_id: str) -> None:
+        with self._call_locks_guard:
+            self._call_locks.pop(call_id, None)
+
+    def _connect(self, call_id: str | None = None):
+        """Pooled connection; with call_id also holds the per-call lock.
+
+        Every method below opens exactly one connection, so the lock
+        spans the whole read-modify-write. RLock: nested use is safe.
+        """
+        import contextlib
+
+        @contextlib.contextmanager
+        def _guarded():
+            if call_id is None:
+                with self._pool_or_open().connection() as conn:
+                    yield conn
+                return
+            lock = self._call_lock(call_id)
+            lock.acquire()
+            try:
+                with self._pool_or_open().connection() as conn:
+                    yield conn
+            finally:
+                lock.release()
+
+        return _guarded()
 
     def ensure_call(self, call_id: str, family_id: str) -> PersistResult:
         try:
-            with self._connect() as conn:
+            with self._connect(call_id) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -137,7 +178,7 @@ class PostgresCallRecordStore(CallRecordStore):
 
     def append_event(self, event: CallEvent, family_id: str) -> PersistResult:
         try:
-            with self._connect() as conn:
+            with self._connect(event.call_id) as conn:
                 with conn.cursor() as cur:
                     if not self._check_family(cur, event.call_id, family_id):
                         conn.rollback()
@@ -172,7 +213,7 @@ class PostgresCallRecordStore(CallRecordStore):
         family_id: str,
     ) -> PersistResult:
         try:
-            with self._connect() as conn:
+            with self._connect(observation.call_id) as conn:
                 with conn.transaction():
                     with conn.cursor() as cur:
                         if not self._check_family(cur, observation.call_id, family_id):
@@ -230,7 +271,7 @@ class PostgresCallRecordStore(CallRecordStore):
 
     def finalize_call(self, snapshot: CallResultSnapshot) -> PersistResult:
         try:
-            with self._connect() as conn:
+            with self._connect(snapshot.call_id) as conn:
                 with conn.transaction():
                     with conn.cursor() as cur:
                         if not self._check_family(cur, snapshot.call_id, snapshot.family_id):
@@ -300,7 +341,7 @@ class PostgresCallRecordStore(CallRecordStore):
 
     def get_call_result(self, call_id: str, family_id: str) -> CallResultSnapshot | None:
         try:
-            with self._connect() as conn:
+            with self._connect(call_id) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -348,7 +389,7 @@ class PostgresCallRecordStore(CallRecordStore):
 
     def get_events(self, call_id: str, family_id: str) -> list[CallEvent]:
         try:
-            with self._connect() as conn:
+            with self._connect(call_id) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -381,7 +422,7 @@ class PostgresCallRecordStore(CallRecordStore):
         family_id: str,
     ) -> PersistResult:
         try:
-            with self._connect() as conn:
+            with self._connect(snapshot.call_id) as conn:
                 with conn.transaction():
                     with conn.cursor() as cur:
                         if not self._check_family(cur, snapshot.call_id, family_id):
@@ -429,7 +470,7 @@ class PostgresCallRecordStore(CallRecordStore):
                 error="call_id and family_id required",
             )
         try:
-            with self._connect() as conn:
+            with self._connect(binding["call_id"]) as conn:
                 with conn.transaction():
                     with conn.cursor() as cur:
                         if not self._check_family(cur, call_id, family_id):
@@ -455,7 +496,7 @@ class PostgresCallRecordStore(CallRecordStore):
 
     def get_call_binding(self, call_id: str) -> dict[str, Any] | None:
         try:
-            with self._connect() as conn:
+            with self._connect(call_id) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         "SELECT metadata FROM call_results WHERE call_id = %s",
@@ -476,7 +517,7 @@ class PostgresCallRecordStore(CallRecordStore):
         if not fs_uuid:
             return None
         try:
-            with self._connect() as conn:
+            with self._connect(f"fs:{fs_uuid}") as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -500,7 +541,7 @@ class PostgresCallRecordStore(CallRecordStore):
 
     def delete_call_binding(self, call_id: str) -> PersistResult:
         try:
-            with self._connect() as conn:
+            with self._connect(call_id) as conn:
                 with conn.transaction():
                     with conn.cursor() as cur:
                         cur.execute(

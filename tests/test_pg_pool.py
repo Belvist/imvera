@@ -58,6 +58,39 @@ def test_pool_opens_lazily_and_reuses_connections() -> None:
         store.close()
 
 
+def test_concurrent_fact_merges_lose_nothing() -> None:
+    """TOCTOU proof (P0 plan 4e): parallel read-modify-write merges on one
+    call must not lose facts — per-call lock serializes them."""
+    from packages.core.memory_store import observation_from_fact
+    from packages.dialogue.facts import FactRecord
+
+    store = PostgresCallRecordStore(PG_URL, max_size=8)
+    try:
+        store.ensure_call("race-1", "race-fam")
+
+        def worker(i: int) -> None:
+            fact = FactRecord(
+                field=f"field_{i}",
+                value=f"value_{i}",
+                source_quote=f"quote {i}",
+                turn_id=i,
+            )
+            obs = observation_from_fact("race-1", i, fact, i)
+            result = store.save_observation(obs, "race-fam")
+            assert result.ok, result.error
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(30)
+        snap = store.get_call_result("race-1", "race-fam")
+        assert snap is not None
+        assert len(snap.facts) == 10, f"lost facts: {sorted(snap.facts)}"
+    finally:
+        store.close()
+
+
 def test_pool_exhaustion_is_error_not_hang() -> None:
     store = PostgresCallRecordStore(PG_URL, min_size=1, max_size=1)
     try:

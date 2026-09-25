@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import concurrent.futures
 import logging
 import os
 import threading
+import time
 import wave
 from pathlib import Path
 
@@ -18,6 +20,8 @@ from tools.telephony_gate.evidence import MediaGateEvidence, write_evidence
 
 log = logging.getLogger("imvera_media_bridge")
 ROOT = Path(__file__).resolve().parents[2]
+
+_bridge_start_mono = time.monotonic()
 
 _teardown_executor: concurrent.futures.ThreadPoolExecutor | None = None
 _teardown_lock = threading.Lock()
@@ -59,6 +63,89 @@ async def startup() -> None:
                 m.device,
                 m.error,
             )
+    asyncio.get_running_loop().create_task(_startup_recovery())
+
+
+async def _startup_recovery() -> None:
+    """P0 plan 4: best-effort recovery shortly after start (non-blocking).
+
+    1. Replay the durable persist spool (PG may have been down).
+    2. Sweep orphaned FS audio-stream channels with no live session.
+    3. Arm the periodic spool watcher.
+    """
+    await asyncio.sleep(10)
+    await _replay_spool_once("startup")
+    await _sweep_orphan_channels()
+    asyncio.get_running_loop().create_task(_spool_watcher())
+
+
+async def _replay_spool_once(reason: str) -> None:
+    import os as _os
+
+    spool_dir = _os.environ.get("IMVERA_PERSIST_SPOOL_DIR")
+    if not spool_dir:
+        return
+    try:
+        from packages.core import create_call_record_store
+        from packages.core.spill import replay_spool
+
+        store = create_call_record_store()
+        delegate = getattr(store, "_delegate", store)
+        counts = await asyncio.to_thread(replay_spool, spool_dir, delegate)
+        if counts["applied"] or counts["stopped"] or counts["quarantined"]:
+            log.info("bridge.spool_replay reason=%s %s", reason, counts)
+    except Exception:
+        log.exception("bridge.spool_replay_failed reason=%s", reason)
+
+
+async def _spool_watcher() -> None:
+    while True:
+        await asyncio.sleep(60)
+        await _replay_spool_once("watcher")
+
+
+async def _sweep_orphan_channels() -> None:
+    """Hang up parked audio-stream channels with no live bridge session.
+
+    After a bridge restart, FS may still park channels whose WS died.
+    Only audio_stream-app channels are touched; grace 60s for fresh setups.
+    """
+    import time as _time
+
+    started_ago = _time.time() - _bridge_start_mono
+    if started_ago < 60:
+        await asyncio.sleep(60 - started_ago)
+    try:
+        from packages.telephony.freeswitch_esl import freeswitch_api
+        from services.imvera_media_bridge.callactor import _live_actors
+
+        out = await freeswitch_api("show channels as json", timeout_s=5.0)
+    except Exception:
+        log.exception("bridge.sweep.esl_unavailable")
+        return
+    try:
+        import json as _json
+
+        data = _json.loads(out)
+        rows = data.get("rows", data if isinstance(data, list) else [])
+    except Exception:
+        log.warning("bridge.sweep.unparseable")
+        return
+    live_uuids = set(_live_actors)
+    for row in rows if isinstance(rows, list) else []:
+        uuid = str(row.get("uuid", ""))
+        app = str(row.get("application", "") or row.get("app", ""))
+        if not uuid or "audio_stream" not in app:
+            continue
+        if uuid in live_uuids:
+            continue
+        try:
+            from packages.telephony.freeswitch_esl import hangup_channel
+
+            await hangup_channel(uuid)
+            log.info("bridge.sweep.orphan_hangup fs_uuid=%s", uuid)
+        except Exception:
+            log.exception("bridge.sweep.hangup_failed fs_uuid=%s", uuid)
 
 
 async def _noop_inbound(_frame) -> None:

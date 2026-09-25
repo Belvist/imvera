@@ -446,6 +446,26 @@ Until these exist, agent reports exact commands run.
 - Gates: 1765 green, differential PASS, corpus 500/500; bridge on 72cc6ea.
 - NEXT: plans 3 (pool + quiet hot path), 4 (resume/recovery), 5 (CI/ops).
 
+## Plans 3-4 done: pool/quiet hot path + resume/recovery (2026-09-25/26)
+
+- Plan 3: psycopg_pool (lazy, min1/max10, timeouts, env-tuned; exhaustion
+  explicit); trace writer background (enqueue-only, flush on stop, drop
+  counter, sync flag); teardown WAV/forensic in serial bg worker (fixed
+  own None-lock bug before release); inbound cap 2min + counter; FS
+  capacity declared in GENERATOR (overlay file is dead — live profile is
+  conf/generated, mounted). Pool proven 20×4, zero errors.
+- Lab network lesson: Mac flaps .1.194↔.0.103; Zoiper via localhost proxy
+  survives; kill -9 wedges Zoiper SIP (clean quit only); regen script
+  must run when IP changes (fragile, documented).
+- Plan 4: duplicate-actor guard per fs_uuid (reject 1008); orphan sweeper
+  on start (audio_stream only, 60s grace); spool auto-replay on start +
+  60s watcher; per-call RLock inside _connect (TOCTOU serialized, 11
+  sites; fs_uuid namespaced); multi-host CAS deferred (documented).
+- Outbox decision: tables stay as future Core handoff (writes only, no
+  reader) — no fake relay, no silent drop. Recorded, not implemented.
+- Gates: 1767 green, differential PASS, corpus 500/500.
+- NEXT: plan 5 (CI/ops).
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
