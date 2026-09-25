@@ -17,6 +17,7 @@ from packages.dialogue_engine.check_path import (
 )
 from packages.dialogue_engine.conversation_policy import (
     TurnContext,
+    _mentions_medication,
     decide_conversation_policy,
     schedule_next_action,
 )
@@ -1326,6 +1327,145 @@ _NOT_RECALLED_PHRASES = frozenset(
 )
 
 
+_GREETING_ONLY = frozenset(
+    {
+        "привет",
+        "приветик",
+        "здравствуйте",
+        "здравствуй",
+        "добрый день",
+        "добрый вечер",
+        "доброе утро",
+    }
+)
+
+
+def _coerce_unclear_by_content(
+    state: EngineState, user_text: str
+) -> SemanticAct | None:
+    """Route grounded probe answers the legacy interpreter cannot see.
+
+    Legacy interpretation runs without probe context (mirror unsynced), so
+    onset/severity answers and greeting-backs arrive as UNCLEAR and die in
+    repeat/give-up loops. The engine HAS the context — route by content:
+    greeting → BACKCHANNEL (kind re-ask), onset/severity at a matching
+    probe → ANSWER. Never invents facts; only unblocks routing.
+    """
+    from packages.dialogue_engine.check_path import looks_like_duration_answer
+    from packages.dialogue_engine.issue_memory import (
+        extract_grounded_severity_value,
+        get_active_episode,
+    )
+
+    stripped = user_text.strip().lower().rstrip(".!?…")
+    if stripped in _GREETING_ONLY and state.delivered_question is not None:
+        return SemanticAct.BACKCHANNEL
+    # Severity is grounded wherever it appears — record it even outside a
+    # probe (ITS-listen turns carry volunteered severity, live demo).
+    recorded_severity = extract_grounded_severity_value(user_text)
+    if recorded_severity:
+        episode = get_active_episode(state)
+        if episode is not None:
+            episode.known_attributes["severity"] = recorded_severity
+    if state.probe_phase == "duration" and looks_like_duration_answer(user_text):
+        return SemanticAct.ANSWER
+    if state.probe_phase in ("duration", "pain_night"):
+        severity = extract_grounded_severity_value(user_text)
+        if severity:
+            episode = get_active_episode(state)
+            if episode is not None:
+                episode.known_attributes["severity"] = severity
+            return SemanticAct.ANSWER
+    return None
+
+
+def _resolve_medication_today_answer(state: EngineState, user_text: str) -> bool:
+    """Record a medication-today answer and clear the delivered question.
+
+    Returns True when the text resolves the today-status (took / did not
+    take / takes no meds) — the caller advances the ladder. Anything else
+    returns False so normal unclear handling applies.
+    """
+    from packages.dialogue_engine.coverage import (
+        _ALREADY_TOOK_TODAY,
+        _NEGATED_TOOK_TODAY,
+        _NO_DAILY_MEDS,
+    )
+
+    text = user_text or ""
+    if _ALREADY_TOOK_TODAY.search(text):
+        state.observations["coverage_medication_today"] = text.strip()
+    elif _NEGATED_TOOK_TODAY.search(text) or _NO_DAILY_MEDS.search(text):
+        state.observations["coverage_medication_today"] = text.strip()
+    else:
+        return False
+    state.delivered_question = None
+    state.planned_question = None
+    state.waiting_on_slot = None
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.bump_revision()
+    return True
+
+
+_BG_CHECK_INTENT_SLOT = {
+    "check_mood": "mood",
+    "check_sleep": "sleep",
+    "check_plans": "plans",
+}
+
+_NEG_LEAD = re.compile(r"^(нет|неа|ну)\s*,?\s*", re.I)
+
+
+def _fill_background_answer(state: EngineState, user_text: str) -> bool:
+    """Fill an asked background slot from a substantive answer.
+
+    Generic positives ("Всё хорошо"), marker answers ("выспалась") and
+    content answers ("гулять пойду") must fill mood/sleep/plans — otherwise
+    the ladder re-asks forever. Debris, denials and questions never fill.
+    """
+    from packages.contracts.enums import SlotStatus
+    from packages.dialogue_engine.coverage import _MOOD_MARKERS, _SLEEP_MARKERS
+    from packages.dialogue_engine.fast_interpreter import _detect_polarity
+    from packages.dialogue_engine.policy import apply_slot_answer
+
+    delivered = state.delivered_question
+    slot = _BG_CHECK_INTENT_SLOT.get(getattr(delivered, "intent", "") or "")
+    if slot is None or state.slots.get(slot) != SlotStatus.OPEN:
+        return False
+    text = (user_text or "").strip()
+    if len(text) < 2:
+        return False
+    core = _NEG_LEAD.sub("", text).strip() or text
+    polarity = _detect_polarity(core)
+    marked = False
+    if slot == "mood":
+        marked = bool(_MOOD_MARKERS.search(text))
+    elif slot == "sleep":
+        marked = bool(_SLEEP_MARKERS.search(text))
+    if slot == "plans":
+        if len(core.split()) < 2 or polarity == "negative":
+            return False
+    elif not marked and polarity not in ("positive", "negative"):
+        return False
+    apply_slot_answer(
+        state,
+        slot,
+        text,
+        turn_id=state.processing_turn_id or "",
+        source_text=text,
+        polarity=polarity,
+        confidence=0.85,
+    )
+    state.delivered_question = None
+    state.planned_question = None
+    state.waiting_on_slot = None
+    state.processing_turn_id = None
+    state.processing_effect_id = None
+    state.bump_revision()
+    return True
+
+
 def _is_onset_answer(semantic: object, user_text: str) -> bool:
     """True when this turn answers a pending onset probe. The caller checks
     pending state; here we only require an answer-like act so complaints
@@ -1500,6 +1640,11 @@ def _apply_semantic(
         state.processing_effect_id = None
         return _speak_repair(state, answer_slot or semantic.target_slot or "wellness")
 
+    if semantic.act == SemanticAct.UNCLEAR:
+        coerced = _coerce_unclear_by_content(state, user_text)
+        if coerced is not None:
+            semantic = semantic.model_copy(update={"act": coerced, "value": user_text})
+
     if semantic.act == SemanticAct.BACKCHANNEL:
         state.processing_turn_id = None
         state.processing_effect_id = None
@@ -1531,6 +1676,46 @@ def _apply_semantic(
             state.waiting_on_slot = None
             observe_topic_answer(state, user_text)
             return _advance_after_topic(state, user_text)
+        delivered_intent = (
+            state.delivered_question.intent if state.delivered_question else ""
+        )
+        if delivered_intent in (
+            "medication_status_today",
+            "background_medication_today",
+        ) and _resolve_medication_today_answer(state, user_text):
+            return _schedule_advance(state, user_text=user_text)
+        if (
+            state.important_to_share_asked
+            and not state.important_to_share_resolved
+            and _mentions_medication(user_text)
+        ):
+            # Grounded meds content inside ITS ("Да, от давления") is a
+            # medication status report, not share-note debris and never a
+            # give-up: resolve ITS and ask the frozen today-status followup
+            # (mirrors the rich-path pivot in conversation_policy).
+            from packages.dialogue_engine.conversation_policy import (
+                _record_important_share,
+            )
+
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.important_to_share_resolved = True
+            _record_important_share(state, user_text)
+            state.medication_asked = True
+            state.waiting_on_slot = None
+            state.bump_revision()
+            # Fresh slot budget: this is a new followup on new information,
+            # not a nagging repeat of the exhausted ITS question.
+            return _emit_speak(
+                state,
+                text=(
+                    "Поняла. Вы сегодня приняли лекарство, "
+                    "которое обычно должны принять?"
+                ),
+                intent="medication_status_today",
+                slot="background_medication",
+                marks_question=True,
+            )
         if state.probe_phase:
             count = state.slot_unclear_counts.get(f"probe_{state.probe_phase}", 0) + 1
             state.slot_unclear_counts[f"probe_{state.probe_phase}"] = count
@@ -1539,6 +1724,8 @@ def _apply_semantic(
             if count >= 2:
                 return _advance_probe_after_answer(state, user_text)
             return _speak_probe(state, state.probe_phase, clarification=True)
+        if _fill_background_answer(state, user_text):
+            return _schedule_advance(state, user_text=user_text)
         count = state.slot_unclear_counts.get(answer_slot, 0) + 1
         state.slot_unclear_counts[answer_slot] = count
         state.processing_turn_id = None
@@ -1558,6 +1745,14 @@ def _apply_semantic(
         state.processing_turn_id = None
         state.processing_effect_id = None
         state.waiting_on_slot = None
+        if state.probe_phase == "duration":
+            # Onset answers must ground, never divert into topic flow
+            # ("проснулась" is a time anchor, not a sleep topic).
+            from packages.dialogue_engine.check_path import looks_like_duration_answer
+
+            if looks_like_duration_answer(text):
+                advance_probe_phase(state, text)
+                return _schedule_advance(state, user_text=text)
         if should_start_topic_flow(
             state, text, answer_slot=f"probe_{state.probe_phase}"
         ):
@@ -2258,6 +2453,14 @@ def _close_partial(state: EngineState) -> tuple[EngineState, list[Effect]]:
     # Emergency evidence must never be abandoned via partial — escalate.
     if _has_urgent_evidence(state):
         return _emit_urgent_close(state)
+    # Grounded complaint must never die as "не получилось": the check-in
+    # happened (complaint text on record, never declined) — close warm.
+    if (state.wellness_concern or "").strip() and (
+        "concern_declined" not in state.observations
+    ):
+        return _emit_summary(
+            state, acknowledge="Поняла вас. Спасибо, что рассказали."
+        )
     state.call_closed = True
     state.closing_reason = "partial_unresolved"
     state.fsm_state = FsmState.FINAL_CLASSIFICATION

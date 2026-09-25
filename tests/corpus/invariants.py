@@ -37,6 +37,18 @@ def is_empty_or_noise(text: str) -> bool:
     return bool(_EMPTY_OR_NOISE.match(stripped))
 
 
+def pending_slot(session: CallSession) -> str | None:
+    """Engine-native pending slot (Cut 4c: legacy mirror no longer synced).
+
+    Mirrors the prod read in CallActor (session._engine.pending_slot_name);
+    falls back to the legacy mirror only when no engine is attached.
+    """
+    engine = session._engine
+    if engine is not None:
+        return engine.state.waiting_on_slot or engine.pending_slot_name()
+    return session.state.pending_slot
+
+
 def check_turn_invariants(
     session: CallSession,
     user_text: str,
@@ -46,7 +58,7 @@ def check_turn_invariants(
 ) -> list[str]:
     """Return human-readable hard failures for one turn."""
     errors: list[str] = []
-    pending = session.state.pending_slot
+    pending = pending_slot(session)
 
     if is_backchannel_only(user_text) and pending:
         if session.state.slots.get(pending) == SlotStatus.FILLED and slots_before.get(

@@ -7,7 +7,7 @@ import time
 from packages.contracts.enums import SlotStatus
 from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession
-from tests.corpus.invariants import check_turn_invariants
+from tests.corpus.invariants import check_turn_invariants, pending_slot
 from tests.corpus.models import Scenario, ScenarioResult, TurnTrace
 
 
@@ -22,7 +22,7 @@ def _daily_session(call_id: str) -> CallSession:
     session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
     session.state.greeted = True
     session.mark_spoken_action(start.proposal.generation_id)
-    assert session.state.pending_slot == "wellness"
+    assert pending_slot(session) == "wellness"
     return session
 
 
@@ -71,7 +71,7 @@ def run_scenario(scenario: Scenario) -> ScenarioResult:
                 intent=result.proposal.intent,
                 judgement=result.interpretation.judgement.value,
                 dialogue_act=result.interpretation.dialogue_act.value,
-                pending_slot=session.state.pending_slot,
+                pending_slot=pending_slot(session),
                 slots=_slot_map(session),
                 speech=speech,
             )

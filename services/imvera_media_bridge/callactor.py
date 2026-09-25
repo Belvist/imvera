@@ -91,19 +91,31 @@ def _resolve_product_mission(websocket: WebSocket, fs_uuid: str):
 
 
 async def inference_blockers() -> list[str]:
-    """Product CallActor readiness: STT + TTS required; LLM is not required."""
+    """Product CallActor readiness: STT + TTS required; LLM is not required.
+
+    Comma-separated replica lists are checked one by one; one sick
+    replica is a warning, all sick is a blocker.
+    """
     from packages.dialogue_engine.semantic_nlp.warmup import nlp_blockers
+    from services.providers.replica_pool import split_urls
 
     stt, tts, _llm = _gateway_urls()
     blockers: list[str] = nlp_blockers()
     async with httpx.AsyncClient(timeout=2.0) as client:
         for name, base in (("stt", stt), ("tts", tts)):
-            try:
-                response = await client.get(f"{base.rstrip('/')}/health/ready")
-                if response.status_code != 200:
-                    blockers.append(f"{name}: HTTP {response.status_code}")
-            except httpx.HTTPError as exc:
-                blockers.append(f"{name}: {exc}")
+            urls = split_urls(base)
+            sick = 0
+            for url in urls:
+                try:
+                    response = await client.get(f"{url}/health/ready")
+                    if response.status_code != 200:
+                        sick += 1
+                except httpx.HTTPError:
+                    sick += 1
+            if sick >= len(urls):
+                blockers.append(f"{name}: all {len(urls)} replicas sick")
+            elif sick:
+                log.warning("%s: %d/%d replicas sick", name, sick, len(urls))
     return blockers
 
 

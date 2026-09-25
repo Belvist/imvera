@@ -1,4 +1,4 @@
-"""Voice gateway — CallActor wiring (production). Telephony = FreeSWITCH bridge (ADR-013)."""
+"""Voice gateway — browser-lab CallActor wiring, not production telephony."""
 
 from __future__ import annotations
 
@@ -85,17 +85,27 @@ app = FastAPI(title="IMVERA Voice Gateway", version="0.3.0", lifespan=_lifespan)
 
 
 async def _inference_blockers() -> list[str]:
+    from services.providers.replica_pool import split_urls
+
     stt, tts, llm = _urls()
     blockers: list[str] = []
     async with httpx.AsyncClient(timeout=2.0) as client:
         for name, base in (("stt", stt), ("tts", tts), ("llm", llm)):
-            try:
-                response = await client.get(f"{base.rstrip('/')}/health/ready")
-                if response.status_code != 200:
-                    blockers.append(f"{name}: HTTP {response.status_code}")
-            except httpx.HTTPError as exc:
-                blockers.append(f"{name}: {exc}")
+            urls = split_urls(base)
+            sick = sum(
+                1 for url in urls if not await _url_ok(client, url)
+            )
+            if sick >= len(urls):
+                blockers.append(f"{name}: all {len(urls)} replicas sick")
     return blockers
+
+
+async def _url_ok(client, url: str) -> bool:
+    try:
+        response = await client.get(f"{url}/health/ready")
+        return response.status_code == 200
+    except httpx.HTTPError:
+        return False
 
 
 @app.get("/health/ready", response_model=None)

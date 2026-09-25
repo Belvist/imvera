@@ -205,7 +205,8 @@ def _mentions_medication(raw: str) -> bool:
 
         _MEDICATION_RE = _re.compile(
             r"(таблет|лекар|препарат|медикамент|капл\w*\s+в\s+глаза|"
-            r"покапа\w*\s+в\s+глаза)",
+            r"покапа\w*\s+в\s+глаза|"
+            r"от\s+давления|от\s+сердца|для\s+давления)",
             _re.I,
         )
     return bool(_MEDICATION_RE.search(raw or ""))
@@ -1172,7 +1173,10 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         # report, not consent to close: fall through to the safety net.
         if its_class in ("DECLINE", "TOPIC_COMPLETE") and not _turn_reports_fresh_negative(turn):
             state.important_to_share_resolved = True
-            if state.mandatory_background_goals:
+            # Full check-in when the mission requires background goals:
+            # ask OPEN mood/sleep/plans (all other guards inside).
+            # A short call ends only when nothing is left open.
+            if state.mandatory_background_goals or state.required_background_goals:
                 bg = _background_goal_plan(state, filled=filled)
                 if bg:
                     return bg
@@ -1214,7 +1218,8 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     slot="important_to_share",
                     marks_question=True,
                 )
-            if state.mandatory_background_goals:
+            # Same full check-in rule as the DECLINE branch above.
+            if state.mandatory_background_goals or state.required_background_goals:
                 bg = _background_goal_plan(state, filled=filled)
                 if bg:
                     return bg

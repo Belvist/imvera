@@ -330,6 +330,43 @@ Until these exist, agent reports exact commands run.
 - NEXT: live-call evidence (interpret.nlp_candidate stages in traces) →
   expand seeds from misses → v3. Slot/entity heads after act proves out.
 
+## Dialogue naturalness freeze + scale direction (2026-09-24)
+
+- Owner order: dialogue «not-a-questionnaire» work is RECORDED as plan item 1
+  (done): deterministic variety pools (2b4d8d8), volunteered-info acks,
+  «Сочувствую»/empathy bridges, no-re-ask on temporal refusal, «Алло»-recall,
+  mic-check, distress «Плохо.». Raw-LLM liveliness stays out of prod
+  (prompt-contract v1 bar not passed). Warm close is NEXT in dialogue track.
+- Owner order: next is system analysis + stabilization, then scale prep for
+  100–100000 concurrent users — inside ADR-014 (no fourth system), gates stay.
+  Plan block at top of `docs/current-task.md`.
+
+## Stage 0 stabilization + replicas + demo MP4s (2026-09-24/25)
+
+- Stage 0 slices 0–1 done: PG backups (`scripts/pg_backup.py`, runbook,
+  manual until scheduled) + fs_uuid index (Seq Scan → Index Scan).
+  Slices 2–6 (pool, bg traces, caps, soak) pending.
+- Outage matrix (`tests/test_call_actor_outages.py`): STT/TTS/LLM deaths
+  survived; PG death crashed start/finalize → fail-open hardening in
+  session.py + transition_store.py (persist False + log, dialogue continues).
+- Durable persist: SpillingCallRecordStore (fsync spool + replay script),
+  live on bridge via IMVERA_PERSIST_SPOOL_DIR.
+- Inference scale: single-thread queue-4 measured (STT ≤4, TTS ≤4 clean
+  503s); STT :9111 + TTS :9112 replicas live; providers round-robin +
+  failover (transport/429/503 only, never verdicts/mid-stream), logged.
+  LLM worker unfit for hot path (p50 ~6.5s); live path doesn't use it.
+- Dialogue hearing fixes from real grandma recordings: onset/severity
+  answers routed by content (legacy has no probe context), greeting→
+  backchannel re-ask, ITS meds pivot + today-Q, bg slot fill, warm summary
+  guard (grounded complaint never "не получилось"), mission-config bg
+  continuation (default short-call unchanged — flip needs corpus rebaseline).
+- Demo: `tools/vera_demo/build_demo.py` + 3 MP4s in Downloads
+  (Вера — Нужно внимание/Все в порядке/Тревога). Demo-only config
+  (required bg goals); prod default untouched.
+- Gates at push: full suite green, differential PASS, corpus 500/500.
+  Open: run_dialogue_corpus clarify_wellness intent dispute; default
+  short-vs-full check-in decision; backup schedule; audio soak-100.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)

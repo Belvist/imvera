@@ -5,7 +5,12 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
-from packages.contracts.core import CallRecordStore, CallResultSnapshot
+from packages.contracts.core import (
+    CallRecordStore,
+    CallResultSnapshot,
+    DeliveryStage,
+    PersistResult,
+)
 from packages.contracts.enums import AnswerJudgement, AsrQuality, DialogueAct, FsmState, RiskLevel
 from packages.contracts.events import CallEvent
 from packages.contracts.interpretation import TurnInterpretation
@@ -115,11 +120,17 @@ class CallSession:
         if dialogue_engine_active():
             prior: dict[str, str] = {}
             if hasattr(self.store, "get_latest_family_snapshot"):
-                snap = self.store.get_latest_family_snapshot(
-                    family_id,
-                    exclude_call_id=call_id,
-                    elder_display_name=elder_display_name,
-                )
+                try:
+                    snap = self.store.get_latest_family_snapshot(
+                        family_id,
+                        exclude_call_id=call_id,
+                        elder_display_name=elder_display_name,
+                    )
+                except Exception:
+                    _log.exception(
+                        "get_latest_family_snapshot failed call_id=%s", call_id
+                    )
+                    snap = None
                 if snap is not None:
                     prior.update(snap.facts)
                     prior.update(
@@ -170,7 +181,15 @@ class CallSession:
             payload=payload,
             idempotency_key=key,
         )
-        return self.store.append_event(event, self.state.family_id).ok
+        try:
+            return self.store.append_event(event, self.state.family_id).ok
+        except Exception:
+            _log.exception(
+                "append_event failed call_id=%s event=%s (dialogue continues)",
+                self.state.call_id,
+                event_type,
+            )
+            return False
 
     def _persist_action_policy_shadow_records(self) -> None:
         """Persist shadow telemetry via CallEvent with bounded fail-open retry.
@@ -258,7 +277,15 @@ class CallSession:
                 project_call_result,
             )
 
-            existing = self.store.get_call_result(self.state.call_id, self.state.family_id)
+            try:
+                existing = self.store.get_call_result(
+                    self.state.call_id, self.state.family_id
+                )
+            except Exception:
+                _log.exception(
+                    "get_call_result failed call_id=%s", self.state.call_id
+                )
+                existing = None
             base = dict(existing.metadata) if existing else None
             return project_call_result(
                 self._engine,
@@ -276,7 +303,11 @@ class CallSession:
             )
         facts = {k: v.value for k, v in self.state.facts.items()}
         quotes = {k: v.source_quote for k, v in self.state.facts.items()}
-        existing = self.store.get_call_result(self.state.call_id, self.state.family_id)
+        try:
+            existing = self.store.get_call_result(self.state.call_id, self.state.family_id)
+        except Exception:
+            _log.exception("get_call_result failed call_id=%s", self.state.call_id)
+            existing = None
         metadata = dict(existing.metadata) if existing else {}
         from packages.dialogue.transition_store import _load_outbox, _state_to_metadata
         from packages.dialogue_engine.check_path import build_call_metadata
@@ -336,7 +367,14 @@ class CallSession:
         self._persist_action_policy_shadow_records()
         self._persist_action_policy_shadow_health()
         snap = self._snapshot().model_copy(update={"call_ended": True})
-        result = self.store.finalize_call(snap)
+        try:
+            result = self.store.finalize_call(snap)
+        except Exception as exc:
+            _log.exception(
+                "finalize_call failed call_id=%s (finalization flags still set)",
+                self.state.call_id,
+            )
+            return False, str(exc)
         if not result.ok:
             return False, result.error
         self.state.call_finalized = True
@@ -383,7 +421,10 @@ class CallSession:
                 obs = observation_from_fact(self.state.call_id, turn_id, fact, self._obs_seq)
                 if obs.idempotency_key in self._persisted_keys:
                     continue
-                result = self.store.save_observation(obs, self.state.family_id)
+                try:
+                    result = self.store.save_observation(obs, self.state.family_id)
+                except Exception as exc:
+                    return ids, False, str(exc)
                 if not result.ok:
                     return ids, False, result.error
                 self._persisted_keys.add(obs.idempotency_key)
@@ -396,7 +437,10 @@ class CallSession:
             obs = observation_from_fact(self.state.call_id, turn_id, fact, self._obs_seq)
             if obs.idempotency_key in self._persisted_keys:
                 continue
-            result = self.store.save_observation(obs, self.state.family_id)
+            try:
+                result = self.store.save_observation(obs, self.state.family_id)
+            except Exception as exc:
+                return ids, False, str(exc)
             if not result.ok:
                 return ids, False, result.error
             self._persisted_keys.add(obs.idempotency_key)
@@ -417,7 +461,10 @@ class CallSession:
         )
         if obs.idempotency_key in self._persisted_keys:
             return obs.observation_id, True, None
-        result = self.store.save_observation(obs, self.state.family_id)
+        try:
+            result = self.store.save_observation(obs, self.state.family_id)
+        except Exception as exc:
+            return None, False, str(exc)
         if not result.ok:
             return None, False, result.error
         self._persisted_keys.add(obs.idempotency_key)
@@ -669,7 +716,18 @@ class CallSession:
         Planner.release_question_attempt(self.state, generation_id)
 
     def start(self) -> SessionTurnResult:
-        ensure = self.store.ensure_call(self.state.call_id, self.state.family_id)
+        try:
+            ensure = self.store.ensure_call(self.state.call_id, self.state.family_id)
+        except Exception as exc:
+            _log.exception(
+                "ensure_call failed call_id=%s (dialogue continues unpersisted)",
+                self.state.call_id,
+            )
+            ensure = PersistResult(
+                ok=False,
+                delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+                error=str(exc),
+            )
         self.turn_id += 1
         if self._engine is not None:
             self._engine.start()

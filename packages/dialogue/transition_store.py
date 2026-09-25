@@ -7,6 +7,7 @@ take engine-sourced values and never write the legacy dialogue_state dump.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from pydantic import BaseModel
@@ -37,6 +38,17 @@ class PendingAction(BaseModel):
     speech: str
     question_goal_id: str | None = None
     state_version: int
+
+
+_log = logging.getLogger("dialogue.transitions")
+
+
+def _store_failed(exc: Exception) -> PersistResult:
+    return PersistResult(
+        ok=False,
+        delivery_stage=DeliveryStage.OBSERVATION_RECEIVED,
+        error=str(exc),
+    )
 
 
 class DialogueTransition(BaseModel):
@@ -90,6 +102,28 @@ class DialogueTransitionStore:
         self._store = store
         self._family_id = family_id
 
+    def _read_snapshot(self, call_id: str) -> CallResultSnapshot | None:
+        """Fail-open read: store outage → None (call continues unpersisted)."""
+        try:
+            return self._store.get_call_result(call_id, self._family_id)
+        except Exception:
+            _log.exception("get_call_result failed call_id=%s", call_id)
+            return None
+
+    def _ensure(self, call_id: str) -> PersistResult:
+        try:
+            return self._store.ensure_call(call_id, self._family_id)
+        except Exception as exc:
+            _log.exception("ensure_call failed call_id=%s", call_id)
+            return _store_failed(exc)
+
+    def _save_snapshot(self, updated: CallResultSnapshot) -> PersistResult:
+        try:
+            return self._store.save_dialogue_snapshot(updated, self._family_id)
+        except Exception as exc:
+            _log.exception("save_dialogue_snapshot failed call_id=%s", updated.call_id)
+            return _store_failed(exc)
+
     def load(self, call_id: str) -> DialogueTransition | None:
         """Restore via the legacy dialogue_state dump.
 
@@ -100,7 +134,7 @@ class DialogueTransitionStore:
         new engine calls. An engine-native replay API is out of scope until
         resume-on-new-call becomes a runtime contract (it is not today).
         """
-        snap = self._store.get_call_result(call_id, self._family_id)
+        snap = self._read_snapshot(call_id)
         if snap is None:
             return None
         state = _load_state_from_snapshot(snap)
@@ -109,7 +143,7 @@ class DialogueTransitionStore:
         return DialogueTransition(state=state, pending_action=_load_pending(snap))
 
     def get_outbox_record(self, call_id: str, action_id: str) -> OutboxRecord | None:
-        snap = self._store.get_call_result(call_id, self._family_id)
+        snap = self._read_snapshot(call_id)
         if snap is None:
             return None
         return _load_outbox(snap.metadata).get(action_id)
@@ -141,12 +175,12 @@ class DialogueTransitionStore:
                 state_version=state.state_version,
             )
 
-        snap = self._store.get_call_result(state.call_id, self._family_id)
+        snap = self._read_snapshot(state.call_id)
         if snap is None:
-            ensure = self._store.ensure_call(state.call_id, self._family_id)
+            ensure = self._ensure(state.call_id)
             if not ensure.ok:
                 return ensure
-            snap = self._store.get_call_result(state.call_id, self._family_id)
+            snap = self._read_snapshot(state.call_id)
         if snap is None:
             return PersistResult(
                 ok=False,
@@ -189,7 +223,7 @@ class DialogueTransitionStore:
                 "metadata": metadata,
             }
         )
-        return self._store.save_dialogue_snapshot(updated, self._family_id)
+        return self._save_snapshot(updated)
 
     def commit_engine_transition(
         self,
@@ -229,12 +263,12 @@ class DialogueTransitionStore:
                 state_version=state_revision,
             )
 
-        snap = self._store.get_call_result(call_id, self._family_id)
+        snap = self._read_snapshot(call_id)
         if snap is None:
-            ensure = self._store.ensure_call(call_id, self._family_id)
+            ensure = self._ensure(call_id)
             if not ensure.ok:
                 return ensure
-            snap = self._store.get_call_result(call_id, self._family_id)
+            snap = self._read_snapshot(call_id)
         if snap is None:
             return PersistResult(
                 ok=False,
@@ -284,7 +318,7 @@ class DialogueTransitionStore:
                 "metadata": metadata,
             }
         )
-        return self._store.save_dialogue_snapshot(updated, self._family_id)
+        return self._save_snapshot(updated)
 
     def _transition_outbox(
         self,
@@ -294,7 +328,7 @@ class DialogueTransitionStore:
         *,
         sent_samples: int | None = None,
     ) -> PersistResult:
-        snap = self._store.get_call_result(state.call_id, self._family_id)
+        snap = self._read_snapshot(state.call_id)
         if snap is None:
             return PersistResult(
                 ok=False,
@@ -332,7 +366,7 @@ class DialogueTransitionStore:
         metadata = dict(snap.metadata)
         metadata.update(_state_to_metadata(state, pending, outbox))
         updated = snap.model_copy(update={"metadata": metadata})
-        return self._store.save_dialogue_snapshot(updated, self._family_id)
+        return self._save_snapshot(updated)
 
     def mark_outbox_dispatching(self, state: DialogueState, action_id: str) -> PersistResult:
         return self._transition_outbox(state, action_id, ActionOutboxStatus.DISPATCHING)
@@ -381,7 +415,7 @@ class DialogueTransitionStore:
         _transition_outbox, no legacy state dump. Metadata starts from the
         stored snapshot (read-modify-write), state_version set from the
         engine revision."""
-        snap = self._store.get_call_result(call_id, self._family_id)
+        snap = self._read_snapshot(call_id)
         if snap is None:
             return PersistResult(
                 ok=False,
@@ -425,7 +459,7 @@ class DialogueTransitionStore:
             pending.model_dump(mode="json") if pending is not None else None
         )
         updated = snap.model_copy(update={"metadata": metadata})
-        return self._store.save_dialogue_snapshot(updated, self._family_id)
+        return self._save_snapshot(updated)
 
     def mark_engine_outbox_dispatching(
         self, call_id: str, action_id: str, *, state_revision: int
@@ -482,7 +516,7 @@ class DialogueTransitionStore:
         )
         if not dispatch.ok:
             return dispatch
-        snap = self._store.get_call_result(call_id, self._family_id)
+        snap = self._read_snapshot(call_id)
         if snap is None:
             return PersistResult(
                 ok=False,
@@ -495,7 +529,7 @@ class DialogueTransitionStore:
         # Cut 3b: drop stale legacy dump (see commit_engine_transition).
         metadata.pop("dialogue_state", None)
         updated = snap.model_copy(update={"metadata": metadata})
-        return self._store.save_dialogue_snapshot(updated, self._family_id)
+        return self._save_snapshot(updated)
 
     def mark_action_delivered(
         self,
@@ -509,7 +543,7 @@ class DialogueTransitionStore:
         dispatch = self.mark_outbox_dispatching(state, action_id)
         if not dispatch.ok:
             return dispatch
-        snap = self._store.get_call_result(state.call_id, self._family_id)
+        snap = self._read_snapshot(state.call_id)
         if snap is None:
             return PersistResult(
                 ok=False,
@@ -521,7 +555,7 @@ class DialogueTransitionStore:
         outbox = _load_outbox(metadata)
         metadata.update(_state_to_metadata(state, None, outbox))
         updated = snap.model_copy(update={"metadata": metadata})
-        return self._store.save_dialogue_snapshot(updated, self._family_id)
+        return self._save_snapshot(updated)
 
     def replay_pending_action(self, call_id: str) -> PendingAction | None:
         """Legacy-scope replay (see load()). Not a runtime contract for
@@ -529,7 +563,7 @@ class DialogueTransitionStore:
         trans = self.load(call_id)
         if trans is None or trans.pending_action is None:
             return None
-        snap = self._store.get_call_result(call_id, self._family_id)
+        snap = self._read_snapshot(call_id)
         if snap is not None and snap.metadata.get("pending_action") is None:
             return None
         record = self.get_outbox_record(call_id, trans.pending_action.action_id)
