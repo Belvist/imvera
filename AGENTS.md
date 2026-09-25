@@ -466,6 +466,20 @@ Until these exist, agent reports exact commands run.
 - Gates: 1767 green, differential PASS, corpus 500/500.
 - NEXT: plan 5 (CI/ops).
 
+## Plan 5 ops done + all-5 verification (2026-09-26)
+
+- CI: dialogue-corpus-gate + policy-diff jobs (10 total, per-PR fast).
+- `scripts/version_watch.py`: SHA drift check (exit 2), verified both ways.
+- `docs/runbooks/deploy.md`: topology (MLX workers can't containerize),
+  env separation, deploy + rollback procedures, owner pre-prod checklist.
+- Daily pg-backup launchd installed (03:00); no bridge restart needed
+  (ops-only files, no runtime imports) — bridge stays on 9301ba9.
+- Final full verification: 1767 green (6 env-skips), differential PASS,
+  corpus 500/500, ruff clean repo-wide, version_watch OK.
+- All 5 audit P0 plans implemented + pushed. Remaining: owner checklist
+  (branch protection, secrets, trunk, 100 profiles/consents), soak-100,
+  live redial proof, remote CI result.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
