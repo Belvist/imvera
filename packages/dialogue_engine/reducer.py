@@ -1339,6 +1339,41 @@ _GREETING_ONLY = frozenset(
     }
 )
 
+_BACKCHANNEL_ONLY = frozenset({"ага", "угу", "мгм", "м-м", "мм"})
+
+_BACKCHANNEL_ACKS = ("Слушаю вас.", "Да-да, слушаю вас.")
+
+
+def _backchannel_reask(state: EngineState) -> tuple[str, str, str] | None:
+    """Ack + rephrased question for a backchannel at a pending question.
+
+    Returns (text, slot, intent) or None when there is nothing safe to
+    rephrase (ITS-listen etc.) — the caller keeps the wait-timer path.
+    The rephrase is always a DIFFERENT variant, never a verbatim repeat
+    and never a scold.
+    """
+    from packages.dialogue_engine import questions
+
+    delivered = state.delivered_question
+    if delivered is None or not (delivered.slot or "").strip():
+        return None
+    slot = delivered.slot
+    pool: list[str] = []
+    if slot in ("wellness", "mood", "sleep", "plans"):
+        pool = list(questions._SLOT_QUESTION_VARIANTS.get(slot, ()))
+    elif slot.startswith("probe_"):
+        pool = list(questions._PROBE_QUESTION_VARIANTS.get(slot.removeprefix("probe_"), ()))
+    else:
+        return None
+    asked = (delivered.text or "").strip()
+    alts = [v for v in pool if v.strip() and v.strip() != asked]
+    if not alts:
+        return None
+    rephrase = alts[questions._speech_day() % len(alts)]
+    ack = _BACKCHANNEL_ACKS[questions._speech_day() % len(_BACKCHANNEL_ACKS)]
+    intent = (delivered.intent or "").strip() or slot
+    return (f"{ack} {rephrase}", slot, intent)
+
 
 def _coerce_unclear_by_content(
     state: EngineState, user_text: str
@@ -1359,6 +1394,8 @@ def _coerce_unclear_by_content(
 
     stripped = user_text.strip().lower().rstrip(".!?…")
     if stripped in _GREETING_ONLY and state.delivered_question is not None:
+        return SemanticAct.BACKCHANNEL
+    if stripped in _BACKCHANNEL_ONLY and state.delivered_question is not None:
         return SemanticAct.BACKCHANNEL
     # Severity is grounded wherever it appears — record it even outside a
     # probe (ITS-listen turns carry volunteered severity, live demo).
@@ -1654,6 +1691,26 @@ def _apply_semantic(
             and not state.awaiting_goodbye_confirm
         ):
             return state, []
+        reask = _backchannel_reask(state)
+        if reask is not None:
+            text, slot, intent = reask
+            state, effects = _emit_speak(
+                state,
+                text=text,
+                intent=intent,
+                slot=slot,
+                marks_question=True,
+            )
+            effects.append(
+                TimerEffect(
+                    effect_id=_new_effect_id(),
+                    revision=state.revision,
+                    timer_id=f"wait-{slot}",
+                    wait_ms=7000,
+                    reason="backchannel",
+                )
+            )
+            return state, effects
         if answer_slot:
             state.waiting_on_slot = answer_slot
             return state, [
@@ -1867,6 +1924,11 @@ def _apply_semantic(
         state.processing_effect_id = None
         state.waiting_on_slot = None
         return _advance_after_fills(state, filled, user_text=user_text)
+
+    # Asked background slot answered in own words ("Всё хорошо" to a mood
+    # question): semantic slots may claim a filled slot — fill delivered.
+    if _fill_background_answer(state, user_text):
+        return _schedule_advance(state, user_text=user_text)
 
     relation_filled = _relation_fallback_fill(state, user_text, answer_slot)
     if relation_filled:

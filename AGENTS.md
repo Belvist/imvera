@@ -367,6 +367,24 @@ Until these exist, agent reports exact commands run.
   Open: run_dialogue_corpus clarify_wellness intent dispute; default
   short-vs-full check-in decision; backup schedule; audio soak-100.
 
+## Backchannel rephrase + both check-in modes (2026-09-25)
+
+- Owner decisions: (1) «ага» на любом висящем вопросе → подтверждение +
+  переформулировка (никогда нотация, никогда молчание); повторных «ага»
+  честно закрывают звонок через exhaustion (partial без фактуры, warm
+  summary при живой жалобе). (2) Оба сценария живут: короткий дефолт
+  untouched; полный check-in через mission-config required bg goals.
+- Engine: `_backchannel_reask` (ack + другой вариант, тот же slot/intent,
+  marks_question + wait-timer fallback); `_fill_background_answer`
+  (mood/sleep/plans из своих слов, UNCLEAR- и ANSWER-пути);
+  ITS-ветки дёргают bg только при mandatory/required (дефолт коротких
+  звонков не менялся).
+- Gates: 1716 green, differential PASS, corpus 500/500; 4 новых rephrase-
+  теста + 6 grandma-тестов. Demo MP4 пересобраны на новом движке.
+- Open в dialogue track: prompt v2, emo wiring; run_dialogue_corpus
+  clarify-спор закрыт новым поведением (rephrase вместо clarify/wait —
+  ожидания корпуса обновить отдельным решением).
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
