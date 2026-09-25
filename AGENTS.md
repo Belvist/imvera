@@ -433,6 +433,19 @@ Until these exist, agent reports exact commands run.
 - Live P0 (greeting/goodbye/severity on old code) still needs redial —
   bridge now on 69e9310+; deploy discipline recorded (version check).
 
+## Plan 2 reliability done (2026-09-25)
+
+- Session no longer discards computed turns on fact-persist failure
+  (was terminal_noop → mute); actor speaks degraded on persist failure
+  (mute regression test with pump + recording media).
+- Workers: QueueFull→429, deadline→503 (failover-compatible codes).
+- LLM cancel broadcasts all replicas; spool replay quarantines poison
+  rows (skip-and-count, per-call data never blocked).
+- Stale wait timers die quietly (delivered-moved-on / filled checks);
+  stale playing no longer blocks close (PLAYING phase still protected).
+- Gates: 1765 green, differential PASS, corpus 500/500; bridge on 72cc6ea.
+- NEXT: plans 3 (pool + quiet hot path), 4 (resume/recovery), 5 (CI/ops).
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)

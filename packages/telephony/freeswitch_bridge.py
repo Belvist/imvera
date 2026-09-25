@@ -56,6 +56,10 @@ class FreeSwitchBridgeSession:
     first_outbound_pcm_at: float | None = None
     first_inbound_pcm_at: float | None = None
     _raw_inbound: bytearray = field(default_factory=bytearray)
+    # P0 plan 3d: inbound recording buffer is capped (2 min of 16k mono);
+    # overflow drops oldest with a counter instead of OOM.
+    _raw_inbound_dropped_bytes: int = 0
+    _RAW_INBOUND_CAP_BYTES: int = 2 * 60 * 16000 * 2
     # P0-B/C generation transport: cancelled set enforces drops at enqueue
     # AND send gates; per-generation counters prove 0 ghost frames.
     _cancelled_generations: set[str] = field(default_factory=set)
@@ -89,6 +93,10 @@ class FreeSwitchBridgeSession:
                 self.counters.carrier_rx_bytes += len(data)
                 self.counters.gateway_rx_frames += 1
                 self._raw_inbound.extend(data)
+                overflow = len(self._raw_inbound) - self._RAW_INBOUND_CAP_BYTES
+                if overflow > 0:
+                    del self._raw_inbound[:overflow]
+                    self._raw_inbound_dropped_bytes += overflow
                 if self.counters.gateway_rx_frames == 1:
                     log.info(
                         "FS bridge first uplink pcm call_id=%s bytes=%s",

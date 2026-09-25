@@ -52,6 +52,9 @@ def write_zoiper_runtime_config(media_host: str | None = None) -> Path:
                 # IP (breaks answer/RTP — Contact becomes 185.x and 7000 hangs).
                 '    <param name="NDLB-received-in-nat-reg-contact" value="false"/>',
                 '    <param name="aggressive-nat-detection" value="false"/>',
+                # P0 plan 3e: explicit capacity (lab values; raise after soak).
+                '    <param name="max-sessions" value="30"/>',
+                '    <param name="sessions-per-second" value="10"/>',
                 # Zoiper lab: G722 wideband first (HD voice), G711 fallback.
                 '    <param name="inbound-codec-prefs" value="G722,PCMU,PCMA"/>',
                 '    <param name="outbound-codec-prefs" value="G722,PCMU,PCMA"/>',

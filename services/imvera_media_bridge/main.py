@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import os
+import threading
 import wave
 from pathlib import Path
 
@@ -16,6 +18,9 @@ from tools.telephony_gate.evidence import MediaGateEvidence, write_evidence
 
 log = logging.getLogger("imvera_media_bridge")
 ROOT = Path(__file__).resolve().parents[2]
+
+_teardown_executor: concurrent.futures.ThreadPoolExecutor | None = None
+_teardown_lock = threading.Lock()
 GATE_ROOT = ROOT / ".run" / "freeswitch-gate"
 INVITE_META = GATE_ROOT / "synthetic_invite.json"
 
@@ -136,8 +141,29 @@ async def fs_pcm_stream(websocket: WebSocket, fs_uuid: str) -> None:
         pass
     finally:
         _sessions.pop(call_id, None)
-        _write_session_artifacts(session)
+        _teardown_in_background(session)
         log.info("bridge.session.closed call_id=%s", call_id)
+
+
+def _teardown_in_background(session: FreeSwitchBridgeSession) -> None:
+    """Session WAV artifacts off teardown (P0 plan 3c, diagnostic only)."""
+    global _teardown_executor
+    with _teardown_lock:
+        if _teardown_executor is None:
+            _teardown_executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="teardown-uplink"
+            )
+        executor = _teardown_executor
+
+    def _run() -> None:
+        try:
+            _write_session_artifacts(session)
+        except Exception:
+            log.exception(
+                "bridge.teardown.artifacts_failed call_id=%s", session.call_id
+            )
+
+    executor.submit(_run)
 
 
 def _load_invite_meta() -> dict:

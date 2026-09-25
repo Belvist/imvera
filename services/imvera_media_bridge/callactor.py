@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import os
 import subprocess
 import sys
+import threading
 import wave
 from pathlib import Path
 from typing import Any
@@ -30,6 +32,9 @@ from packages.voice_runtime.trace import record_event
 
 log = logging.getLogger("imvera_media_bridge.callactor")
 ROOT = Path(__file__).resolve().parents[2]
+
+_teardown_executor: concurrent.futures.ThreadPoolExecutor | None = None
+_teardown_lock = threading.Lock()
 
 
 class ProductBindingMissing(RuntimeError):
@@ -271,9 +276,40 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
         await bridge.handle_ws(websocket)
     finally:
         await actor.stop()
-        _persist_ws_uplink(call_id, bridge)
-        _run_forensic_collect(fs_uuid, call_id)
+        _teardown_in_background(call_id, bridge, fs_uuid)
         log.info("callactor.session.closed call_id=%s", call_id)
+
+
+_teardown_executor: concurrent.futures.ThreadPoolExecutor | None = None
+_teardown_lock = None
+
+
+def _teardown_in_background(
+    call_id: str, bridge: FreeSwitchBridgeSession, fs_uuid: str
+) -> None:
+    """WAV dump + forensic collect off the teardown hot path (P0 plan 3c).
+
+    Diagnostic artifacts only — spool owns durability. Fire-and-forget on
+    a single serial worker; failures are logged, never raised.
+    """
+    global _teardown_executor
+    with _teardown_lock:
+        if _teardown_executor is None:
+            _teardown_executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="teardown"
+            )
+
+    def _run() -> None:
+        try:
+            _persist_ws_uplink(call_id, bridge)
+        except Exception:
+            log.exception("callactor.teardown.wav_failed call_id=%s", call_id)
+        try:
+            _run_forensic_collect(fs_uuid, call_id)
+        except Exception:
+            log.exception("callactor.teardown.forensic_failed call_id=%s", call_id)
+
+    _teardown_executor.submit(_run)
 
 
 def _persist_ws_uplink(call_id: str, bridge: FreeSwitchBridgeSession) -> None:

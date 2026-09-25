@@ -440,6 +440,9 @@ class CallActor:
         await self._queue.put(ActorEvent(ActorEventType.STOP))
         if self._task:
             await self._task
+        from packages.voice_runtime.trace import flush_traces
+
+        await asyncio.to_thread(flush_traces, 3.0)
 
     async def on_media_ready(
         self,

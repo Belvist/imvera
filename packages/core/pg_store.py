@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 from datetime import UTC, datetime
 from typing import Any
 
@@ -37,13 +39,68 @@ def _persist_error(exc: Exception) -> PersistResult:
 
 
 class PostgresCallRecordStore(CallRecordStore):
-    def __init__(self, dsn: str) -> None:
+    """Pooled PG store (P0 plan 3a): connections come from a bounded pool,
+    never per-operation connects. Pool opens lazily on first use so import
+    and construction never touch the DB. Exhaustion surfaces as
+    PoolTimeout → caught per-method into PersistResult(ok=False), never
+    a hot-path hang."""
+
+    def __init__(
+        self,
+        dsn: str,
+        *,
+        min_size: int | None = None,
+        max_size: int | None = None,
+        connect_timeout: float = 5.0,
+        pool_timeout: float = 5.0,
+    ) -> None:
         self._dsn = dsn
+        self._min_size = int(
+            min_size if min_size is not None
+            else os.environ.get("IMVERA_PG_POOL_MIN", "1")
+        )
+        self._max_size = int(
+            max_size if max_size is not None
+            else os.environ.get("IMVERA_PG_POOL_MAX", "10")
+        )
+        self._connect_timeout = connect_timeout
+        self._pool_timeout = pool_timeout
+        self._pool = None
+        self._pool_lock = threading.Lock()
+
+    def _pool_or_open(self):
+        pool = self._pool
+        if pool is not None:
+            return pool
+        with self._pool_lock:
+            if self._pool is None:
+                from psycopg_pool import ConnectionPool
+
+                self._pool = ConnectionPool(
+                    self._dsn,
+                    min_size=self._min_size,
+                    max_size=self._max_size,
+                    timeout=self._pool_timeout,
+                    kwargs={"connect_timeout": self._connect_timeout},
+                    open=True,
+                )
+            return self._pool
+
+    def pool_stats(self) -> dict[str, Any]:
+        pool = self._pool
+        if pool is None:
+            return {"opened": False}
+        stats = {"opened": True}
+        stats.update(pool.get_stats())
+        return stats
+
+    def close(self) -> None:
+        pool, self._pool = self._pool, None
+        if pool is not None:
+            pool.close()
 
     def _connect(self):
-        import psycopg
-
-        return psycopg.connect(self._dsn)
+        return self._pool_or_open().connection()
 
     def ensure_call(self, call_id: str, family_id: str) -> PersistResult:
         try:
