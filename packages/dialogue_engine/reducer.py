@@ -1341,6 +1341,31 @@ _GREETING_ONLY = frozenset(
 
 _BACKCHANNEL_ONLY = frozenset({"ага", "угу", "мгм", "м-м", "мм"})
 
+_AFFIRM_ONLY = frozenset(
+    {"ага", "угу", "мгм", "м-м", "мм", "да", "да-да", "конечно", "верно"}
+)
+_DENY_ONLY = frozenset({"нет", "неа", "не"})
+
+_OPEN_Q_WORD = re.compile(
+    r"\b(как|что|какой|какая|какое|какие|сколько|когда|где|куда|"
+    r"почему|зачем|давно|расскажите|подскажите|можете|чем|кого|кому|"
+    r"о\s+ч[её]м)\b",
+    re.I,
+)
+
+
+def _is_yes_no_question(text: str) -> bool:
+    """Yes/no form ("Принимали?", "Выспались?") vs open form ("Как спали?").
+
+    Only the last clause counts ("Ночью как спали — выспались?" is yes/no).
+    """
+    stripped = (text or "").strip()
+    if not stripped.endswith("?"):
+        return False
+    last = re.split(r"[.…!?—–-]", stripped)
+    clause = next((c for c in reversed(last) if c.strip()), "")
+    return not _OPEN_Q_WORD.search(clause)
+
 _BACKCHANNEL_ACKS = ("Слушаю вас.", "Да-да, слушаю вас.")
 
 
@@ -1395,8 +1420,16 @@ def _coerce_unclear_by_content(
     stripped = user_text.strip().lower().rstrip(".!?…")
     if stripped in _GREETING_ONLY and state.delivered_question is not None:
         return SemanticAct.BACKCHANNEL
-    if stripped in _BACKCHANNEL_ONLY and state.delivered_question is not None:
-        return SemanticAct.BACKCHANNEL
+    if state.delivered_question is not None:
+        yes_no = _is_yes_no_question(state.delivered_question.text or "")
+        if stripped in _AFFIRM_ONLY or stripped in _DENY_ONLY:
+            # Affirmation/denial answers a yes/no question ("Принимали?" +
+            # "ага" = took); on an open question "ага" is a backchannel.
+            if yes_no:
+                return SemanticAct.ANSWER
+            if stripped in _BACKCHANNEL_ONLY:
+                return SemanticAct.BACKCHANNEL
+            return None
     # Severity is grounded wherever it appears — record it even outside a
     # probe (ITS-listen turns carry volunteered severity, live demo).
     recorded_severity = extract_grounded_severity_value(user_text)
@@ -1430,7 +1463,14 @@ def _resolve_medication_today_answer(state: EngineState, user_text: str) -> bool
     )
 
     text = user_text or ""
-    if _ALREADY_TOOK_TODAY.search(text):
+    stripped = text.strip().lower().rstrip(".!?…")
+    if stripped in _AFFIRM_ONLY:
+        # Bare "ага/да" to "Приняли?" = took.
+        state.observations["coverage_medication_today"] = text.strip()
+    elif stripped in _DENY_ONLY:
+        # Bare "нет" to "Приняли?" = did not take — recorded, never nagged.
+        state.observations["coverage_medication_today"] = text.strip()
+    elif _ALREADY_TOOK_TODAY.search(text):
         state.observations["coverage_medication_today"] = text.strip()
     elif _NEGATED_TOOK_TODAY.search(text) or _NO_DAILY_MEDS.search(text):
         state.observations["coverage_medication_today"] = text.strip()
@@ -1454,19 +1494,57 @@ _BG_CHECK_INTENT_SLOT = {
 _NEG_LEAD = re.compile(r"^(нет|неа|ну)\s*,?\s*", re.I)
 
 
+_BG_CHECK_INTENT_SLOT = {
+    "check_mood": "mood",
+    "check_sleep": "sleep",
+    "check_plans": "plans",
+}
+
+_NEG_FORM_Q = re.compile(r"\bне\b|ничего|никак", re.I)
+
+
 def _fill_background_answer(state: EngineState, user_text: str) -> bool:
     """Fill an asked background slot from a substantive answer.
 
-    Generic positives ("Всё хорошо"), marker answers ("выспалась") and
-    content answers ("гулять пойду") must fill mood/sleep/plans — otherwise
+    Generic positives ("Всё хорошо"), marker answers ("выспалась"),
+    content answers ("гулять пойду") and bare yes/no affirmations
+    ("ага" to "Выспались?") must fill mood/sleep/plans — otherwise
     the ladder re-asks forever. Debris, denials and questions never fill.
     """
     from packages.contracts.enums import SlotStatus
-    from packages.dialogue_engine.coverage import _MOOD_MARKERS, _SLEEP_MARKERS
+    from packages.dialogue_engine.coverage import (
+        _MOOD_MARKERS,
+        _NUTRITION_MARKERS,
+        _SLEEP_MARKERS,
+    )
     from packages.dialogue_engine.fast_interpreter import _detect_polarity
     from packages.dialogue_engine.policy import apply_slot_answer
 
     delivered = state.delivered_question
+    if getattr(delivered, "slot", "") == "background_nutrition":
+        # Food check ("Покушали?"): bare yes/no and substantive answers
+        # record verbatim and move on — never re-ask, never debris-loop.
+        text = (user_text or "").strip()
+        core = _NEG_LEAD.sub("", text).strip() or text
+        stripped = core.lower()
+        if (
+            len(text) >= 2
+            and (
+                stripped in _AFFIRM_ONLY
+                or stripped in _DENY_ONLY
+                or _NUTRITION_MARKERS.search(text)
+                or _detect_polarity(core) in ("positive", "negative")
+            )
+        ):
+            state.observations["coverage_nutrition"] = text
+            state.delivered_question = None
+            state.planned_question = None
+            state.waiting_on_slot = None
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.bump_revision()
+            return True
+        return False
     slot = _BG_CHECK_INTENT_SLOT.get(getattr(delivered, "intent", "") or "")
     if slot is None or state.slots.get(slot) != SlotStatus.OPEN:
         return False
@@ -1475,6 +1553,14 @@ def _fill_background_answer(state: EngineState, user_text: str) -> bool:
         return False
     core = _NEG_LEAD.sub("", text).strip() or text
     polarity = _detect_polarity(core)
+    stripped = core.lower()
+    if stripped in _AFFIRM_ONLY:
+        # Bare yes to a yes/no question: negative-form Q ("ничего не
+        # тревожит?") is good news either way, else take as positive.
+        polarity = "positive"
+    elif stripped in _DENY_ONLY:
+        qtext = getattr(delivered, "text", "") or ""
+        polarity = "positive" if _NEG_FORM_Q.search(qtext) else "negative"
     marked = False
     if slot == "mood":
         marked = bool(_MOOD_MARKERS.search(text))
@@ -1794,6 +1880,16 @@ def _apply_semantic(
         if _is_meaningful_turn(user_text):
             return _speak_never_silent(state, answer_slot, user_text)
         return state, []
+
+    if semantic.act == SemanticAct.ANSWER:
+        _dq = state.delivered_question
+        if _dq is not None and (_dq.intent or "") in (
+            "medication_status_today",
+            "background_medication_today",
+        ):
+            # Bare "ага/да/нет" coerced to ANSWER lands here (not UNCLEAR).
+            if _resolve_medication_today_answer(state, user_text):
+                return _schedule_advance(state, user_text=user_text)
 
     if state.probe_phase and semantic.act == SemanticAct.ANSWER:
         # Compatibility only: project probe advance after content is known.

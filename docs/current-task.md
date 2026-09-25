@@ -1,3 +1,13 @@
+# К пушу-3: да/нет «ага» = ответ (2026-09-25)
+
+- Правка владельца: «ага» на да/нет-вопрос — ответ. `_is_yes_no_question`
+  (последняя клауза), affirmation/denial → ANSWER; meds-today пишет
+  принял/не принял; mood/sleep fill; nutrition observation.
+- Открытая форма + «ага» → rephrase как было.
+- Ворота: 1720 green, differential PASS, corpus 500/500, ruff.
+
+---
+
 # К пушу-2: backchannel rephrase + оба сценария (2026-09-25)
 
 - Решения владельца: «ага» → подтверждение + переформулировка на ЛЮБОМ

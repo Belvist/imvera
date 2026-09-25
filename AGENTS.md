@@ -385,6 +385,18 @@ Until these exist, agent reports exact commands run.
   clarify-спор закрыт новым поведением (rephrase вместо clarify/wait —
   ожидания корпуса обновить отдельным решением).
 
+## Yes/no affirmation + open rephrase (2026-09-25)
+
+- Owner correction: «ага» на «принимали таблетки?/покушали?» = ответ
+  «да», не backchannel. Правило: да/нет-форма («Принимали?»,
+  «Выспались?», последняя клауза без вопросительных слов) + «ага/да»
+  → ANSWER (meds-today: принял/не принял пишется; mood/sleep: fill
+  positive/negative; negative-form Q всегда positive; nutrition:
+  observation + advance). Открытая форма + «ага» → rephrase.
+- Gates: 1720 green, differential PASS, corpus 500/500; 4 yes/no-теста.
+- Open в dialogue track: prompt v2, emo wiring; run_dialogue_corpus
+  clarify-спор закрыт rephrase-поведением.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
