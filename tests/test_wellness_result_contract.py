@@ -119,7 +119,7 @@ def test_exhausted_wellness_survives_public_result(
     assert body["outcomes"] == {
         "call_outcome": "TECHNICAL",
         "mission_status": "PARTIAL",
-        "family_status": "UNSET",
+        "candidate_family_status": "UNSET",
     }
     mission = body["mission_result"]
     assert mission == body["metadata"]["mission_result"]
@@ -154,7 +154,7 @@ def test_completed_call_with_unknown_wellness_is_still_partial(
         "mission_status": "PARTIAL",
         # P0#4: StatusEngine wired — completed partial check is YELLOW,
         # no longer UNSET.
-        "family_status": "YELLOW",
+        "candidate_family_status": "YELLOW",
     }
     assert body["partial"] is True
     wellness = next(
@@ -175,7 +175,7 @@ def test_unknown_does_not_suppress_later_real_red(
     assert session._engine is not None
     assert session._engine.state.safety_mode == "red"
     body = _public_result(session, monkeypatch)
-    assert body["outcomes"]["family_status"] == "RED"
+    assert body["outcomes"]["candidate_family_status"] == "RED"
     assert body["outcomes"]["mission_status"] == "PARTIAL"
     assert body["observations"]
     assert any(
@@ -217,7 +217,7 @@ def test_explicit_refusal_remains_a_distinct_call_outcome(
     assert "wellness_unknown" not in session._engine.state.observations
     body = _public_result(session, monkeypatch)
     assert body["outcomes"]["call_outcome"] == "DECLINED"
-    assert body["outcomes"]["family_status"] == "UNSET"
+    assert body["outcomes"]["candidate_family_status"] == "UNSET"
     assert not any(
         note.startswith("wellness_unknown:") for note in body["mission_result"]["observations"]
     )
@@ -237,5 +237,5 @@ def test_slot_declined_alone_is_not_consent_or_public_decline(
     assert not session.state.call_revoked
     body = _public_result(session, monkeypatch)
     assert body["outcomes"]["call_outcome"] == "TECHNICAL"
-    assert body["outcomes"]["family_status"] == "UNSET"
+    assert body["outcomes"]["candidate_family_status"] == "UNSET"
     assert body["termination_reason"] == TerminationReason.DISCONNECTED.value

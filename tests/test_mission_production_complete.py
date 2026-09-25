@@ -243,7 +243,7 @@ def test_red_safety_continuation_closes_without_mission_question(
     assert eng.state.call_closed or (r2.proposal.intent or "") == "safety_close"
     mr = build_mission_result(eng.state)
     outcomes = build_call_outcomes(eng.state, mission_result=mr)
-    assert outcomes.family_status == "RED"
+    assert outcomes.candidate_family_status == "RED"
     assert outcomes.mission_status == "PARTIAL"
     assert eng.state.goals["worker_visited"].lifecycle != GoalLifecycle.SATISFIED
 
@@ -412,7 +412,7 @@ def test_third_party_unavailable_outcomes(monkeypatch: pytest.MonkeyPatch) -> No
     outcomes = build_call_outcomes(eng.state)
     assert outcomes.call_outcome == "NO_ANSWER"
     assert outcomes.mission_status == "NOT_RUN"
-    assert outcomes.family_status == "UNSET"
+    assert outcomes.candidate_family_status == "UNSET"
 
 
 # ---------------------------------------------------------------------------
@@ -914,7 +914,7 @@ def test_mission_result_persists_in_memory_roundtrip(monkeypatch: pytest.MonkeyP
     assert goals["worker_visited"].lifecycle == GoalLifecycle.SATISFIED.value
     assert goals["worker_visited"].value == "yes"
     assert snap.outcomes is not None
-    assert snap.outcomes.family_status == "UNSET"
+    assert snap.outcomes.candidate_family_status == "UNSET"
     assert snap.outcomes.mission_status in {"COMPLETED", "PARTIAL"}
 
 

@@ -673,6 +673,28 @@ def _on_interpretation_completed(
         return state, []
     if _stale(state, event.revision):
         return state, []
+    # Async-interpreted turns get the same safety hijack as the sync path:
+    # a dangerous phrase must never ride the ordinary flow (P0 audit G-05).
+    quote = (
+        getattr(event.semantic, "source_quote", "")
+        or getattr(event.semantic, "value", "")
+    )
+    if quote:
+        from packages.dialogue_engine.check_path import (
+            is_urgent_action,
+            is_urgent_state,
+        )
+
+        if is_urgent_action(quote):
+            return _emit_urgent_close(state, user_text=quote)
+        if is_urgent_state(quote):
+            state.processing_turn_id = event.turn_id
+            state.processing_effect_id = event.effect_id or None
+            _record_negative_wellness(state, quote, record_concern=False)
+            state.red_state_pending = True
+            from packages.dialogue_engine.state import CheckPath
+
+            state.check_path = CheckPath.URGENT
     return _apply_semantic(state, event.semantic)
 
 

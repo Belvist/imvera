@@ -29,4 +29,5 @@ class CallOutcomes(BaseModel):
 
     call_outcome: Literal["COMPLETED", "DECLINED", "NO_ANSWER", "TECHNICAL"] = "TECHNICAL"
     mission_status: Literal["COMPLETED", "PARTIAL", "DECLINED", "NOT_RUN"] = "NOT_RUN"
-    family_status: Literal["GREEN", "YELLOW", "RED", "UNSET"] = "UNSET"
+    candidate_family_status: Literal["GREEN", "YELLOW", "RED", "UNSET"] = "UNSET"
+    """Candidate only — product-facing GREEN/RED requires Core ack (ADR-007)."""

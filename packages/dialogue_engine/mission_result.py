@@ -184,7 +184,7 @@ def build_call_outcomes(
         return CallOutcomes(
             call_outcome="NO_ANSWER",
             mission_status="NOT_RUN",
-            family_status="UNSET",
+            candidate_family_status="UNSET",
         )
     if state.closing_reason in {"stop_call", "revoke_consent", "defer"} or (
         state.call_closed and state.closing_reason
@@ -247,7 +247,7 @@ def build_call_outcomes(
     return CallOutcomes(
         call_outcome=call_out,  # type: ignore[arg-type]
         mission_status=mr.status,  # type: ignore[arg-type]
-        family_status=family,  # type: ignore[arg-type]
+        candidate_family_status=family,  # type: ignore[arg-type]
     )
 
 

@@ -127,12 +127,18 @@ def _fz(word: str) -> str:
 # (fall/choke/die/blood/help), never generic pain.
 _URGENT_ACTION = re.compile(
     r"\b(скор(ую|ая|ой)\b|срочн\w*|помогите|спасите|не\s+могу\s+дышать|"
+    r"не\s+хватает\s+воздуха|нехватка\s+воздуха|"
     + _fz("задыха")
     + r"\w*|зад[аы]\b|удуш\w*|"
-    r"кровь|кро[вф]ь|потеря\w*\s+сознан|теря\w*\s+сознан|"
+    r"кровь|кро[вф]ь|"
+    r"потеря\w*\s+сознан\w*|теря\w*\s+сознан\w*|без\s+сознания|"
     r"упал\w*|упан\w*|упа[рл]\w*|пада\w*|пад[ао]\b|\bпад\b|не\s+могу\s+встать|"
-    r"вызов\w*\s+скор\w*|вызови(те)?\s+скор\w*|инфаркт|инсульт|"
-    r"сердечн\w*\s+приступ|сердц\w*\s+давит|давит\w*\s+сердц\w*|"
+    r"вызов\w*\s+скор\w*|вызови(те)?\s+скор\w*|вызывайте\s+скор\w*|"
+    r"инфаркт|инсульт|"
+    r"сердечн\w*\s+приступ|"
+    r"сердц\w*\s+(давит|болит|колет|сжимает|щемит)|"
+    r"давит\w*\s+сердц\w*|"
+    r"давлен\w*\s+2\d\d|"
     r"бол(?!ее(?:\b|-))\w*\s+в\s+груд\w*)\b",
     re.I,
 )
@@ -153,13 +159,17 @@ def is_urgent_concern(text: str) -> bool:
 
 
 def is_urgent_action(text: str) -> bool:
-    return bool(_URGENT_ACTION.search(text or ""))
+    from packages.safety.patterns import match_guarded
+
+    return match_guarded(_URGENT_ACTION, text or "") is not None
 
 
 def is_urgent_state(text: str) -> bool:
+    from packages.safety.patterns import match_guarded
+
     if is_urgent_action(text):
         return False
-    return bool(_URGENT_STATE.search(text or ""))
+    return match_guarded(_URGENT_STATE, text or "") is not None
 
 
 def looks_like_duration_answer(text: str) -> bool:

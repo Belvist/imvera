@@ -67,12 +67,12 @@ def test_completed_check_resolves_green_or_yellow(
         _deliver(session, result)
     snap = session._snapshot()
     assert snap.outcomes is not None
-    assert snap.outcomes.family_status in ("GREEN", "YELLOW")
-    assert snap.outcomes.family_status != "UNSET"
-    assert snap.metadata["outcomes"]["family_status"] == snap.outcomes.family_status
+    assert snap.outcomes.candidate_family_status in ("GREEN", "YELLOW")
+    assert snap.outcomes.candidate_family_status != "UNSET"
+    assert snap.metadata["outcomes"]["candidate_family_status"] == snap.outcomes.candidate_family_status
 
 
-def test_red_keeps_red_family_status(
+def test_red_keeps_red_candidate_family_status(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     session = _session(monkeypatch, tmp_path, "status-red")
@@ -82,7 +82,7 @@ def test_red_keeps_red_family_status(
     engine.state.risk_handling = True
     snap = session._snapshot()
     assert snap.outcomes is not None
-    assert snap.outcomes.family_status == "RED"
+    assert snap.outcomes.candidate_family_status == "RED"
 
 
 def _completed_suffering_engine(call_id: str):
@@ -126,7 +126,7 @@ def test_open_complaint_floors_completed_mission_to_yellow() -> None:
         subject="speaker",
         status="open",
     )
-    assert build_call_outcomes(engine.state).family_status == "YELLOW"
+    assert build_call_outcomes(engine.state).candidate_family_status == "YELLOW"
 
 
 def test_probed_concern_floors_completed_mission_to_yellow() -> None:
@@ -134,7 +134,7 @@ def test_probed_concern_floors_completed_mission_to_yellow() -> None:
 
     engine = _completed_suffering_engine("status-concern")
     engine.state.wellness_concern = "тошнит"
-    assert build_call_outcomes(engine.state).family_status == "YELLOW"
+    assert build_call_outcomes(engine.state).candidate_family_status == "YELLOW"
 
 
 def test_resolved_or_other_person_complaint_keeps_green() -> None:
@@ -156,4 +156,4 @@ def test_resolved_or_other_person_complaint_keeps_green() -> None:
         subject="other_person",
         status="open",
     )
-    assert build_call_outcomes(engine.state).family_status == "GREEN"
+    assert build_call_outcomes(engine.state).candidate_family_status == "GREEN"
