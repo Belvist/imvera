@@ -1,3 +1,17 @@
+# К пушу-5: CDK + golden live-call (2026-09-25)
+
+- Handoff принят с правками: ADR-021 proposed в репо; P0d golden-тест
+  на fs-4d8f5a8b через RICH-путь (как live): greeting_ack → concern →
+  onset → current → ITS → summary без прощания → один goodbye.
+- Пойман live-only gap: kernel метит «Привет» как answer → общий
+  `_answer_backchannel` на оба пути (да/нет-форма исключена).
+- Timer-тест мигрирован на rephrase-контракт.
+- Ворота: 1725 green, differential PASS, corpus 500/500.
+- Ему: ADR-021 + этот блок — пересылай как brief; P1 (PhraseSelect,
+  Protocol-YAML) после live-паритета.
+
+---
+
 # К пушу-4: external review batch (2026-09-25)
 
 - Имя Юрьевна везде; прощание одно (goodbye_final); приветствие — soft-ack;
@@ -8,6 +22,19 @@
 - Ворота: 1721 green, differential PASS, corpus 500/500; MP4 пересобраны.
 - Отклонение от written-spec: красный спрашивает severity перед ITS
   (естественно для триажа, safety на «скорую» цел).
+
+# Live-урок: мост жил на старом коде (2026-09-25, ~05:43 MSK)
+
+- Звонок fs-4d8f5a8b тестировал 6ba61b5, репо уже 69e9310: soft-ack,
+  single-goodbye, severity в живом коде отсутствовали. Tests green ≠ prod.
+- Дисциплина: после каждого dialogue-пуша — рестарт моста + сверка
+  engine.version с HEAD. Мост перезапущен на 69e9310, health ok, имя
+  Юрьевна на месте. P1–P3 из отчёта (привет/goodbye/severity) требуют
+  живого редиала — код готов, звонка не было.
+- P4 («зук болит» в summary) — тоже старый код; проверить на новом,
+  не чинить вслепую.
+
+---
 
 ---
 

@@ -63,16 +63,16 @@ def test_backchannel_timer_wait_same_slot(monkeypatch: pytest.MonkeyPatch, tmp_p
     parsed = interpret("ага", utterance_id=uid, engine_state=engine.state, answer_slot=slot)
     turn = kernel_to_rich_turn(parsed, answer_slot=slot, engine_state=engine.state)
     result = session.handle_user_text("ага", utterance_id=uid, rich_turn=turn)
-    assert result.timer_effect is not None, "expected backchannel TimerEffect"
-    assert result.proposal.intent == "wait_for_continuation"
-    assert result.proposal.speech == ""
+    # Backchannel at a pending question: immediate ack + rephrased re-ask
+    # (owner decision), wait timer stays armed as the silence fallback.
+    assert (result.proposal.speech or "").strip() != ""
+    assert "?" in (result.proposal.speech or "")
     assert result.validated.allowed
     waiting = engine.state.waiting_on_slot
     assert waiting, "engine must hold the waited slot"
-    assert result.proposal.wait_goal_id == (engine.state.goals[waiting].goal_id or waiting)
     # No spurious goals from the timer branch ensure_goal().
     assert set(engine.state.goals) - goals_before <= {waiting}
-    expired = session.handle_wait_expired(result.timer_effect.effect_id)
+    expired = session.handle_wait_expired()
     assert expired.persist_ok, expired.persist_error
     assert expired.speak_effect is not None or expired.proposal.intent in (
         "wait_for_continuation",

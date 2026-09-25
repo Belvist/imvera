@@ -414,6 +414,25 @@ Until these exist, agent reports exact commands run.
 - Deviation noted: red flow now asks severity before ITS (triage-natural,
   safety hijack on «скорую» intact) — differs from written-spec demo.
 
+## CDK handoff + golden live-call test (2026-09-25)
+
+- External handoff framed as ADR-021 (proposed, `docs/adr/021-*.md`):
+  Care Dialogue Kernel — protocol-first, classifiers label only, banks
+  speak, NeedQueue with gates, one goodbye, truth = live path. Agreed
+  with adjustments: PhraseSelect extraction + Protocol-as-YAML deferred
+  to P1 (no refactor under freeze before live parity).
+- P0d done: `tests/test_golden_live_call.py` replays fs-4d8f5a8b's 7 user
+  lines through the RICH path (kernel + rich turns, like CallActor):
+  greeting_ack → probe_concern → episode onset → episode current → ITS →
+  summary (no farewell) → single goodbye_final. Caught live-only gap:
+  kernel labels greeting-backs as answers → shared `_answer_backchannel`
+  now serves both paths (yes/no form excluded).
+- Timer-wait test migrated to rephrase contract (immediate ack+re-ask,
+  timer stays as silence fallback).
+- Gates: 1725 green, differential PASS, corpus 500/500.
+- Live P0 (greeting/goodbye/severity on old code) still needs redial —
+  bridge now on 69e9310+; deploy discipline recorded (version check).
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)

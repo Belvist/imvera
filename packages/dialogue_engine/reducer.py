@@ -933,6 +933,25 @@ def _apply_rich_turn(
             return _schedule_advance(state, turn=turn, user_text=user_text, answer_slot=answer_slot)
         return _speak_repair(state, answer_slot or "wellness")
 
+    if (
+        state.delivered_question is not None
+        and _is_greeting_or_backchannel_text(user_text)
+        and not _is_yes_no_question(state.delivered_question.text or "")
+        and not turn.issue_mentions
+        and not turn.goal_facts
+        and not turn.correction
+        and not turn.user_question
+        and turn.control in ("none", "")
+    ):
+        # Kernel may label greeting-backs as answers; route by content —
+        # same shared answer as the semantic path (live fs-4d8f5a8b).
+        state.processing_turn_id = None
+        state.processing_effect_id = None
+        state.bump_revision()
+        answered, effects = _answer_backchannel(state, answer_slot, user_text)
+        if effects:
+            return answered, effects
+
     if turn.dialogue_act == "backchannel":
         state.processing_turn_id = None
         state.processing_effect_id = None
@@ -942,17 +961,9 @@ def _apply_rich_turn(
             and not state.awaiting_goodbye_confirm
         ):
             return state, []
-        if answer_slot:
-            state.waiting_on_slot = answer_slot
-            return state, [
-                TimerEffect(
-                    effect_id=_new_effect_id(),
-                    revision=state.revision,
-                    timer_id=f"wait-{answer_slot}",
-                    wait_ms=7000,
-                    reason="backchannel",
-                )
-            ]
+        answered, effects = _answer_backchannel(state, answer_slot, user_text)
+        if effects:
+            return answered, effects
         if _is_meaningful_turn(user_text):
             return _speak_never_silent(state, answer_slot or "wellness", user_text)
         return state, []
@@ -1615,6 +1626,75 @@ def _severity_probe_due(state: EngineState) -> bool:
     return True
 
 
+def _is_greeting_or_backchannel_text(text: str) -> bool:
+    stripped = (text or "").strip().lower().rstrip(".!?…")
+    return stripped in _GREETING_ONLY or stripped in _BACKCHANNEL_ONLY
+
+
+def _answer_backchannel(
+    state: EngineState, answer_slot: str | None, user_text: str
+) -> tuple[EngineState, list[Effect]]:
+    """Shared greeting/backchannel answer for the semantic and rich paths.
+
+    Greeting ("Привет" to a just-asked question): soft ack, never re-ask.
+    Backchannel ("ага"): ack + rephrased re-ask, else wait-timer fallback.
+    """
+    stripped_in = user_text.strip().lower().rstrip(".!?…")
+    if stripped_in in _GREETING_ONLY and state.delivered_question is not None:
+        # Greeting back: soft ack, never re-ask what was asked two seconds
+        # ago. The wait timer re-asks on real silence.
+        slot = state.delivered_question.slot or answer_slot or "wellness"
+        state, effects = _emit_speak(
+            state,
+            text="Здравствуйте! Я вас слушаю.",
+            intent="greeting_ack",
+            slot=slot,
+            marks_question=False,
+        )
+        effects.append(
+            TimerEffect(
+                effect_id=_new_effect_id(),
+                revision=state.revision,
+                timer_id=f"wait-{slot}",
+                wait_ms=7000,
+                reason="backchannel",
+            )
+        )
+        return state, effects
+    reask = _backchannel_reask(state)
+    if reask is not None:
+        text, slot, intent = reask
+        state, effects = _emit_speak(
+            state,
+            text=text,
+            intent=intent,
+            slot=slot,
+            marks_question=True,
+        )
+        effects.append(
+            TimerEffect(
+                effect_id=_new_effect_id(),
+                revision=state.revision,
+                timer_id=f"wait-{slot}",
+                wait_ms=7000,
+                reason="backchannel",
+            )
+        )
+        return state, effects
+    if answer_slot:
+        state.waiting_on_slot = answer_slot
+        return state, [
+            TimerEffect(
+                effect_id=_new_effect_id(),
+                revision=state.revision,
+                timer_id=f"wait-{answer_slot}",
+                wait_ms=7000,
+                reason="backchannel",
+            )
+        ]
+    return state, []
+
+
 def _is_onset_answer(semantic: object, user_text: str) -> bool:
     """True when this turn answers a pending onset probe. The caller checks
     pending state; here we only require an answer-like act so complaints
@@ -1803,60 +1883,9 @@ def _apply_semantic(
             and not state.awaiting_goodbye_confirm
         ):
             return state, []
-        stripped_in = user_text.strip().lower().rstrip(".!?…")
-        if stripped_in in _GREETING_ONLY and state.delivered_question is not None:
-            # Greeting back ("Привет" to a just-asked question): soft ack,
-            # never re-ask what was asked two seconds ago. The wait timer
-            # re-asks on real silence.
-            slot = state.delivered_question.slot or answer_slot or "wellness"
-            state, effects = _emit_speak(
-                state,
-                text="Здравствуйте! Я вас слушаю.",
-                intent="greeting_ack",
-                slot=slot,
-                marks_question=False,
-            )
-            effects.append(
-                TimerEffect(
-                    effect_id=_new_effect_id(),
-                    revision=state.revision,
-                    timer_id=f"wait-{slot}",
-                    wait_ms=7000,
-                    reason="backchannel",
-                )
-            )
-            return state, effects
-        reask = _backchannel_reask(state)
-        if reask is not None:
-            text, slot, intent = reask
-            state, effects = _emit_speak(
-                state,
-                text=text,
-                intent=intent,
-                slot=slot,
-                marks_question=True,
-            )
-            effects.append(
-                TimerEffect(
-                    effect_id=_new_effect_id(),
-                    revision=state.revision,
-                    timer_id=f"wait-{slot}",
-                    wait_ms=7000,
-                    reason="backchannel",
-                )
-            )
-            return state, effects
-        if answer_slot:
-            state.waiting_on_slot = answer_slot
-            return state, [
-                TimerEffect(
-                    effect_id=_new_effect_id(),
-                    revision=state.revision,
-                    timer_id=f"wait-{answer_slot}",
-                    wait_ms=7000,
-                    reason="backchannel",
-                )
-            ]
+        answered, effects = _answer_backchannel(state, answer_slot, user_text)
+        if effects:
+            return answered, effects
         if _is_meaningful_turn(user_text):
             return _speak_never_silent(state, answer_slot or "wellness", user_text)
         return state, []
