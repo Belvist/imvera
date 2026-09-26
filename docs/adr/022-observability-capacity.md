@@ -59,8 +59,13 @@ law; ADR-014 gates stay open while features grow.
   follow-up slice (metric `trace_truncated_total`).
 - 100k design: explicitly out of scope (ADR-018 stands).
 
-## Verification
+## Verification notes (P0a slice, 2026-09-26)
 
-- Tier unit tests (chatty dropped in pilot/prod, errors kept everywhere).
-- Live 1-call DEBUG trace unchanged byte-for-byte in shape.
-- `/health` shows trace stats; drop counter alertable.
+Done: `obs_mode`/`keep_event`/budget/`write_call_summary`/`trace_stats`
+in `packages/voice_runtime/trace.py`; `/health/ready` returns `obs_mode`
++ `trace_stats(queued/dropped/truncated_calls)`; summary wired once per
+call into background teardown; tier unit tests green; default `debug`
+unchanged (lab byte-identical). Single-goodbye/safety behavior untouched
+(dialogue out of scope for this slice).
+Deferred: OTel/Loki/ClickHouse sinks; per-call 32KB truncation metric
+beyond the counter; capacity probe (P0c); protocol-YAML (P0b).

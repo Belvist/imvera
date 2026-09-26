@@ -162,9 +162,10 @@ async def ready() -> JSONResponse | dict:
         "gate": "p0b" if mode == "callactor" else "p0a",
     }
     try:
-        from packages.voice_runtime.trace import trace_stats
+        from packages.voice_runtime.trace import obs_mode, trace_stats
 
         payload["trace"] = trace_stats()
+        payload["obs_mode"] = obs_mode()
     except Exception:
         pass
     if mode == "callactor":
