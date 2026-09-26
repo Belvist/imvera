@@ -81,9 +81,22 @@ class DownlinkRecorder:
         save_pcm_u8_wav(self.bytes(), path, sample_rate=sample_rate)
 
 
-def play_u8_on_call(call, pcm_u8: bytes, *, frame_bytes: int, frame_sleep_s: float = 0.02) -> None:
+def play_u8_on_call(
+    call,
+    pcm_u8: bytes,
+    *,
+    frame_bytes: int,
+    frame_sleep_s: float = 0.02,
+    leading_silence_ms: int = 200,
+) -> None:
     import time
 
+    if leading_silence_ms > 0:
+        silence = bytes([128]) * frame_bytes
+        n_frames = max(1, int(leading_silence_ms / (frame_sleep_s * 1000)))
+        for _ in range(n_frames):
+            call.write_audio(silence)
+            time.sleep(frame_sleep_s)
     for offset in range(0, len(pcm_u8), frame_bytes):
         frame = pcm_u8[offset : offset + frame_bytes]
         if len(frame) < frame_bytes:

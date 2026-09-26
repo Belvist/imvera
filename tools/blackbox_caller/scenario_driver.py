@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -92,7 +93,19 @@ def run_scenario(
                 result.errors.append("call timeout")
                 break
             if step.action == "wait_bot_finish":
-                client.wait_bot_finish(step.wait_s or 30.0)
+                finished = client.wait_bot_finish(step.wait_s or 30.0)
+                if not finished:
+                    result.errors.append(
+                        f"wait_bot_finish timed out after {step.wait_s or 30.0}s "
+                        "(bot speech not observed→ended)"
+                    )
+                # Let FreeSWITCH/CallActor open listen after playout settle before uplink.
+                settle_ms = int(
+                    os.environ.get("IMVERA_LIVE_POST_BOT_SETTLE_MS", "700")
+                    or "700"
+                )
+                if settle_ms > 0:
+                    time.sleep(settle_ms / 1000.0)
                 continue
             if step.action in {"play_wav", "barge_in"}:
                 if step.phrase_id not in manifest:
