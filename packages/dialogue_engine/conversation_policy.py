@@ -1333,7 +1333,9 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 # scheduled user text so calm/hostile distinction still runs.
                 _raw = _raw_turn or (turn_context.user_text or "")
                 if _raw.strip():
-                    from packages.dialogue_engine.check_path import _looks_like_complaint
+                    from packages.dialogue_engine.check_path import (
+                        complaint_without_negation,
+                    )
                     from packages.dialogue_engine.reluctance import (
                         _DONT_KNOW,
                         _FINISH_NOW,
@@ -1344,7 +1346,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                         r"не\s+могу\s+сказать", _raw, re.I
                     )
                     if (
-                        not _looks_like_complaint(_raw)
+                        not complaint_without_negation(_raw)
                         and not _FINISH_NOW.search(_raw)
                         and not _IRRITATION.search(_raw)
                         and not _cant_say

@@ -306,14 +306,37 @@ def _looks_like_complaint(text: str) -> bool:
         return True
     return bool(
         re.search(
-            r"(плох|бол(?!ее(?:\b|-))|тошн|кружи|дурно|мутит|тяжел|температур|давлен|"
-            r"отвратительн|паршив|хреново|фигово|дерьмово|гнусно|мерзко|"
-            r"погано|кошмарно|"
-            r"слабость|болит|ноет|ломит|давит|тошнит|знобит|озноб|"
-            r"беспокоит|тревожит|мешает|не\s+могу|плохо\s+себя)",
+            _COMPLAINT_RE,
             t,
         )
     )
+
+
+_COMPLAINT_RE = re.compile(
+    r"(плох|бол(?!ее(?:\b|-))|тошн|кружи|дурно|мутит|тяжел|температур|давлен|"
+    r"отвратительн|паршив|хреново|фигово|дерьмово|гнусно|мерзко|"
+    r"погано|кошмарно|"
+    r"слабость|болит|ноет|ломит|давит|тошнит|знобит|озноб|"
+    r"беспокоит|тревожит|мешает|не\s+могу|плохо\s+себя)"
+)
+
+
+def complaint_without_negation(text: str) -> bool:
+    """True only if a complaint marker appears OUTSIDE negation.
+
+    "Ничего не болит, всё хорошо" must never read as a complaint —
+    live fs-6e3abff0 escalated urgent on exactly this (false RED).
+    Clause-scoped via shared safety guards.
+    """
+    from packages.safety.patterns import is_negated_at, split_clauses
+
+    if is_urgent_concern(text):
+        return True
+    for clause in split_clauses((text or "").lower()):
+        for match in _COMPLAINT_RE.finditer(clause):
+            if not is_negated_at(clause, match.start()):
+                return True
+    return False
 
 
 def _probe_duration(state: EngineState, text: str) -> ProbeStep:
