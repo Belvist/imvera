@@ -10,7 +10,7 @@ export PYTHONPATH := .
 .PHONY: voice-refs-prepare tts-preview tts-preview-list tts-preview-compare
 .PHONY: voice-open test-contracts test-dialogue-e2e test-persistence-e2e test-voice test-sip
 .PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k dialogue-corpus-gate effect-delivery-chaos-gate stress-gate stress-gate-100
-.PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera live-debug-1 live-daily-check-100
+.PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera live-debug-1 live-daily-check-100 agent-dialogue-gate
 .PHONY: test-dialogue-topic lint-dialogue-topic forensic-gate test-dialogue-rich
 .PHONY: test-dialogue-runtime lint-dialogue lint-touched test-semantic-kernel benchmark-semantic-kernel test-voice-perception test-live-replays preflight-gates
 
@@ -302,6 +302,11 @@ test-sip:
 
 test-pstn:
 	@echo "BLOCKED: PSTN trunk — use IMVERA_LIVE_TRANSPORT=pstn make live-call-soak"
+
+
+agent-dialogue-gate:
+	@echo "LAYER A: agent dialogue gate — CallSession engine checklist (no Zoiper)"
+	@$(PYTHON) scripts/agent_dialogue_gate.py
 
 live-call-1:
 	@echo "LAYER: black-box SIP/RTP E2E — 1 real call via external pyVoIP caller"
