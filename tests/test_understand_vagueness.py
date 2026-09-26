@@ -52,12 +52,15 @@ def test_real_complaint_still_grounds() -> None:
 
 def test_explicit_decline_vs_vague_vs_refusal() -> None:
     from packages.dialogue_engine.check_path import is_explicit_concern_decline
+    from packages.dialogue_engine.protocol.acts import declines_open_concern_probe
 
     assert is_explicit_concern_decline("И ничего вроде не беспокоит.") is True
     assert is_explicit_concern_decline("Ничего не болит, всё хорошо.") is True
-    assert is_explicit_concern_decline("Нормально.") is True
+    # Denial shapes only — bare positives ride the normal answer flow.
+    assert is_explicit_concern_decline("Нормально.") is False
     assert is_explicit_concern_decline("Поел.") is False
     assert is_explicit_concern_decline("Не скажу.") is False
     assert is_explicit_concern_decline("Отстань.") is False
     assert is_explicit_concern_decline("Голова болит.") is False
     assert is_explicit_concern_decline("Не очень, голова болит.") is False
+    assert callable(declines_open_concern_probe)

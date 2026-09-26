@@ -233,6 +233,38 @@ _TRAILING_POSITIVE = re.compile(
 )
 
 
+def _pain_only_negated(judged_lower: str) -> bool:
+    """True when pain markers exist only under negation and no non-pain
+    negative marker fired ("Не болит ничего" vs "плохо"). Requires an
+    explicit negator — bare "устал" stays negative."""
+    from packages.dialogue_engine.check_path import complaint_without_negation
+
+    if complaint_without_negation(judged_lower):
+        return False
+    if not re.search(r"\b(не|нет|ничего|никак)\b", judged_lower):
+        return False
+    pain_present = bool(
+        re.search(
+            r"(бол|тошн|кружи|дурно|мутит|тяжел|температур|слабость|"
+            r"ноет|ломит|давит|тошнит|знобит|озноб|беспокоит|тревожит|"
+            r"устал|слаб)",
+            judged_lower,
+        )
+    )
+    if not pain_present:
+        return False
+    nonpain_neg = bool(
+        re.search(
+            r"(мне\s+плохо|плохо\s+мне|(?<!не\s)\bплохо\b|плохо\s+себя|"
+            r"самочувствие\s+(плохое|плохо|неважное)|"
+            r"умира|ужасн|отвратительн|паршив|хреново|фигово|дерьмово|гнусно|мерзко|"
+            r"погано|кошмарно|грустно|не\s+очень|нехорошо|состояние\s+не)",
+            judged_lower,
+        )
+    )
+    return not nonpain_neg
+
+
 def _denied_pain_with_positive(text: str) -> bool:
     """Denied pain + positive summary ("Ничего не болит, всё хорошо").
 
@@ -352,6 +384,11 @@ def extract_goal_facts(
             or _NEGATIVE.match(core)
         )
     )
+    if wellness_neg and _pain_only_negated(_judge_wellness):
+        # Negated pain alone ("Не болит ничего") is not negative wellness —
+        # it is the absence of complaint (live hard-battery). Non-pain
+        # negatives (плохо/ужасно/не очень) still count.
+        wellness_neg = False
     if wellness_neg and _denied_pain_with_positive(raw):
         # Human denied pain and summarized positive ("Ничего не болит,
         # всё хорошо") — that is positive, never negative (live fs-6e3abff0).

@@ -113,6 +113,13 @@ def _is_other_person_only(text: str) -> bool:
 
 
 def may_close_partial(state: EngineState, slot: str) -> bool:
+    from packages.dialogue_engine.protocol.acts import is_forbidden
+
+    # CDK Step 2: a recorded DECLINE forbids the give-up close — "не
+    # получилось узнать" is factually wrong after "nothing bothers".
+    # Normal close (ITS/summary) still happens via the ladder.
+    if is_forbidden(state, "concern_probe"):
+        return False
     goal = state.ensure_goal(slot)
     if state.playing_question is not None or state.planned_question is not None:
         return False

@@ -27,9 +27,11 @@ def normalize_act(state, user_text: str) -> str | None:
     text = (user_text or "").strip()
     if not text:
         return None
-    if is_explicit_concern_decline(text) and _concern_probe_open(state):
-        # DECLINE declines something actually open — never a bare
-        # "Хорошо." to a wellness question (that is WELLNESS_OK territory).
+    if declines_open_concern_probe(state, text):
+        return "DECLINE"
+    if is_explicit_concern_decline(text) and _decline_targets_open(state):
+        # Soft branch: denial with no probe open but wellness declinable
+        # (gate flow) — same act, same YAML effects.
         return "DECLINE"
     try:
         mentions = extract_issue_mentions(text)
@@ -47,6 +49,19 @@ def normalize_act(state, user_text: str) -> str | None:
         record = state.slot_records.get("wellness")
         if record is not None and getattr(record, "polarity", None) == "positive":
             return "WELLNESS_OK"
+        from packages.dialogue_engine.issue_mention_extract import (
+            extract_goal_facts,
+        )
+
+        try:
+            fields = {
+                (f.field, f.value)
+                for f in extract_goal_facts(text, answer_slot="wellness")
+            }
+        except Exception:
+            fields = set()
+        if ("wellness", "positive") in fields:
+            return "WELLNESS_OK"
     return None
 
 
@@ -60,6 +75,45 @@ def _concern_probe_open(state) -> bool:
     if getattr(state, "probe_phase", None) == "concern":
         return True
     return int(getattr(state, "concern_probe_count", 0) or 0) > 0
+
+
+def _is_bare_positive_ok(text: str) -> bool:
+    from packages.dialogue_engine.fast_interpreter import _POSITIVE
+
+    return bool(_POSITIVE.match((text or "").strip()))
+
+
+def declines_open_concern_probe(state, text: str) -> bool:
+    """Decline of an OPEN concern probe: denial shapes OR bare positive.
+
+    "Нормально." to "Что беспокоит?" means "I'm fine" — accept at once.
+    Bare positives elsewhere are NOT declines (WELLNESS_OK territory).
+    """
+    from packages.dialogue_engine.check_path import is_explicit_concern_decline
+
+    if not _concern_probe_open(state):
+        return False
+    t = (text or "").strip()
+    if is_explicit_concern_decline(t):
+        return True
+    return _is_bare_positive_ok(t)
+
+
+def _decline_targets_open(state) -> bool:
+    """Something declinable is open: concern probe, or soft wellness branch.
+
+    Soft branch = no grounded complaint, no specific probe running.
+    No FILLED check: explicit denial with filled wellness still declines
+    further probing (gate). Bare positives never reach here anyway
+    (helper excludes them) — so this gate cannot misfire on "Хорошо.".
+    """
+    if _concern_probe_open(state):
+        return True
+    if (state.wellness_concern or "").strip():
+        return False
+    if (state.probe_phase or "") in ("duration", "severity", "pain_night"):
+        return False
+    return True
 
 
 def apply_act_effects(state, act: str) -> None:

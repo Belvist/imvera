@@ -1326,12 +1326,13 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         ):
             from packages.dialogue_engine.protocol.acts import is_forbidden
 
-            # CDK Step 2: a DECLINE act forbids concern re-probes. Vague
-            # turns after an explicit decline rejoin the ladder instead of
-            # re-asking pain-site questions (fs-6e3abff0 class).
-            _probes_forbidden = is_forbidden(
-                state, "concern_probe"
-            ) or is_forbidden(state, "pain_site_probe")
+            # CDK Step 2: forbids from acts. concern_probe ban skips every
+            # probe branch below (decline fallthrough). pain_site_probe
+            # ban (e.g. after WELLNESS_OK) skips only the site-listing
+            # options variant — a plain "что беспокоит" stays allowed so
+            # genuine deterioration still probes (live battery).
+            _concern_banned = is_forbidden(state, "concern_probe")
+            _pain_banned = is_forbidden(state, "pain_site_probe")
             if state.concern_probe_count >= 2:
                 # Twice vague on red — escalate unspecified, honestly marked.
                 # BUT a calm substantive non-complaint («Пойдёт.») declines
@@ -1362,7 +1363,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                         and not _cant_say
                     ):
                         _force = False
-                if _force and not _probes_forbidden:
+                if _force and not _concern_banned:
                     state.observations["concern_status"] = "unspecified"
                     state.red_state_pending = False
                     return ResponsePlan(
@@ -1374,24 +1375,37 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             elif state.concern_probe_count == 1:
                 from packages.dialogue_engine.check_path import (
                     apply_concern_answer,
-                    is_explicit_concern_decline,
+                )
+                from packages.dialogue_engine.protocol.acts import (
+                    declines_open_concern_probe,
                 )
 
                 _raw1 = (
                     (turn.raw_text if turn is not None else "")
                     or (turn_context.user_text or "")
                 )
-                if _raw1.strip() and is_explicit_concern_decline(_raw1):
-                    # Explicit "nothing bothers" declines — accept and move
-                    # on (live fs-6e3abff0); vague/refusal still gets ONE
-                    # options ask below (pinned), hostile still escalates.
+                if _raw1.strip() and declines_open_concern_probe(state, _raw1):
+                    # Decline of the open probe (denial shapes or bare
+                    # "I'm fine") — accept and move on (live fs-6e3abff0);
+                    # vague/refusal still gets ONE options ask below.
                     apply_concern_answer(state, _raw1)
                     state.observations["concern_declined"] = "1"
                     state.red_state_pending = False
                 else:
-                    if _probes_forbidden:
+                    if _concern_banned:
                         state.observations["concern_declined"] = "1"
                         state.red_state_pending = False
+                    elif _pain_banned:
+                        # Site listing banned, plain probe allowed.
+                        state.concern_probe_count = 2
+                        return ResponsePlan(
+                            obligation=ConversationObligation.NEVER_SILENT,
+                            action="speak",
+                            mandatory_question=questions.probe_question("concern"),
+                            intent="probe_concern",
+                            slot="wellness",
+                            marks_question=True,
+                        )
                     else:
                         state.concern_probe_count = 2
                         return ResponsePlan(
@@ -1408,7 +1422,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                             marks_question=True,
                         )
             else:
-                if _probes_forbidden:
+                if _concern_banned:
                     state.observations["concern_declined"] = "1"
                     state.red_state_pending = False
                     state.concern_probe_count = 0

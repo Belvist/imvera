@@ -270,18 +270,19 @@ _EXPLICIT_DECLINE_RE = re.compile(
     r"(ничего\s+не\s+(болит|беспокоит|тревожит)|"
     r"не\s+(болит|беспокоит)\b|"
     r"\bнет\b.{0,25}(хорошо|нормально|отлично)|"
-    r"вс[её]\s+хорошо|вс[её]\s+нормально|вс[её]\s+отлично|"
-    r"^нормально\.?$|^хорошо\.?$)",
+    r"вс[её]\s+хорошо|вс[её]\s+нормально|вс[её]\s+отлично)",
     re.I,
 )
 
 
 def is_explicit_concern_decline(text: str) -> bool:
-    """Explicit 'nothing bothers' (live fs-6e3abff0) — accept at once.
+    """Explicit denial-of-complaint (live fs-6e3abff0) — accept at once.
 
-    Distinct from vague ("Поел.", "Не скажу.") which still earns ONE
-    options ask, and from hostile refusal which escalates. Only a clear
-    denial-of-complaint skips the options step entirely.
+    Denial shapes only ("ничего не болит", "нет, всё хорошо"). Bare
+    positives ("Нормально.", "Хорошо.") are NOT declines here — they ride
+    the normal answer flow (WELLNESS_OK territory). Vague ("Поел.",
+    "Не скажу.") still earns ONE options ask; hostile still escalates.
+    Guarded by complaint_without_negation: any unnegated complaint wins.
     """
     t = (text or "").strip()
     if not t or complaint_without_negation(t):

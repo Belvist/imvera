@@ -2030,6 +2030,13 @@ def _apply_semantic(
         state.slot_unclear_counts[answer_slot] = count
         state.processing_turn_id = None
         state.processing_effect_id = None
+        from packages.dialogue_engine.protocol.acts import is_forbidden
+
+        if is_forbidden(state, "concern_probe"):
+            # DECLINE recorded: partial-close ("не получилось узнать") is
+            # factually wrong — the user told us nothing bothers. Rejoin
+            # the ladder (ITS / normal close) instead of giving up.
+            return _schedule_advance(state, user_text=user_text)
         if may_close_partial(state, answer_slot):
             return _close_partial(state)
         if can_ask_slot(state, answer_slot):
@@ -2793,6 +2800,12 @@ def _close_partial(state: EngineState) -> tuple[EngineState, list[Effect]]:
         return _emit_summary(
             state, acknowledge="Поняла вас. Спасибо, что рассказали."
         )
+    # Recorded DECLINE must never die as "не получилось" either: the user
+    # told us nothing bothers — close warm, never give up (CDK Step 2).
+    from packages.dialogue_engine.protocol.acts import is_forbidden
+
+    if is_forbidden(state, "concern_probe"):
+        return _emit_summary(state, acknowledge="Хорошо, записала.")
     state.call_closed = True
     state.closing_reason = "partial_unresolved"
     state.fsm_state = FsmState.FINAL_CLASSIFICATION

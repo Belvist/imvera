@@ -63,3 +63,32 @@ def test_issue_site_enqueues_severity_before_its() -> None:
     assert "сильн" in speech.lower() or "терпим" in speech.lower()
     # Queue consumed by the probe: ITS later must not re-ask severity.
     assert "severity" not in _engine(session).state.queued_needs
+
+
+def _fresh_state():
+    from packages.dialogue_engine.engine import DialogueEngine
+
+    engine = DialogueEngine(call_id="act-table", elder_display_name="Тест")
+    engine.start()
+    return engine.state
+
+
+def test_act_table_no_preopened_probe_required() -> None:
+    """DoD#5: state×text→act without a pre-opened concern probe."""
+    from packages.dialogue_engine.protocol.acts import normalize_act
+
+    cases = [
+        # (setup, text, expected_act)
+        ("wellness_open", "И ничего вроде не беспокоит.", "DECLINE"),
+        ("wellness_open", "Ничего не болит, всё хорошо.", "DECLINE"),
+        ("wellness_open", "Да нет, ничего не болит.", "DECLINE"),  # new wording
+        ("wellness_open", "Поел.", None),
+        ("wellness_open", "Не скажу.", None),
+        ("wellness_open", "Отстань.", None),
+        ("wellness_open", "Голова болит.", "ISSUE_SITE"),
+        ("wellness_open", "Хорошо.", None),  # bare positive: not DECLINE
+    ]
+    for setup, text, expected in cases:
+        state = _fresh_state()
+        assert setup == "wellness_open"  # single setup in this table
+        assert normalize_act(state, text) == expected, (text, expected)
