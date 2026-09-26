@@ -14,6 +14,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from packages.dialogue_engine.protocol import coverage_order as _coverage_order
+
 if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState
 
@@ -24,7 +26,8 @@ DOMAINS: tuple[str, ...] = ("wellbeing", "mood", "sleep", "medication", "nutriti
 
 # Baseline filler priority: food first, then meds (neutral check only after
 # the meal question — never nag right after «хорошо»). Mood/sleep last.
-FILLER_ORDER: tuple[str, ...] = ("nutrition", "medication", "mood", "sleep")
+# Generated from the protocol table (single source); do not fork a copy.
+FILLER_ORDER: tuple[str, ...] = _coverage_order("full")
 
 _MOOD_MARKERS = re.compile(
     r"(груст|одинок|тревож|триво|настроени|тоскл|весел|радост)", re.I

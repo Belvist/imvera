@@ -145,7 +145,9 @@ def _required_bg_goals(state: EngineState) -> set[str]:
     """
     required = set(getattr(state, "required_background_goals", None) or ())
     if getattr(state, "mandatory_background_goals", False):
-        required |= {"mood", "sleep", "plans"}
+        from packages.dialogue_engine.protocol import BACKGROUND_SLOTS
+
+        required |= set(BACKGROUND_SLOTS)
     return required
 
 
@@ -256,18 +258,12 @@ def build_call_outcomes(
             "plans": state.slots.get("plans") == SlotStatus.FILLED,
         }
         bg_required = _required_bg_goals(state)
+        from packages.dialogue_engine.protocol import BACKGROUND_SLOTS, required_slots
+
         required_checks = [
             key
-            for key in (
-                "identity",
-                "consent",
-                "can_talk",
-                "wellness",
-                "mood",
-                "sleep",
-                "plans",
-            )
-            if key not in ("mood", "sleep", "plans") or key in bg_required
+            for key in required_slots("full")
+            if key not in BACKGROUND_SLOTS or key in bg_required
         ]
         snapshot = CallStatusSnapshot(
             call_id=state.call_id,

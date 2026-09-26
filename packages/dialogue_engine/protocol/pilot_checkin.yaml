@@ -1,0 +1,24 @@
+# Pilot check-in protocol — the single table of required/coverage/status.
+# P0b Step 1. All slot/coverage/mandatory readers must derive from here
+# (generated constants or thin wrappers) — never a second hardcoded copy.
+# See docs/plans/P0b-protocol-as-data.md. Behavior-neutral vs the values
+# it replaces (verified by unit tests pinning exact tuples).
+version: 1
+modes:
+  short: # default check-in: wellness + ITS carry the call
+    required_slots: [identity, consent, can_talk, wellness]
+    coverage_order: [nutrition, medication, mood, sleep]
+    may_its_without: [mood, sleep, plans]
+  full: # mission-required background goals (demo/pilot full check-in)
+    required_slots: [identity, consent, can_talk, wellness, mood, sleep, plans]
+    coverage_order: [nutrition, medication, mood, sleep]
+  complaint: # active pain: site + severity before ITS
+    required_slots: [site, severity]
+    coverage_order: []
+status_impact:
+  missing_required_after_close: YELLOW # explains fs-e98331b8
+  urgent_unnegated_complaint: RED
+acts: # declared lattice (Step 2 moves branching here; nets stay meanwhile)
+  WELLNESS_OK: {clears: [wellness], enqueues: []}
+  DECLINE: {clears: [open_probe], forbids: [pain_site_probe]}
+  ISSUE_SITE: {enqueues: [severity]}
