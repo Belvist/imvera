@@ -26,7 +26,10 @@ MODES: dict = PROTOCOL["modes"]
 STATUS_IMPACT: dict = PROTOCOL.get("status_impact", {})
 ACTS: dict = PROTOCOL.get("acts", {})
 
-BACKGROUND_SLOTS: tuple[str, ...] = ("mood", "sleep", "plans")
+# Background = required in full but not in short (derived, not copied).
+BACKGROUND_SLOTS: tuple[str, ...] = tuple(
+    s for s in MODES["full"]["required_slots"] if s not in MODES["short"]["required_slots"]
+)
 
 
 def required_slots(mode: str) -> tuple[str, ...]:
