@@ -11,7 +11,7 @@ SILENCE_CENTER = 128
 class SpeechDetectorConfig:
     sample_rate: int = 8000
     frame_ms: int = 20
-    speech_rms_threshold: float = 12.0
+    speech_rms_threshold: float = 18.0
     silence_frames_for_end: int = 45  # ~900 ms @ 20ms
 
 

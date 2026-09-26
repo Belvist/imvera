@@ -47,7 +47,15 @@ def _require_freeswitch() -> None:
 
 
 def _select_scenarios(count: int) -> list[BlackboxScenario]:
+    import os
+
     catalog = generate_catalog()
+    scenario_id = (os.environ.get("IMVERA_LIVE_SCENARIO") or "").strip()
+    if scenario_id:
+        for sc in catalog:
+            if sc.id == scenario_id:
+                return [sc]
+        raise RuntimeError(f"BLACKBOX_GATE=FAIL: unknown IMVERA_LIVE_SCENARIO={scenario_id}")
     if count >= len(catalog):
         return catalog
     # Deterministic first N for soak ladder 1→10→100

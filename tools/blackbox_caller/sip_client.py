@@ -521,25 +521,34 @@ class PyVoIPSipClient:
 
     def _start_pump(self) -> None:
         frame_bytes = self.config.frame_bytes
+        frame_s = self.config.frame_ms / 1000.0
         silence = bytes([128]) * frame_bytes
         # pyVoIP blocking read waits until buffer != 0x80 padding, so the pump
         # never observes real inter-phrase silence and wait_bot_finish sticks
         # until the step timeout. Non-blocking + explicit silence fixes that.
+        # Wall-clock ticker: each loop advances one silence/speech frame so
+        # silence_frames_for_end maps to real milliseconds even if read_audio
+        # is slow under load.
 
         def _loop() -> None:
+            next_tick = time.time()
             while not self._pump_stop.is_set():
                 try:
                     chunk = self._call.read_audio(frame_bytes, blocking=False)
                 except Exception:
-                    time.sleep(self.config.frame_ms / 1000.0)
-                    continue
+                    chunk = b""
                 if chunk and chunk != silence and chunk != (b"\x80" * len(chunk)):
                     self._recorder.extend(chunk)
                     self._detector.feed(chunk)
                 else:
                     self._recorder.extend(silence)
                     self._detector.feed(silence)
-                time.sleep(self.config.frame_ms / 1000.0)
+                next_tick += frame_s
+                delay = next_tick - time.time()
+                if delay > 0:
+                    time.sleep(delay)
+                else:
+                    next_tick = time.time()
 
         self._pump_thread = threading.Thread(target=_loop, daemon=True)
         self._pump_thread.start()
@@ -557,16 +566,24 @@ class PyVoIPSipClient:
         before opening TTS and dumps all uplink WAVs during the greeting.
         Also ignore ultra-short energy blips and mid-phrase micro-pauses by
         requiring a minimum spoken duration before silence can complete the wait.
+        After the detector reports idle, require a short wall-clock quiet confirm
+        so one flapping frame cannot release the uplink too early.
         """
         deadline = time.time() + timeout_s
         min_speech_s = max(
             0.8,
             float(os.environ.get("IMVERA_LIVE_MIN_BOT_SPEECH_S", "1.5") or "1.5"),
         )
+        quiet_confirm_s = max(
+            0.25,
+            float(os.environ.get("IMVERA_LIVE_BOT_QUIET_CONFIRM_S", "0.4") or "0.4"),
+        )
         speech_started_at: float | None = time.time() if self._detector.bot_speaking else None
         saw_enough_speech = False
+        quiet_since: float | None = None
         while time.time() < deadline:
             if self._detector.bot_speaking:
+                quiet_since = None
                 if speech_started_at is None:
                     speech_started_at = time.time()
                 elif (time.time() - speech_started_at) >= min_speech_s:
@@ -574,8 +591,12 @@ class PyVoIPSipClient:
             else:
                 speech_started_at = None
                 if saw_enough_speech:
-                    return True
-            time.sleep(0.05)
+                    now = time.time()
+                    if quiet_since is None:
+                        quiet_since = now
+                    elif (now - quiet_since) >= quiet_confirm_s:
+                        return True
+            time.sleep(0.02)
         return False
 
     def wait_bot_start(self, timeout_s: float) -> bool:

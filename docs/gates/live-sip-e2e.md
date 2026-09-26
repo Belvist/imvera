@@ -41,6 +41,29 @@ python3 scripts/blackbox_record_prompts.py --record wellness_good_01
 
 Replace macOS `say` recordings with real human speech before claiming telephony acceptance.
 
+## Live contract (coverage ladder)
+
+Default lab voice stack sets `IMVERA_COVERAGE_LADDER=1` (product path).
+`make live-call-1` therefore expects the **coverage-ladder** bot path for
+`good-clean_short-*`:
+
+```text
+opening → background_nutrition → background_medication → background_mood
+       → background_sleep → goodbye
+```
+
+`make live-call-1` hard-bar expects `opening` + `background_nutrition` + `goodbye_final`
+(proves ladder, not checklist mood-first). Full domain coverage is the soak/debug bar.
+Uplink WAVs still answer the full ladder (`nutrition_ok_01`, `medication_none_01`, …).
+Legacy checklist expectations remain on other catalog families until realigned.
+
+Decline Layer B smoke:
+
+```bash
+IMVERA_LIVE_SIP_USER=fs-gate-caller IMVERA_LIVE_SIP_PASSWORD=gate \
+  IMVERA_LIVE_SCENARIO=live-decline-no-pain make live-call-1
+```
+
 ## Commands
 
 ```bash

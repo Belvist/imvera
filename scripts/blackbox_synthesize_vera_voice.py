@@ -72,6 +72,10 @@ DEFAULT_TEXTS: dict[str, str] = {
         "Да так себе сегодня, почти не спал, после обеда в больницу пойду."
     ),
     "contextual_horosho_plans": "Хорошо.",
+    "nutrition_ok_01": "Да, сегодня уже нормально поел.",
+    "medication_none_01": "Нет, я лекарства обычно не принимаю.",
+    "decline_nothing_bothers_01": "И ничего вроде не беспокоит.",
+    "decline_nothing_hurts_01": "Ничего не болит, всё хорошо.",
 }
 
 SMOKE_IDS = (

@@ -101,8 +101,8 @@ def run_scenario(
                     )
                 # Let FreeSWITCH/CallActor open listen after playout settle before uplink.
                 settle_ms = int(
-                    os.environ.get("IMVERA_LIVE_POST_BOT_SETTLE_MS", "700")
-                    or "700"
+                    os.environ.get("IMVERA_LIVE_POST_BOT_SETTLE_MS", "500")
+                    or "500"
                 )
                 if settle_ms > 0:
                     time.sleep(settle_ms / 1000.0)

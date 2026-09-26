@@ -88,11 +88,12 @@ def play_u8_on_call(
     frame_bytes: int,
     frame_sleep_s: float = 0.02,
     leading_silence_ms: int = 200,
+    trailing_silence_ms: int = 400,
 ) -> None:
     import time
 
+    silence = bytes([128]) * frame_bytes
     if leading_silence_ms > 0:
-        silence = bytes([128]) * frame_bytes
         n_frames = max(1, int(leading_silence_ms / (frame_sleep_s * 1000)))
         for _ in range(n_frames):
             call.write_audio(silence)
@@ -103,3 +104,8 @@ def play_u8_on_call(
             frame = frame + bytes([128]) * (frame_bytes - len(frame))
         call.write_audio(frame)
         time.sleep(frame_sleep_s)
+    if trailing_silence_ms > 0:
+        n_trail = max(1, int(trailing_silence_ms / (frame_sleep_s * 1000)))
+        for _ in range(n_trail):
+            call.write_audio(silence)
+            time.sleep(frame_sleep_s)

@@ -13,6 +13,10 @@ BOT_INTENTS = (
     "check_mood",
     "check_sleep",
     "check_plans",
+    "background_nutrition",
+    "background_medication",
+    "background_mood",
+    "background_sleep",
     "summary",
     "goodbye_confirm",
     "goodbye_final",
@@ -108,12 +112,16 @@ def _match_intents(text: str) -> list[IntentObservation]:
     found: list[IntentObservation] = []
 
     patterns: list[tuple[str, str]] = [
-        (r"здравствуйте|это сервис амвера|как вы себя чувствуете", "opening"),
+        (r"здравствуйте|это сервис амвера|как вы себя чувствуете|как себя чувствуете", "opening"),
+        (r"покушать|с едой|поели", "background_nutrition"),
+        (r"лекарств", "background_medication"),
+        (r"настроение", "background_mood"),
+        (r"спал(?:ось|ась|и)?|выспались|как спали", "background_sleep"),
         (r"настроени", "check_mood"),
         (r"как вы спали|спали", "check_sleep"),
         (r"план|занят|собираетесь", "check_plans"),
-        (r"спасибо за разговор", "summary"),
-        (r"до свидания|всего доброго|хорошего дня", "goodbye_final"),
+        (r"спасибо за разговор|не получилось узнать", "summary"),
+        (r"до свидания|всего доброго|хорошего дня|всего вам хорошего", "goodbye_final"),
         (r"закончить разговор|ещё что-нибудь", "goodbye_confirm"),
         (r"повтор|не слыш|слышишь|алло", "repair"),
         (r"рада это слышать", "ack_good"),
@@ -164,6 +172,12 @@ def analyze_transcript(
 
     if assertions.opening_count > 1:
         assertions.errors.append(f"opening replay count={assertions.opening_count}")
+
+    if "no_pain_probe" in tags or "decline" in tags:
+        pain_markers = ("голов", "сердц", "живот", "что болит", "беспокоит сильнее")
+        for m in pain_markers:
+            if m in lower:
+                assertions.errors.append(f"decline path pain/concern probe language: {m!r}")
 
     return assertions
 

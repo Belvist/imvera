@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-CORPUS_VERSION = "1.0.0"
+CORPUS_VERSION = "1.1.0"
 CORPUS_SEED = 42
 
 WellnessCategory = Literal["good", "normal", "so_so", "okay", "bad"]
@@ -93,6 +93,35 @@ PLANS_PHRASES = (
     "plans_uncertain_01",
 )
 GOODBYE_PHRASES = ("goodbye_01", "goodbye_confirm_01")
+NUTRITION_OK_PHRASES = ("nutrition_ok_01",)
+MEDICATION_NONE_PHRASES = ("medication_none_01",)
+DECLINE_BOTHERS_PHRASES = ("decline_nothing_bothers_01",)
+DECLINE_HURTS_PHRASES = ("decline_nothing_hurts_01",)
+
+# Coverage-ladder live contract (IMVERA_COVERAGE_LADDER=1 / pilot full):
+# live-call-1 hard bar: prove product ladder (food after wellness), not checklist mood-first.
+# Full nutrition→medication→mood→sleep soak is live-call-soak / live-debug.
+LADDER_EXPECTED_INTENTS = [
+    "opening",
+    "background_nutrition",
+    "goodbye_final",
+]
+LADDER_FULL_INTENTS = [
+    "opening",
+    "background_nutrition",
+    "background_medication",
+    "background_mood",
+    "background_sleep",
+    "goodbye_final",
+]
+LEGACY_CHECKLIST_EXPECTED_INTENTS = [
+    "opening",
+    "check_mood",
+    "check_sleep",
+    "check_plans",
+    "summary",
+    "goodbye_final",
+]
 
 
 @dataclass
@@ -233,7 +262,25 @@ def _base_turns(
                 ScenarioStep(action="play_wav", phrase_id=mood),
             ]
         )
+    elif family == "clean_short":
+        # Product live path (coverage ladder): nutrition → medication → mood → sleep.
+        nutrition = _pick(NUTRITION_OK_PHRASES, key + ":nutrition")
+        medication = _pick(MEDICATION_NONE_PHRASES, key + ":medication")
+        steps.extend(
+            [
+                ScenarioStep(action="play_wav", phrase_id=wellness),
+                ScenarioStep(action="wait_bot_finish", wait_s=30.0),
+                ScenarioStep(action="play_wav", phrase_id=nutrition),
+                ScenarioStep(action="wait_bot_finish", wait_s=30.0),
+                ScenarioStep(action="play_wav", phrase_id=medication),
+                ScenarioStep(action="wait_bot_finish", wait_s=30.0),
+                ScenarioStep(action="play_wav", phrase_id=mood),
+                ScenarioStep(action="wait_bot_finish", wait_s=30.0),
+                ScenarioStep(action="play_wav", phrase_id=sleep),
+            ]
+        )
     else:
+        # Legacy checklist uplink (families not yet realigned to ladder).
         steps.extend(
             [
                 ScenarioStep(action="play_wav", phrase_id=wellness),
@@ -278,14 +325,11 @@ def generate_catalog() -> list[BlackboxScenario]:
                 if family == "interrupted_question" and "barge_in" not in tags:
                     tags.append("barge_in")
                 steps = _base_turns(sid, category, family, variant)
-                expected = [
-                    "opening",
-                    "check_mood",
-                    "check_sleep",
-                    "check_plans",
-                    "summary",
-                    "goodbye_final",
-                ]
+                if family == "clean_short":
+                    expected = list(LADDER_EXPECTED_INTENTS)
+                    tags.append("coverage_ladder")
+                else:
+                    expected = list(LEGACY_CHECKLIST_EXPECTED_INTENTS)
                 if family == "multi_slot":
                     expected = ["opening", "check_mood", "summary", "goodbye_final"]
                 scenarios.append(
@@ -299,6 +343,33 @@ def generate_catalog() -> list[BlackboxScenario]:
                         expected_intents=expected,
                     )
                 )
+    # Named Layer B decline smoke (coverage ladder + no pain-probe).
+    decline_steps: list[ScenarioStep] = [
+        ScenarioStep(action="wait_bot_finish", wait_s=45.0),
+        ScenarioStep(action="play_wav", phrase_id="wellness_okay_05"),
+        ScenarioStep(action="wait_bot_finish", wait_s=30.0),
+        ScenarioStep(action="play_wav", phrase_id="decline_nothing_bothers_01"),
+        ScenarioStep(action="wait_bot_finish", wait_s=30.0),
+        ScenarioStep(action="play_wav", phrase_id="decline_nothing_hurts_01"),
+        ScenarioStep(action="wait_bot_finish", wait_s=30.0),
+        ScenarioStep(action="play_wav", phrase_id="nutrition_ok_01"),
+        ScenarioStep(action="wait_bot_finish", wait_s=45.0),
+        ScenarioStep(action="play_wav", phrase_id="goodbye_01"),
+        ScenarioStep(action="wait_bot_finish", wait_s=25.0),
+        ScenarioStep(action="play_wav", phrase_id="goodbye_confirm_01"),
+        ScenarioStep(action="wait_bot_finish", wait_s=30.0),
+    ]
+    scenarios.append(
+        BlackboxScenario(
+            id="live-decline-no-pain",
+            wellness_category="okay",
+            family="decline",
+            variant=0,
+            tags=["decline", "coverage_ladder", "mandatory", "no_pain_probe"],
+            steps=decline_steps,
+            expected_intents=["opening", "goodbye_final"],
+        )
+    )
     return scenarios
 
 

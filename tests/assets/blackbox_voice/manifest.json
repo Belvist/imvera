@@ -45,7 +45,11 @@
     "repair_allo_01": "wav/repair_allo_01.wav",
     "backchannel_01": "wav/backchannel_01.wav",
     "multi_slot_so_so_sleep_plans": "wav/multi_slot_so_so_sleep_plans.wav",
-    "contextual_horosho_plans": "wav/contextual_horosho_plans.wav"
+    "contextual_horosho_plans": "wav/contextual_horosho_plans.wav",
+    "nutrition_ok_01": "wav/nutrition_ok_01.wav",
+    "medication_none_01": "wav/medication_none_01.wav",
+    "decline_nothing_bothers_01": "wav/decline_nothing_bothers_01.wav",
+    "decline_nothing_hurts_01": "wav/decline_nothing_hurts_01.wav"
   },
   "prompts": {
     "wellness_good_01": "Хорошо себя чувствую.",
@@ -91,9 +95,13 @@
     "wellness_so_so_02": "Не очень.",
     "wellness_so_so_03": "Сегодня так себе.",
     "wellness_so_so_04": "Неважно себя чувствую.",
-    "wellness_so_so_05": "Ну такое."
+    "wellness_so_so_05": "Ну такое.",
+    "nutrition_ok_01": "Да, сегодня уже нормально поел.",
+    "medication_none_01": "Нет, я лекарства обычно не принимаю.",
+    "decline_nothing_bothers_01": "И ничего вроде не беспокоит.",
+    "decline_nothing_hurts_01": "Ничего не болит, всё хорошо."
   },
   "source": "vera_tts_smoke",
-  "synthesized_at": "2026-09-08T16:35:54.628482+00:00",
-  "tts_model_revision": "silero_lab:silero:v5_ru:xenia"
+  "synthesized_at": "2026-09-26T22:49:51.639972+00:00",
+  "tts_model_revision": "silero_lab:silero:v5_ru:kseniya"
 }

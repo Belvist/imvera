@@ -209,30 +209,50 @@ def validate_full_daily_check_trace(
         if not any(i in _OPENING_INTENTS for i in intents):
             result.errors.append("missing opening/opening_wellness engine intent")
 
-        for check in _CHECK_INTENTS:
-            if check not in intents and family != "multi_slot":
-                result.errors.append(f"missing engine intent {check}")
+        ladder = family in {"clean_short", "decline"} or "coverage_ladder" in family
+        if family == "decline":
+            # Layer B decline: opening + close, no pain-site probe in engine path.
+            if any("pain" in i or i == "probe_concern" for i in intents):
+                result.errors.append(f"decline path hit probe intent: {intents}")
+            if "goodbye_final" not in intents and "end_call" not in intents:
+                result.errors.append("decline path missing goodbye_final/end_call")
+        elif ladder:
+            for check in (
+                "background_nutrition",
+                "background_medication",
+                "background_mood",
+                "background_sleep",
+            ):
+                if check not in intents:
+                    result.warnings.append(f"ladder missing engine intent {check}")
+            if "goodbye_final" not in intents and "end_call" not in intents:
+                result.errors.append("missing goodbye_final or end_call")
+        else:
+            for check in _CHECK_INTENTS:
+                if check not in intents and family != "multi_slot":
+                    result.errors.append(f"missing engine intent {check}")
 
-        if "summary" not in intents:
-            result.errors.append("missing engine intent summary")
+            if "summary" not in intents:
+                result.errors.append("missing engine intent summary")
 
-        if "goodbye_confirm" not in intents and "goodbye_final" not in intents:
-            result.errors.append("missing goodbye_confirm or goodbye_final")
+            if "goodbye_confirm" not in intents and "goodbye_final" not in intents:
+                result.errors.append("missing goodbye_confirm or goodbye_final")
 
-        if "goodbye_final" not in intents:
-            result.errors.append("missing engine intent goodbye_final")
+            if "goodbye_final" not in intents:
+                result.errors.append("missing engine intent goodbye_final")
 
-        summary_idx = next((i for i, x in enumerate(intents) if x == "summary"), -1)
-        goodbye_idx = next((i for i, x in enumerate(intents) if x == "goodbye_final"), -1)
-        if summary_idx >= 0 and goodbye_idx >= 0 and goodbye_idx < summary_idx:
-            result.errors.append("goodbye_final before summary in engine decisions")
+            summary_idx = next((i for i, x in enumerate(intents) if x == "summary"), -1)
+            goodbye_idx = next((i for i, x in enumerate(intents) if x == "goodbye_final"), -1)
+            if summary_idx >= 0 and goodbye_idx >= 0 and goodbye_idx < summary_idx:
+                result.errors.append("goodbye_final before summary in engine decisions")
 
         for required_stage in ("end_call.started", "call.cleanup_ok"):
-            if required_stage not in stages:
+            if required_stage not in stages and family != "decline":
                 result.errors.append(f"missing lifecycle stage {required_stage}")
 
         tts_count = sum(1 for s in stages if s == "tts.start")
-        if tts_count < 4:
+        min_tts = 2 if family == "decline" else 4
+        if tts_count < min_tts:
             result.errors.append(f"expected multiple tts.start, got {tts_count}")
 
     if "CALL_CLEANUP_FAILURE" in stages:
