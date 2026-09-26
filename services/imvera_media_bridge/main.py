@@ -161,6 +161,12 @@ async def ready() -> JSONResponse | dict:
         "mode": mode,
         "gate": "p0b" if mode == "callactor" else "p0a",
     }
+    try:
+        from packages.voice_runtime.trace import trace_stats
+
+        payload["trace"] = trace_stats()
+    except Exception:
+        pass
     if mode == "callactor":
         from services.imvera_media_bridge.callactor import inference_blockers
 

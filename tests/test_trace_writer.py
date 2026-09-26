@@ -36,3 +36,30 @@ def test_sync_mode_writes_inline(tmp_path, monkeypatch) -> None:
     rows = trace_path("c2").read_text(encoding="utf-8").strip().splitlines()
     assert len(rows) == 1
     monkeypatch.delenv("IMVERA_TRACE_SYNC")
+
+
+def test_tier_filtering() -> None:
+    import os
+
+    from packages.voice_runtime.trace import keep_event
+
+    old = os.environ.get("IMVERA_OBS_MODE")
+    try:
+        os.environ["IMVERA_OBS_MODE"] = "debug"
+        assert keep_event("stage.timing") is True
+        os.environ["IMVERA_OBS_MODE"] = "pilot"
+        assert keep_event("stage.timing") is False
+        assert keep_event("renderer.phrase_ready") is True
+        assert keep_event("persistence.failed") is True
+        os.environ["IMVERA_OBS_MODE"] = "prod"
+        assert keep_event("stage.timing") is False
+        assert keep_event("stt.final") is True
+        assert keep_event("playback.completed") is False
+        assert keep_event("persistence.failed") is True
+        os.environ["IMVERA_OBS_MODE"] = "nonsense"
+        assert keep_event("stage.timing") is True  # unknown falls back to debug
+    finally:
+        if old is None:
+            os.environ.pop("IMVERA_OBS_MODE", None)
+        else:
+            os.environ["IMVERA_OBS_MODE"] = old

@@ -25,6 +25,41 @@ TRACE_DIR = ROOT / ".run" / "traces"
 
 _MAX_QUEUE = 20000
 
+# ADR-022 tiers. Chatty classes die first under load; errors never do.
+# stage.timing dominates live traces (171/222 events on fs-5b509b4f).
+CHATTY_TYPES = frozenset({"stage.timing"})
+ERROR_SUBSTRINGS = frozenset(
+    {"failed", "error", "degraded", "timeout", "cancelled", "TECHNICAL"}
+)
+
+_VALID_MODES = ("debug", "pilot", "prod")
+
+
+def obs_mode() -> str:
+    mode = os.environ.get("IMVERA_OBS_MODE", "debug").strip().lower()
+    return mode if mode in _VALID_MODES else "debug"
+
+
+def keep_event(event_type: str) -> bool:
+    """Tier filter (ADR-022). Debug keeps everything (lab default)."""
+    mode = obs_mode()
+    if mode == "debug":
+        return True
+    lowered = event_type.lower()
+    if any(marker in lowered for marker in ERROR_SUBSTRINGS):
+        return True
+    if mode == "pilot":
+        return event_type not in CHATTY_TYPES
+    # prod: errors + turn/call lifecycle only (no per-stage chatter).
+    return event_type in {
+        "call.started",
+        "call.ended",
+        "renderer.phrase_ready",
+        "stt.final",
+        "persistence.committed",
+        "persistence.failed",
+    }
+
 _log = logging.getLogger("voice.trace")
 
 _queue: queue.Queue = queue.Queue(maxsize=_MAX_QUEUE)
@@ -73,10 +108,13 @@ def _sync_enabled() -> bool:
 
 
 def record_event(call_id: str, event: RuntimeEvent) -> None:
+    event_type = event.event_type.value
+    if not keep_event(event_type):
+        return
     row = {
         "ts": datetime.now(UTC).isoformat(),
         "call_id": call_id,
-        "type": event.event_type.value,
+        "type": event_type,
         "payload": event.payload,
     }
     if _sync_enabled():
@@ -90,6 +128,11 @@ def record_event(call_id: str, event: RuntimeEvent) -> None:
         dropped_events += 1
         if dropped_events % 100 == 1:
             _log.warning("trace queue full, dropped %d events", dropped_events)
+
+
+def trace_stats() -> dict[str, int]:
+    """Queue depth + drops for /health (ADR-022: never silent)."""
+    return {"queued": _queue.qsize(), "dropped": dropped_events}
 
 
 def flush_traces(timeout_s: float = 10.0) -> bool:
