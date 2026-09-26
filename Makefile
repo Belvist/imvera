@@ -10,7 +10,7 @@ export PYTHONPATH := .
 .PHONY: voice-refs-prepare tts-preview tts-preview-list tts-preview-compare
 .PHONY: voice-open test-contracts test-dialogue-e2e test-persistence-e2e test-voice test-sip
 .PHONY: test-pstn trace-bench test-isolation release-check test-corpus-1k dialogue-corpus-gate effect-delivery-chaos-gate stress-gate stress-gate-100
-.PHONY: live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera live-debug-1 live-daily-check-100 agent-dialogue-gate
+.PHONY: sync-freeswitch-zoiper-profile live-call-1 live-call-soak blackbox-write-catalog blackbox-synthesize-vera live-debug-1 live-daily-check-100 agent-dialogue-gate
 .PHONY: test-dialogue-topic lint-dialogue-topic forensic-gate test-dialogue-rich
 .PHONY: test-dialogue-runtime lint-dialogue lint-touched test-semantic-kernel benchmark-semantic-kernel test-voice-perception test-live-replays preflight-gates
 
@@ -308,15 +308,20 @@ agent-dialogue-gate:
 	@echo "LAYER A: agent dialogue gate — CallSession engine checklist (no Zoiper)"
 	@$(PYTHON) scripts/agent_dialogue_gate.py
 
-live-call-1:
+# Refresh gitignored config/local/freeswitch_zoiper.json sip_host from detect_media_host
+# so REGISTER realm matches FreeSWITCH domain (LAN IP), not a stale Wi-Fi address.
+sync-freeswitch-zoiper-profile:
+	@$(PYTHON) -c "from scripts.freeswitch_zoiper_info import sync_freeswitch_zoiper_profile; d=sync_freeswitch_zoiper_profile(); print(f'sip_host={d[\"sip_host\"]}:{d[\"sip_port\"]}')"
+
+live-call-1: sync-freeswitch-zoiper-profile
 	@echo "LAYER: black-box SIP/RTP E2E — 1 real call via external pyVoIP caller"
 	@$(PYTHON) tools/blackbox_caller/main.py --calls 1
 
-live-call-soak:
+live-call-soak: sync-freeswitch-zoiper-profile
 	@echo "LAYER: black-box SIP/RTP soak — IMVERA_LIVE_CALLS=$${IMVERA_LIVE_CALLS:-10}"
 	@$(PYTHON) tools/blackbox_caller/main.py --calls $${IMVERA_LIVE_CALLS:-10}
 
-live-debug-1:
+live-debug-1: sync-freeswitch-zoiper-profile
 	@echo "LAYER: real SIP full daily-check — 1 call, server trace + DEBUG_REPORT.md"
 	@$(PYTHON) scripts/live_daily_check_gate.py --calls 1 --profile full --scenario $${IMVERA_LIVE_DEBUG_SCENARIO:-good-clean_short-00}
 

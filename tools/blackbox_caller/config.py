@@ -151,21 +151,58 @@ def load_docker_internal_config() -> BlackboxConfig:
     )
 
 
+def _live_media_host() -> str:
+    """Current Mac LAN IP used as FreeSWITCH domain / Zoiper host (lab source of truth)."""
+    try:
+        from scripts.local_sip_config import detect_media_host
+
+        return (detect_media_host() or "").strip()
+    except Exception:
+        return ""
+
+
+def _refresh_stale_profile_host(live_host: str) -> None:
+    """Rewrite gitignored freeswitch_zoiper.json when LAN IP drifted (no secrets changed)."""
+    if not live_host or not DEFAULT_PROFILE.is_file():
+        return
+    try:
+        data = json.loads(DEFAULT_PROFILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if (data.get("sip_host") or "").strip() == live_host:
+        return
+    data["sip_host"] = live_host
+    DEFAULT_PROFILE.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
 def load_config() -> BlackboxConfig:
     if is_docker_internal_smoke():
         return load_docker_internal_config()
     profile = load_profile()
     profile_host = (profile.get("sip_host") or "").strip()
     env_host = (os.environ.get("IMVERA_LIVE_SIP_HOST") or "").strip()
-    sip_domain = (
-        os.environ.get("IMVERA_LIVE_SIP_DOMAIN")
-        or profile_host
-        or env_host
-        or "127.0.0.1"
-    ).strip()
+    env_domain = (os.environ.get("IMVERA_LIVE_SIP_DOMAIN") or "").strip()
     port = int(os.environ.get("IMVERA_LIVE_SIP_PORT", profile.get("sip_port", 5060)))
 
-    preferred_host = env_host or profile_host or "127.0.0.1"
+    live_host = _live_media_host()
+    # Prefer env, else reachable profile, else live LAN (detect_media_host). Stale
+    # gitignored sip_host (e.g. old 192.168.1.64) must not become FS auth realm.
+    preferred_host = env_host or profile_host or live_host or "127.0.0.1"
+    if preferred_host not in {"127.0.0.1", "localhost"} and not _host_reachable(
+        preferred_host, port
+    ):
+        if live_host and _host_reachable(live_host, port):
+            preferred_host = live_host
+            _refresh_stale_profile_host(live_host)
+        elif live_host and _is_lan_ipv4(live_host):
+            preferred_host = live_host
+            _refresh_stale_profile_host(live_host)
+
+    sip_domain = (env_domain or preferred_host or live_host or "127.0.0.1").strip()
+
     if preferred_host in {"127.0.0.1", "localhost"}:
         signal_host = preferred_host
     elif _host_reachable(preferred_host, port):
@@ -174,6 +211,8 @@ def load_config() -> BlackboxConfig:
         signal_host = "127.0.0.1"
         if _is_lan_ipv4(preferred_host):
             sip_domain = preferred_host
+        elif live_host and _is_lan_ipv4(live_host):
+            sip_domain = live_host
     else:
         signal_host = preferred_host
 
