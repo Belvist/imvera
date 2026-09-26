@@ -137,6 +137,17 @@ _TOPIC_QUESTIONS: dict[str, str] = {
     "topic_general_symptom_duration": "Как давно это продолжается?",
 }
 
+# Backchannel acks (rotating bank, Step 4: speech lives in banks).
+BACKCHANNEL_ACKS: tuple[str, ...] = (
+    "Слушаю вас.",
+    "Да-да, слушаю вас.",
+    "Да, слушаю вас.",
+    "Угу, слушаю.",
+)
+
+# Greeting back-ack (singleton by design: one fixed hello, no rotation).
+GREETING_ACK = "Здравствуйте! Я вас слушаю."
+
 _SLOT_CLARIFICATIONS: dict[str, str] = {
     "wellness": "Расскажите, пожалуйста, о самочувствии хотя бы в двух словах.",
     "mood": "Как у вас настроение — хотя бы коротко?",

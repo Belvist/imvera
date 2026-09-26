@@ -1440,7 +1440,7 @@ def _is_yes_no_question(text: str) -> bool:
     clause = next((c for c in reversed(last) if c.strip()), "")
     return not _OPEN_Q_WORD.search(clause)
 
-_BACKCHANNEL_ACKS = ("Слушаю вас.", "Да-да, слушаю вас.", "Да, слушаю вас.", "Угу, слушаю.")
+_BACKCHANNEL_ACKS = questions.BACKCHANNEL_ACKS
 
 
 def _backchannel_reask(state: EngineState) -> tuple[str, str, str] | None:
@@ -1714,7 +1714,7 @@ def _answer_backchannel(
         slot = state.delivered_question.slot or answer_slot or "wellness"
         state, effects = _emit_speak(
             state,
-            text="Здравствуйте! Я вас слушаю.",
+            text=questions.GREETING_ACK,
             intent="greeting_ack",
             slot=slot,
             marks_question=False,
