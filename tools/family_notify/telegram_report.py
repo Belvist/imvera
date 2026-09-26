@@ -144,14 +144,26 @@ def report_call(call_id: str, *, dry_run: bool) -> bool:
         print(text)
         return True
     token = os.environ.get("IMVERA_TG_BOT_TOKEN", "")
-    chat_id = os.environ.get("IMVERA_TG_CHAT_ID", "")
-    if not token or not chat_id:
+    chat_ids = [
+        c.strip()
+        for c in os.environ.get("IMVERA_TG_CHAT_ID", "").split(",")
+        if c.strip()
+    ]
+    if not token or not chat_ids:
         print("IMVERA_TG_BOT_TOKEN / IMVERA_TG_CHAT_ID not set — dry output:")
         print(text)
         return False
-    send_message(token, chat_id, text)
-    print(f"sent report for {call_id}")
-    return True
+    failed: list[str] = []
+    for chat_id in chat_ids:
+        try:
+            send_message(token, chat_id, text)
+        except Exception as exc:
+            # One blocked chat (403) must not kill delivery to the rest.
+            print(f"send failed chat_id={chat_id}: {exc}")
+            failed.append(chat_id)
+    delivered = len(chat_ids) - len(failed)
+    print(f"sent report for {call_id} to {delivered}/{len(chat_ids)} chat(s)")
+    return delivered > 0
 
 
 def recent_ended_calls(limit: int = 20) -> list[str]:
