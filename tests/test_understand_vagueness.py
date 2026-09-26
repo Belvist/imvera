@@ -64,3 +64,24 @@ def test_explicit_decline_vs_vague_vs_refusal() -> None:
     assert is_explicit_concern_decline("Голова болит.") is False
     assert is_explicit_concern_decline("Не очень, голова болит.") is False
     assert callable(declines_open_concern_probe)
+
+
+def test_pain_mention_negation_aware() -> None:
+    from packages.dialogue_engine.check_path import has_pain_mention
+
+    assert has_pain_mention("Не болит ничего.") is False
+    assert has_pain_mention("Да нет, ничего не болит.") is False
+    assert has_pain_mention("Ничего не болит, всё хорошо.") is False
+    assert has_pain_mention("Голова болит.") is True
+    assert has_pain_mention("Не очень, голова болит.") is True
+    assert has_pain_mention("Плохо мне.") is False
+
+
+def test_polarity_denied_pain_never_negative() -> None:
+    from packages.dialogue_engine.fast_interpreter import _detect_polarity
+
+    assert _detect_polarity("Не болит ничего.") is None
+    assert _detect_polarity("Да нет, ничего не болит.") is None
+    assert _detect_polarity("Плохо мне.") == "negative"
+    assert _detect_polarity("Не очень, голова болит.") == "negative"
+    assert _detect_polarity("Хорошо.") == "positive"

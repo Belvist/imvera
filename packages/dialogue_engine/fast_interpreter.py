@@ -429,9 +429,42 @@ def fast_interpret_semantic(
     )
 
 
+def _negated_pain_only(normalized: str) -> bool:
+    """Pain markers exist only under negation (shared guard, no new regex).
+
+    "Не болит ничего" → True. "Голова болит" / "плохо" → False.
+    """
+    from packages.dialogue_engine.check_path import complaint_without_negation
+
+    if complaint_without_negation(normalized):
+        return False
+    from packages.dialogue_engine.check_path import _PAIN
+
+    for clause in normalized.split(","):
+        clause = clause.strip()
+        if not clause:
+            continue
+        found = False
+        for match in _PAIN.finditer(clause):
+            found = True
+            from packages.safety.patterns import is_negated_at
+
+            if not is_negated_at(clause, match.start()):
+                return False
+        if found:
+            return True
+    return False
+
+
 def _detect_polarity(text: str) -> str | None:
     core = _normalize_core(text)
     normalized = text.lower()
+    if _negated_pain_only(normalized):
+        # "Не болит ничего" states absence of complaint — never negative.
+        # Trailing positive ("всё хорошо") upgrades to positive below? No:
+        # keep it unknown here; the fact extractor owns the positive call
+        # (denied-pain + trailing positive). Polarity stays honest.
+        return None
     # Contradiction: «хорошо, но состояние не очень» must not read as positive.
     if re.search(r"\bно\b", normalized) and re.search(
         r"(не\s+очень|плох\w*|тяжел\w*|слаб\w*|плохое)",

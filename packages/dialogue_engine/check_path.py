@@ -82,7 +82,17 @@ class ProbeStep:
 
 
 def has_pain_mention(text: str) -> bool:
-    return bool(_PAIN.search(text or ""))
+    """Pain mention outside negation (live hard-battery: denied pain is
+    absence of complaint, never a probe trigger). Clause-scoped via the
+    shared safety guards: "голова болит" hits, "ничего не болит" misses,
+    "не очень, голова болит" hits (second clause is clean)."""
+    from packages.safety.patterns import is_negated_at, split_clauses
+
+    for clause in split_clauses(text or ""):
+        for match in _PAIN.finditer(clause):
+            if not is_negated_at(clause, match.start()):
+                return True
+    return False
 
 
 def has_symptom_detail(text: str) -> bool:
