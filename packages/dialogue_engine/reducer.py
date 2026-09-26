@@ -921,6 +921,21 @@ def _schedule_advance(
     clarify: bool = False,
 ) -> tuple[EngineState, list[Effect]]:
     """Canonical post-mutation advance — scheduler only, not slot ladder."""
+    from packages.dialogue_engine.protocol.acts import consume_need
+
+    # CDK Step 2: serve queued needs before the ladder (guarded: severity
+    # only after onset is known, never on red/closing/summary paths).
+    if (
+        "severity" in state.queued_needs
+        and state.probe_phase is None
+        and (state.wellness_duration or "").strip()
+        and not state.call_closed
+        and state.fsm_state not in (FsmState.SUMMARY, FsmState.GOODBYE)
+        and not state.awaiting_goodbye_confirm
+        and _severity_probe_due(state)
+    ):
+        consume_need(state, "severity")
+        return _speak_probe(state, "severity")
     state.delivered_question = None
     state.planned_question = None
     ctx = TurnContext(
@@ -988,6 +1003,17 @@ def _apply_rich_turn(
         answered, effects = _answer_backchannel(state, answer_slot, user_text)
         if effects:
             return answered, effects
+
+    # CDK Step 2: normalize to a closed act and apply YAML effects.
+    # Dialogue branches on acts + queue from here on.
+    from packages.dialogue_engine.protocol.acts import (
+        apply_act_effects,
+        normalize_act,
+    )
+
+    _protocol_act = normalize_act(state, user_text)
+    if _protocol_act is not None:
+        apply_act_effects(state, _protocol_act)
 
     if turn.dialogue_act == "backchannel":
         state.processing_turn_id = None
@@ -1491,6 +1517,11 @@ def _coerce_unclear_by_content(
         if episode is not None:
             episode.known_attributes["severity"] = recorded_severity
         state.observations["concern_severity"] = recorded_severity
+        from packages.dialogue_engine.protocol.acts import (
+            consume_need as _consume_sev,
+        )
+
+        _consume_sev(state, "severity")
     if state.probe_phase == "duration" and looks_like_duration_answer(user_text):
         return SemanticAct.ANSWER
     if state.probe_phase in ("duration", "pain_night", "severity"):
@@ -1911,6 +1942,17 @@ def _apply_semantic(
         if coerced is not None:
             semantic = semantic.model_copy(update={"act": coerced, "value": user_text})
 
+    # CDK Step 2: normalize to a closed act and apply YAML effects.
+    # Dialogue branches on acts + queue from here on.
+    from packages.dialogue_engine.protocol.acts import (
+        apply_act_effects,
+        normalize_act,
+    )
+
+    _protocol_act = normalize_act(state, user_text)
+    if _protocol_act is not None:
+        apply_act_effects(state, _protocol_act)
+
     if semantic.act == SemanticAct.BACKCHANNEL:
         state.processing_turn_id = None
         state.processing_effect_id = None
@@ -2021,6 +2063,11 @@ def _apply_semantic(
             if looks_like_duration_answer(text):
                 advance_probe_phase(state, text)
                 if _severity_probe_due(state):
+                    from packages.dialogue_engine.protocol.acts import (
+                        consume_need as _consume,
+                    )
+
+                    _consume(state, "severity")
                     return _speak_probe(state, "severity")
                 return _schedule_advance(state, user_text=text)
         if should_start_topic_flow(

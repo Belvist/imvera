@@ -1263,10 +1263,12 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         _declined = state.observations.get("concern_declined") == "1"
         if _declined and turn is not None:
             from packages.dialogue_engine.check_path import _looks_like_complaint
+            from packages.dialogue_engine.protocol.acts import lift_forbids
 
             if _looks_like_complaint(turn.raw_text or ""):
                 state.observations.pop("concern_declined", None)
                 state.concern_probe_count = max(state.concern_probe_count, 1)
+                lift_forbids(state)
                 _declined = False
         # Movie/news defuse (live: «умираю» from a film): strong non-medical
         # context + no symptom anywhere → not a medical red. Clear pending,
@@ -1322,6 +1324,14 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         if _negative_no_concern and (
             state.check_path != CheckPath.URGENT or state.red_state_pending
         ):
+            from packages.dialogue_engine.protocol.acts import is_forbidden
+
+            # CDK Step 2: a DECLINE act forbids concern re-probes. Vague
+            # turns after an explicit decline rejoin the ladder instead of
+            # re-asking pain-site questions (fs-6e3abff0 class).
+            _probes_forbidden = is_forbidden(
+                state, "concern_probe"
+            ) or is_forbidden(state, "pain_site_probe")
             if state.concern_probe_count >= 2:
                 # Twice vague on red — escalate unspecified, honestly marked.
                 # BUT a calm substantive non-complaint («Пойдёт.») declines
@@ -1352,7 +1362,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                         and not _cant_say
                     ):
                         _force = False
-                if _force:
+                if _force and not _probes_forbidden:
                     state.observations["concern_status"] = "unspecified"
                     state.red_state_pending = False
                     return ResponsePlan(
@@ -1379,36 +1389,48 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     state.observations["concern_declined"] = "1"
                     state.red_state_pending = False
                 else:
-                    state.concern_probe_count = 2
+                    if _probes_forbidden:
+                        state.observations["concern_declined"] = "1"
+                        state.red_state_pending = False
+                    else:
+                        state.concern_probe_count = 2
+                        return ResponsePlan(
+                            obligation=ConversationObligation.NEVER_SILENT,
+                            action="speak",
+                            mandatory_question=(
+                                "Скажите, что болит — голова, сердце, "
+                                "живот? Или что случилось?"
+                            ),
+                            intent="probe_concern_options",
+                            # slot=None: the per-slot reserve cap already spent two
+                            # wellness asks; this ladder is slot-independent anyway.
+                            slot=None,
+                            marks_question=True,
+                        )
+            else:
+                if _probes_forbidden:
+                    state.observations["concern_declined"] = "1"
+                    state.red_state_pending = False
+                    state.concern_probe_count = 0
+                    _q = ""
+                else:
+                    state.concern_probe_count = 1
+                    _q = questions.probe_question("concern")
+                if _q:
+                    _turn_text = turn.raw_text if turn is not None else ""
+                    if _has_distress_markers(_turn_text):
+                        # Live fs-2d8153a8: «очень плохо» → bare «Что беспокоит».
+                        # Name the pain first, then ask — pools intact.
+                        _q = f"Сочувствую. {_q}"
                     return ResponsePlan(
                         obligation=ConversationObligation.NEVER_SILENT,
                         action="speak",
-                        mandatory_question=(
-                            "Скажите, что болит — голова, сердце, "
-                            "живот? Или что случилось?"
-                        ),
-                        intent="probe_concern_options",
-                        # slot=None: the per-slot reserve cap already spent two
-                        # wellness asks; this ladder is slot-independent anyway.
-                        slot=None,
+                        mandatory_question=_q,
+                        intent="probe_concern",
+                        slot="wellness",
                         marks_question=True,
                     )
-            else:
-                state.concern_probe_count = 1
-                _q = questions.probe_question("concern")
-                _turn_text = turn.raw_text if turn is not None else ""
-                if _has_distress_markers(_turn_text):
-                    # Live fs-2d8153a8: «очень плохо» → bare «Что беспокоит».
-                    # Name the pain first, then ask — pools intact.
-                    _q = f"Сочувствую. {_q}"
-                return ResponsePlan(
-                    obligation=ConversationObligation.NEVER_SILENT,
-                    action="speak",
-                    mandatory_question=_q,
-                    intent="probe_concern",
-                    slot="wellness",
-                    marks_question=True,
-                )
+                # Forbidden: declined, rejoin the ladder below.
 
     # Adaptive coverage (not a questionnaire): when nothing acute is open
     # but the minimum (3 exchanges / 3 domains) is unmet, ask ONE next

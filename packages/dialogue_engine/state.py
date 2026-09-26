@@ -253,6 +253,11 @@ class EngineState(BaseModel):
     # Asked-question history (spoken question texts, cap 20) — answers
     # «а что ты спрашивал?» and never-repeat audits. Not state for logic.
     asked_history: list[str] = Field(default_factory=list)
+    # CDK Step 2: act-driven NeedQueue. forbidden_actions blocks probes a
+    # DECLINE ruled out (per-call; lifted only by restated complaint).
+    # queued_needs holds must-ask items (e.g. severity) served before ITS.
+    forbidden_actions: list[str] = Field(default_factory=list)
+    queued_needs: list[str] = Field(default_factory=list)
     # Wellness clarify asked once after a mute/garbled first answer.
     wellness_clarify_asked: bool = False
     # Silence reprompts used (max 1 per call): a 7 s silence is not an answer

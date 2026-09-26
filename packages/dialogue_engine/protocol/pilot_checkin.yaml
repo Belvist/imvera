@@ -19,6 +19,6 @@ status_impact:
   missing_required_after_close: YELLOW # explains fs-e98331b8
   urgent_unnegated_complaint: RED
 acts: # declared lattice (Step 2 moves branching here; nets stay meanwhile)
-  WELLNESS_OK: {clears: [wellness], enqueues: []}
-  DECLINE: {clears: [open_probe], forbids: [pain_site_probe]}
-  ISSUE_SITE: {enqueues: [severity]}
+  WELLNESS_OK: {clears: [wellness], enqueues: [], forbids: []}
+  DECLINE: {clears: [open_probe], forbids: [pain_site_probe, concern_probe], enqueues: []}
+  ISSUE_SITE: {enqueues: [severity], clears: [], forbids: []}
