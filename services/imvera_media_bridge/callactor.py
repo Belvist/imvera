@@ -321,6 +321,13 @@ def _teardown_in_background(
             _run_forensic_collect(fs_uuid, call_id)
         except Exception:
             log.exception("callactor.teardown.forensic_failed call_id=%s", call_id)
+        try:
+            from packages.voice_runtime.trace import flush_traces, write_call_summary
+
+            if flush_traces(timeout_s=5.0):
+                write_call_summary(call_id)
+        except Exception:
+            log.exception("callactor.teardown.summary_failed call_id=%s", call_id)
 
     _teardown_executor.submit(_run)
 

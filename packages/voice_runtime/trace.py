@@ -32,6 +32,11 @@ ERROR_SUBSTRINGS = frozenset(
     {"failed", "error", "degraded", "timeout", "cancelled", "TECHNICAL"}
 )
 
+# ADR-022 forensic budget (pilot/prod only; debug is unlimited by design):
+# after the cap, only errors + the end summary are written.
+MAX_FORENSIC_EVENTS = 200
+MAX_FORENSIC_BYTES = 64 * 1024
+
 _VALID_MODES = ("debug", "pilot", "prod")
 
 
@@ -66,6 +71,9 @@ _queue: queue.Queue = queue.Queue(maxsize=_MAX_QUEUE)
 _worker: threading.Thread | None = None
 _worker_lock = threading.Lock()
 dropped_events = 0
+truncated_calls = 0
+_call_usage: dict[str, list[int]] = {}
+_usage_lock = threading.Lock()
 
 
 def _write_row(call_id: str, row: dict) -> None:
@@ -120,6 +128,8 @@ def record_event(call_id: str, event: RuntimeEvent) -> None:
     if _sync_enabled():
         _write_row(call_id, row)
         return
+    if _over_budget(call_id, event_type, row):
+        return
     _ensure_worker()
     global dropped_events
     try:
@@ -130,9 +140,119 @@ def record_event(call_id: str, event: RuntimeEvent) -> None:
             _log.warning("trace queue full, dropped %d events", dropped_events)
 
 
+def _is_error_type(event_type: str) -> bool:
+    lowered = event_type.lower()
+    return any(marker in lowered for marker in ERROR_SUBSTRINGS)
+
+
+def _over_budget(call_id: str, event_type: str, row: dict) -> bool:
+    """Per-call forensic budget (pilot/prod; debug unlimited)."""
+    if obs_mode() == "debug" or _is_error_type(event_type):
+        return False
+    global truncated_calls
+    with _usage_lock:
+        if len(_call_usage) > 10000:
+            _call_usage.clear()
+        used = _call_usage.get(call_id)
+        if used is None:
+            used = [0, 0]
+            _call_usage[call_id] = used
+        if used[0] < 0:
+            return True  # already truncated: errors only from here
+        size = len(json.dumps(row, ensure_ascii=False))
+        if used[0] >= MAX_FORENSIC_EVENTS or used[1] + size > MAX_FORENSIC_BYTES:
+            if used[0] >= 0:
+                truncated_calls += 1
+                used[0] = -1
+                _log.warning("trace budget hit call_id=%s", call_id)
+                marker = {
+                    "ts": datetime.now(UTC).isoformat(),
+                    "call_id": call_id,
+                    "type": "trace.truncated",
+                    "payload": {"mode": obs_mode()},
+                }
+                try:
+                    _queue.put_nowait((call_id, marker))
+                except queue.Full:
+                    pass
+            return True
+        used[0] += 1
+        used[1] += size
+        return False
+
+
+def write_call_summary(call_id: str) -> dict:
+    """End-of-call summary record (ADR-022 PILOT contract).
+
+    Aggregates the call's own JSONL (turns, actions, errors, stage
+    p50/p95) and appends one `call.summary` row. Cheap: single file read.
+    """
+    path = trace_path(call_id)
+    summary: dict = {
+        "call_id": call_id,
+        "turns": 0,
+        "actions": [],
+        "errors": [],
+        "truncated": False,
+        "stage_ms": {},
+    }
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        lines = []
+    timings: dict[str, list[float]] = {}
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        rtype = str(row.get("type", ""))
+        payload = row.get("payload") or {}
+        if rtype == "stt.final":
+            summary["turns"] += 1
+        elif rtype == "renderer.phrase_ready":
+            text = str(payload.get("text", ""))[:80]
+            if text:
+                summary["actions"].append(text)
+        elif rtype == "trace.truncated":
+            summary["truncated"] = True
+        if _is_error_type(rtype):
+            summary["errors"].append(rtype)
+        if rtype == "stage.timing":
+            stage = str(payload.get("stage", "unknown"))
+            try:
+                timings.setdefault(stage, []).append(float(payload.get("elapsed_ms", 0)))
+            except (TypeError, ValueError):
+                pass
+    for stage, samples in sorted(timings.items()):
+        ordered = sorted(samples)
+        summary["stage_ms"][stage] = {
+            "n": len(ordered),
+            "p50": round(ordered[len(ordered) // 2], 1),
+            "p95": round(ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))], 1),
+        }
+    marker = {
+        "ts": datetime.now(UTC).isoformat(),
+        "call_id": call_id,
+        "type": "call.summary",
+        "payload": summary,
+    }
+    try:
+        _write_row(call_id, marker)
+    except OSError:
+        pass
+    with _usage_lock:
+        _call_usage.pop(call_id, None)
+    return summary
+
+
 def trace_stats() -> dict[str, int]:
-    """Queue depth + drops for /health (ADR-022: never silent)."""
-    return {"queued": _queue.qsize(), "dropped": dropped_events}
+    """Queue depth + drops + truncations for /health (ADR-022: never silent)."""
+    return {
+        "queued": _queue.qsize(),
+        "dropped": dropped_events,
+        "truncated_calls": truncated_calls,
+    }
 
 
 def flush_traces(timeout_s: float = 10.0) -> bool:
