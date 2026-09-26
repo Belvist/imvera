@@ -258,6 +258,9 @@ class EngineState(BaseModel):
     # queued_needs holds must-ask items (e.g. severity) served before ITS.
     forbidden_actions: list[str] = Field(default_factory=list)
     queued_needs: list[str] = Field(default_factory=list)
+    # CDK Step 3: last normalized act ("" when none). Read-only signal for
+    # downstream guards; routing never assigns meaning to free text here.
+    last_protocol_act: str = ""
     # Wellness clarify asked once after a mute/garbled first answer.
     wellness_clarify_asked: bool = False
     # Silence reprompts used (max 1 per call): a 7 s silence is not an answer

@@ -1343,10 +1343,24 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 # Semantic path carries no RichUserTurn: fall back to the
                 # scheduled user text so calm/hostile distinction still runs.
                 _raw = _raw_turn or (turn_context.user_text or "")
-                if _raw.strip():
-                    from packages.dialogue_engine.check_path import (
-                        complaint_without_negation,
-                    )
+                from packages.dialogue_engine.check_path import (
+                    complaint_without_negation,
+                )
+
+                if (
+                    getattr(state, "last_protocol_act", "") == "WELLNESS_SO_SO"
+                    and _raw.strip()
+                    and not complaint_without_negation(_raw)
+                ):
+                    # CDK Step 3: only ever vague (no complaint, no hostility
+                    # below) — decline, never force-close-urgent on mush.
+                    from packages.dialogue_engine.reluctance import _IRRITATION
+
+                    if not _IRRITATION.search(_raw):
+                        _force = False
+                        state.observations["concern_declined"] = "1"
+                        state.red_state_pending = False
+                if _force and _raw.strip():
                     from packages.dialogue_engine.reluctance import (
                         _DONT_KNOW,
                         _FINISH_NOW,

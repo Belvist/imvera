@@ -18,7 +18,13 @@ modes:
 status_impact:
   missing_required_after_close: YELLOW # explains fs-e98331b8
   urgent_unnegated_complaint: RED
-acts: # declared lattice (Step 2 moves branching here; nets stay meanwhile)
+acts: # closed lattice (Step 3 wires Understand; enforcement per act below)
   WELLNESS_OK: {clears: [wellness], enqueues: [], forbids: [pain_site_probe]}
+  WELLNESS_SO_SO: {clears: [], enqueues: [], forbids: []}
   DECLINE: {clears: [open_probe], forbids: [pain_site_probe, concern_probe], enqueues: []}
   ISSUE_SITE: {enqueues: [severity], clears: [], forbids: []}
+  ISSUE_SEVERITY_ANSWER: {clears: [severity], enqueues: [], forbids: []}
+  AFFIRM_CLOSE: {clears: [], enqueues: [], forbids: []}
+  GOODBYE: {clears: [], enqueues: [], forbids: []}
+  OTHER: {clears: [], enqueues: [], forbids: []}
+  SIDE_TOPIC: {clears: [], enqueues: [], forbids: []}

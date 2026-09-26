@@ -92,3 +92,33 @@ def test_act_table_no_preopened_probe_required() -> None:
         state = _fresh_state()
         assert setup == "wellness_open"  # single setup in this table
         assert normalize_act(state, text) == expected, (text, expected)
+
+
+def test_act_lattice_table() -> None:
+    """DoD: state×text→act table, new wordings need no new code."""
+    from packages.dialogue_engine.protocol.acts import normalize_act
+
+    cases = [
+        ("И ничего вроде не беспокоит.", "DECLINE"),
+        ("Да нет, ничего не болит.", "DECLINE"),  # fresh wording, same act
+        ("Более-менее.", "WELLNESS_SO_SO"),
+        ("Да так пойдёт.", "WELLNESS_SO_SO"),
+        ("Средне.", "WELLNESS_SO_SO"),
+        ("Терпимо.", "WELLNESS_SO_SO"),
+        ("Голова болит.", "ISSUE_SITE"),
+        ("Живот прихватило.", "ISSUE_SITE"),
+        ("Хорошо.", "WELLNESS_OK"),  # needs wellness asked; set below
+        ("Нормально.", "WELLNESS_OK"),  # mild positive, not decline
+        ("Поел.", None),
+        ("Отстань.", None),
+    ]
+    for text, expected in cases:
+        st = _fresh_state()
+        if expected in ("WELLNESS_OK",):
+            from packages.dialogue_engine.state import Question, QuestionPhase
+
+            st.delivered_question = Question(
+                question_id="g", slot="wellness", text="Как вы?",
+                phase=QuestionPhase.DELIVERED, intent="check_wellness",
+            )
+        assert normalize_act(st, text) == expected, (text, expected)

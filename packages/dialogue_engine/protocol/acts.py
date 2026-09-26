@@ -13,14 +13,15 @@ from __future__ import annotations
 def normalize_act(state, user_text: str) -> str | None:
     """One closed act or None, from existing understanding outputs only.
 
-    - DECLINE: explicit denial-of-concern (existing helper).
-    - ISSUE_SITE: kernel/legacy issue mentions present.
-    - WELLNESS_OK: positive polarity answer while wellness was asked.
-    New Russian phrasings map to these acts via Understand (Step 3);
-    never a new `if "phrase" in text` here or in policy.
+    Priority is explicit (documented): DECLINE > ISSUE_SITE >
+    ISSUE_SEVERITY_ANSWER > WELLNESS_SO_SO > WELLNESS_OK.
+    New Russian phrasings map to these acts via Understand (fact
+    extractors, polarity, mentions); never a new `if "phrase" in text`
+    here or in policy.
     """
     from packages.dialogue_engine.check_path import is_explicit_concern_decline
     from packages.dialogue_engine.issue_mention_extract import (
+        extract_goal_facts,
         extract_issue_mentions,
     )
 
@@ -39,6 +40,17 @@ def normalize_act(state, user_text: str) -> str | None:
         mentions = ()
     if mentions:
         return "ISSUE_SITE"
+    if _is_severity_answer(state, text):
+        return "ISSUE_SEVERITY_ANSWER"
+    try:
+        fields = {
+            (f.field, f.value)
+            for f in extract_goal_facts(text, answer_slot="wellness")
+        }
+    except Exception:
+        fields = set()
+    if ("wellness", "uncertain") in fields:
+        return "WELLNESS_SO_SO"
     delivered = state.delivered_question
     if delivered is not None and (delivered.slot or delivered.intent or "") in (
         "wellness",
@@ -49,20 +61,30 @@ def normalize_act(state, user_text: str) -> str | None:
         record = state.slot_records.get("wellness")
         if record is not None and getattr(record, "polarity", None) == "positive":
             return "WELLNESS_OK"
-        from packages.dialogue_engine.issue_mention_extract import (
-            extract_goal_facts,
-        )
-
-        try:
-            fields = {
-                (f.field, f.value)
-                for f in extract_goal_facts(text, answer_slot="wellness")
-            }
-        except Exception:
-            fields = set()
         if ("wellness", "positive") in fields:
             return "WELLNESS_OK"
     return None
+
+
+def _is_severity_answer(state, text: str) -> bool:
+    """Answer carrying onset/severity content while such a probe is open."""
+    delivered = state.delivered_question
+    intent = (getattr(delivered, "intent", "") or "") if delivered else ""
+    if not any(k in intent for k in ("severity", "duration", "onset")):
+        if (state.probe_phase or "") not in ("severity", "duration"):
+            return False
+    try:
+        from packages.dialogue_engine.issue_memory import (
+            extract_grounded_onset_value,
+            extract_grounded_severity_value,
+        )
+
+        return bool(
+            extract_grounded_severity_value(text)
+            or extract_grounded_onset_value(text)
+        )
+    except Exception:
+        return False
 
 
 def _concern_probe_open(state) -> bool:
@@ -123,6 +145,10 @@ def apply_act_effects(state, act: str) -> None:
     spec = ACTS.get(act)
     if not spec:
         return
+    try:
+        state.last_protocol_act = act
+    except Exception:
+        pass
     for probe in spec.get("forbids", []) or []:
         if probe not in state.forbidden_actions:
             state.forbidden_actions.append(probe)
@@ -132,6 +158,8 @@ def apply_act_effects(state, act: str) -> None:
     for cleared in spec.get("clears", []) or []:
         if cleared == "open_probe" and state.probe_phase == "concern":
             state.probe_phase = None
+        if cleared == "severity":
+            consume_need(state, "severity")
         state.queued_needs = [n for n in state.queued_needs if n != cleared]
     state.bump_revision()
 
