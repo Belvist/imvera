@@ -23,6 +23,7 @@ Exit 0 = PASS, 1 = FAIL.
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import subprocess
 import sys
@@ -173,6 +174,59 @@ def run_checklist(*, strict_first_probe: bool) -> GateReport:
     return report
 
 
+
+def run_dream_narrative_scenario() -> GateReport:
+    """fs-80cf029f class: dream body mention must not open pain onset."""
+    call_id = f"agent-gate-dream-{time.time_ns()}"
+    report = GateReport(
+        gate="agent_dialogue_gate_dream_narrative",
+        git_sha=_git_sha(),
+        call_id=call_id,
+    )
+    os.environ.setdefault("IMVERA_COVERAGE_LADDER", "1")
+    from packages.dialogue_engine.scenario_runner import ScenarioRunner
+    from packages.dialogue_engine.events import CallStarted, User
+    from packages.dialogue_engine.effects import SpeakEffect
+    from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
+
+    dream = (
+        "Великолепно спала. О, Сталина видела! Сталина во сне видела. "
+        "Приходил ко мне руку тянул."
+    )
+    r = ScenarioRunner(call_id=call_id, elder_display_name="Тамара Юрьевна")
+    turns: list[TurnResult] = []
+    r.run([CallStarted()])
+    for u in (
+        "Нормально, всё хорошо.",
+        "Ничего не беспокоит.",
+        "Поела нормально.",
+        "Лекарств нет.",
+    ):
+        res = r.run([u])
+        speech = " ".join(
+            e.text for e in res.speak_effects if isinstance(e, SpeakEffect)
+        )
+        turns.append(TurnResult(user=u, speech=speech))
+    kr = interpret(dream, utterance_id="u-dream", answer_slot="sleep", engine_state=r.state)
+    rich = kernel_to_rich_turn(kr)
+    res = r.run([User(text=dream, rich_turn=rich)])
+    speech = " ".join(e.text for e in res.speak_effects if isinstance(e, SpeakEffect))
+    turns.append(TurnResult(user=dream, speech=speech))
+    report.turns = [asdict(t) for t in turns]
+    report.forbidden_actions = list(r.state.forbidden_actions or [])
+    low = speech.lower()
+    if any(m in low for m in ("боль", "когда появилась", "рука тянул — зафиксировала")):
+        report.errors.append(f"dream narrative opened pain probe: {speech!r}")
+    if r.state.active_episode_id:
+        report.errors.append(f"dream narrative created episode {r.state.active_episode_id}")
+    if (r.state.wellness_concern or "").strip():
+        report.errors.append(
+            f"dream narrative wrote wellness_concern={r.state.wellness_concern!r}"
+        )
+    report.passed = not report.errors
+    return report
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -183,10 +237,18 @@ def main() -> int:
     args = parser.parse_args()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report = run_checklist(strict_first_probe=args.strict_first_probe)
+    dream_report = run_dream_narrative_scenario()
     out = REPORT_DIR / f"{report.call_id}.json"
     out.write_text(json.dumps(asdict(report), ensure_ascii=False, indent=2), encoding="utf-8")
+    dream_out = REPORT_DIR / f"{dream_report.call_id}.json"
+    dream_out.write_text(
+        json.dumps(asdict(dream_report), ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     latest = REPORT_DIR / "latest.json"
     latest.write_text(out.read_text(encoding="utf-8"), encoding="utf-8")
+    (REPORT_DIR / "dream_narrative_latest.json").write_text(
+        dream_out.read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     status = "PASS" if report.passed else "FAIL"
     print(f"agent_dialogue_gate {status} sha={report.git_sha} call_id={report.call_id}")
@@ -199,8 +261,16 @@ def main() -> int:
         print(f"WARN: {w}")
     for e in report.errors:
         print(f"ERROR: {e}")
+    dstatus = "PASS" if dream_report.passed else "FAIL"
+    print(f"dream_narrative_gate {dstatus} call_id={dream_report.call_id}")
+    print(f"dream_report={dream_out}")
+    for t in dream_report.turns:
+        print(f"  U: {t['user'][:120]}")
+        print(f"  V: {t['speech'][:200]}")
+    for e in dream_report.errors:
+        print(f"ERROR: {e}")
     print(report.note)
-    return 0 if report.passed else 1
+    return 0 if (report.passed and dream_report.passed) else 1
 
 
 if __name__ == "__main__":

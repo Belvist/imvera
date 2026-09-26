@@ -13,8 +13,9 @@ from __future__ import annotations
 def normalize_act(state, user_text: str) -> str | None:
     """One closed act or None, from existing understanding outputs only.
 
-    Priority is explicit (documented): DECLINE > ISSUE_SITE >
-    ISSUE_SEVERITY_ANSWER > WELLNESS_SO_SO > WELLNESS_OK.
+    Priority is explicit (documented): DECLINE > SIDE_TOPIC (narrative
+    fiction/dream frame) > ISSUE_SITE > ISSUE_SEVERITY_ANSWER >
+    WELLNESS_SO_SO > WELLNESS_OK.
     New Russian phrasings map to these acts via Understand (fact
     extractors, polarity, mentions); never a new `if "phrase" in text`
     here or in policy.
@@ -34,12 +35,27 @@ def normalize_act(state, user_text: str) -> str | None:
         # Soft branch: denial with no probe open but wellness declinable
         # (gate flow) — same act, same YAML effects.
         return "DECLINE"
+    from packages.dialogue_engine.check_path import (
+        is_narrative_fiction_frame,
+        suppress_health_issues_for_narrative_frame,
+    )
+
+    # Dream/film/news narrative → SIDE_TOPIC, never ISSUE_SITE (even if a
+    # legacy extractor still surfaces a body verb). Real complaint pivots
+    # fall through to ISSUE_SITE below.
+    if suppress_health_issues_for_narrative_frame(text):
+        return "SIDE_TOPIC"
+
     try:
         mentions = extract_issue_mentions(text)
     except Exception:
         mentions = ()
     if mentions:
         return "ISSUE_SITE"
+    if is_narrative_fiction_frame(text):
+        # Frame present but pivot kept mentions empty / no mentions — still
+        # mark side-topic so policy does not treat the turn as silence.
+        return "SIDE_TOPIC"
     if _is_severity_answer(state, text):
         return "ISSUE_SEVERITY_ANSWER"
     try:

@@ -184,6 +184,14 @@ def extract_issue_mentions(text: str) -> tuple[IssueMention, ...]:
     raw = text.strip()
     if not raw:
         return ()
+    from packages.dialogue_engine.check_path import (
+        suppress_health_issues_for_narrative_frame,
+    )
+
+    # Dream/film/news frame: «во сне руку тянул» / «в фильме умирали» are
+    # SIDE_TOPIC narrative, not speaker ISSUE_SITE (live fs-80cf029f).
+    if suppress_health_issues_for_narrative_frame(raw):
+        return ()
     parts = _split_symptom_parts(raw)
     all_mentions: list[IssueMention] = []
     shared_verb = any(bool(_PAIN_VERB.search(p.lower())) for p in parts)

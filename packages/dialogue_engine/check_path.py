@@ -334,6 +334,61 @@ def _probe_concern(state: EngineState, text: str) -> ProbeStep:
     return ProbeStep(action=ProbeAction.SPEAK_PROBE, probe_phase="duration")
 
 
+
+# Dream / film / news / story frame: body talk inside narrative is NOT a
+# speaker health complaint (live fs-80cf029f «во сне… руку тянул» → false
+# ISSUE_SITE/onset). Same class as movie_dying hard-battery.
+_NARRATIVE_FICTION_FRAME = re.compile(
+    r"(?:"
+    r"\bво\s+сне\b|"
+    r"\bснил(?:ось|ся|ась|ись)?\b|"
+    r"\bприснил(?:ось|ся|ась|ись)?\b|"
+    r"\bсон\s+такой\b|"
+    r"\bфильм\w*|"
+    r"\bкино\b|"
+    r"\bсериал\w*|"
+    r"\bпередач\w*|"
+    r"\bновост\w*|"
+    r"\bсказк\w*|"
+    r"\bв\s+игре\b|"
+    r"\bв\s+книг\w*"
+    r")",
+    re.I,
+)
+# Explicit present-tense speaker health pivot keeps real complaints even
+# when a film/dream was mentioned («после фильма голова разболелась»).
+_NARRATIVE_REAL_COMPLAINT_PIVOT = re.compile(
+    r"(?:"
+    r"\bа\s+сейчас\b|"
+    r"\bи\s+сейчас\b|"
+    r"\bсейчас\s+(?:бол|но[ею]т|тошн|дав[аи]т|кружи)|"
+    r"\bу\s+меня\s+(?:бол|но[ею]т|тошн|дав[аи]т|кружи)|"
+    r"\bмне\s+(?:бол|тошн)|"
+    r"\b(голов[ауеы]|живот|сердц\w*|спин[ауеы]|руках?|ногах?)\s+"
+    r"(?:бол|но[ею]т|лом|дав[аи]т|тян[еу]т|разболел)"
+    r")",
+    re.I,
+)
+
+
+def is_narrative_fiction_frame(text: str) -> bool:
+    """True when the utterance carries a dream/film/news/story frame."""
+    return bool(_NARRATIVE_FICTION_FRAME.search(text or ""))
+
+
+def suppress_health_issues_for_narrative_frame(text: str) -> bool:
+    """Fiction/dream narrative must not open ISSUE_SITE / pain episodes.
+
+    Suppress unless the same turn also pivots to a present speaker complaint.
+    """
+    raw = text or ""
+    if not is_narrative_fiction_frame(raw):
+        return False
+    if _NARRATIVE_REAL_COMPLAINT_PIVOT.search(raw):
+        return False
+    return True
+
+
 def _looks_like_complaint(text: str) -> bool:
     """Negation-aware complaint check (live fs-6e3abff0).
 

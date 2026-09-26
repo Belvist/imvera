@@ -1278,7 +1278,9 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
 
             _raw_low = (turn.raw_text or "").lower()
             if re.search(
-                r"\b(фильм\w*|кино|передач\w*|сериал\w*|новост\w*)\b", _raw_low
+                r"\b(фильм\w*|кино|передач\w*|сериал\w*|новост\w*|"
+                r"во\s+сне|снил\w*|приснил\w*|сказк\w*)\b",
+                _raw_low,
             ) and not turn.issue_mentions:
                 from packages.dialogue_engine.check_path import _PAIN
 
