@@ -1362,20 +1362,37 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 state.observations["concern_declined"] = "1"
                 state.red_state_pending = False
             elif state.concern_probe_count == 1:
-                state.concern_probe_count = 2
-                return ResponsePlan(
-                    obligation=ConversationObligation.NEVER_SILENT,
-                    action="speak",
-                    mandatory_question=(
-                        "Скажите, что болит — голова, сердце, "
-                        "живот? Или что случилось?"
-                    ),
-                    intent="probe_concern_options",
-                    # slot=None: the per-slot reserve cap already spent two
-                    # wellness asks; this ladder is slot-independent anyway.
-                    slot=None,
-                    marks_question=True,
+                from packages.dialogue_engine.check_path import (
+                    apply_concern_answer,
+                    is_explicit_concern_decline,
                 )
+
+                _raw1 = (
+                    (turn.raw_text if turn is not None else "")
+                    or (turn_context.user_text or "")
+                )
+                if _raw1.strip() and is_explicit_concern_decline(_raw1):
+                    # Explicit "nothing bothers" declines — accept and move
+                    # on (live fs-6e3abff0); vague/refusal still gets ONE
+                    # options ask below (pinned), hostile still escalates.
+                    apply_concern_answer(state, _raw1)
+                    state.observations["concern_declined"] = "1"
+                    state.red_state_pending = False
+                else:
+                    state.concern_probe_count = 2
+                    return ResponsePlan(
+                        obligation=ConversationObligation.NEVER_SILENT,
+                        action="speak",
+                        mandatory_question=(
+                            "Скажите, что болит — голова, сердце, "
+                            "живот? Или что случилось?"
+                        ),
+                        intent="probe_concern_options",
+                        # slot=None: the per-slot reserve cap already spent two
+                        # wellness asks; this ladder is slot-independent anyway.
+                        slot=None,
+                        marks_question=True,
+                    )
             else:
                 state.concern_probe_count = 1
                 _q = questions.probe_question("concern")

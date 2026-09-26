@@ -227,6 +227,26 @@ _WELLNESS_CRISIS = re.compile(
 )
 
 
+_TRAILING_POSITIVE = re.compile(
+    r"(хорошо|отлично|нормально|прекрасно|замечательно|супер)\s*[.!?…]*$",
+    re.I,
+)
+
+
+def _denied_pain_with_positive(text: str) -> bool:
+    """Denied pain + positive summary ("Ничего не болит, всё хорошо").
+
+    No unnegated complaint anywhere, and the last clause is positive.
+    "Голова болит, но в целом нормально" stays negative (real complaint).
+    """
+    from packages.dialogue_engine.check_path import complaint_without_negation
+
+    lowered = (text or "").lower().replace("ё", "е")
+    if complaint_without_negation(lowered):
+        return False
+    return bool(_TRAILING_POSITIVE.search(lowered))
+
+
 def extract_goal_facts(
     text: str,
     *,
@@ -332,15 +352,21 @@ def extract_goal_facts(
             or _NEGATIVE.match(core)
         )
     )
-    wellness_pos = bool(
-        not wellness_neg
-        and (
-            _WELLNESS_POSITIVE.search(_judge_n)
-            or _POSITIVE.match(core)
-            or _WELLNESS_FREE_POSITIVE.search(_judge_wellness)
-            or _NORMAL.match(core)
+    if wellness_neg and _denied_pain_with_positive(raw):
+        # Human denied pain and summarized positive ("Ничего не болит,
+        # всё хорошо") — that is positive, never negative (live fs-6e3abff0).
+        wellness_neg = False
+        wellness_pos = True
+    else:
+        wellness_pos = bool(
+            not wellness_neg
+            and (
+                _WELLNESS_POSITIVE.search(_judge_n)
+                or _POSITIVE.match(core)
+                or _WELLNESS_FREE_POSITIVE.search(_judge_wellness)
+                or _NORMAL.match(core)
+            )
         )
-    )
     if wellness_neg:
         _add("wellness", "negative")
     elif wellness_pos:

@@ -198,11 +198,15 @@ def _concern_runner(monkeypatch: pytest.MonkeyPatch):
 def test_answer_act_non_complaint_reaches_net(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """ANSWER-act non-complaint falls through to the scheduler net → options."""
+    """Explicit "I'm fine" declines the concern probe at once (live fs-6e3abff0).
+
+    No options re-ask on unambiguous decline; vague answers still earn
+    ONE options ask (next test), refusal/hostile keep their pinned paths.
+    """
     runner = _concern_runner(monkeypatch)
     runner._user_turn("Нормально.", delayed=False)
     assert runner.engine.state.wellness_concern == ""
-    assert [e.intent for e in runner._pending_speaks] == ["probe_concern_options"]
+    assert [e.intent for e in runner._pending_speaks] == ["important_to_share"]
 
 
 def test_vague_first_probe_answer_goes_to_options(

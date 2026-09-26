@@ -266,6 +266,29 @@ def _register_probe(phase: str, handler: Callable[[EngineState, str], ProbeStep]
     _PROBE_FLOW[phase] = handler
 
 
+_EXPLICIT_DECLINE_RE = re.compile(
+    r"(ничего\s+не\s+(болит|беспокоит|тревожит)|"
+    r"не\s+(болит|беспокоит)\b|"
+    r"\bнет\b.{0,25}(хорошо|нормально|отлично)|"
+    r"вс[её]\s+хорошо|вс[её]\s+нормально|вс[её]\s+отлично|"
+    r"^нормально\.?$|^хорошо\.?$)",
+    re.I,
+)
+
+
+def is_explicit_concern_decline(text: str) -> bool:
+    """Explicit 'nothing bothers' (live fs-6e3abff0) — accept at once.
+
+    Distinct from vague ("Поел.", "Не скажу.") which still earns ONE
+    options ask, and from hostile refusal which escalates. Only a clear
+    denial-of-complaint skips the options step entirely.
+    """
+    t = (text or "").strip()
+    if not t or complaint_without_negation(t):
+        return False
+    return bool(_EXPLICIT_DECLINE_RE.search(t))
+
+
 def apply_concern_answer(state: EngineState, text: str) -> str:
     """Single owner for concern-probe answers (rich and semantic paths).
 
@@ -301,15 +324,14 @@ def _probe_concern(state: EngineState, text: str) -> ProbeStep:
 
 
 def _looks_like_complaint(text: str) -> bool:
-    t = (text or "").lower()
+    """Negation-aware complaint check (live fs-6e3abff0).
+
+    "Ничего не беспокоит" is a decline, not a complaint. Urgent phrases
+    still count (fail toward safety). All routing callers share this.
+    """
     if is_urgent_concern(text):
         return True
-    return bool(
-        re.search(
-            _COMPLAINT_RE,
-            t,
-        )
-    )
+    return complaint_without_negation(text)
 
 
 _COMPLAINT_RE = re.compile(

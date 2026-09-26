@@ -64,8 +64,8 @@ def test_negated_pain_is_not_complaint() -> None:
         complaint_without_negation,
     )
 
-    assert _looks_like_complaint("Ничего не болит, всё хорошо.") is True  # legacy shape
     assert complaint_without_negation("Ничего не болит, всё хорошо.") is False
     assert complaint_without_negation("И ничего вроде не беспокоит.") is False
     assert complaint_without_negation("Голова болит.") is True
     assert complaint_without_negation("Что-то животик болит у меня.") is True
+    assert complaint_without_negation("Не очень, голова болит.") is True
