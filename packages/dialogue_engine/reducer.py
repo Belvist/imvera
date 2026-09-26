@@ -1414,7 +1414,7 @@ def _is_yes_no_question(text: str) -> bool:
     clause = next((c for c in reversed(last) if c.strip()), "")
     return not _OPEN_Q_WORD.search(clause)
 
-_BACKCHANNEL_ACKS = ("Слушаю вас.", "Да-да, слушаю вас.")
+_BACKCHANNEL_ACKS = ("Слушаю вас.", "Да-да, слушаю вас.", "Да, слушаю вас.", "Угу, слушаю.")
 
 
 def _backchannel_reask(state: EngineState) -> tuple[str, str, str] | None:

@@ -15,7 +15,7 @@ pytestmark = pytest.mark.dialogue_engine
 def test_day_zero_yields_canonical(monkeypatch: pytest.MonkeyPatch) -> None:
     from packages.dialogue_engine import questions
 
-    monkeypatch.setenv("IMVERA_SPEECH_DAY", "99")  # 99 % 3 == 0
+    monkeypatch.setenv("IMVERA_SPEECH_DAY", "102")  # 102 % 6 == 0
     assert questions.slot_question("wellness") == "Как вы себя чувствуете?"
     assert questions.slot_question("mood") == "А какое у вас сегодня настроение?"
     assert questions.slot_question("sleep") == "Как вы спали?"
@@ -27,7 +27,7 @@ def test_rotation_varies_by_day(monkeypatch: pytest.MonkeyPatch) -> None:
     from packages.dialogue_engine import questions
 
     seen = set()
-    for day in ("99", "100", "101"):
+    for day in ("102", "103", "104"):
         monkeypatch.setenv("IMVERA_SPEECH_DAY", day)
         seen.add(questions.slot_question("wellness"))
         seen.add(questions.important_to_share_question())
@@ -39,7 +39,7 @@ def test_greeting_has_brand_name_and_question(
 ) -> None:
     from packages.dialogue_engine import questions
 
-    for day in ("99", "100", "101"):
+    for day in ("102", "103", "104"):
         monkeypatch.setenv("IMVERA_SPEECH_DAY", day)
         g = questions.opening_speech("Даниил")
         assert "Амвера" in g and "Даниил" in g and g.rstrip().endswith("?")
@@ -49,7 +49,7 @@ def test_greeting_has_brand_name_and_question(
 def test_greeting_prior_followup_wins(monkeypatch: pytest.MonkeyPatch) -> None:
     from packages.dialogue_engine import questions
 
-    monkeypatch.setenv("IMVERA_SPEECH_DAY", "100")
+    monkeypatch.setenv("IMVERA_SPEECH_DAY", "103")
     g = questions.opening_speech("Даниил", {"wellness_concern": "голова болит"})
     assert "голов" in g.lower()
 
@@ -82,3 +82,18 @@ def test_bridge_ack_fresh_episode_stays_canonical() -> None:
 
     ep = SimpleNamespace(body_site=None, primary_label="болит", kind="symptom")
     assert _bridge_ack_for_episode(ep) == "Хорошо."
+
+
+def test_phrase_banks_have_depth() -> None:
+    from packages.dialogue_engine import questions
+
+    for slot, pool in questions._SLOT_QUESTION_VARIANTS.items():
+        assert len(pool) >= 6, (slot, len(pool))
+        assert len(set(pool)) == len(pool), f"dupes in {slot}"
+    for phase, pool in questions._PROBE_QUESTION_VARIANTS.items():
+        assert len(pool) >= 6, (phase, len(pool))
+        assert len(set(pool)) == len(pool), f"dupes in {phase}"
+    assert len(questions._ITS_QUESTION_VARIANTS) >= 6
+    assert len(set(questions._ITS_QUESTION_VARIANTS)) == len(
+        questions._ITS_QUESTION_VARIANTS
+    )
