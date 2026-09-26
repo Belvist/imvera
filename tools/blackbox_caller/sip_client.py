@@ -77,6 +77,18 @@ def _patch_pyvoip_invite() -> None:
         call_id = self.gen_call_id()
         sess_id = self.sessID.next()
         invite_body = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
+        # Stock pyVoIP REGISTER adds ;rport but INVITE does not. On Docker Desktop
+        # (esp. with host VPN) FS sees UDP src as a public/NAT IP; without rport it
+        # replies to Via host (LAN) which never reaches the caller socket. ;rport
+        # forces replies to the mapped source — same path REGISTER already uses.
+        via_prefix = f"Via: SIP/2.0/UDP {self.myIP}:{self.myPort};"
+        via_line = invite_body.split("\r\n", 3)[1]
+        if via_prefix + "branch=" in invite_body and ";rport" not in via_line:
+            invite_body = invite_body.replace(
+                via_prefix + "branch=",
+                via_prefix + "rport;branch=",
+                1,
+            )
         early_provisional = {
             SIPStatus(100),
             SIPStatus(180),
@@ -137,6 +149,13 @@ def _patch_pyvoip_invite() -> None:
                 + "algorithm=MD5\r\n"
             )
             invite_auth = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
+            via_line = invite_auth.split("\r\n", 3)[1]
+            if via_prefix + "branch=" in invite_auth and ";rport" not in via_line:
+                invite_auth = invite_auth.replace(
+                    via_prefix + "branch=",
+                    via_prefix + "rport;branch=",
+                    1,
+                )
             invite_auth = invite_auth.replace("\r\nContent-Length", f"\r\n{auth}Content-Length")
             self.out.sendto(invite_auth.encode("utf8"), (self.server, self.port))
             return SIPMessage(invite_auth.encode("utf8")), call_id, sess_id
