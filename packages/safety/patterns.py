@@ -36,12 +36,15 @@ _THIRD_PARTY = re.compile(
 )
 _SELF = re.compile(r"\b(я|мне|меня|у\s+меня)\b", re.I)
 
-# Imperatives bypass the past guard (help needed now by definition).
-_IMPERATIVE_HELP = re.compile(
-    r"\b(помогите|спасите|вызывайте\s+скорую|вызови(те)?\s+скор\w*|"
-    r"вызов\w*\s+скор\w*|срочн\w*)\b",
+# Explicit request for help: the user asked — no false-alarm doubt.
+EXPLICIT_HELP_REQUEST = re.compile(
+    r"\b(помогите|спасите|вызывайте\s+скор\w*|вызови(те)?\s+скор\w*|"
+    r"вызвали\s+скор\w*|вызвать\s+скор\w*|вызов\w*\s+скор\w*|срочн\w*)\b",
     re.I,
 )
+
+# Imperatives bypass the past guard (help needed now by definition).
+_IMPERATIVE_HELP = EXPLICIT_HELP_REQUEST
 
 _CLAUSE_SPLIT = re.compile(r"[,;]|\s+но\s+|\s+а\s+", re.I)
 

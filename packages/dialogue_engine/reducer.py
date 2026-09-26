@@ -182,12 +182,27 @@ def _on_safety_interrupt(
     state.processing_turn_id = None
     state.processing_effect_id = None
     state.bump_revision()
+    # Explicit request for help ("помогите", "вызовите скорую") closes at
+    # once — the user asked, no false-alarm doubt (live fs-f93eb308).
+    # Descriptive matches clarify first (asked, never assumed) with a
+    # specific echo, never the generic interrogation.
+    quote = (event.quote or "").strip()
+    if quote:
+        from packages.safety.patterns import EXPLICIT_HELP_REQUEST
+
+        if EXPLICIT_HELP_REQUEST.search(quote):
+            return _emit_urgent_close(state, user_text=quote)
     if state.safety_clarify_count >= 2:
         return _safety_close_after_clarify(state)
     state.safety_clarify_count += 1
+    clarify_text = _SAFETY_RED_PROMPT
+    if quote:
+        short = quote[:80].strip()
+        if short:
+            clarify_text = f"«{short}» — правильно поняла? Нужна помощь?"
     return _emit_speak(
         state,
-        text=_SAFETY_RED_PROMPT,
+        text=clarify_text,
         intent="safety_clarify",
         slot="safety",
         marks_question=True,

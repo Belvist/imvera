@@ -7,7 +7,7 @@ RED_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("cannot_stand", re.compile(r"\b(не\s+могу\s+(встать|подняться))\b", re.I)),
     ("help_urgent", re.compile(
         r"\b(помогите|спасите|вызывайте\s+скор\w*|вызови(те)?\s+скор\w*|"
-        r"вызов\w*\s+скор\w*)\b",
+        r"вызвали\s+скор\w*|вызвать\s+скор\w*|вызов\w*\s+скор\w*|умира\w*|умр\w*)\b",
         re.I,
     )),
     ("severe_pain", re.compile(r"\b(очень\s+больно|сильн[аяое]+\s+боль)\b", re.I)),
