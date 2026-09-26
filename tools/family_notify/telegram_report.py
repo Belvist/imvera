@@ -166,7 +166,7 @@ def report_call(call_id: str, *, dry_run: bool) -> bool:
     return delivered > 0
 
 
-def recent_ended_calls(limit: int = 20) -> list[str]:
+def recent_ended_calls(limit: int = 20, since_hours: float = 24.0) -> list[str]:
     import psycopg
 
     dsn = os.environ.get("IMVERA_PG_URL", "")
@@ -174,18 +174,20 @@ def recent_ended_calls(limit: int = 20) -> list[str]:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT call_id FROM call_results "
-                "WHERE call_ended = TRUE ORDER BY updated_at DESC LIMIT %s",
-                (limit,),
+                "WHERE call_ended = TRUE "
+                "AND updated_at > now() - (%s || ' hours')::interval "
+                "ORDER BY updated_at DESC LIMIT %s",
+                (str(since_hours), limit),
             )
             return [r[0] for r in cur.fetchall()]
 
 
-def watch(interval_s: float, dry_run: bool) -> None:
+def watch(interval_s: float, dry_run: bool, since_hours: float) -> None:
     sent = _load_sent()
     print(f"watching (interval {interval_s}s), already sent: {len(sent)}")
     while True:
         try:
-            for call_id in recent_ended_calls():
+            for call_id in recent_ended_calls(since_hours=since_hours):
                 if call_id in sent:
                     continue
                 if report_call(call_id, dry_run=dry_run):
@@ -202,9 +204,10 @@ def main() -> int:
     ap.add_argument("--watch", action="store_true")
     ap.add_argument("--interval", type=float, default=30.0)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--since-hours", type=float, default=24.0)
     args = ap.parse_args()
     if args.watch:
-        watch(args.interval, args.dry_run)
+        watch(args.interval, args.dry_run, args.since_hours)
         return 0
     if not args.call_id:
         print("need --call-id or --watch")
