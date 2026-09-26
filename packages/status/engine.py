@@ -60,7 +60,8 @@ class StatusEngine:
         checks = snapshot.mandatory_checks
         if not checks:
             return False
-        return all(checks.get(key, False) for key in PILOT_MANDATORY_CHECKS)
+        required = snapshot.required_checks or list(PILOT_MANDATORY_CHECKS)
+        return all(checks.get(key, False) for key in required)
 
     @staticmethod
     def finalize(snapshot: CallStatusSnapshot) -> CallStatusSnapshot:

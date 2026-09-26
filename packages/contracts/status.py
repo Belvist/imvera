@@ -31,4 +31,8 @@ class CallStatusSnapshot(BaseModel):
     consent_state: ConsentState = ConsentState.UNKNOWN
     safety: SafetySnapshot = Field(default_factory=SafetySnapshot)
     mandatory_checks: dict[str, bool] = Field(default_factory=dict)
+    # Subset of PILOT_MANDATORY_CHECKS gating GREEN in THIS call's mode.
+    # None/empty = all (backward compatible). Short mode excludes bg goals
+    # the mission never required; full mode includes them.
+    required_checks: list[str] | None = None
     public_status: PublicCallStatus | None = None

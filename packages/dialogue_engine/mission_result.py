@@ -135,12 +135,34 @@ def build_mission_result(state: EngineState) -> MissionResultSnapshot:
     )
 
 
+def _required_bg_goals(state: EngineState) -> set[str]:
+    """Background goals required by THIS call's mode (live fs-e98331b8).
+
+    Short-call default never asks mood/sleep/plans as obligations
+    (coverage may still fill them opportunistically); full check-in
+    (mission-required bg goals) does. Required-ness follows the mode —
+    otherwise every short all-good call degrades to PARTIAL/YELLOW.
+    """
+    required = set(getattr(state, "required_background_goals", None) or ())
+    if getattr(state, "mandatory_background_goals", False):
+        required |= {"mood", "sleep", "plans"}
+    return required
+
+
 def _mission_status(state: EngineState, goals: list[GoalResultSnapshot], mission) -> str:
     if getattr(state, "target_presence", None) == "unavailable":
         return "NOT_RUN"
     if not goals:
         return "NOT_RUN"
-    required = [g for g, d in zip(goals, mission.goals) if d.required]
+    required = [
+        g
+        for g, d in zip(goals, mission.goals)
+        if d.required
+        and (
+            g.goal_id not in ("mood", "sleep", "plans")
+            or g.goal_id in _required_bg_goals(state)
+        )
+    ]
     if not required:
         required = goals
 
@@ -233,6 +255,20 @@ def build_call_outcomes(
             "sleep": state.slots.get("sleep") == SlotStatus.FILLED,
             "plans": state.slots.get("plans") == SlotStatus.FILLED,
         }
+        bg_required = _required_bg_goals(state)
+        required_checks = [
+            key
+            for key in (
+                "identity",
+                "consent",
+                "can_talk",
+                "wellness",
+                "mood",
+                "sleep",
+                "plans",
+            )
+            if key not in ("mood", "sleep", "plans") or key in bg_required
+        ]
         snapshot = CallStatusSnapshot(
             call_id=state.call_id,
             delivery_state=DeliveryState.ANSWERED,
@@ -241,6 +277,7 @@ def build_call_outcomes(
             consent_state=ConsentState.UNKNOWN,
             safety=SafetySnapshot(),
             mandatory_checks=checks,
+            required_checks=required_checks,
         )
         family = StatusEngine.resolve(snapshot).value
 
