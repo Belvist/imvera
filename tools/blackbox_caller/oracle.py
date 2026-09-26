@@ -44,8 +44,26 @@ class ExternalAssertions:
     errors: list[str] = field(default_factory=list)
 
 
+def _resolve_whisper_cli() -> str | None:
+    """Find openai-whisper CLI even when Frameworks scripts dir is off PATH."""
+    found = shutil.which("whisper")
+    if found:
+        return found
+    try:
+        import sysconfig
+
+        candidate = Path(sysconfig.get_path("scripts")) / "whisper"
+        if candidate.is_file():
+            return str(candidate)
+    except Exception:
+        pass
+    return None
+
+
 def transcribe_external(wav_path: Path, *, asr_command: str = "") -> str:
     """Transcribe downlink with independent ASR — never production GigaAM."""
+    import os
+
     if asr_command:
         cmd = asr_command.replace("{wav}", str(wav_path))
         proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
@@ -54,12 +72,22 @@ def transcribe_external(wav_path: Path, *, asr_command: str = "") -> str:
         raise RuntimeError(
             f"IMVERA_BLACKBOX_ASR_CMD failed rc={proc.returncode}: {proc.stderr[:400]}"
         )
-    whisper = shutil.which("whisper")
+    whisper = _resolve_whisper_cli()
     if whisper:
         out_dir = wav_path.parent / "_asr_tmp"
         out_dir.mkdir(parents=True, exist_ok=True)
+        model = (os.environ.get("IMVERA_BLACKBOX_WHISPER_MODEL") or "base").strip() or "base"
         proc = subprocess.run(
-            [whisper, str(wav_path), "--language", "Russian", "--output_dir", str(out_dir)],
+            [
+                whisper,
+                str(wav_path),
+                "--model",
+                model,
+                "--language",
+                "Russian",
+                "--output_dir",
+                str(out_dir),
+            ],
             capture_output=True,
             text=True,
             check=False,

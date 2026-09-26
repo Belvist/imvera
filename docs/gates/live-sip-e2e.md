@@ -63,7 +63,8 @@ Environment:
 | `IMVERA_LIVE_EXTENSION` | `7000` | Vera extension |
 | `IMVERA_LIVE_CALLS` | `10` | Soak count |
 | `IMVERA_LIVE_STOP_ON_FAIL` | `1` | Stop ladder on first failure |
-| `IMVERA_BLACKBOX_ASR_CMD` | (empty) | External ASR shell command with `{wav}` |
+| `IMVERA_BLACKBOX_ASR_CMD` | (empty) | External ASR shell command with `{wav}` (stdout text) |
+| `IMVERA_BLACKBOX_WHISPER_MODEL` | `base` | openai-whisper model when using the `whisper` CLI path |
 | `IMVERA_LIVE_CLIENT_IP` | auto | Client RTP source IP |
 
 ## Evidence
