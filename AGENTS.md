@@ -491,6 +491,18 @@ Until these exist, agent reports exact commands run.
   ruff clean, all 6 workers ready, Zoiper registered, bridge == HEAD
   (944c256, watch OK).
 
+## ADR-022 obs tiers + law doc (2026-09-26)
+
+- Verified report numbers: fs-5b509b4f = 222 events / 63KB, 171 ×
+  stage.timing; max_active_calls:1 in YAML, unenforced in code;
+  SYSTEM_DESIGN still draws Composer (stale north, ADR-020/021 win).
+- `IMVERA_OBS_MODE=debug|pilot|prod` enforced in record_event (debug
+  default unchanged; errors never filtered); `/health` exposes trace
+  queued/dropped. ADR-022 Operating Law proposed (1-page law + floors).
+- Gates: 1774 green, differential PASS, corpus 500/500; bridge db193ed.
+- NEXT per report: capacity probe (measure ceiling before raising caps);
+  P1 protocol-YAML, PhraseSelect module, multi-bridge sticky.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
