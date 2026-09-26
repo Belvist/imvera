@@ -480,6 +480,17 @@ Until these exist, agent reports exact commands run.
   (branch protection, secrets, trunk, 100 profiles/consents), soak-100,
   live redial proof, remote CI result.
 
+## Temporary Telegram family report (2026-09-26)
+
+- `tools/family_notify/telegram_report.py` (one file, stdlib): color +
+  summary + facts from snapshot; candidate status labeled provisional.
+  `--call-id` / `--watch` / `--dry-run`. Verified rendering on live
+  call fs-1af9504e (YELLOW). Needs owner `IMVERA_TG_BOT_TOKEN` +
+  `IMVERA_TG_CHAT_ID` to actually send.
+- Full re-verification: 1767 green, differential PASS, corpus 500/500,
+  ruff clean, all 6 workers ready, Zoiper registered, bridge == HEAD
+  (944c256, watch OK).
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
