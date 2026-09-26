@@ -503,6 +503,23 @@ Until these exist, agent reports exact commands run.
 - NEXT per report: capacity probe (measure ceiling before raising caps);
   P1 protocol-YAML, PhraseSelect module, multi-bridge sticky.
 
+## Load-ready detail: budget, summary, probe, design doc (2026-09-26)
+
+- Per-call forensic budget (200 events/64KB, pilot/prod; debug unlimited)
+  with `trace.truncated` marker + counter; fixed own counter-reset bug
+  before release. End-of-call `call.summary` (turns/actions/errors/
+  stage p50/p95) wired into background teardown.
+- `scripts/capacity_probe.py`: synthetic concurrent calls on the LIVE
+  stack (real grandma PCM → STT → engine → TTS). Measured: 1/2/4 clean
+  (p50 ~0.5-0.7s), knee at 8 (5/24 errors, p95 2s). Ceiling data in
+  `.run/capacity_probe.json`; caps stay until re-measured.
+- `docs/SCALING_AND_OBSERVABILITY.md`: full detail with measured numbers
+  (ideology, tiers table, budgets, floors, probe procedure, open Qs).
+  SYSTEM_DESIGN banner: ADR-020/021 win, Composer-in-hot-path stale.
+- Gates: 1777 green, differential PASS, corpus 500/500; bridge f254574.
+- NEXT: owner answers (pilot concurrent target? GPU? audio retention?
+  metrics stack?) → replicas/probe per data.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
