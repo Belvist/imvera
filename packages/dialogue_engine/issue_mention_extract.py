@@ -179,19 +179,49 @@ def _severity_from_clause(n: str) -> str | None:
     return m.group(0) if m else None
 
 
+_CLAUSE_SPLIT_RE = re.compile(
+    r"\s*[,;]\s*|\s+(?:а|но|однако)\s+",
+    re.I,
+)
+_SPEAKER_SIGNAL_RE = re.compile(
+    r"\b(?:я|мне|меня|мной|мною|у\s+меня|сам|сама)\b",
+    re.I,
+)
+
+
 def extract_issue_mentions(text: str) -> tuple[IssueMention, ...]:
     """Extract literal issue mentions with evidence — never infer unstated body sites."""
     raw = text.strip()
     if not raw:
         return ()
     from packages.dialogue_engine.check_path import (
-        suppress_health_issues_for_narrative_frame,
+        suppress_health_issues_for_non_complaint_frame,
     )
 
-    # Dream/film/news frame: «во сне руку тянул» / «в фильме умирали» are
-    # SIDE_TOPIC narrative, not speaker ISSUE_SITE (live fs-80cf029f).
-    if suppress_health_issues_for_narrative_frame(raw):
+    # False-world frames (dream/film, other-person, joke, past-resolved):
+    # never speaker ISSUE_SITE (map docs/plans/Understand-false-worlds.md).
+    if suppress_health_issues_for_non_complaint_frame(raw):
         return ()
+
+    # Mixed subjects («у мужа плохо, а у меня голова болит»): keep speaker
+    # clauses only — mirror extract_goal_facts other-person split.
+    _low = raw.lower().replace("ё", "е")
+    if _CLAUSE_SPLIT_RE.search(raw) and _SPEAKER_SIGNAL_RE.search(_low):
+        from packages.dialogue_engine.check_path import is_other_person_health_frame
+
+        _parts = _CLAUSE_SPLIT_RE.split(raw)
+        _kept = [
+            p.strip()
+            for p in _parts
+            if p.strip() and not is_other_person_health_frame(p.strip())
+        ]
+        if not _kept:
+            return ()
+        raw = " ".join(_kept).strip()
+        raw = re.sub(r"^(?:а|но|однако)\s+", "", raw, flags=re.I).strip()
+        if not raw:
+            return ()
+
     parts = _split_symptom_parts(raw)
     all_mentions: list[IssueMention] = []
     shared_verb = any(bool(_PAIN_VERB.search(p.lower())) for p in parts)

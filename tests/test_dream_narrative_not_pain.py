@@ -7,8 +7,6 @@ Same class as movie_dying: fiction ≠ elder complaint. Fix is Understand/acts
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from packages.dialogue_engine.check_path import (
@@ -105,7 +103,11 @@ def test_sleep_dream_turn_no_pain_onset_probe() -> None:
     assert r.state.active_episode_id is None
     assert not (r.state.wellness_concern or "").strip()
     assert getattr(r.state, "last_protocol_act", None) == "SIDE_TOPIC"
-    assert not any("onset" in (e.intent or "") for e in res.speak_effects if isinstance(e, SpeakEffect))
+    assert not any(
+        "onset" in (e.intent or "")
+        for e in res.speak_effects
+        if isinstance(e, SpeakEffect)
+    )
 
 
 def test_summary_must_not_claim_hand_pain_from_dream() -> None:

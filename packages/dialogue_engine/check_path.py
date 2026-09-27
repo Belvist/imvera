@@ -179,6 +179,9 @@ def is_urgent_state(text: str) -> bool:
 
     if is_urgent_action(text):
         return False
+    # Joke/hyperbole («умру от смеха», «шучу») is not a medical red state.
+    if is_joke_hyperbole_frame(text or ""):
+        return False
     return match_guarded(_URGENT_STATE, text or "") is not None
 
 
@@ -204,6 +207,13 @@ def classify_wellness_path(
     rules: tuple[tuple[Callable[[], bool], WellnessBranch], ...] = (
         (
             lambda: TopicFamily.SLEEP in detect_families(text),
+            WellnessBranch(path=CheckPath.STANDARD),
+        ),
+        (
+            # Past-resolved pain is history, not a current complaint:
+            # never store it as concern or open pain probes (false-worlds).
+            # Present pivots ("а сейчас болит") fall through below.
+            lambda: is_past_noncurrent_frame(wellness_text or ""),
             WellnessBranch(path=CheckPath.STANDARD),
         ),
         (
@@ -316,6 +326,19 @@ def apply_concern_answer(state: EngineState, text: str) -> str:
         state.probe_phase = None
         state.observations["concern_declined"] = "1"
         return "declined"
+    # Past-resolved frames («раньше болела, сейчас хорошо») are history,
+    # not a current concern — same decline path, no probes (false-worlds).
+    # Present pivots («а сейчас болит») fall through to grounding below.
+    if is_past_noncurrent_frame(text):
+        state.probe_phase = None
+        state.observations["concern_declined"] = "1"
+        return "declined"
+    # Past-resolved frames («раньше болела, сейчас хорошо») are history,
+    # not a current concern — same decline path, no probes (false-worlds).
+    if is_past_noncurrent_frame(text):
+        state.probe_phase = None
+        state.observations["concern_declined"] = "1"
+        return "declined"
     state.wellness_concern = text
     if is_urgent_concern(text):
         state.check_path = CheckPath.URGENT
@@ -387,6 +410,197 @@ def suppress_health_issues_for_narrative_frame(text: str) -> bool:
     if _NARRATIVE_REAL_COMPLAINT_PIVOT.search(raw):
         return False
     return True
+
+
+# --- False-world / non-complaint frames (Understand; map docs/plans/Understand-false-worlds.md) ---
+# Third-party, joke/hyperbole, past-vs-current share the dream/film suppress path:
+# never write speaker ISSUE_SITE / wellness_concern / onset from these frames.
+
+_JOKE_HYPERBOLE_FRAME = re.compile(
+    r"(?:"
+    r"\bшучу\b|"
+    r"\bшутим\b|"
+    r"\bшутк\w*|"
+    r"\bприкол\w*|"
+    r"\bприкалыва\w*|"
+    r"\bот\s+смеха\b|"
+    r"\bумираю\s+от\s+смеха\b|"
+    r"\bумр\w*\s+от\s+смеха\b|"
+    r"\bхоть\s+вешайся\b|"
+    r"\bконечно\s+шуч\w*|"
+    r"\bшуч\w*\s+конечно\b"
+    r")",
+    re.I,
+)
+
+_PAST_TIME_MARKER = re.compile(
+    r"(?:"
+    r"\bраньше\b|"
+    r"\bпозавчера\b|"
+    r"\bвчера\b|"
+    r"\bв\s+прошл(?:ом|ую|ые)\b|"
+    r"\bбывало\b"
+    r")",
+    re.I,
+)
+_PAST_PAIN_VERB = re.compile(
+    r"\b(?:"
+    r"болел[аио]?|болели|"
+    r"разболел(?:ся|ась|ось|ись)?|"
+    r"поболел(?:а|о|и)?|"
+    r"ныл[аио]?|ныли|"
+    r"ломило|давило|тошнило"
+    r")\b",
+    re.I,
+)
+_PRESENT_PAIN_VERB = re.compile(
+    r"\b(?:"
+    r"болит|болят|ноет|ноют|ломит|давит|тошнит|"
+    r"кружится|разболелась(?!\s+раньше)|"
+    r"беспокоит|тревожит"
+    r")\b",
+    re.I,
+)
+_PRESENT_RESOLVED_OR_OK = re.compile(
+    r"(?:"
+    r"\bсейчас\s+(?:вс[её]\s+)?(?:хорош\w*|норм\w*|отличн\w*|не\s+бол\w*)|"
+    r"\bсейчас\s+уже\s+(?:прошл\w*|не\s+бол\w*|норм\w*)|"
+    r"\bа\s+сейчас\s+(?:вс[её]\s+)?(?:хорош\w*|норм\w*|отличн\w*|не\s+бол\w*)|"
+    r"\bсегодня\s+(?:уже\s+)?(?:норм\w*|хорош\w*|не\s+бол\w*|прошл\w*)|"
+    r"\bуже\s+прошл\w*|"
+    r"\bуже\s+не\s+бол\w*"
+    r")",
+    re.I,
+)
+_PRESENT_ACTIVE_COMPLAINT_PIVOT = re.compile(
+    r"(?:"
+    r"\bа\s+сейчас\s+(?:у\s+меня\s+)?(?:бол|но[ею]т|тошн|дав[аи]т|кружи)|"
+    r"\bсейчас\s+у\s+меня\s+(?:бол|плохо|тошн)|"
+    r"\bи\s+сейчас\s+(?:бол|но[ею]т|тошн|вс[её]\s+ещ[её])|"
+    r"\bсейчас\s+(?:бол|но[ею]т|тошн|дав[аи]т|кружи)|"
+    r"\bдо\s+сих\s+пор\s+бол|"
+    r"\bвс[её]\s+ещ[её]\s+бол"
+    r")",
+    re.I,
+)
+
+# Off-protocol chatter cues (food, visits, weather) — no symptom required.
+_OFF_PROTOCOL_CHATTER = re.compile(
+    r"(?:"
+    r"\bсуп\w*|\bборщ\w*|\bкаш[аеиу]\b|\bед[ауие]\b|"
+    r"\bварил\w*|\bготов(?:ил|лю|ит)\w*|"
+    r"\bпогод\w*|\bдожд\w*|\bснег\b|"
+    r"\bмагазин\w*|\bгулял\w*|\bпрогул\w*|"
+    r"\bтелевизор\w*|\bпередач\w*|"
+    r"\bприезжа\w*|\bприехал\w*|\bгостил\w*"
+    r")",
+    re.I,
+)
+_SYMPTOMISH = re.compile(
+    r"(?:"
+    r"\bбол(?!ее(?:\b|-))\w*|\bтошн\w*|\bкружи\w*|\bдавлен\w*|"
+    r"\bтемператур\w*|\bслабост\w*|\bзадыха\w*|\bум[ие]ра\w*|"
+    r"\bноет\b|\bломит\b|\bбеспокоит\b"
+    r")",
+    re.I,
+)
+
+
+def is_joke_hyperbole_frame(text: str) -> bool:
+    """Joke / hyperbole markers — not a medical complaint or red state."""
+    return bool(_JOKE_HYPERBOLE_FRAME.search(text or ""))
+
+
+_SPEAKER_HEALTH_SIGNAL = re.compile(
+    r"\b(?:я|мне|меня|мной|мною|у\s+меня|сам|сама)\b",
+    re.I,
+)
+
+
+def is_other_person_health_frame(text: str) -> bool:
+    """Someone else's illness with no speaker health pivot.
+
+    Two structural requirements, not a phrase bank:
+    1. illness language in the same turn (a bare relative noun is a
+       companion, not a patient: «пойду гулять с дочкой»);
+    2. a third-party subject (inflection-proof: «дочь» is not a substring of
+       «дочкой»/«дочери», so token matching misses real cases) and no
+       speaker-health signal.
+
+    A speaker pivot («у мужа плохо, а у меня голова болит») always wins.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    if not _SYMPTOMISH.search(raw):
+        return False
+    if _PRESENT_ACTIVE_COMPLAINT_PIVOT.search(raw):
+        return False
+    try:
+        from packages.dialogue_engine.semantic_kernel.lexicon import has_other_person
+    except Exception:  # noqa: BLE001
+        return False
+    if not has_other_person(raw):
+        return False
+    return not bool(_SPEAKER_HEALTH_SIGNAL.search(raw))
+
+
+def is_past_noncurrent_frame(text: str) -> bool:
+    """Historical pain that must not open a *current* ISSUE_SITE.
+
+    Suppression requires an explicit non-current signal (resolved / positive
+    now). A bare past marker is NOT enough: «Со вчера головная боль.»,
+    «Вчера ухо заложило.» and «Живот болел вчера.» are symptoms the elder
+    still reports — grounding must keep them and the onset probe is exactly
+    the next useful question.
+    """
+    raw = text or ""
+    if not raw.strip():
+        return False
+    if _PRESENT_ACTIVE_COMPLAINT_PIVOT.search(raw):
+        return False
+    has_past = bool(_PAST_TIME_MARKER.search(raw) or _PAST_PAIN_VERB.search(raw))
+    if not has_past:
+        return False
+    if _PRESENT_RESOLVED_OR_OK.search(raw):
+        return True
+    # No explicit non-current signal: keep the symptom. Grounding outranks
+    # the past frame — «Вчера ухо заложило.» / «Живот болел вчера.» are what
+    # the elder just reported, and the onset probe is the useful next move.
+    return False
+
+
+def is_side_topic_chatter(text: str) -> bool:
+    """Off-protocol chatter without symptom language → SIDE_TOPIC mark."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    if not _OFF_PROTOCOL_CHATTER.search(raw):
+        return False
+    if _SYMPTOMISH.search(raw):
+        return False
+    if is_urgent_action(raw):
+        return False
+    return True
+
+
+def suppress_health_issues_for_non_complaint_frame(text: str) -> bool:
+    """Umbrella: false-world frames must not open speaker health ISSUE_SITE.
+
+    Covers dream/film narrative, other-person-only illness, joke/hyperbole,
+    and past-resolved / historical-only pain. Real present speaker pivots
+    still fall through (handled inside each detector).
+    """
+    raw = text or ""
+    if suppress_health_issues_for_narrative_frame(raw):
+        return True
+    if is_other_person_health_frame(raw):
+        return True
+    if is_joke_hyperbole_frame(raw):
+        return True
+    if is_past_noncurrent_frame(raw):
+        return True
+    return False
 
 
 def _looks_like_complaint(text: str) -> bool:

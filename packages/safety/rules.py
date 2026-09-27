@@ -135,7 +135,25 @@ def match_deterministic_signals(text: str) -> list[str]:
             if _match_signal_in_clause(pattern, clause, signal_id):
                 if signal_id not in found:
                     found.append(signal_id)
+    if "help_urgent" in found and _dying_only_joke(text):
+        found.remove("help_urgent")
     return found
+
+
+def _dying_only_joke(text: str) -> bool:
+    """Dying words inside an explicit joke frame are not a help call.
+
+    «умру от смеха» must not raise RED; explicit «помогите»/«скорую»
+    in the same turn still counts. Reuses the Understand joke helper.
+    """
+    from packages.dialogue_engine.check_path import is_joke_hyperbole_frame
+
+    if not is_joke_hyperbole_frame(text or ""):
+        return False
+    low = (text or "").lower()
+    if re.search(r"\b(помогите|спасите|скор\w*)\b", low):
+        return False
+    return bool(re.search(r"\b(умира\w*|умр\w*)\b", low))
 
 
 def signal_to_risk_level(signal_id: str) -> str:

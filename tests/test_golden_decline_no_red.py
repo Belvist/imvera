@@ -60,7 +60,6 @@ def test_double_decline_never_urgent() -> None:
 
 def test_negated_pain_is_not_complaint() -> None:
     from packages.dialogue_engine.check_path import (
-        _looks_like_complaint,
         complaint_without_negation,
     )
 

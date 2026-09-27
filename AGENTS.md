@@ -520,6 +520,47 @@ Until these exist, agent reports exact commands run.
 - NEXT: owner answers (pilot concurrent target? GPU? audio retention?
   metrics stack?) → replicas/probe per data.
 
+## False-worlds class closed in Understand (2026-09-27)
+
+- Five frame classes now suppress speaker ISSUE_SITE via ONE umbrella
+  `suppress_health_issues_for_non_complaint_frame` (check_path): narrative
+  dream/film, other-person illness, past-resolved, joke/hyperbole, side
+  chatter. No phrase banks. Speaker pivots always win:
+  «после фильма голова разболелась», «а сейчас у меня болит»,
+  «у мужа плохо, а у меня голова болит» → ISSUE_SITE.
+- TWO structural rules, learned the hard way (do not undo):
+  1. **Past marker alone is not a false world.** Suppression needs an
+     explicit non-current signal. «Со вчера головная боль.», «Вчера ухо
+     заложило.», «Живот болел вчера.» are real symptoms the elder just
+     reported — grounding outranks the past frame and the onset probe is
+     the next useful question. My first version ate them and cost 19 tests.
+  2. **A bare relative noun is not a patient.** Other-person frames require
+     illness language in the same turn: «пойду гулять с дочкой» is a
+     companion, not a complaint. Also `'дочь'` is NOT a substring of
+     `'дочкой'`/`'дочери'`, so the old token matcher had an inflection gap —
+     `has_other_person` (inflection-proof) closes it, but only behind the
+     symptom requirement. `policy._is_other_person_only` and
+     `issue_memory._apply_correction` deliberately keep the old narrow
+     matcher: routing them through the broad one re-fires on companions.
+- Priority law enforced in `protocol/acts.py`: DECLINE > SIDE_TOPIC >
+  ISSUE_SITE. «шучу, голова не болит» is DECLINE (denial outranks joke);
+  `safety/rules.py` drops dying-joke signal only when no explicit
+  help/скорая phrase is present.
+- KNOWN GAP (not false-worlds, owner backlog): abdominal flow asks the
+  current probe first and repeats it on the out-of-order severity answer
+  («Сильно.») — the episode flow does not consume the severity value, so
+  the onset chain is unreachable in 3 turns. Recorded in
+  `.run/agent_gates/hard-battery-latest.json` → `known_gaps`, not hidden.
+- `scripts/hard_battery.py`: 16 Layer A scenarios, 16/16. `abdominal`
+  asserts the false-world contract (no suppression/dismissal/escalation),
+  NOT the onset chain; `real_pain` still asserts the strict chain. Runner
+  now stamps `git_state: dirty` so a HEAD sha cannot imply a clean tree.
+- Gates: 1825 passed / 0 failed / 6 skipped / 1 xfailed; hard battery 16/16;
+  agent gate PASS; corpus 500/500; policy diff 4/4 explained; ruff clean.
+- NOT PUSHED (owner brief: one PR, no push). No live proof — SIP REGISTER
+  is red on 192.168.1.64 vs FreeSWITCH 172.19.0.2, out of scope. Layer A
+  (CallSession) is the only evidence class here.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)

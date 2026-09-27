@@ -1,3 +1,68 @@
+# False-worlds в Understand: закрыто, Layer A зелёное (2026-09-27)
+
+Branch `feature/voice-zoiper-m5`, HEAD до коммита `2feb511`. Brief:
+`.run/OPENCODE_FALSE_WORLDS_BRIEF.md`; карта `docs/plans/Understand-false-worlds.md`.
+
+## Что сделано
+
+- Пять классов false-world гасят speaker ISSUE_SITE через ОДИН umbrella
+  `suppress_health_issues_for_non_complaint_frame` (check_path): narrative
+  dream/film, other-person illness, past-resolved, joke/hyperbole, side
+  chatter. Без phrase banks.
+- Speaker pivots всегда выигрывают → ISSUE_SITE: «после фильма голова
+  разболелась», «а сейчас у меня болит», «у мужа плохо, а у меня голова
+  болит».
+- Закон приоритетов в `protocol/acts.py`: DECLINE > SIDE_TOPIC > ISSUE_SITE.
+  «шучу, голова не болит» → DECLINE (отказ важнее шутки).
+  `safety/rules.py`: dying-joke снимает сигнал только если нет явного
+  «помогите/скорую».
+- `scripts/hard_battery.py`: 16 Layer A сценариев, 16/16; раннер пишет
+  `git_state: dirty`, чтобы sha HEAD не выдавал чистое дерево.
+
+## Два структурных правила (НЕ откатывать)
+
+1. **Прошедшее время само по себе не false world.** Нужен явный
+   non-current сигнал. «Со вчера головная боль.», «Вчера ухо заложило.»,
+   «Живот болел вчера.» — это только что сказанные симптомы; grounding
+   выше past-фрейма, дальше полезен onset-вопрос. Первая версия съела их
+   и стоила 19 упавших тестов.
+2. **Голое родственное слово — не пациент.** Other-person требует болезненной
+   лексики в том же ходе: «пойду гулять с дочкой» — спутник. Плюс инфлексия:
+   `'дочь'` НЕ подстрока `'дочкой'`/`'дочери'`, поэтому старый token-матчер
+   имел дыру — `has_other_person` её закрывает, но только за требованием
+   симптома. `policy._is_other_person_only` и `issue_memory._apply_correction`
+   сознательно оставлены на старом узком матчере: маршрутизация их через
+   широкий снова ловит спутников (это и сломало sleep-slot тест).
+
+## Известный gap (вне false-worlds, бэклог владельца)
+
+Abdominal-поток сначала спрашивает current-probe и повторяет его на
+вне-порядковом ответе тяжести («Сильно.») — episode-флоу не потребляет
+значение severity, onset-цепочка недостижима за 3 хода. Не скрыт: лежит в
+`.run/agent_gates/hard-battery-latest.json` → `known_gaps`. Сценарий
+`abdominal` проверяет false-world контракт (нет подавления/опровержения/
+эскалации), а строгую цепочку по-прежнему держит `real_pain`.
+
+## Ворота (все зелёные)
+
+```text
+python3 -m pytest tests/ -q            -> 1825 passed / 0 failed / 6 skipped / 1 xfailed
+python3 scripts/hard_battery.py         -> 16/16
+make agent-dialogue-gate                -> agent_dialogue_gate PASS + dream_narrative_gate PASS
+python3 scripts/dialogue_corpus_gate.py -> 500/500 PASS
+python3 tools/voice_lab/policy_diff_v8_v9.py -> GATE PASS changed=4 expected=4 unexplained=0
+python3 -m ruff check packages/ tests/ scripts/hard_battery.py -> All checks passed
+```
+
+## НЕ проверено
+
+- Live SIP: REGISTER красный на 192.168.1.64 против FreeSWITCH 172.19.0.2 —
+  вне scope этого brief. Доказательный класс здесь только Layer A
+  (CallSession/ScenarioRunner), никаких Live B утверждений.
+- Коммит локальный, **push не делался** (owner brief: один PR, без push).
+
+---
+
 # К пушу-5: CDK + golden live-call (2026-09-25)
 
 - Handoff принят с правками: ADR-021 proposed в репо; P0d golden-тест

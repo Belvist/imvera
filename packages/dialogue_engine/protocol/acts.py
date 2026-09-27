@@ -13,8 +13,9 @@ from __future__ import annotations
 def normalize_act(state, user_text: str) -> str | None:
     """One closed act or None, from existing understanding outputs only.
 
-    Priority is explicit (documented): DECLINE > SIDE_TOPIC (narrative
-    fiction/dream frame) > ISSUE_SITE > ISSUE_SEVERITY_ANSWER >
+    Priority is explicit (documented): DECLINE > SIDE_TOPIC (false-world
+    non-complaint frames: narrative/dream, other-person, joke, past-resolved,
+    side chatter) > ISSUE_SITE > ISSUE_SEVERITY_ANSWER >
     WELLNESS_SO_SO > WELLNESS_OK.
     New Russian phrasings map to these acts via Understand (fact
     extractors, polarity, mentions); never a new `if "phrase" in text`
@@ -37,13 +38,13 @@ def normalize_act(state, user_text: str) -> str | None:
         return "DECLINE"
     from packages.dialogue_engine.check_path import (
         is_narrative_fiction_frame,
-        suppress_health_issues_for_narrative_frame,
+        is_side_topic_chatter,
+        suppress_health_issues_for_non_complaint_frame,
     )
 
-    # Dream/film/news narrative → SIDE_TOPIC, never ISSUE_SITE (even if a
-    # legacy extractor still surfaces a body verb). Real complaint pivots
-    # fall through to ISSUE_SITE below.
-    if suppress_health_issues_for_narrative_frame(text):
+    # False-world frames → SIDE_TOPIC, never ISSUE_SITE (even if a legacy
+    # extractor still surfaces a body verb). Real speaker pivots fall through.
+    if suppress_health_issues_for_non_complaint_frame(text):
         return "SIDE_TOPIC"
 
     try:
@@ -52,9 +53,23 @@ def normalize_act(state, user_text: str) -> str | None:
         mentions = ()
     if mentions:
         return "ISSUE_SITE"
-    if is_narrative_fiction_frame(text):
-        # Frame present but pivot kept mentions empty / no mentions — still
-        # mark side-topic so policy does not treat the turn as silence.
+    from packages.dialogue_engine.check_path import _PRESENT_ACTIVE_COMPLAINT_PIVOT
+
+    if _PRESENT_ACTIVE_COMPLAINT_PIVOT.search(text):
+        # Siteless present-tense speaker complaint: live complaint needing
+        # the concern pipeline, not silence.
+        return "ISSUE_SITE"
+    from packages.dialogue_engine.check_path import (
+        _PRESENT_ACTIVE_COMPLAINT_PIVOT,
+    )
+
+    # Siteless present-tense speaker complaint («а сейчас у меня болит»):
+    # same ISSUE_SITE act via the existing pivot detector, not a new regex.
+    if _PRESENT_ACTIVE_COMPLAINT_PIVOT.search(text):
+        return "ISSUE_SITE"
+    if is_narrative_fiction_frame(text) or is_side_topic_chatter(text):
+        # Frame/chatter with empty mentions — mark SIDE_TOPIC so policy
+        # does not treat the turn as silence / invent a concern.
         return "SIDE_TOPIC"
     if _is_severity_answer(state, text):
         return "ISSUE_SEVERITY_ANSWER"

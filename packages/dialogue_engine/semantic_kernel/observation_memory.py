@@ -81,13 +81,13 @@ def _temporal_from_spans(
 
 def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
     from packages.dialogue_engine.check_path import (
-        suppress_health_issues_for_narrative_frame,
+        suppress_health_issues_for_non_complaint_frame,
     )
 
-    # Narrative fiction frame: do not emit speaker health observations from
-    # dream/film body talk (live fs-80cf029f). Mentions stay empty too via
-    # extract_issue_mentions; this blocks the kernel observation path.
-    if suppress_health_issues_for_narrative_frame(result.raw_text):
+    # False-world frames: do not emit speaker health observations
+    # (dream/film, other-person, joke, past-resolved). Mentions stay empty
+    # via extract_issue_mentions; this blocks the kernel observation path.
+    if suppress_health_issues_for_non_complaint_frame(result.raw_text):
         return ()
 
     spans = result.spans
