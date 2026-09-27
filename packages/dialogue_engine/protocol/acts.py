@@ -21,7 +21,10 @@ def normalize_act(state, user_text: str) -> str | None:
     extractors, polarity, mentions); never a new `if "phrase" in text`
     here or in policy.
     """
-    from packages.dialogue_engine.check_path import is_explicit_concern_decline
+    from packages.dialogue_engine.check_path import (
+        is_explicit_concern_decline,
+        is_politeness_refusal,
+    )
     from packages.dialogue_engine.issue_mention_extract import (
         extract_goal_facts,
         extract_issue_mentions,
@@ -30,6 +33,11 @@ def normalize_act(state, user_text: str) -> str | None:
     text = (user_text or "").strip()
     if not text:
         return None
+    # «Не беспокой меня» is a request to stop, not a denial of the complaint.
+    # Same closed act (DECLINE forbids further probing), different reason —
+    # no new act, no new branch here.
+    if is_politeness_refusal(text):
+        return "DECLINE"
     if declines_open_concern_probe(state, text):
         return "DECLINE"
     if is_explicit_concern_decline(text) and _decline_targets_open(state):

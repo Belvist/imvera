@@ -295,6 +295,39 @@ _EXPLICIT_DECLINE_RE = re.compile(
 )
 
 
+_POLITENESS_REFUSAL_RE = re.compile(
+    r"(?:"
+    r"\bне\s+(?:беспокой|беспокоить|надо\s+беспокоить|спрашивай|спрашивать|"
+    r"надо\s+спрашивать|расспрашивай)\b|"
+    r"\bне\s+хочу\s+(?:об\s+этом\s+)?(?:говорить|рассказывать)\b|"
+    r"\bне\s+надо\s+(?:мне\s+)?(?:вопросов|спрашивать)\b|"
+    r"\bоставьте\s+меня\b|"
+    r"\bбольше\s+не\s+(?:спрашивай|спрашивайте|беспокой|беспокоить)\b"
+    r")",
+    re.I,
+)
+
+
+def is_politeness_refusal(text: str) -> bool:
+    """The elder asks to stop being probed.
+
+    Distinct from denial of a complaint: «не беспокой меня» does not mean
+    «у меня ничего не болит» — it means «stop asking». Routing both through
+    one predicate is why the refusal used to be answered with the next
+    question (live fs-4d8f5a8b).
+
+    Honoring it stops the routine question ladders only. A symptom reported
+    after a refusal still opens ISSUE_SITE — safety and grounding outrank
+    politeness.
+    """
+    t = (text or "").strip()
+    if not t:
+        return False
+    if complaint_without_negation(t):
+        return False
+    return bool(_POLITENESS_REFUSAL_RE.search(t))
+
+
 def is_explicit_concern_decline(text: str) -> bool:
     """Explicit denial-of-complaint (live fs-6e3abff0) — accept at once.
 
@@ -609,7 +642,7 @@ def _looks_like_complaint(text: str) -> bool:
 
 
 _COMPLAINT_RE = re.compile(
-    r"(плох|бол(?!ее(?:\b|-))|тошн|кружи|дурно|мутит|тяжел|температур|давлен|"
+    r"(плох|бол(?!ее(?:\b|-)|ьше)|тошн|кружи|дурно|мутит|тяжел|температур|давлен|"
     r"отвратительн|паршив|хреново|фигово|дерьмово|гнусно|мерзко|"
     r"погано|кошмарно|"
     r"слабость|болит|ноет|ломит|давит|тошнит|знобит|озноб|"

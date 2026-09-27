@@ -158,6 +158,27 @@ def _clause_mentions(
             role="primary" if first_symptom else "independent",
             quote=clause,
         )
+
+    # Generic construction fallback: ANY noun + pain verb is a body site.
+    # The specific rules above keep their canonical labels; this only runs
+    # when a clause produced no mention, so it closes the whole class of
+    # holes (зуб, спина, нога, горло, ухо, ребро, ...) without a body-part
+    # list. Live fs-4d8f5a8b: «Начал зук болит у меня.» extracted NOTHING and
+    # the freshest symptom was lost at summary.
+    if not mentions or not any(m.role in ("primary", "independent") for m in mentions):
+        for g in _GENERIC_BODY_PAIN.finditer(n):
+            site = g.group(1).strip()
+            if not site or _NON_BODY_NOUN.search(site):
+                continue
+            add(
+                label=f"{site} болит",
+                kind="symptom",
+                body_site=site,
+                role="primary" if first_symptom else "independent",
+                quote=clause,
+            )
+            first_symptom = False
+            break
     return mentions
 
 
@@ -185,6 +206,22 @@ _CLAUSE_SPLIT_RE = re.compile(
 )
 _SPEAKER_SIGNAL_RE = re.compile(
     r"\b(?:я|мне|меня|мной|мною|у\s+меня|сам|сама)\b",
+    re.I,
+)
+
+
+_GENERIC_BODY_PAIN = re.compile(
+    r"\b([а-яё]{3,})\b"
+    r"(?:\s+(?:сильно|очень|немного|чуть|ещ[её]|тоже|постоянно|давно|"
+    r"невыносимо|нестерпимо|страшно))?"
+    r"\s+(?:болит|болит[аиуы]?|ноет|ноют|ломит|ломит[аи]?|давит|стреляет|"
+    r"стрелял|жж[её]т|жг[её]т|пульсирует|колет|першит)\b",
+    re.I,
+)
+# Words that are not a body site even in "<noun> болит" position.
+_NON_BODY_NOUN = re.compile(
+    r"^(?:не|ни|мне|меня|я|он|она|оно|они|нас|вас|все|всё|всего|кто|что|"
+    r"очень|сильно|немного|ещё|еще|тоже|тоже|плохо|хорошо|само|сама|ещё)$",
     re.I,
 )
 

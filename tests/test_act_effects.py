@@ -84,7 +84,14 @@ def test_act_table_no_preopened_probe_required() -> None:
         ("wellness_open", "Да нет, ничего не болит.", "DECLINE"),  # new wording
         ("wellness_open", "Поел.", None),
         ("wellness_open", "Не скажу.", None),
-        ("wellness_open", "Отстань.", None),
+        ("wellness_open", "Отстань.", None),  # hostile: escalation, not politeness
+        # Politeness refusal = «stop asking», a closed act (DECLINE). Distinct
+        # from denial of the complaint; hostile wording above must NOT map here.
+        ("wellness_open", "Не беспокой меня ещё.", "DECLINE"),
+        ("wellness_open", "не хочу об этом говорить", "DECLINE"),
+        ("wellness_open", "Больше не спрашивай.", "DECLINE"),
+        ("wellness_open", "Оставьте меня, пожалуйста.", "DECLINE"),
+        ("wellness_open", "Хватит меня спрашивать.", None),  # hostile register
         ("wellness_open", "Голова болит.", "ISSUE_SITE"),
         ("wellness_open", "Хорошо.", None),  # bare positive: not DECLINE
     ]

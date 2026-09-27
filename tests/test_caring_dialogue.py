@@ -50,7 +50,7 @@ def test_broken_glue_ack_prefers_full_label() -> None:
         SimpleNamespace(label="головная боль", body_site="голова", role="primary"),
     ]
     assert _grounded_ack_for_mentions(SimpleNamespace(issue_mentions=dupes)) == (
-        "Поняла вас. Головная боль — зафиксировала."
+        "Головная боль — жаль, что беспокоит."
     )
     alone = [
         SimpleNamespace(label="голова боль", body_site="голова", role="primary"),
@@ -69,7 +69,7 @@ def test_sited_ack_kept() -> None:
 
     ok = SimpleNamespace(label="Живот болит", body_site="живот", role="primary")
     assert _grounded_ack_for_mentions(SimpleNamespace(issue_mentions=[ok])) == (
-        "Поняла вас. Живот болит — зафиксировала."
+        "Живот болит — жаль, что беспокоит."
     )
 
 

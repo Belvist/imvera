@@ -719,8 +719,32 @@ def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
         and not _is_bare_verb_label(label)
         and not _is_broken_glue_label(label)
     ):
-        return f"Поняла вас. {label[0].upper() + label[1:]} — зафиксировала."
+        spoken_label = label[0].upper() + label[1:]
+        return questions.episode_ack(
+            _episode_ack_kind(turn, primary),
+            spoken_label,
+            turn_seq=_utterance_seq(turn),
+        )
     return _BARE_ACK_ROTATION[_utterance_seq(turn) % len(_BARE_ACK_ROTATION)]
+
+
+def _episode_ack_kind(turn: RichUserTurn, mention) -> str:
+    """Which acknowledgment fits what actually happened (not a phrase list).
+
+    improving → the elder says it eased; strong → they already said it
+    hurts badly; answer → they replied to Vera's own question; new →
+    they reported a symptom for the first time.
+    """
+    status = str(getattr(mention, "status", "") or "").lower()
+    if status in ("improving", "resolved"):
+        return "improving"
+    severity = str(getattr(mention, "severity", "") or "")
+    raw = str(getattr(turn, "raw_text", "") or "")
+    if (severity and _STRONG_PAIN.search(severity)) or _STRONG_PAIN.search(raw):
+        return "strong"
+    if getattr(turn, "answers_pending_question", False):
+        return "answer"
+    return "new"
 
 
 _STRONG_PAIN = re.compile(
@@ -751,6 +775,10 @@ def _bridge_ack_for_episode(ep, prev=None) -> str:
         return "Хорошо."
     if ep.kind == "sleep_problem" or "сон" in label.lower():
         return "Хорошо. Про сон —"
+    if _is_verb_phrase_label(label):
+        # A generic body site keeps the elder's own clause («зук болит»).
+        # Speak it as a clause — «Про зук болит» is ungrammatical.
+        return f"Хорошо. {label[0].upper() + label[1:]} —"
     if label and not _is_bare_verb_label(label):
         return f"Хорошо. Про {label} —"
     progress = len(getattr(ep, "known_attributes", None) or {})
@@ -826,6 +854,17 @@ def _is_broken_glue_label(label: str) -> bool:
         and words[0] in _BROKEN_GLUE_SITES
         and words[1] in ("боль", "боли")
     )
+
+
+def _is_verb_phrase_label(label: str) -> bool:
+    """True for a «<site> <pain verb>» label (the generic-body-site form).
+
+    Such a label is a clause, not a noun phrase: it must be spoken as a
+    clause, never after «Про».
+    """
+    words = [w.strip(".,!?").lower() for w in (label or "").split()]
+    words = [w for w in words if w]
+    return len(words) >= 2 and words[-1] in _BARE_VERBS
 
 
 def _is_bare_verb_label(label: str) -> bool:
@@ -1552,6 +1591,44 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
     )
 
 
+_REFUSAL_ACK = (
+    "Поняла, не буду больше спрашивать.",
+    "Хорошо, больше не спрашиваю.",
+    "Поняла, оставлю вас в покое.",
+)
+
+
+def _elder_asked_to_stop(
+    state: EngineState, turn_context: TurnContext
+) -> ResponsePlan | None:
+    """«Не беспокой меня» must stop the routine question ladders.
+
+    Warm acknowledgement, no question. Safety and grounding outrank
+    politeness: a symptom reported after a refusal still reaches ISSUE_SITE
+    through the normal paths, because the refusal predicate never matches a
+    complaint. The farewell stays available so the elder can end the call.
+    """
+    from packages.dialogue_engine.check_path import is_politeness_refusal
+
+    turn = turn_context.turn
+    raw = getattr(turn, "raw_text", "") or ""
+    if raw and is_politeness_refusal(raw):
+        state.elder_asked_to_stop = True
+    if not getattr(state, "elder_asked_to_stop", False):
+        return None
+    # Only silence the routine ladders while nothing is being reported.
+    if turn is not None and getattr(turn, "issue_mentions", None):
+        return None
+    ack = _REFUSAL_ACK[_utterance_seq(turn) % len(_REFUSAL_ACK)]
+    return ResponsePlan(
+        obligation=ConversationObligation.NEVER_SILENT,
+        action="speak",
+        mandatory_question=ack,
+        intent="ack_refusal",
+        marks_question=False,
+    )
+
+
 def schedule_next_action(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
     """Thin routing wrapper via DecisionRouter.
 
@@ -1560,6 +1637,10 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
     Exactly one authoritative scheduler mutates/returns per invocation.
     """
     from packages.dialogue_engine.decision_router import route_schedule_next_action
+
+    refusal = _elder_asked_to_stop(state, turn_context)
+    if refusal is not None:
+        return refusal
 
     plan = route_schedule_next_action(
         state,

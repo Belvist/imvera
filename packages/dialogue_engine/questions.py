@@ -194,6 +194,34 @@ _WELLNESS_ACK_NORMAL = "Понятно."
 _WELLNESS_ACK_OKAY = "Хорошо, поняла."
 _WELLNESS_ACK_UNCERTAIN = "Понимаю."
 _WELLNESS_ACK_NEGATIVE = "Мне жаль это слышать."
+# Episode acknowledgment keyed by MEANING (what happened), not by situation
+# phrase. Small by design — PhraseSelect discipline, not bank inflation: a
+# new wording must not become a new branch in policy.
+_EPISODE_ACK: dict[str, tuple[str, ...]] = {
+    # A symptom the elder just reported for the first time.
+    "new": (
+        "{label} — жаль, что беспокоит.",
+        "{label} — это запишу.",
+        "{label} — услышала.",
+    ),
+    # An answer to the question Vera just asked.
+    "answer": (
+        "{label} — спасибо, что сказали.",
+        "{label} — записала.",
+        "{label} — учла.",
+    ),
+    # The elder already said it hurts badly.
+    "strong": (
+        "{label} — это тяжело, понимаю.",
+        "{label} — жаль, что вы это терпите.",
+        "{label} — сильно, понимаю.",
+    ),
+    # Reported as easing or gone.
+    "improving": (
+        "{label} — полегчало, рада.",
+        "{label} — проходит, хорошо.",
+    ),
+}
 # Legacy constant — prefer summary_close_speech(state).
 _SUMMARY_TEXT = "Всё, спасибо. Всего вам хорошего. До свидания."
 _URGENT_CLOSE = (
@@ -325,6 +353,19 @@ def goodbye_final_speech(state: EngineState) -> str:
     if name:
         return f"До свидания, {name}. Всего вам хорошего."
     return _GOODBYE_FINAL
+
+
+def episode_ack(kind: str, label: str, *, turn_seq: int = 0) -> str:
+    """Acknowledgment for a grounded episode fact, chosen by meaning.
+
+    Falls back to the neutral form for an unknown signal — never invents a
+    branch of its own.
+    """
+    pool = _EPISODE_ACK.get(kind)
+    if not pool:
+        return f"Поняла вас. {label} — зафиксировала."
+    template = pool[turn_seq % len(pool)] if turn_seq else pool[0]
+    return template.format(label=label)
 
 
 def important_to_share_question() -> str:

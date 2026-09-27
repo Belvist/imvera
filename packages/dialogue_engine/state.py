@@ -261,6 +261,9 @@ class EngineState(BaseModel):
     # CDK Step 3: last normalized act ("" when none). Read-only signal for
     # downstream guards; routing never assigns meaning to free text here.
     last_protocol_act: str = ""
+    # Elder asked to stop being probed («не беспокой меня»). Silences the
+    # routine question ladders only — safety/grounding still win.
+    elder_asked_to_stop: bool = False
     # Wellness clarify asked once after a mute/garbled first answer.
     wellness_clarify_asked: bool = False
     # Silence reprompts used (max 1 per call): a 7 s silence is not an answer

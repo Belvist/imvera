@@ -1031,6 +1031,28 @@ def merge_legacy_mentions(
         key = (legacy.body_site or "", legacy.label.lower())
         if key in kernel_keys:
             continue
+        # A kernel mention with no body_site and a single-word label is a
+        # bare verb («болит») — strictly less informative than a sited
+        # legacy mention («зук болит»). Substring dedup must never let it
+        # drop the sited one: the kernel has no vocabulary for every body
+        # part, so a bare verb is exactly what it produces for an unknown
+        # site. Live fs-4d8f5a8b: «Начал зук болит у меня.» lost the tooth.
+        weaker = next(
+            (
+                k
+                for k in kernel_mentions
+                if not k.body_site
+                and len((k.label or "").split()) == 1
+                and k.label.lower() in legacy.label.lower()
+            ),
+            None,
+        )
+        if weaker is not None and legacy.body_site:
+            merged = [m for m in merged if m is not weaker]
+            merged.append(legacy)
+            kernel_keys.discard((weaker.body_site or "", weaker.label.lower()))
+            kernel_keys.add(key)
+            continue
         if any(
             legacy.label.lower() in k.label.lower() or k.label.lower() in legacy.label.lower()
             for k in kernel_mentions

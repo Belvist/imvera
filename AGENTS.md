@@ -561,6 +561,52 @@ Until these exist, agent reports exact commands run.
   is red on 192.168.1.64 vs FreeSWITCH 172.19.0.2, out of scope. Layer A
   (CallSession) is the only evidence class here.
 
+## Three dialogue defects closed (2026-09-27, after false-worlds)
+
+Found by replaying the REAL call fs-4d8f5a8b through the marked Layer A path
+(`@pytest.mark.dialogue_engine` — a standalone replay runs the fallback path
+and LIES: different acts, different speech). Paper-simulated a "one open
+worry" model first: it validated the idea and, by failing, produced these
+four precise fixes instead of an architecture rewrite.
+
+1. **A fresh symptom was silently lost.** «Начал зук болит у меня.» produced
+   NO mention, so the newest symptom of the call vanished and the summary
+   mentioned only the belly. TWO structural holes: the legacy extractor knew
+   only 5 hardcoded body sites, and the kernel (no vocabulary for every part)
+   returns a bare verb «болит» with `body_site=None` — which then won the
+   merge. Fix: any noun + pain verb is a site (`_GENERIC_BODY_PAIN`, runs
+   only when the specific rules produced nothing, so canonical labels do not
+   move), and in `merge_legacy_mentions` a sited mention outranks a bare verb.
+2. **A refusal to be probed was answered with the next question.**
+   «Не беспокой меня ещё.» → «Есть ли ещё что-то важное…». DECLINE only
+   covered denial of the complaint. New predicate `is_politeness_refusal` →
+   existing closed act DECLINE (no new act) + `state.elder_asked_to_stop`
+   gating the routine ladders with a warm, question-free ack. Safety stays
+   above politeness by construction: a symptom after a refusal still opens
+   ISSUE_SITE. HOSTILE wording («Отстань.», «Хватит…») is deliberately NOT in
+   the polite set — it keeps the pre-existing urgent_close escalation, and
+   `test_same_turn_self_correction` caught that regression.
+3. **Administrative monotone.** Every episode turn opened «Поняла вас. … —
+   зафиксировала.». Now `questions.episode_ack(kind, label)` picks by
+   MEANING (new/answer/strong/improving) from a small bank — PhraseSelect
+   discipline, not inflation. Every template keeps the label grammatically
+   standalone, because labels come in two shapes (noun phrase «боль в животе»
+   vs clause «зук болит») and a comma splice reads like a form.
+- ALSO FIXED, found on the way: `_COMPLAINT_RE` matched «бол» inside
+  «больше», so «не беспокой меня больше» armed a PAIN complaint. Guarded with
+  `бол(?!ее(?:\b|-)|ьше)`. Safety-adjacent, caught by the refusal work.
+- Gates: 1867 passed / 0 failed / 6 skipped / 1 xfailed; hard battery 16/16;
+  agent gate PASS; corpus 500/500; policy diff 4/4 explained; ruff clean.
+- Contracts migrated deliberately (expectations updated, assertions kept
+  strict): `test_caring_dialogue` ack text, `test_act_effects` table rows for
+  the new DECLINE wordings. NOT PUSHED (owner: no push). No live proof —
+  SIP REGISTER red on 192.168.1.64 vs FreeSWITCH 172.19.0.2.
+- STILL OPEN: severity asked only by a hard chain (abdominal gap, in
+  hard-battery `known_gaps`); ITS still reads as a form («на что мне стоит
+  обратить внимание»); no cross-call memory at all; coverage domains
+  (mood/sleep) can still be abandoned mid-call. "One open worry" remains a
+  paper model — validate it against the fixed engine before adopting.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
