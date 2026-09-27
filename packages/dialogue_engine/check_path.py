@@ -333,12 +333,6 @@ def apply_concern_answer(state: EngineState, text: str) -> str:
         state.probe_phase = None
         state.observations["concern_declined"] = "1"
         return "declined"
-    # Past-resolved frames («раньше болела, сейчас хорошо») are history,
-    # not a current concern — same decline path, no probes (false-worlds).
-    if is_past_noncurrent_frame(text):
-        state.probe_phase = None
-        state.observations["concern_declined"] = "1"
-        return "declined"
     state.wellness_concern = text
     if is_urgent_concern(text):
         state.check_path = CheckPath.URGENT

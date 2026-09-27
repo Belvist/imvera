@@ -55,16 +55,8 @@ def normalize_act(state, user_text: str) -> str | None:
         return "ISSUE_SITE"
     from packages.dialogue_engine.check_path import _PRESENT_ACTIVE_COMPLAINT_PIVOT
 
-    if _PRESENT_ACTIVE_COMPLAINT_PIVOT.search(text):
-        # Siteless present-tense speaker complaint: live complaint needing
-        # the concern pipeline, not silence.
-        return "ISSUE_SITE"
-    from packages.dialogue_engine.check_path import (
-        _PRESENT_ACTIVE_COMPLAINT_PIVOT,
-    )
-
     # Siteless present-tense speaker complaint («а сейчас у меня болит»):
-    # same ISSUE_SITE act via the existing pivot detector, not a new regex.
+    # live complaint needing the concern pipeline, not silence.
     if _PRESENT_ACTIVE_COMPLAINT_PIVOT.search(text):
         return "ISSUE_SITE"
     if is_narrative_fiction_frame(text) or is_side_topic_chatter(text):
