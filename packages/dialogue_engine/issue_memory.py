@@ -749,6 +749,38 @@ def _apply_correction(state: EngineState, turn: RichUserTurn) -> None:
         state.active_episode_id = ep.episode_id
 
 
+def _record_out_of_order_value(
+    state: EngineState,
+    ep: IssueEpisode,
+    turn: RichUserTurn,
+    pending: str,
+    exclude: tuple[str, ...],
+) -> bool:
+    """Record a grounded answer that arrived for a step other than the pending one.
+
+    «Сильно.» while «сейчас ещё беспокоит?» is open is a real severity answer.
+    Dropping it made the current probe repeat verbatim and lost the evidence
+    (live fs-4d8f5a8b, hard-battery `abdominal`). Probe order is a product
+    plan; evidence is the elder's words — consume the evidence.
+
+    Deliberately severity-only. A generalized version also wrote a `current`
+    answer into `onset`/`duration` («Сейчас не беспокоит.» is not a temporal
+    anchor) — fabricated data is worse than a missing value. Temporal steps
+    keep their own pending-only handling, and a recorded value is never
+    overwritten.
+    """
+    if pending == "severity":
+        return False
+    if (ep.known_attributes or {}).get("severity"):
+        return False
+    value = extract_grounded_severity_value(turn.raw_text, exclude_clauses=exclude)
+    if not value:
+        return False
+    ep.known_attributes["severity"] = value
+    finalize_episode_if_complete(ep)
+    return True
+
+
 def _fill_pending_attribute_for_episode(
     state: EngineState,
     turn: RichUserTurn,
@@ -775,6 +807,7 @@ def _fill_pending_attribute_for_episode(
     # (frozen: onset stays None and pending stays open). Falls through to the
     # per-attribute extractors below, which write only grounded values.
     exclude = _mention_exclusion_clauses(turn)
+    _record_out_of_order_value(state, ep, turn, attribute, exclude)
     if attribute == "onset":
         value = extract_grounded_onset_value(turn.raw_text, exclude_clauses=exclude)
         if value:
