@@ -7,6 +7,49 @@ import uuid
 
 from packages.contracts.semantic import Evidence, FactCandidate, IssueMention
 
+_BARE_SITE_RE = None
+
+
+def _bare_site_clause_re() -> re.Pattern[str]:
+    """Bare-site clause matcher; lexicon lemmas appended lazily to avoid a
+    circular import (semantic_kernel/__init__ imports kernel → this module)."""
+    global _BARE_SITE_RE
+    if _BARE_SITE_RE is None:
+        from packages.dialogue_engine.semantic_kernel.lexicon import (
+            BODY_SITE_LEMMAS,
+        )
+
+        _BARE_SITE_RE = re.compile(
+            r"^(?:и|а|но|вот|у\s+меня|меня)?\s*"
+            r"(голова|живот|спина|нога|ноги|рука|руки|грудь|шея|поясница|колено|горло|"
+            + "|".join(sorted(BODY_SITE_LEMMAS))
+            + r")"
+            r"(?:\s+(?:тоже|также))?\s*$",
+            re.I,
+        )
+    return _BARE_SITE_RE
+
+
+def _normalize_site_token(token: str) -> str:
+    from packages.dialogue_engine.semantic_kernel.morphology import (
+        normalize_token,
+    )
+
+    return normalize_token(token)
+
+
+def _site_in_lexicon(site: str) -> bool:
+    from packages.dialogue_engine.semantic_kernel.lexicon import (
+        BODY_SITE_LEMMAS,
+    )
+
+    return site in BODY_SITE_LEMMAS
+
+
+def _cap_site(token: str) -> str:
+    token = (token or "").strip()
+    return token[0].upper() + token[1:] if token else token
+
 _PAIN_VERB = re.compile(
     r"\b(бол(?!ее(?:\b|-))\w*|зноби\w*|озноб\w*|морози\w*|приболел\w*|заболел\w*|разболел\w*|поболел\w*|"
     r"побал\w*|побалива\w*|поныва\w*|ноет\w*|беспоко\w*|давит\w*|ломит\w*|"
@@ -57,10 +100,30 @@ def _split_symptom_parts(text: str) -> list[str]:
     return out or [text.strip()]
 
 
-_BARE_SITE_CLAUSE = re.compile(
-    r"^(?:и|а|но|вот|у\s+меня|меня)?\s*"
-    r"(голова|живот|спина|нога|ноги|рука|руки|грудь|шея|поясница|колено|горло)"
-    r"\s*$",
+_BARE_SITE_CLAUSE = None  # built lazily via _bare_site_clause_re()
+# Bare-site correction pivot («Ой, нет, голова.», «Не живот, а голова.»):
+# the denied site never matches _BARE_SITE_CLAUSE (its «не» prefix is not an
+# allowed prefix), so only the corrected site grounds a mention.
+_BARE_CORRECTION_PIVOT = re.compile(r"\bнет\b|\bне\s+[а-яё]+,?\s+а\b", re.I)
+# Sensation + location without a pain verb («тяжесть в животе», «шум в
+# ушах»). The site requirement is structural: bare «шум» is TV noise,
+# bare «туман» is weather — only the paired form is a complaint.
+_SENSATION_SITE = re.compile(
+    r"\b(тяжесть|тяжести|жжение|жжения|резь|рези|ломота|ломоты|колик\w*|"
+    r"спазм\w*|судорог\w*|онемение|онемения|покалывание|зуд|дрожь|озноб\w*|"
+    r"потливость|слабость|усталость|одышк\w*|удушье|сердцебиение|от[её]к\w*|"
+    r"синяк\w*|сыпь|головокружение|тошнот\w*|рвот\w*|каш\w*|насморк\w*|"
+    r"чихан\w*|икот\w*|отрыжк\w*|изжог\w*|запор\w*|понос\w*|гной\w*|"
+    r"сухость|першение|горечь|жажд\w*|бол[ьи]\w*|кров[ьи]\w*)\b"
+    r"\s+(в|на|у|во|из|ис|с|со|от|до|под|над|к|ко|за)\s+([а-яё\-]+(?:\s+[а-яё\-]+){0,2})",
+    re.I,
+)
+_SENSATION_EAR_NOISE = re.compile(
+    r"\b(шум|звон)\b\s+(в)\s+(ушах|ухе|голове)\b",
+    re.I,
+)
+_SENSATION_EYE_FOG = re.compile(
+    r"\b(туман|двоение|двоится)\b\s+(в|перед)\s+(глазах|глазами|глазу)\b",
     re.I,
 )
 
@@ -159,6 +222,67 @@ def _clause_mentions(
             quote=clause,
         )
 
+    # Sensation + location without a pain verb («тяжесть в животе»).
+    # Runs before the generic fallback so the label is a speakable noun
+    # phrase, not a bare noun. The site token is resolved through the
+    # morphology layer; an unresolvable site means no mention.
+    if not any(m.role in ("primary", "independent") for m in mentions):
+        for _sens_re, _kind in (
+            (_SENSATION_SITE, "symptom"),
+            (_SENSATION_EAR_NOISE, "symptom"),
+            (_SENSATION_EYE_FOG, "symptom"),
+        ):
+            _sm = _sens_re.search(n)
+            if not _sm:
+                continue
+            _site = ""
+            _site_tok = ""
+            for _cand in _sm.group(3).strip().split():
+                _cand = _cand.strip()
+                if not _cand:
+                    continue
+                _resolved = _normalize_site_token(_cand)
+                if _cand.lower() in ("ушах", "ухе"):
+                    _resolved = "ухо"
+                elif _cand.lower() in ("глазах", "глазами", "глазу"):
+                    _resolved = "глаз"
+                elif _cand.lower() in ("голове",):
+                    _resolved = "голова"
+                if _site_in_lexicon(_resolved):
+                    _site, _site_tok = _resolved, _cand
+                    break
+            if not _site:
+                continue
+            _sens = _sm.group(1).strip()
+            _prep = _sm.group(2).strip()
+            add(
+                label=f"{_sens} {_prep} {_site_tok}",
+                kind=_kind,
+                body_site=_site,
+                role="primary" if first_symptom else "independent",
+                quote=clause,
+            )
+            first_symptom = False
+            break
+
+    # Bare site sharing the turn's pain verb («Болит голова и нога») or named
+    # as a correction («Нет, нога.»). The specific rules above only know a
+    # handful of sites; every other site was silently lost here.
+    if shared_verb and not any(m.role in ("primary", "independent") for m in mentions):
+        _bm = _bare_site_clause_re().match(n.rstrip(".,!?…"))
+        if _bm:
+            _btok = _bm.group(1).strip()
+            _bnorm = _normalize_site_token(_btok)
+            _bsite = _bnorm if _site_in_lexicon(_bnorm) else _btok.lower()
+            add(
+                label=f"{_cap_site(_btok)} болит",
+                kind="symptom",
+                body_site=_bsite,
+                role="primary" if first_symptom else "independent",
+                quote=clause,
+            )
+            first_symptom = False
+
     # Generic construction fallback: ANY noun + pain verb is a body site.
     # The specific rules above keep their canonical labels; this only runs
     # when a clause produced no mention, so it closes the whole class of
@@ -170,10 +294,19 @@ def _clause_mentions(
             site = g.group(1).strip()
             if not site or _NON_BODY_NOUN.search(site):
                 continue
+            # Normalize long sites to the lemma («Руке» → «рука»); keep short
+            # or unknown words raw — morphology maps «Пах» → «пахнуть» and
+            # «Зук» must stay the elder's own word.
+            _norm = _normalize_site_token(site)
+            _body = (
+                _norm
+                if len(site) >= 4 and _site_in_lexicon(_norm)
+                else site.lower()
+            )
             add(
                 label=f"{site} болит",
                 kind="symptom",
-                body_site=site,
+                body_site=_body,
                 role="primary" if first_symptom else "independent",
                 quote=clause,
             )
@@ -215,7 +348,8 @@ _GENERIC_BODY_PAIN = re.compile(
     r"(?:\s+(?:сильно|очень|немного|чуть|ещ[её]|тоже|постоянно|давно|"
     r"невыносимо|нестерпимо|страшно))?"
     r"\s+(?:болит|болит[аиуы]?|ноет|ноют|ломит|ломит[аи]?|давит|стреляет|"
-    r"стрелял|жж[её]т|жг[её]т|пульсирует|колет|першит)\b",
+    r"стрелял|жж[её]т|жг[её]т|пульсирует|колет|першит|першило|"
+    r"залож\w*|онем\w*|тошн\w*|кашл\w*|тян\w*|урч\w*)\b",
     re.I,
 )
 # Words that are not a body site even in "<noun> болит" position.
@@ -262,9 +396,12 @@ def extract_issue_mentions(text: str) -> tuple[IssueMention, ...]:
     parts = _split_symptom_parts(raw)
     all_mentions: list[IssueMention] = []
     shared_verb = any(bool(_PAIN_VERB.search(p.lower())) for p in parts)
+    correction_pivot = bool(_BARE_CORRECTION_PIVOT.search(raw))
     first = True
     for part in parts:
-        bare_site = shared_verb and bool(_BARE_SITE_CLAUSE.match(part.strip().lower()))
+        bare_site = (shared_verb or correction_pivot) and bool(
+            _bare_site_clause_re().match(part.strip().lower().rstrip(".,!?…"))
+        )
         found = _clause_mentions(
             raw, part, first_symptom=first, shared_verb=bare_site
         )

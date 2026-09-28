@@ -10,11 +10,26 @@ from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
 from packages.dialogue_engine.semantic_kernel.lexicon import (
     BODY_SITE_LEMMAS,
     ISSUE_VERB_LEMMAS,
+    SENSATION_NOUNS,
+    SEVERITY_WORDS,
+    TIME_WORDS,
 )
 from packages.dialogue_engine.semantic_kernel.morphology import normalize_token
 from packages.dialogue_engine.semantic_kernel.types import SemanticSpan, SpanType
 
 _TOKEN = re.compile(r"[а-яёa-z]+(?:-[а-яёa-z]+)?", re.I)
+
+
+def _yo_variants(words: frozenset[str]) -> list[str]:
+    """Both ё- and е-forms: span matching runs on raw text (no normalization)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for w in sorted(words):
+        for v in (w, w.replace("ё", "е"), w.replace("е", "ё")):
+            if v not in seen:
+                seen.add(v)
+                out.append(v)
+    return out
 
 _DURATION = re.compile(
     r"\b("
@@ -31,8 +46,9 @@ _TIME = re.compile(
     r"со?\s+вчерашн\w*(?:\s+дня)?|с\s+утра|с\s+десяти|с\s+\d{1,2}(?::\d{2})?|"
     r"\d{1,2}\s*:\s*\d{2}|"
     r"давно|иногда|периодически|постоянно|уже\s+почти|почти\s+прошл\w*|"
-    r"три\s+года\s+назад|год\s+назад"
-    r")\b",
+    r"три\s+года\s+назад|год\s+назад|"
+    + "|".join(_yo_variants(TIME_WORDS))
+    + r")\b",
     re.I,
 )
 
@@ -58,6 +74,10 @@ _FALSE_ISSUE_TOKENS = frozenset(
         "более",
         "менее",
         "более-менее",
+        # Yeast («дрожжи») collides with the «дрожь» stem — baking is not
+        # a symptom («пеку пироги на дрожжах»).
+        "дрожжи",
+        "дрожжей",
     }
 )
 _FALSE_BODY_SITE_TOKENS = frozenset({"голод", "голодный", "голодная", "голоден"})
@@ -67,7 +87,9 @@ _ISSUE_SURFACE = re.compile(
     re.I,
 )
 _SEVERITY = re.compile(
-    r"\b(сильн\w*|терпим\w*|слаб\w*|невыносим\w*|ужасн\w*|пойд[её]т|сойд[её]т)\b",
+    r"\b(сильн\w*|терпим\w*|слаб\w*|невыносим\w*|ужасн\w*|пойд[её]т|сойд[её]т|"
+    + "|".join(_yo_variants(SEVERITY_WORDS))
+    + r")\b",
     re.I,
 )
 _STATUS = re.compile(
@@ -90,10 +112,26 @@ _ISSUE_BEFORE_BODY = re.compile(
 )
 # Vital-sign conditions without a verb («давление высокое», «температура»):
 # invisible otherwise (live: lone pressure complaints dropped entirely).
+# Extended from SENSATION_NOUNS — same mechanism, one source of truth.
+# Excluded from the bare trigger: шум/звон/туман need a body site («шум в
+# ушах», «туман перед глазами») because bare «шум» is TV noise; жар is out
+# entirely («на улице жара» vs «у меня жар» — температура covers fever).
+_SENSATION_BARE = frozenset(
+    w
+    for w in SENSATION_NOUNS
+    if w not in {"шум", "звон", "туман", "жар", "дрожь"}
+)
+
+
+_SENSATION_ALT = "|".join(sorted(_SENSATION_BARE, key=len, reverse=True))
 _CONDITION = re.compile(
-    r"\b(давление|давленьице|пульс|сахар|температура|температурка)\w*",
+    r"\b(давление|давленьице|пульс|сахар|температура|температурка|"
+    r"дрож[ьи]\b|" + _SENSATION_ALT + r")\w*",
     re.I,
 )
+# «сдавала кровь на анализ» is a lab procedure, not a complaint — the bare
+# кровь trigger must not fire there («кровь из носа» still fires).
+_LAB_BLOOD = re.compile(r"\bсдава\w*|\bсдать\b|\bанализ\w*", re.I)
 _BODY_PREP = re.compile(
     r"\b(?:в|на|у)\s+([а-яё\-]+(?:\s+[а-яё\-]+){0,2})\b",
     re.I,
@@ -253,6 +291,17 @@ def parse_spans(text: str) -> tuple[SemanticSpan, ...]:
                 s.type == SpanType.ISSUE and s.start <= cstart_m < s.end
                 for s in acc.spans
             ):
+                # The bare «боль» stem reintroduces the «больше» trap
+                # (больше/большой/больница/болезнь are never symptoms alone).
+                # Compare raw AND normalized: «больнице» normalizes to
+                # «больница», «больше» to «большой».
+                _ctext_low = ctext.lower()
+                if _ctext_low in _FALSE_ISSUE_TOKENS:
+                    continue
+                if normalize_token(_ctext_low) in _FALSE_ISSUE_TOKENS:
+                    continue
+                if _LAB_BLOOD.search(clause) and "кров" in ctext.lower():
+                    continue
                 acc.add(SpanType.ISSUE, ctext, cstart_m, cend_m, 0.86)
 
         tokens = list(_TOKEN.finditer(clause))

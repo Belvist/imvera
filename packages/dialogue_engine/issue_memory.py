@@ -98,7 +98,17 @@ _AFTER_EVENT_ANCHOR = re.compile(
     re.I,
 )
 _SEVERITY_ANCHOR = re.compile(
-    r"\b(сильн\w*|терпим\w*|слаб\w*|невыносим\w*|пойд[её]т|сойд[её]т)\b",
+    r"\b(сильн\w*|терпим\w*|слаб\w*|невыносим\w*|нестерпим\w*|пойд[её]т|сойд[её]т|"
+    r"чуть|немного|средне|очень|ужасн\w*|страшн\w*|кошмарн\w*|жутк\w*|"
+    r"дико\b|едва|еле|слегка|порядком)\b",
+    re.I,
+)
+# A negated degree («не сильно», «не очень») is not a severity value.
+_SEVERITY_NEGATED = re.compile(r"\b(не|ни)\s*$", re.I)
+# Local pain-verb test for the out-of-order recorder (importing the shared
+# _PAIN_VERB here would cycle through issue_mention_extract at module load).
+_PAIN_VERB_LOCAL = re.compile(
+    r"\b(бол(?!ее(?:\b|-))\w*|ноет\w*|ломит\w*|давит\w*|беспоко\w*|тян\w*)\b",
     re.I,
 )
 # Explicit skip of the temporal probe («давай дальше», «пропусти») — not an
@@ -183,8 +193,12 @@ def extract_grounded_severity_value(
         n = _norm(text)
         if _UNKNOWN_ATTRIBUTE_ANSWER.search(n):
             continue
-        match = _SEVERITY_ANCHOR.search(n)
-        if match:
+        for match in _SEVERITY_ANCHOR.finditer(n):
+            # A negated degree («не сильно», «не очень беспокоит») answers
+            # the opposite — never record it as a severity value. Later
+            # matches in the same clause still count («не сильно, а очень»).
+            if _SEVERITY_NEGATED.search(n[: match.start()].rstrip(" ,—-")):
+                continue
             if len(clauses) == 1:
                 return raw_text.strip().rstrip(",;")
             start, end = match.span()
@@ -772,6 +786,14 @@ def _record_out_of_order_value(
     if pending == "severity":
         return False
     if (ep.known_attributes or {}).get("severity"):
+        return False
+    raw = (turn.raw_text or "").strip()
+    # Out-of-order grab is only safe for a bare degree answer («Сильно.»,
+    # «Очень.») or a turn that actually talks about pain («Ужасно болит
+    # голова»). Otherwise a degree word about something else («Очень
+    # боюсь.») would be misfiled as pain severity.
+    bare = len(re.findall(r"[а-яёa-z]+", raw, flags=re.I)) <= 3
+    if not bare and not _PAIN_VERB_LOCAL.search(raw):
         return False
     value = extract_grounded_severity_value(turn.raw_text, exclude_clauses=exclude)
     if not value:

@@ -42,6 +42,13 @@ _POLITE = [
     "Не надо мне вопросов.",
 ]
 _HOSTILE = ["Отстань.", "Хватит меня спрашивать."]
+_LIVE_COMPOSITE_REFUSAL = (
+    "Ой, всё, давай пока. Надоело мне, не беспокой меня, я занята."
+)
+_COMPOSITE_SIBLINGS = [
+    "Ой, давай пока, я занята, больше меня не спрашивай.",
+    "Всё, пока, не беспокой меня, мне сейчас некогда.",
+]
 
 
 def _state() -> EngineState:
@@ -132,3 +139,29 @@ def test_symptom_after_refusal_is_still_recorded() -> None:
     sites = {e.body_site for e in engine.state.issue_episodes.values() if e.body_site}
     assert "зук" in sites, sites
     assert "?" in out[-1], out[-1]
+
+
+@pytest.mark.parametrize(
+    "text", [_LIVE_COMPOSITE_REFUSAL, *_COMPOSITE_SIBLINGS]
+)
+def test_composite_opening_refusal_never_reports_green(text: str) -> None:
+    """False-GREEN regression for fs-42bb57a0.
+
+    A composite politeness refusal on the opening wellness turn must be a
+    DECLINE, must not fill wellness with the refusal text, and must make a
+    follow-up goodbye resolve as a declined call rather than a completed
+    green check. A sibling wording already covered by `is_politeness_refusal`
+    must pass without a per-quote branch.
+    """
+    session, out = _run(["Здравствуйте.", text, "Пока."])
+    engine = session._engine
+    assert engine is not None
+    assert normalize_act(_state(), text) == "DECLINE", text
+    assert engine.state.last_protocol_act == "DECLINE", text
+    assert engine.state.elder_asked_to_stop, text
+    assert "?" not in out[1], out[1]
+    assert "wellness" not in session._snapshot().facts, session._snapshot().facts
+    outcomes = session._snapshot().outcomes
+    assert outcomes is not None
+    assert outcomes.call_outcome == "DECLINED", outcomes
+    assert outcomes.candidate_family_status != "GREEN", outcomes

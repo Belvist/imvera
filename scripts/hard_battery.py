@@ -110,9 +110,22 @@ def check_no_red_no_probes(turns: list[dict], forbidden: list[str], state) -> li
 def check_pain_chain(turns: list[dict], forbidden: list[str], state) -> list[str]:
     errors: list[str] = []
     joined = " ".join(t["v"].lower() for t in turns)
+    # Any legitimate onset/duration probe surface: the question pool rotates
+    # by day, so pinning feminine forms only made this gate pass some days
+    # and fail others. The contract is "a temporal probe was asked".
     if not any(
         m in joined
-        for m in ("когда начала", "когда началась", "когда появилась", "давно это")
+        for m in (
+            "когда начала",
+            "когда началась",
+            "когда появилось",
+            "когда появилась",
+            "когда началось",
+            "как давно",
+            "давно это",
+            "давно болит",
+            "сколько уже",
+        )
     ):
         errors.append("real pain: no onset/duration probe asked")
     if any(m in joined for m in URGENT_MARKERS):

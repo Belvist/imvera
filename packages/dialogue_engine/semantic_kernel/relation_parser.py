@@ -31,6 +31,7 @@ def _relations_in_clause(spans: tuple[SemanticSpan, ...]) -> list[SemanticRelati
     issues = [s for s in spans if s.type == SpanType.ISSUE]
     if not issues:
         return []
+    negations = [s for s in spans if s.type == SpanType.NEGATION]
 
     relations: list[SemanticRelation] = []
     for sp in spans:
@@ -68,6 +69,14 @@ def _relations_in_clause(spans: tuple[SemanticSpan, ...]) -> list[SemanticRelati
                     )
                 )
         elif sp.type == SpanType.SEVERITY:
+            # A directly negated degree («не очень», «не так сильно») is not
+            # a severity value — linking it fabricates evidence (live:
+            # «чувствую себя не очень» produced severity «очень»).
+            if any(
+                0 <= sp.start - neg.end <= 6
+                for neg in negations
+            ):
+                continue
             target = _nearest_issue(sp, issues)
             if target:
                 relations.append(

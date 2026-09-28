@@ -15,6 +15,12 @@ import re
 from typing import TYPE_CHECKING
 
 from packages.dialogue_engine.protocol import coverage_order as _coverage_order
+from packages.dialogue_engine.semantic_kernel.lexicon import (
+    MEDICATION_WORDS,
+    MOOD_WORDS_NEG,
+    MOOD_WORDS_POS,
+    SLEEP_WORDS,
+)
 
 if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState
@@ -30,17 +36,38 @@ DOMAINS: tuple[str, ...] = ("wellbeing", "mood", "sleep", "medication", "nutriti
 FILLER_ORDER: tuple[str, ...] = _coverage_order("full")
 
 _MOOD_MARKERS = re.compile(
-    r"(груст|одинок|тревож|триво|настроени|тоскл|весел|радост)", re.I
+    r"(груст|одинок|тревож|триво|настроени|тоскл|весел|радост|"
+    + "|".join(sorted(MOOD_WORDS_NEG | MOOD_WORDS_POS))
+    + r")",
+    re.I,
 )
 _SLEEP_MARKERS = re.compile(
-    r"(спал|сплю|сон|бессон|высп|недоспал|проснул|заснуть)", re.I
+    r"(спал|сплю|сон|бессон|высп|недоспал|проснул|заснуть|дрем|вороча|кошмар|храп|снотворн|"
+    + "|".join(sorted(SLEEP_WORDS))
+    + r")",
+    re.I,
 )
 _MEDICATION_MARKERS = re.compile(
-    r"(таблет|лекар|препарат|медикамент|капа\w*\s+в\s+глаза|покапа)", re.I
+    r"(таблет|лекар|препарат|медикамент|капа\w*\s+в\s+глаза|покапа|"
+    + "|".join(sorted(MEDICATION_WORDS))
+    + r")",
+    re.I,
 )
 _NUTRITION_MARKERS = re.compile(
     r"(поел|поела|покушал|кушал\w*|пообедал|поужинал|позавтракал|аппетит|"
-    r"\bел[аи]?\b|\bпил[аи]?\b|голод|попил|воды|ел\s+сегодня|пирож|суп|каш|макарон)",
+    r"\bел[аи]?\b|\bпил[аи]?\b|голод|попил|воды|ел\s+сегодня|пирож|суп|каш|макарон|"
+    # Food words are whole-word matched: short stems («чай», «рис», «сок»,
+    # «щи», «уха», «мед») collide as substrings («случайно», «борис»,
+    # «высоко», «женщина», «ухаживать», «медсестра»).
+    r"\b(?:завтрак\w*|обед\w*|ужин\w*|полдник\w*|суп[ауом]*|каш[ауои]\w*|хлеб\w*|"
+    r"булк\w*|булоч\w*|ча[ейюемя]|кофе|молок\w*|кефир\w*|яблок\w*|"
+    r"банан\w*|апельсин\w*|картошк\w*|картофел\w*|макарон\w*|рис[ауом]*|"
+    r"гречк\w*|гречн\w*|мяс\w*|рыб\w*|куриц\w*|яйц\w*|сыр[ауом]*|творог\w*|"
+    r"сметан\w*|масл\w*|сахар\w*|сол[ьи]\w*|вод\w*|сок\w*|компот\w*|"
+    r"кисел\w*|пирог\w*|пирож\w*|печенье|печенья|печенью|конфет\w*|м[её]д[ауом]*|"
+    r"варен[ье]\w*|салат\w*|овощ\w*|фрукт\w*|котлет\w*|сосис\w*|"
+    r"колбас\w*|пельмен\w*|борщ\w*|уха\b|щи\b|окрошк\w*|блин\w*|"
+    r"олад\w*|яичниц\w*|омлет\w*|бутерброд\w*)\b)",
     re.I,
 )
 

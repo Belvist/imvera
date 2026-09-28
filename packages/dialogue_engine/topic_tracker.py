@@ -543,16 +543,34 @@ def next_topic_prompt(state: EngineState) -> TopicPrompt | None:
     plan = TOPIC_PLANS.get(family, ())
     infer_only = _INFER_ONLY_DIMENSIONS.get(family, frozenset())
 
-    for dimension in plan:
-        if dimension in infer_only and dimensions_satisfied(state, family, dimension):
-            continue
-        if not dimensions_satisfied(state, family, dimension):
-            state.topic_asked_dimension = dimension
-            return TopicPrompt(
-                family=family,
-                dimension=dimension,
-                intent=f"topic_{family}_{dimension}",
-            )
+    def _open_dimensions(exclude: str | None = None) -> list[str]:
+        out: list[str] = []
+        for dimension in plan:
+            if dimension == exclude:
+                continue
+            if dimension in infer_only and dimensions_satisfied(state, family, dimension):
+                continue
+            if not dimensions_satisfied(state, family, dimension):
+                out.append(dimension)
+        return out
+
+    # Never repeat the just-asked question verbatim in a row (the abdominal
+    # loop: current probe, out-of-order onset answer, same current probe).
+    # An out-of-order answer satisfies a different dimension; the still-open
+    # one is asked again only after another open dimension goes first — or,
+    # if it is the sole open dimension, as a last resort below.
+    prev = state.topic_asked_dimension
+    candidates = _open_dimensions(exclude=prev)
+    if not candidates:
+        candidates = _open_dimensions()
+    if candidates:
+        dimension = candidates[0]
+        state.topic_asked_dimension = dimension
+        return TopicPrompt(
+            family=family,
+            dimension=dimension,
+            intent=f"topic_{family}_{dimension}",
+        )
 
     _complete_topic(state, family)
     return next_topic_prompt(state)
