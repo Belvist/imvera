@@ -152,6 +152,7 @@ ADR-009: LLM understanding + code state policy, QuestionLedger (2026-09-07)
 ADR-012: Self-hosted LiveKit + LiveKit SIP — lab/spike only (2026-09-08)
 ADR-013: Production telephony FreeSWITCH + PCM WS bridge (2026-09-08)
 ADR-014: Architecture freeze + 7 acceptance gates; no fourth system (2026-09-08)
+ADR-023: Replacement and cleanup law; gated vertical slices replace blanket freeze (2026-09-28)
 ```
 
 ## Owner order — behavior freeze lifted for dialogue speech (2026-09-22)
@@ -606,6 +607,23 @@ four precise fixes instead of an architecture rewrite.
   обратить внимание»); no cross-call memory at all; coverage domains
   (mood/sleep) can still be abandoned mid-call. "One open worry" remains a
   paper model — validate it against the fixed engine before adopting.
+
+## Severity evidence kept, nothing fabricated (2026-09-27)
+
+- `_fill_pending_attribute_for_episode` wrote ONLY the pending attribute, so
+  «Сильно.» answering the current probe was discarded: the probe repeated
+  verbatim and the elder's answer was lost. Now `_record_out_of_order_value`
+  consumes a grounded severity answer whenever a different step is pending.
+  Probe order is a product plan; evidence is the elder's words.
+- DELIBERATELY severity-only, learned by breaking it first: a generalized
+  version also wrote a `current` answer into `onset`/`duration`
+  («Сейчас не беспокоит.» is not a temporal anchor). Fabricated data is
+  worse than a missing value. Never overwrites a recorded value.
+- KNOWN GAP left open, not half-fixed: Vera repeats the onset probe once and
+  does not acknowledge a severity-only turn out loud. Speech surface must be
+  fixed while LISTENING to a real call, not from a text transcript.
+- Gates: 1870 passed / 0 failed / 6 skipped / 1 xfailed; hard battery 16/16;
+  agent gate PASS; corpus 500/500; policy diff 4/4; ruff clean. NOT PUSHED.
 
 ## Related Files
 

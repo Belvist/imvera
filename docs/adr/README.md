@@ -23,8 +23,14 @@ Record irreversible technical decisions here.
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [013](013-production-telephony-freeswitch.md) | Production telephony: FreeSWITCH + PCM WS | accepted |
-| [014](014-architecture-freeze-acceptance-gates.md) | Architecture freeze + 7 acceptance gates; no fourth system | accepted |
+| [013](013-production-telephony-freeswitch.md) | Production telephony: FreeSWITCH + PCM WS | accepted; freeze clauses amended → [023](023-replacement-and-cleanup-law.md) |
+| [014](014-architecture-freeze-acceptance-gates.md) | Architecture freeze + 7 acceptance gates; no fourth system | accepted; blanket freeze amended → [023](023-replacement-and-cleanup-law.md) |
+
+## Replacement law (2026-09-28)
+
+| ADR | Title | Status |
+|-----|-------|--------|
+| [023](023-replacement-and-cleanup-law.md) | Replacement and cleanup law | accepted |
 
 ADR-012 is **lab/spike only** for production telephony (see ADR-013).  
 ADR-014 **does not** stamp `ARCHITECTURE = FROZEN` until gates 1–7 are VERIFIED.
