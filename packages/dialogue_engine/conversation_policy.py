@@ -506,6 +506,24 @@ _DISTRESS_MARKERS = re.compile(
     r"болит\s+сильно|помира\w*|нет\s+сил|болезненн\w*)",
     re.I,
 )
+# Ambiguous fatigue (external audit 2026-09-29): «Надоело всё» is not
+# self-harm — explicit forms go RED via safety patterns — but answering it
+# with a cold form is inhumane. ITS questions after a fatigue turn carry
+# an empathy prefix. Never a standalone (speech-discipline gate).
+_FATIGUE_MARKERS = re.compile(
+    r"(?:"
+    r"\bнадоел[ои]?\b\s*(?:вс[её]|так|жить|болеть|таблетки)?|"
+    r"\bнадоели\b|"
+    r"\bустал[аои]?\b\s*(?:так|всё|все|жить)?|"
+    r"\bжизнь\s+не\s+мила\b"
+    r")",
+    re.I,
+)
+_FATIGUE_ACK = "Понимаю."
+
+
+def _has_fatigue_markers(text: str) -> bool:
+    return bool(_FATIGUE_MARKERS.search(text or ""))
 
 
 def _has_distress_markers(text: str) -> bool:
@@ -544,7 +562,21 @@ def _turn_reports_fresh_negative(turn) -> bool:
     return False
 
 
-def _important_to_share_plan(state: EngineState) -> ResponsePlan | None:
+def _its_question(state: EngineState, user_text: str = "") -> str:
+    """ITS question with a fatigue ack when the last turn was fatigue.
+
+    Single owner for both ITS emission sites so the empathy prefix cannot
+    rot in one of them.
+    """
+    question = questions.important_to_share_question(state)
+    if user_text and _has_fatigue_markers(user_text):
+        question = f"{_FATIGUE_ACK} {question}"
+    return question
+
+
+def _important_to_share_plan(
+    state: EngineState, user_text: str = ""
+) -> ResponsePlan | None:
     if state.important_to_share_asked or state.important_to_share_resolved:
         return None
     if _has_open_episodes(state):
@@ -557,7 +589,7 @@ def _important_to_share_plan(state: EngineState) -> ResponsePlan | None:
     return ResponsePlan(
         obligation=ConversationObligation.IMPORTANT_TO_SHARE,
         action="speak",
-        mandatory_question=questions.important_to_share_question(state),
+        mandatory_question=_its_question(state, user_text),
         intent="important_to_share",
         slot="important_to_share",
         marks_question=True,
@@ -720,11 +752,18 @@ def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
         and not _is_broken_glue_label(label)
     ):
         spoken_label = label[0].upper() + label[1:]
-        return questions.episode_ack(
+        ack = questions.episode_ack(
             _episode_ack_kind(turn, primary),
             spoken_label,
             turn_seq=_utterance_seq(turn),
         )
+        raw = getattr(turn, "raw_text", "") or ""
+        if raw and _has_fatigue_markers(raw) and "Понимаю" not in ack:
+            ack = f"{_FATIGUE_ACK} {ack}"
+        return ack
+    raw = getattr(turn, "raw_text", "") or ""
+    if raw and _has_fatigue_markers(raw):
+        return f"{_FATIGUE_ACK} Тяжело."
     return _BARE_ACK_ROTATION[_utterance_seq(turn) % len(_BARE_ACK_ROTATION)]
 
 
@@ -785,7 +824,12 @@ def _bridge_ack_for_episode(ep, prev=None) -> str:
     return _BRIDGE_ACK_ROTATION[progress % len(_BRIDGE_ACK_ROTATION)]
 
 
-_BARE_ACK_ROTATION = ("Поняла вас.", "Поняла вас, записываю.", "Хорошо, поняла вас.")
+# Last-resort fallback when a turn has content but no speakable label.
+# Listener-honest by design: claiming «Поняла вас» about something not
+# understood is dishonest — «Слушаю вас» tells the truth and the clarifying
+# question that follows does the work. (Speech-discipline gate bans the old
+# «Поняла вас.»/«Хорошо, поняла вас.» standalones.)
+_BARE_ACK_ROTATION = ("Слушаю вас.", "Да, слышу вас.", "Я вас слушаю.")
 _BRIDGE_ACK_ROTATION = ("Хорошо.", "Поняла вас.", "Так, поняла вас.")
 
 
@@ -1436,7 +1480,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 )
 
                 _raw1 = (
-                    (turn.raw_text if turn is not None else "")
+                    getattr(turn, "raw_text", "")
                     or (turn_context.user_text or "")
                 )
                 if _raw1.strip() and declines_open_concern_probe(state, _raw1):
@@ -1551,7 +1595,9 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     marks_question=True,
                 )
 
-    its = _important_to_share_plan(state)
+    its = _important_to_share_plan(
+        state, getattr(turn, "raw_text", "") or turn_context.user_text
+    )
     if its:
         return its
 
@@ -1567,7 +1613,11 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     return ResponsePlan(
                         obligation=ConversationObligation.IMPORTANT_TO_SHARE,
                         action="speak",
-                        mandatory_question=questions.important_to_share_question(state),
+                        mandatory_question=_its_question(
+                            state,
+                            getattr(turn, "raw_text", "")
+                            or turn_context.user_text,
+                        ),
                         intent="important_to_share",
                         slot="important_to_share",
                         marks_question=True,

@@ -41,7 +41,13 @@ def _to_mood_q(session: CallSession) -> str:
     _say(session, "Да, было вкусно.")
     _say(session, "Да, от давления.")
     mood_q = _say(session, "Да, приняла.")
-    assert "настроение" in mood_q.lower(), f"expected mood Q, got: {mood_q!r}"
+    # Contract migrated: any member of the mood pool counts as the mood
+    # question (per-call rotation may open on a variant without the word
+    # «настроение», e.g. «Не тревожит ничего сегодня?»).
+    from packages.dialogue_engine import questions as _Q
+    assert mood_q.strip() in _Q._SLOT_QUESTION_VARIANTS["mood"], (
+        f"expected mood Q, got: {mood_q!r}"
+    )
     return mood_q
 
 
@@ -57,7 +63,8 @@ def test_aga_at_wellness_rephrases_not_scolds() -> None:
 def test_aga_at_mood_rephrases() -> None:
     session = _session("bc-mood", full=True)
     mood_q = _to_mood_q(session)
-    assert "настроение" in mood_q.lower()
+    from packages.dialogue_engine import questions as _Q
+    assert mood_q.strip() in _Q._SLOT_QUESTION_VARIANTS["mood"]
     speech = _say(session, "Ага.")
     assert "двух словах" not in speech
     assert "?" in speech

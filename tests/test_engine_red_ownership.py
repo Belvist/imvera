@@ -132,3 +132,25 @@ def test_engine_red_observation_persisted(
     result = session.get_persisted_result()
     assert result is not None
     assert len(result.observations) >= 1
+
+
+def test_fall_then_silence_closes_with_red(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """External audit 2026-09-29: a fall followed by silence must never hang
+    the call open. Engine bounds silences, closes, and keeps RED candidate
+    (live CallActor timers/re-asks are verified on a live call only)."""
+    session = _session(monkeypatch, tmp_path, "red-silence")
+    engine = session._engine
+    assert engine is not None
+    _rich_reply(session, "Упала.")
+    # Bounded silences must terminate the call (exact count depends on
+    # env flags; unbounded hanging is the failure mode being pinned).
+    for _ in range(10):
+        _rich_reply(session, "")
+        if engine.state.call_closed:
+            break
+    assert engine.state.call_closed is True
+    # The fall stays RED-flagged at close (snapshot outcomes are not built
+    # on this path — session-level safety state is the contract here).
+    assert session.safety.active_risk == RiskLevel.RED

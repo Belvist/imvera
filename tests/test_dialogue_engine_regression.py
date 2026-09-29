@@ -206,7 +206,10 @@ def test_negative_wellness_gets_empathetic_ack() -> None:
     intents = [e.intent for e in result.speak_effects]
     assert "probe_concern" in intents
     probe = next(e for e in result.speak_effects if e.intent == "probe_concern")
-    assert "беспокоит" in probe.text.lower()
+    # Contract migrated: any member of the concern pool counts (per-call
+    # rotation may open on «Жалобы есть какие?» instead of a «беспокоит» form).
+    from packages.dialogue_engine import questions as _Q
+    assert probe.text.strip() in _Q._PROBE_QUESTION_VARIANTS["concern"]
 
 
 def test_tebe_ploho_fast_path_negative_wellness() -> None:

@@ -11,6 +11,18 @@ RED_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         re.I,
     )),
     ("severe_pain", re.compile(r"\b(очень\s+больно|сильн[аяое]+\s+боль)\b", re.I)),
+    # Explicit self-harm ideation (external audit 2026-09-29: «Жить не хочу»
+    # got a cold ITS question and YELLOW). Deliberately explicit forms only:
+    # ambiguous fatigue («надоело всё», «устала жить») is NOT red — it gets
+    # empathy without escalation. Third-party and negated forms are scoped
+    # out by the generic clause checks below.
+    ("self_harm", re.compile(
+        r"\b(жить\s+не\s+хочу|не\s+хочу\s+жить|хочу\s+умереть|"
+        r"покончить\s+с\s+собой|наложить\s+на\s+себя\s+руки|"
+        r"вскрыть\s+вены|повеситься|лучше\s+умереть|"
+        r"не\s+вижу\s+смысла\s+жить)\b",
+        re.I,
+    )),
     ("bleeding", re.compile(r"\b(кровь|кро[вф]ь)\b", re.I)),
     ("consciousness", re.compile(
         r"\b(потеря\w*\s+сознан\w*|теря\w*\s+сознан\w*|без\s+сознания)\b",

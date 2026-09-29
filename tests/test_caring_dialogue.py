@@ -29,12 +29,14 @@ def test_bare_verb_ack_drops_label() -> None:
     )
 
     bare = SimpleNamespace(label="болеть", body_site="", role="primary")
+    # Contract migrated: the fallback is listener-honest («Слушаю вас.»),
+    # never a fake comprehension claim («Поняла вас.» about nothing parsed).
     assert _grounded_ack_for_mentions(SimpleNamespace(issue_mentions=[bare])) == (
-        "Поняла вас."
+        "Слушаю вас."
     )
     bare2 = SimpleNamespace(label="Беспокоит", body_site="", role="primary")
     assert _grounded_ack_for_mentions(SimpleNamespace(issue_mentions=[bare2])) == (
-        "Поняла вас."
+        "Слушаю вас."
     )
 
 
@@ -56,7 +58,7 @@ def test_broken_glue_ack_prefers_full_label() -> None:
         SimpleNamespace(label="голова боль", body_site="голова", role="primary"),
     ]
     assert _grounded_ack_for_mentions(SimpleNamespace(issue_mentions=alone)) == (
-        "Поняла вас."
+        "Слушаю вас."
     )
 
 

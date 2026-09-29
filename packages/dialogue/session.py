@@ -823,6 +823,17 @@ class CallSession:
             )
 
         next_turn = self.turn_id + 1
+        # Backchannel streak (single funnel for both rich and semantic
+        # paths): consecutive «ага»-only turns with no engagement. Any
+        # other turn resets it. The threshold close lives in the shared
+        # _answer_backchannel.
+        if self._engine is not None:
+            from packages.dialogue_engine.reducer import _is_backchannel_only_text
+
+            if _is_backchannel_only_text(user_text):
+                self._engine.state.backchannel_streak += 1
+            else:
+                self._engine.state.backchannel_streak = 0
         if interp is None:
             interp, contract = self.interpreter.interpret(self.state, user_text, next_turn)
         elif contract is None:

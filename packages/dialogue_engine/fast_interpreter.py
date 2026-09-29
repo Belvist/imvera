@@ -8,7 +8,7 @@ from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
 
 _POSITIVE = re.compile(
     r"^(хорошо|нормально|отлично|прекрасно|замечательно|неплохо|не\s+плохо|"
-    r"вс[её]\s+хорошо|вс[её]\s+нормально)\.?$",
+    r"вс[её]\s+хорошо|вс[её]\s+нормально|здоров\w*)\.?$",
     re.I,
 )
 _NEGATIVE = re.compile(

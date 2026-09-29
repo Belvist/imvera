@@ -258,6 +258,10 @@ class EngineState(BaseModel):
     # audits and the speech-discipline gate; repair repeats bypass nothing
     # here since the ledger never diverts.
     spoken_surfaces: list[str] = Field(default_factory=list)
+    # Consecutive backchannel-only turns («ага» × N). Three in a row with
+    # no engagement closes honestly — independent of per-slot attempt caps,
+    # which rotation across slots would otherwise dilute.
+    backchannel_streak: int = 0
     # Per-pool rotation counters for rotate_pool (pool key -> next index).
     # Seeded by day on first use, so single asks are byte-identical to
     # day rotation and only true repeats advance to the next variant.

@@ -665,6 +665,19 @@ def _on_user_turn(
         return state, []
     state.first_user_turn_received = True
     state.turn_seq += 1
+    # Triple-backchannel honest close (single funnel for rich and semantic
+    # paths): three consecutive «ага»-only turns with no engagement close
+    # the call instead of re-asking forever. Safety is unaffected — an
+    # urgent text never matches backchannel-only, so hijacks below still
+    # fire first for real emergencies. Streak accounting lives in
+    # CallSession.handle_user_text (the other single funnel).
+    _raw_for_streak = ""
+    if event.rich_turn is not None:
+        _raw_for_streak = event.rich_turn.raw_text or ""
+    elif event.text:
+        _raw_for_streak = event.text
+    if state.backchannel_streak >= 3 and _is_backchannel_only_text(_raw_for_streak):
+        return _close_partial(state)
     if event.effect_id and event.semantic is None and event.rich_turn is None:
         state.processing_turn_id = event.turn_id
         state.processing_effect_id = event.effect_id
@@ -1741,6 +1754,11 @@ def _is_greeting_or_backchannel_text(text: str) -> bool:
     return stripped in _GREETING_ONLY or stripped in _BACKCHANNEL_ONLY
 
 
+def _is_backchannel_only_text(text: str) -> bool:
+    stripped = (text or "").strip().lower().rstrip(".!?…")
+    return stripped in _BACKCHANNEL_ONLY
+
+
 def _answer_backchannel(
     state: EngineState, answer_slot: str | None, user_text: str
 ) -> tuple[EngineState, list[Effect]]:
@@ -1748,6 +1766,7 @@ def _answer_backchannel(
 
     Greeting ("Привет" to a just-asked question): soft ack, never re-ask.
     Backchannel ("ага"): ack + rephrased re-ask, else wait-timer fallback.
+    The triple-backchannel close lives in _on_user_turn (single funnel).
     """
     stripped_in = user_text.strip().lower().rstrip(".!?…")
     if stripped_in in _GREETING_ONLY and state.delivered_question is not None:

@@ -369,6 +369,20 @@ class ProofLogger:
             _log.warning("proof append failed: %s", exc)
             return False
 
+    def append_row(self, row: dict) -> bool:
+        """Append a pre-built row (shadow/disagreement records). Same
+        never-raises contract as append."""
+        try:
+            path = self.path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+                fh.flush()
+            return True
+        except Exception as exc:  # noqa: BLE001 — logger never breaks the call
+            _log.warning("proof append failed: %s", exc)
+            return False
+
 
 def read_records(path: Path | None = None) -> list[dict]:
     rows: list[dict] = []

@@ -118,15 +118,18 @@ def _rotate(pool: list[str] | tuple[str, ...]) -> str:
 def rotate_pool(
     state: EngineState | None, key: str, pool: list[str] | tuple[str, ...]
 ) -> str:
-    """Per-call rotation seeded by day: the first use in a call returns
-    exactly what day-rotation would (zero churn for single asks), repeats
-    advance to the next variant. This is the systematic end of verbatim
-    re-asks — day rotation alone repeats the same surface all day.
-    state=None keeps legacy day rotation (stateless unit tests)."""
+    """Per-call rotation seeded by day AND call: the seed mixes the day
+    ordinal with the call id, so different calls (even the same day) open
+    on different variants, while repeats within a call still advance.
+    Stateless direct calls keep legacy day rotation (unit tests pin it).
+    """
     if state is None:
         return _rotate(pool)
+    import zlib
+
+    seed = (_speech_day() + zlib.crc32((state.call_id or "").encode())) % len(pool)
     counters = state.pool_counters
-    idx = counters.get(key, _speech_day() % len(pool))
+    idx = counters.get(key, seed)
     counters[key] = (idx + 1) % len(pool)
     return pool[idx]
 

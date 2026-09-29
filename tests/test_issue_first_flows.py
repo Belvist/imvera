@@ -56,7 +56,10 @@ def test_flow_fs_f534c2e6_soft_no_closes_warm() -> None:
     assert "important_to_share" in _intents(r)
     its = [e for e in r.effects if getattr(e, "intent", "") == "important_to_share"]
     assert its
-    assert "важн" in its[-1].text.lower()
+    # Contract migrated: any member of the ITS pool counts (per-call
+    # rotation may open on «Записала. Ещё что-то беспокоит?»).
+    from packages.dialogue_engine import questions as _Q
+    assert its[-1].text.strip() in _Q._ITS_QUESTION_VARIANTS
     result = r.run(["Да вроде бы нет, планов толком тоже нет никаких. Так вроде всё нормально."])
     intents = [e.intent for e in result.speak_effects]
     texts = " ".join(e.text.lower() for e in result.speak_effects)
