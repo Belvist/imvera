@@ -480,6 +480,37 @@ def _emit_speak(
     if intent == "summary":
         state.summary_delivered = False
     state.bump_revision()
+    # Proof-bundle monitor feed (ADR-024 slice 1): log the decision that
+    # produced this surface. Logging only — zero behavior change. Placed
+    # here, after all early returns, so only actually-emitted speech is
+    # recorded. Legal set flagged incomplete until the scheduler routes
+    # through select_from_legal (promotion slice); outcomes link in slice 4.
+    try:
+        from packages.dialogue_engine.proof_bundle import (
+            ProofLogger,
+            build_turn_record,
+        )
+
+        ProofLogger().append(
+            build_turn_record(
+                turn_id=gen_id,
+                call_id=getattr(state, "call_id", ""),
+                protocol_version="cdk-v1",
+                state_id=str(getattr(state, "revision", "")),
+                slot_state={
+                    k: str(v)
+                    for k, v in (getattr(state, "slots", {}) or {}).items()
+                },
+                legal_set_complete=False,
+                selected_action_id=intent or "",
+                selection_source="heuristic",
+                act=getattr(state, "last_protocol_act", "") or "",
+                canonical_text=text,
+                question_budget=1 if marks_question else 0,
+            )
+        )
+    except Exception:  # noqa: BLE001 — monitor feed never breaks speech
+        pass
     effect = SpeakEffect(
         effect_id=_new_effect_id(),
         revision=state.revision,
