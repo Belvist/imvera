@@ -1,3 +1,28 @@
+# Consent invariant hardened + consent as separate fact (2026-09-29)
+
+Reviewer challenge accepted: `mission COMPLETED == re-engagement` is now
+pinned by 6 sequences, not asserted. Verified against the state machine
+(SATISFIED is written ONLY by `_apply_mission_goal_answers` from grounded
+user-turn answers; machine tails carry no goal_answers; legacy mirror is
+stale) — COMPLETED physically requires substantive user turns.
+
+Sequences in `tests/test_politeness_refusal.py::TestConsentReengagementInvariant`:
+DECLINE→end→DECLINED; DECLINE→symptom→COMPLETED/YELLOW care-first (short-call
+mode: symptom satisfies wellness = genuine re-engagement, documented
+deviation); DECLINE→full re-engage→COMPLETED/GREEN; machine tails
+("", "Алло.", "Ага.") can never COMPLETED (critical invariant);
+DECLINE→revoke→UNSET; engage→revoke→tails stays DECLINED/UNSET.
+
+Consent withdrawal also recorded as `observations["consent_declined"]`
+(first refusal quote) — traceable independently of call_outcome for
+future ranker outcome labels (ADR-024 data shape).
+
+Gates: pytest 1926/0; hard1000 1315/1315; safety 203/203; redteam 47/47;
+hard_battery 16/16; corpus 500/500; agent+dream PASS; policy diff 4/4.
+NOT VERIFIED: live SIP/redial; bridge on old code; TTS by ear.
+
+---
+
 # False-GREEN consent fix: закрыт контрактом (2026-09-29)
 
 Branch `feature/voice-zoiper-m5`, HEAD `16f00a6` (после коммита). Brief:

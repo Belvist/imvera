@@ -165,3 +165,108 @@ def test_composite_opening_refusal_never_reports_green(text: str) -> None:
     assert outcomes is not None
     assert outcomes.call_outcome == "DECLINED", outcomes
     assert outcomes.candidate_family_status != "GREEN", outcomes
+
+
+_REFUSAL = _LIVE_COMPOSITE_REFUSAL
+
+
+def _outcomes(session):
+    snap = session._snapshot()
+    assert snap.outcomes is not None
+    mission = snap.mission_result.status if snap.mission_result else None
+    return snap.outcomes, mission
+
+
+class TestConsentReengagementInvariant:
+    """`mission COMPLETED == re-engagement` is load-bearing: the whole
+    consent fix rests on COMPLETED being unreachable without substantive
+    user turns. Each sequence below pins one side of it.
+
+    Verified against the state machine (2026-09-29): SATISFIED is written
+    only by `_apply_mission_goal_answers` from grounded user-turn answers
+    (non-empty utterance-grounded evidence required); machine tails carry
+    no goal_answers; legacy mirror is stale (`sync_to_legacy = 0`).
+    """
+
+    def test_decline_then_nothing_then_end_is_declined(self) -> None:
+        session, _ = _run(["Здравствуйте.", _REFUSAL, "Пока."])
+        outcomes, mission = _outcomes(session)
+        assert outcomes.call_outcome == "DECLINED", outcomes
+        assert mission == "PARTIAL", mission
+        assert outcomes.candidate_family_status != "GREEN", outcomes
+
+    def test_decline_then_symptom_keeps_care_first_yellow(self) -> None:
+        """Deviation from the naive expectation, documented deliberately:
+        in short-call mode only wellness is required, and a volunteered
+        symptom SATISFIES it — genuine re-engagement, so mission COMPLETES.
+        What must hold: the episode opens (grounding wins) and the
+        candidate stays care-first YELLOW, never GREEN, never an
+        artificial DECLINED that would hide the symptom.
+        """
+        session, _ = _run(["Здравствуйте.", _REFUSAL, "Голова болит.", "Пока."])
+        engine = session._engine
+        assert engine is not None
+        sites = {e.body_site for e in engine.state.issue_episodes.values()}
+        assert "голова" in sites, sites
+        outcomes, mission = _outcomes(session)
+        assert mission == "COMPLETED", mission
+        assert outcomes.candidate_family_status == "YELLOW", outcomes
+
+    def test_decline_then_full_reengagement_completes(self) -> None:
+        session, _ = _run(
+            [
+                "Здравствуйте.",
+                _REFUSAL,
+                "Хорошо.",
+                "Позавтракал.",
+                "Принял таблетки.",
+                "Настроение хорошее.",
+                "Выспался.",
+                "Пока.",
+            ]
+        )
+        outcomes, mission = _outcomes(session)
+        assert mission == "COMPLETED", mission
+        assert outcomes.call_outcome == "COMPLETED", outcomes
+        assert outcomes.candidate_family_status == "GREEN", outcomes
+
+    def test_machine_tails_can_never_complete(self) -> None:
+        """THE critical invariant: silences, backchannels and mic-noise
+        after a refusal must never flip the mission to COMPLETED. Tails
+        carry no goal_answers, so no grounded evidence can accrue."""
+        session, _ = _run(
+            ["Здравствуйте.", _REFUSAL, "", "Алло.", "Ага.", "Пока."]
+        )
+        outcomes, mission = _outcomes(session)
+        assert mission != "COMPLETED", mission
+        assert outcomes.call_outcome == "DECLINED", outcomes
+        assert outcomes.candidate_family_status != "GREEN", outcomes
+
+    def test_decline_then_revoke_close_stays_unset(self) -> None:
+        session, _ = _run(["Здравствуйте.", _REFUSAL, "Не хочу разговаривать.", "Пока."])
+        outcomes, _ = _outcomes(session)
+        assert outcomes.call_outcome == "DECLINED", outcomes
+        assert outcomes.candidate_family_status == "UNSET", outcomes
+
+    def test_engage_then_revoke_tails_keep_declined(self) -> None:
+        """Revoke wins over prior engagement AND over trailing machine
+        tails: closing turns after revoke are terminal_noop and must not
+        flip anything back to COMPLETED/GREEN."""
+        session, _ = _run(
+            ["Здравствуйте.", "Хорошо.", "Не хочу разговаривать.", "Пока.", "", "Алло."]
+        )
+        outcomes, mission = _outcomes(session)
+        assert outcomes.call_outcome == "DECLINED", outcomes
+        assert outcomes.candidate_family_status == "UNSET", outcomes
+        assert mission == "COMPLETED", mission
+
+    def test_consent_withdrawal_recorded_as_separate_fact(self) -> None:
+        """ADR-024 outcome data: the refusal moment must be traceable
+        independently of the final call_outcome (future ranker learns
+        consent=DECLINED -> silence -> call DECLINED from this)."""
+        session, _ = _run(["Здравствуйте.", _REFUSAL, "Пока."])
+        engine = session._engine
+        assert engine is not None
+        fact = engine.state.observations.get("consent_declined")
+        assert fact, "no consent_declined observation recorded"
+        assert "не беспокой" in str(fact).lower(), fact

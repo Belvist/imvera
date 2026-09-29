@@ -1663,7 +1663,14 @@ def _elder_asked_to_stop(
     turn = turn_context.turn
     raw = getattr(turn, "raw_text", "") or ""
     if raw and is_politeness_refusal(raw):
-        state.elder_asked_to_stop = True
+        if not getattr(state, "elder_asked_to_stop", False):
+            state.elder_asked_to_stop = True
+            # Consent transition as a separate fact (ADR-024 outcome data):
+            # the withdrawal moment must be traceable independently of the
+            # final call_outcome, so a future ranker can learn sequences
+            # like consent=DECLINED -> silence -> call DECLINED. First
+            # refusal wins; later quotes don't overwrite the moment.
+            state.observations["consent_declined"] = raw.strip()[:160]
     if not getattr(state, "elder_asked_to_stop", False):
         return None
     # Only silence the routine ladders while nothing is being reported.
