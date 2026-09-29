@@ -967,6 +967,34 @@ class DeterministicMissionUnderstandingProvider:
                     except Exception:  # noqa: BLE001 — fail closed to re-ask
                         return None
                 return speaker
+            # Other background slots: a delivered question must not claim an
+            # answer that positively belongs to a DIFFERENT slot («Дома
+            # посижу.» answering a sleep probe fills plans, never sleep —
+            # live fs-acb5e768 wrote sleep="Дома посижу."). Bare/short
+            # answers with no domain facts keep the old behavior.
+            if gdef.goal_id in ("mood", "sleep", "plans"):
+                try:
+                    from packages.dialogue_engine.issue_mention_extract import (
+                        extract_goal_facts as _facts_for,
+                    )
+
+                    _fields = {
+                        f.field
+                        for f in _facts_for(stripped)
+                        if f.field
+                        in (
+                            "mood",
+                            "sleep",
+                            "plans",
+                            "medication",
+                            "nutrition",
+                            "wellness",
+                        )
+                    }
+                    if gdef.goal_id not in _fields and _fields:
+                        return None
+                except Exception:  # noqa: BLE001 — fail open to old behavior
+                    pass
             return stripped
         # Future free_text: require strong hint/alias — not any non-empty utterance.
         if _match_answer_aliases(stripped, gdef) is not None:

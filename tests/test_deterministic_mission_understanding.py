@@ -802,3 +802,37 @@ def test_p0_o_empty_semantic_hints_no_free_negation_guess() -> None:
     )
     bare = p.understand(_req("нет", mission, "worker_visited"))
     assert bare.goal_answers[0].value == "no"
+
+
+def _daily_mission() -> CallMission:
+    def _goal(gid: str, hint: str) -> GoalDefinition:
+        return GoalDefinition(
+            goal_id=gid,
+            description=hint,
+            prompt_hint=hint,
+            required=False,
+            priority=10,
+            answer_type="free_text",
+        )
+
+    return CallMission(
+        mission_id="daily",
+        goals=(
+            _goal("wellness", "Как себя чувствуете?"),
+            _goal("mood", "Как настроение?"),
+            _goal("sleep", "Как спали?"),
+            _goal("plans", "Какие планы?"),
+        ),
+    )
+
+
+def test_delivered_goal_does_not_steal_other_slot_answer() -> None:
+    """Live fs-acb5e768: «Дома посижу.» answering a pending sleep probe
+    satisfied the sleep goal and wrote sleep="Дома посижу." into family
+    facts. A delivered question must not claim an answer that positively
+    belongs to a different slot; bare/short answers keep old behavior."""
+    mission = _daily_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    result = p.understand(_req("Дома посижу.", mission, "sleep"))
+    by_id = {a.goal_id: a for a in result.goal_answers}
+    assert "sleep" not in by_id, by_id
