@@ -1,3 +1,20 @@
+# Live so_good + answer-routing wart found live (2026-09-29)
+
+- so_so-clean_short live PASS; good-clean_long initially FAIL then
+  PASS after proving the failure is a stale test contract, NOT a
+  regression: volunteered mood/plans answers arrive unprompted and are
+  recorded opportunistically (DB facts verified) on 1f4f35c and HEAD
+  alike — demanding check_mood/check_plans questions there would force
+  robotic re-asking. Oracle now accepts coverage-by-fill OR by-ask.
+- BACKLOG (pre-existing, proven on both versions, do NOT hotfix):
+  pending-sleep + plans-text answer fills sleep slot with plans text
+  (`sleep="Дома посижу."`, quote preserved). Answer-routing content-fit
+  guard needed; hot path, 500-corpus blast radius — separate slice.
+- Bridge intentionally NOT restarted again (runs 9e5ede8; delta since is
+  behavior-neutral tooling). Next restart picks up HEAD.
+
+---
+
 # Live loop closed on 9e5ede8 + act v3 shadow artifact (2026-09-29)
 
 SIP REGISTER healthy again after the LAN flap (.194 everywhere, Zoiper
