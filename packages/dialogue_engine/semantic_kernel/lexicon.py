@@ -75,6 +75,7 @@ BODY_SITE_LEMMAS: frozenset[str] = frozenset(
         "бровь",
         "переносица",
         "ноздря",
+        "сустав",
     }
 )
 

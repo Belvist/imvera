@@ -20,7 +20,7 @@ def _bare_site_clause_re() -> re.Pattern[str]:
         )
 
         _BARE_SITE_RE = re.compile(
-            r"^(?:и|а|но|вот|у\s+меня|меня)?\s*"
+            r"^(?:и|а|но|вот|у\s+меня|меня)?\s*(?:ещ[её]\s+)?"
             r"(голова|живот|спина|нога|ноги|рука|руки|грудь|шея|поясница|колено|горло|"
             + "|".join(sorted(BODY_SITE_LEMMAS))
             + r")"
@@ -65,11 +65,12 @@ _CORRECTION = re.compile(
 )
 _REPAIR_HEARING = re.compile(r"\b(алло|слыш\w*|повтор\w*)\b", re.I)
 _USER_QUESTION = re.compile(
-    r"(кто\s+вы|хто\s+(это|там|звонит)|зачем\s+звон|почему\s+звон|"
+    r"(кто\s+вы|(?:к|х)то\s+(это|там|звонит|такая|такой)|зачем\s+звон|почему\s+звон|"
     r"что\s+вам\s+нужн|а\s+вы\s+кто|"
     r"что\s+вы\s+хотите|зачем\s+вы|про\s+что|"
     r"что\s+ты\s+спрашивал\w*|что\s+вы\s+спрашивали|"
-    r"о\s+ч[её]м\s+ты\s+спрашивал\w*|что\s+ты\s+сейчас\s+спросил\w*)",
+    r"о\s+ч[её]м\s+ты\s+спрашивал\w*|что\s+ты\s+сейчас\s+спросил\w*|"
+    r"не\s+знаю\s+(?:вас|тебя)|(?:вас|тебя)\s+не\s+знаю)",
     re.I,
 )
 _ONSET = re.compile(
@@ -92,7 +93,7 @@ def _mid() -> str:
 
 
 def _split_symptom_parts(text: str) -> list[str]:
-    parts = re.split(r"\s*,\s*|\s*;\s*", text.strip())
+    parts = re.split(r"\s*[,;]\s*|\s*[\.…!?]+\s*", text.strip())
     out: list[str] = []
     for part in parts:
         sub = re.split(r"\s+и\s+", part.strip())
@@ -213,6 +214,33 @@ def _clause_mentions(
             quote=clause,
         )
         first_symptom = False
+    # A fall is a functional event, not a pain verb — but for elderly care
+    # it must ground an episode (onset/current probes come free) instead of
+    # vanishing into a generic question. Negated falls («не падала») are
+    # not events. Other-person falls never reach here (suppressed above).
+    if re.search(r"\bупал[аио]?\b|\bпадени[ея]\b", n) and not re.search(
+        r"\bне\s+(?:упал[аио]?|падал[аио]?)\b", n
+    ):
+        add(
+            label="падение",
+            kind="function_issue",
+            body_site=None,
+            role="primary" if first_symptom else "independent",
+            quote=clause,
+        )
+        first_symptom = False
+    # Whole-body pain («Всё болит.») is a site-less complaint that must not
+    # vanish: record it on the body. The generic rule below excludes
+    # всё/все deliberately (they are not sites), so this needs its own rule.
+    if re.search(r"\bвс[её]\b", n) and _PAIN_VERB.search(n):
+        add(
+            label="всё болит",
+            kind="symptom",
+            body_site="тело",
+            role="primary" if first_symptom else "independent",
+            quote=clause,
+        )
+        first_symptom = False
     if re.search(r"\bплохо\s+спал\w*\b|\bне\s+спал\w*\b|\bбессон\w*\b", n):
         add(
             label="плохой сон",
@@ -267,15 +295,18 @@ def _clause_mentions(
 
     # Bare site sharing the turn's pain verb («Болит голова и нога») or named
     # as a correction («Нет, нога.»). The specific rules above only know a
-    # handful of sites; every other site was silently lost here.
-    if shared_verb and not any(m.role in ("primary", "independent") for m in mentions):
+    # handful of sites; every other site was silently lost here. No
+    # already-mentioned guard: a bare-site match implies no specific rule
+    # fired on this part (they all need verbs), so duplicates are
+    # impossible by construction — unlike the generic rule below.
+    if shared_verb:
         _bm = _bare_site_clause_re().match(n.rstrip(".,!?…"))
         if _bm:
             _btok = _bm.group(1).strip()
             _bnorm = _normalize_site_token(_btok)
             _bsite = _bnorm if _site_in_lexicon(_bnorm) else _btok.lower()
             add(
-                label=f"{_cap_site(_btok)} болит",
+                label=f"{_cap_site(_btok)} {_agree_verb(_btok)}",
                 kind="symptom",
                 body_site=_bsite,
                 role="primary" if first_symptom else "independent",
@@ -291,20 +322,34 @@ def _clause_mentions(
     # the freshest symptom was lost at summary.
     if not mentions or not any(m.role in ("primary", "independent") for m in mentions):
         for g in _GENERIC_BODY_PAIN.finditer(n):
-            site = g.group(1).strip()
-            if not site or _NON_BODY_NOUN.search(site):
-                continue
-            # Normalize long sites to the lemma («Руке» → «рука»); keep short
-            # or unknown words raw — morphology maps «Пах» → «пахнуть» and
-            # «Зук» must stay the elder's own word.
-            _norm = _normalize_site_token(site)
-            _body = (
-                _norm
-                if len(site) >= 4 and _site_in_lexicon(_norm)
-                else site.lower()
-            )
+            site = (g.group(1) or "").strip()
+            verb_first = not site
+            if verb_first:
+                # Verb-first order («Сломала руку», «Болит нога»): the noun
+                # must resolve to a known site — no raw fallback, an
+                # unresolved noun here is usually an adverbial («болит,
+                # наверное»).
+                site = (g.group(2) or "").strip()
+                if not site or _NON_BODY_NOUN.search(site):
+                    continue
+                _norm = _normalize_site_token(site)
+                if not _site_in_lexicon(_norm):
+                    continue
+                site, _body = site, _norm
+            else:
+                if not site or _NON_BODY_NOUN.search(site):
+                    continue
+                # Normalize long sites to the lemma («Руке» → «рука»); keep short
+                # or unknown words raw — morphology maps «Пах» → «пахнуть» and
+                # «Зук» must stay the elder's own word.
+                _norm = _normalize_site_token(site)
+                _body = (
+                    _norm
+                    if len(site) >= 4 and _site_in_lexicon(_norm)
+                    else site.lower()
+                )
             add(
-                label=f"{site} болит",
+                label=f"{site} {_agree_verb(site)}",
                 kind="symptom",
                 body_site=_body,
                 role="primary" if first_symptom else "independent",
@@ -334,13 +379,22 @@ def _severity_from_clause(n: str) -> str | None:
 
 
 _CLAUSE_SPLIT_RE = re.compile(
-    r"\s*[,;]\s*|\s+(?:а|но|однако)\s+",
+    r"\s*[,;]\s*|\s+(?:а|но|однако)\s+|[.…!?]+\s*",
     re.I,
 )
-_SPEAKER_SIGNAL_RE = re.compile(
-    r"\b(?:я|мне|меня|мной|мною|у\s+меня|сам|сама)\b",
-    re.I,
-)
+def _agree_verb(site_tok: str) -> str:
+    """Number agreement for generic labels («суставы болят», «спина болит»).
+
+    A noun directly before a pain verb is the nominative subject in 99% of
+    cases, so plural endings mean plural pain. Explicit set covers «глаза»;
+    genitive-singular collision («боль руки») is negligible here.
+    """
+    low = (site_tok or "").lower()
+    if low in ("глаза", "уши", "зубы", "ноги", "руки", "плечи", "колени"):
+        return "болят"
+    if len(low) > 3 and low.endswith(("ы", "и")):
+        return "болят"
+    return "болит"
 
 
 _GENERIC_BODY_PAIN = re.compile(
@@ -349,7 +403,11 @@ _GENERIC_BODY_PAIN = re.compile(
     r"невыносимо|нестерпимо|страшно))?"
     r"\s+(?:болит|болит[аиуы]?|ноет|ноют|ломит|ломит[аи]?|давит|стреляет|"
     r"стрелял|жж[её]т|жг[её]т|пульсирует|колет|першит|першило|"
-    r"залож\w*|онем\w*|тошн\w*|кашл\w*|тян\w*|урч\w*)\b",
+    r"залож\w*|онем\w*|тошн\w*|кашл\w*|тян\w*|урч\w*|"
+    r"крут\w*|выкруч\w*|слом\w*)\b"
+    r"|\b(?:болит|болит[аиуы]?|ноет|ноют|ломит|давит|тянет|крутит|"
+    r"заложило|онемело|тошнит|кашляет|першит|сломал\w*|выкруч\w*|урчит)\b"
+    r"\s+([а-яё]{3,})\b",
     re.I,
 )
 # Words that are not a body site even in "<noun> болит" position.
@@ -366,20 +424,23 @@ def extract_issue_mentions(text: str) -> tuple[IssueMention, ...]:
     if not raw:
         return ()
     from packages.dialogue_engine.check_path import (
+        is_other_person_health_frame,
         suppress_health_issues_for_non_complaint_frame,
     )
+    from packages.dialogue_engine.semantic_kernel.lexicon import has_other_person
 
     # False-world frames (dream/film, other-person, joke, past-resolved):
     # never speaker ISSUE_SITE (map docs/plans/Understand-false-worlds.md).
+    # Other-person suppression is clause-local: a speaker complaint in
+    # another clause voids it («Живот болит. Внук приезжал. А ещё спина.»).
+    # Dream/joke/past suppression stays whole-text.
     if suppress_health_issues_for_non_complaint_frame(raw):
-        return ()
-
-    # Mixed subjects («у мужа плохо, а у меня голова болит»): keep speaker
-    # clauses only — mirror extract_goal_facts other-person split.
-    _low = raw.lower().replace("ё", "е")
-    if _CLAUSE_SPLIT_RE.search(raw) and _SPEAKER_SIGNAL_RE.search(_low):
-        from packages.dialogue_engine.check_path import is_other_person_health_frame
-
+        if not (
+            _CLAUSE_SPLIT_RE.search(raw)
+            and has_other_person(raw)
+            and is_other_person_health_frame(raw)
+        ):
+            return ()
         _parts = _CLAUSE_SPLIT_RE.split(raw)
         _kept = [
             p.strip()
@@ -388,7 +449,7 @@ def extract_issue_mentions(text: str) -> tuple[IssueMention, ...]:
         ]
         if not _kept:
             return ()
-        raw = " ".join(_kept).strip()
+        raw = ". ".join(_kept).strip()
         raw = re.sub(r"^(?:а|но|однако)\s+", "", raw, flags=re.I).strip()
         if not raw:
             return ()

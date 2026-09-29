@@ -557,7 +557,7 @@ def _important_to_share_plan(state: EngineState) -> ResponsePlan | None:
     return ResponsePlan(
         obligation=ConversationObligation.IMPORTANT_TO_SHARE,
         action="speak",
-        mandatory_question=questions.important_to_share_question(),
+        mandatory_question=questions.important_to_share_question(state),
         intent="important_to_share",
         slot="important_to_share",
         marks_question=True,
@@ -1202,7 +1202,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             return ResponsePlan(
                 obligation=ConversationObligation.IMPORTANT_TO_SHARE,
                 action="speak",
-                mandatory_question=questions.important_to_share_question(),
+                mandatory_question=questions.important_to_share_question(state),
                 intent="important_to_share",
                 slot="important_to_share",
                 marks_question=True,
@@ -1456,7 +1456,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                         return ResponsePlan(
                             obligation=ConversationObligation.NEVER_SILENT,
                             action="speak",
-                            mandatory_question=questions.probe_question("concern"),
+                            mandatory_question=questions.probe_question("concern", state=state),
                             intent="probe_concern",
                             slot="wellness",
                             marks_question=True,
@@ -1484,7 +1484,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     _q = ""
                 else:
                     state.concern_probe_count = 1
-                    _q = questions.probe_question("concern")
+                    _q = questions.probe_question("concern", state=state)
                 if _q:
                     _turn_text = turn.raw_text if turn is not None else ""
                     if _has_distress_markers(_turn_text):
@@ -1567,7 +1567,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     return ResponsePlan(
                         obligation=ConversationObligation.IMPORTANT_TO_SHARE,
                         action="speak",
-                        mandatory_question=questions.important_to_share_question(),
+                        mandatory_question=questions.important_to_share_question(state),
                         intent="important_to_share",
                         slot="important_to_share",
                         marks_question=True,

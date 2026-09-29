@@ -997,9 +997,15 @@ def merge_legacy_mentions(
         except Exception:  # noqa: BLE001
             quote = ""
         anchor = quote.strip().lower() or (m.label or "").strip().lower()
-        if raw_text and anchor:
-            pos = raw_text.lower().find(anchor[:24])
-            clause = raw_text[max(0, pos - 40):pos + 60] if pos >= 0 else anchor
+        # Resolve the subject from the mention's OWN evidence clause. A wide
+        # window bled across clauses: «Живот болит. Внук приезжал. А ещё
+        # спина.» resolved both speaker complaints as other-person because
+        # «внук» sat inside the window. Window only when the quote is
+        # missing entirely.
+        if anchor:
+            clause = anchor
+        elif raw_text:
+            clause = raw_text.lower()
         else:
             clause = anchor
         try:

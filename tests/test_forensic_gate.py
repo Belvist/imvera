@@ -47,7 +47,9 @@ def test_polarity_contradictory_wellness_is_negative() -> None:
 
     text = "Хорошо чувствую себя, но состояние не очень."
     assert _detect_polarity(text) == "negative"
-    assert wellness_ack(value=text) == "Мне жаль это слышать."
+    # Contract migrated: the negative ack always carries a content tail now
+    # (standalone «Мне жаль это слышать.» alone is a banned tic).
+    assert wellness_ack(value=text) == "Мне жаль это слышать. Я вас внимательно слушаю."
 
 
 def test_classify_stt_error_when_expected_differs(tmp_path: Path) -> None:

@@ -519,6 +519,12 @@ class CallActor:
         except Exception:  # noqa: BLE001 — observability never breaks teardown
             pass
         await asyncio.to_thread(self.session.finalize_disconnect)
+        try:
+            from packages.voice_runtime.recordings import note_call_finalized
+
+            note_call_finalized(self.session)
+        except Exception:  # noqa: BLE001 — observability never breaks teardown
+            pass
 
     async def _ensure_output_chain(
         self, output_sample_rate: int, output_frame_size: int

@@ -253,6 +253,15 @@ class EngineState(BaseModel):
     # Asked-question history (spoken question texts, cap 20) — answers
     # «а что ты спрашивал?» and never-repeat audits. Not state for logic.
     asked_history: list[str] = Field(default_factory=list)
+    # Speech ledger: normalized surfaces of everything Vera already said
+    # this call (cap 60). Recorded at the single emit funnel for repeat
+    # audits and the speech-discipline gate; repair repeats bypass nothing
+    # here since the ledger never diverts.
+    spoken_surfaces: list[str] = Field(default_factory=list)
+    # Per-pool rotation counters for rotate_pool (pool key -> next index).
+    # Seeded by day on first use, so single asks are byte-identical to
+    # day rotation and only true repeats advance to the next variant.
+    pool_counters: dict[str, int] = Field(default_factory=dict)
     # CDK Step 2: act-driven NeedQueue. forbidden_actions blocks probes a
     # DECLINE ruled out (per-call; lifted only by restated complaint).
     # queued_needs holds must-ask items (e.g. severity) served before ITS.

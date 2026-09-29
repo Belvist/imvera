@@ -114,6 +114,22 @@ def _speech_day() -> int:
 def _rotate(pool: list[str] | tuple[str, ...]) -> str:
     return pool[_speech_day() % len(pool)]
 
+
+def rotate_pool(
+    state: EngineState | None, key: str, pool: list[str] | tuple[str, ...]
+) -> str:
+    """Per-call rotation seeded by day: the first use in a call returns
+    exactly what day-rotation would (zero churn for single asks), repeats
+    advance to the next variant. This is the systematic end of verbatim
+    re-asks — day rotation alone repeats the same surface all day.
+    state=None keeps legacy day rotation (stateless unit tests)."""
+    if state is None:
+        return _rotate(pool)
+    counters = state.pool_counters
+    idx = counters.get(key, _speech_day() % len(pool))
+    counters[key] = (idx + 1) % len(pool)
+    return pool[idx]
+
 _PROBE_QUESTIONS: dict[str, str] = {
     "concern": "Что именно беспокоит?",
     "duration": "Как давно это продолжается?",
@@ -173,10 +189,21 @@ _SLOT_CLARIFICATION_TAILS: dict[str, list[str]] = {
 
 # Ack tails appended after the canonical ack, rotated by turn_seq.
 # Index 0 is "" (bare canonical) so default/short calls stay identical.
+# Content tails are MANDATORY (never bare): a standalone «Хорошо.» /
+# «Понятно.» as a whole response is the tic the speech-discipline gate
+# forbids. Index 0 is the default, so it carries content too.
 _WELLNESS_ACK_TAILS: dict[str, list[str]] = {
-    "negative": ["", "Я вас внимательно слушаю.", "Расскажите, что беспокоит сильнее всего."],
-    "uncertain": ["", "Я запишу это.", "Уточните чуть подробнее, пожалуйста."],
-    "positive": ["", "Очень хорошо.", "Рада за вас."],
+    "negative": [
+        "Я вас внимательно слушаю.",
+        "Расскажите, что беспокоит сильнее всего.",
+        "Я всё записываю.",
+    ],
+    "uncertain": [
+        "Я запишу это.",
+        "Уточните чуть подробнее, пожалуйста.",
+        "Я вас слушаю.",
+    ],
+    "positive": ["Рада за вас.", "Очень хорошо.", "Ну и славно."],
 }
 
 _REPAIR_ACK = "Да, слышу."
@@ -368,21 +395,23 @@ def episode_ack(kind: str, label: str, *, turn_seq: int = 0) -> str:
     return template.format(label=label)
 
 
-def important_to_share_question() -> str:
-    return _rotate(_ITS_QUESTION_VARIANTS)
+def important_to_share_question(state: EngineState | None = None) -> str:
+    return rotate_pool(state, "its", _ITS_QUESTION_VARIANTS)
 
 
 def topic_question(intent: str) -> str:
     return _TOPIC_QUESTIONS.get(intent, "Расскажите, пожалуйста, чуть подробнее.")
 
 
-def probe_question(phase: str, *, clarification: bool = False) -> str:
+def probe_question(
+    phase: str, *, clarification: bool = False, state: EngineState | None = None
+) -> str:
     key = f"probe_{phase}"
     if clarification:
         return _SLOT_CLARIFICATIONS.get(key, _PROBE_QUESTIONS.get(phase, "Повторите, пожалуйста."))
     pool = _PROBE_QUESTION_VARIANTS.get(phase)
     if pool:
-        return _rotate(pool)
+        return rotate_pool(state, key, pool)
     return _PROBE_QUESTIONS.get(phase, "Расскажите, пожалуйста.")
 
 
@@ -408,8 +437,9 @@ def wellness_ack(
 ) -> str:
     """Short ack after wellness slot fill — polarity-aware.
 
-    turn_seq rotates an appended tail (index 0 = bare canonical, so
-    default calls stay byte-identical).
+    Always content-carrying: the tail is mandatory, never bare. Rotation is
+    by turn_seq over content tails (speech-discipline gate forbids
+    standalone «Хорошо.»/«Понятно.» as whole responses).
     """
     from packages.dialogue_engine.fast_interpreter import _detect_polarity, _normalize_core
 
@@ -435,8 +465,8 @@ def wellness_ack(
         else:
             base = _WELLNESS_ACK
         tails = _WELLNESS_ACK_TAILS["positive"]
-    tail = tails[turn_seq % len(tails)] if turn_seq > 0 else ""
-    return f"{base} {tail}".strip() if tail else base
+    tail = tails[turn_seq % len(tails)]
+    return f"{base} {tail}".strip()
 
 
 def opening_speech(elder_display_name: str, prior_context: dict[str, str] | None = None) -> str:
@@ -507,12 +537,12 @@ def slot_question(
         tail = tails[_clarification_attempt(state, slot) % len(tails)]
         return f"{base} {tail}".strip() if tail else base
     if slot.startswith("probe_"):
-        return probe_question(slot.removeprefix("probe_"))
+        return probe_question(slot.removeprefix("probe_"), state=state)
     if slot.startswith("episode_") or slot.startswith("topic_"):
         return "Расскажите, пожалуйста, чуть подробнее."
     pool = _SLOT_QUESTION_VARIANTS.get(slot)
     if pool:
-        return _rotate(pool)
+        return rotate_pool(state, f"slot:{slot}", pool)
     return _SLOT_QUESTIONS.get(slot, "Повторите, пожалуйста, коротко.")
 
 

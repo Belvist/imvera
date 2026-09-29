@@ -23,8 +23,8 @@ Exit 0 = PASS, 1 = FAIL.
 from __future__ import annotations
 
 import argparse
-import os
 import json
+import os
 import subprocess
 import sys
 import time
@@ -184,9 +184,9 @@ def run_dream_narrative_scenario() -> GateReport:
         call_id=call_id,
     )
     os.environ.setdefault("IMVERA_COVERAGE_LADDER", "1")
-    from packages.dialogue_engine.scenario_runner import ScenarioRunner
-    from packages.dialogue_engine.events import CallStarted, User
     from packages.dialogue_engine.effects import SpeakEffect
+    from packages.dialogue_engine.events import CallStarted, User
+    from packages.dialogue_engine.scenario_runner import ScenarioRunner
     from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
 
     dream = (

@@ -407,18 +407,47 @@ _NARRATIVE_FICTION_FRAME = re.compile(
 )
 # Explicit present-tense speaker health pivot keeps real complaints even
 # when a film/dream was mentioned («после фильма голова разболелась»).
-_NARRATIVE_REAL_COMPLAINT_PIVOT = re.compile(
+# A bare site+verb buried inside the narrative clause («снилось, что голова
+# болит») is not a present pivot — only speaker-anchored pivots or
+# post-narrative ones («после фильма ... разболелась») escape the frame.
+_NARRATIVE_FICTION_BEFORE = re.compile(
+    r"\b(?:снилось|снится|приснилось|фильм\w*|сериал\w*|передач\w*|"
+    r"кино|во\s+сне|сон\s+такой)\b",
+    re.I,
+)
+_NARRATIVE_POST_MARKER = re.compile(
+    r"\bпосле\s+(?:фильм\w*|сериал\w*|кино|сна|передач\w*|этого|него)\b",
+    re.I,
+)
+_NARRATIVE_SPEAKER_PIVOT = re.compile(
     r"(?:"
     r"\bа\s+сейчас\b|"
     r"\bи\s+сейчас\b|"
     r"\bсейчас\s+(?:бол|но[ею]т|тошн|дав[аи]т|кружи)|"
     r"\bу\s+меня\s+(?:бол|но[ею]т|тошн|дав[аи]т|кружи)|"
-    r"\bмне\s+(?:бол|тошн)|"
-    r"\b(голов[ауеы]|живот|сердц\w*|спин[ауеы]|руках?|ногах?)\s+"
-    r"(?:бол|но[ею]т|лом|дав[аи]т|тян[еу]т|разболел)"
+    r"\bмне\s+(?:бол|тошн)"
     r")",
     re.I,
 )
+_NARRATIVE_SITE_VERB = re.compile(
+    r"\b(голов[ауеы]|живот|сердц\w*|спин[ауеы]|руках?|ногах?)\s+"
+    r"(?:бол|но[ею]т|лом|дав[аи]т|тян[еу]т|разболел)",
+    re.I,
+)
+
+
+def _narrative_pivot_escapes(raw: str) -> bool:
+    """Does a present-tense complaint escape the fiction frame?"""
+    if _NARRATIVE_SPEAKER_PIVOT.search(raw):
+        return True
+    for match in _NARRATIVE_SITE_VERB.finditer(raw):
+        before = raw[: match.start()]
+        if _NARRATIVE_FICTION_BEFORE.search(before):
+            if _NARRATIVE_POST_MARKER.search(before):
+                return True
+            continue
+        return True
+    return False
 
 
 def is_narrative_fiction_frame(text: str) -> bool:
@@ -434,7 +463,7 @@ def suppress_health_issues_for_narrative_frame(text: str) -> bool:
     raw = text or ""
     if not is_narrative_fiction_frame(raw):
         return False
-    if _NARRATIVE_REAL_COMPLAINT_PIVOT.search(raw):
+    if _narrative_pivot_escapes(raw):
         return False
     return True
 

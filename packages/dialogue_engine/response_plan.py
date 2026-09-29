@@ -85,7 +85,9 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
     elif plan.slot and not question:
         if plan.slot.startswith("probe_"):
             phase = plan.slot.removeprefix("probe_")
-            question = questions.probe_question(phase, clarification=plan.clarification)
+            question = questions.probe_question(
+                phase, clarification=plan.clarification, state=state
+            )
             plan.intent = plan.intent or plan.slot
         elif plan.slot in ("wellness", "mood", "sleep", "plans"):
             question = questions.slot_question(plan.slot, state=state)
@@ -165,7 +167,7 @@ def _question_for_need(state: EngineState, plan: ResponsePlan, need: QuestionNee
         plan.marks_question = True
         return text
     if need.attribute in ("concern", "pain_night", "duration", "severity"):
-        return questions.probe_question(need.attribute)
+        return questions.probe_question(need.attribute, state=state)
     return questions.slot_question(need.attribute, state=state)
 
 

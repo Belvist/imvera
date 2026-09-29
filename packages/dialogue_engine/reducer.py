@@ -395,6 +395,17 @@ def _emit_speak(
     question_text: str = "",
     bridge_llm_allowed: bool = False,
 ) -> tuple[EngineState, list[Effect]]:
+    from packages.dialogue_engine.speech_ledger import (
+        record as _record_surface,
+    )
+
+    # Record-only: every surface lands in the ledger so repeats are
+    # auditable and the speech-discipline gate can fail the build on them.
+    # (A divert-to-advance here was tried and reverted: a verbatim re-ask
+    # after a non-answer is legitimate — the exhaustion-close accounting
+    # depends on it. Repeats are fixed at the decision layer per site,
+    # e.g. topic skip-on-repeat, never blindly at emit.)
+    state.spoken_surfaces = _record_surface(state.spoken_surfaces, text)
     # Anti-loop: same onset/duration probe must never go out 3x in a row
     # (fuzz I3; live question_back/vague/garbage while temporal pending).
     if _note_temporal_emit(state, slot, intent):
@@ -1473,8 +1484,8 @@ def _backchannel_reask(state: EngineState) -> tuple[str, str, str] | None:
     picks = fresh or alts
     if not picks:
         return None
-    rephrase = picks[questions._speech_day() % len(picks)]
-    ack = _BACKCHANNEL_ACKS[questions._speech_day() % len(_BACKCHANNEL_ACKS)]
+    rephrase = questions.rotate_pool(state, f"reask:{slot}", picks)
+    ack = questions.rotate_pool(state, "reask-ack", list(_BACKCHANNEL_ACKS))
     intent = (delivered.intent or "").strip() or slot
     return (f"{ack} {rephrase}", slot, intent)
 
