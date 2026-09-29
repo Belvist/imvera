@@ -1,0 +1,45 @@
+{"question": "", "text": "Да нет, наверное. Может, близким только сообщить вот то, что у меня голова очень сильно болит и всё так-то дома всё хорошо.", "act": "complaint", "source": "traces/fs-1af9504e.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Нет, всё нормально, всё хорошо, ничего не надо.", "act": "decline", "source": "traces/fs-1aff4b1d.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Ой, Вер, не знаю, как сказать. И тошнит, и жопа болит, и голова, и всё-всё-всё болит у меня, всё тело ломит.", "act": "complaint", "source": "traces/fs-1b34dc2b.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Ну, наверное, со вчерашнего дня плохое самочувствие, вот головная боль.", "act": "complaint", "source": "traces/fs-1f6d3000.jsonl", "coverage": "coverage-5"}
+{"question": "", "text": "Привет. Всё хорошо. Только что покушала.", "act": "decline", "source": "traces/fs-2257cab2.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Ничего меня не беспокоит.", "act": "decline", "source": "traces/fs-27a3ced4.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Нормально поел, но чувствую вот поел тяжесть в животе.", "act": "complaint", "source": "traces/fs-2a5f5115.jsonl", "coverage": "coverage-7"}
+{"question": "", "text": "Нет, всё хорошо. С подружками гулять пойду.", "act": "decline", "source": "traces/fs-2aebe975.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Ну не знаю, то ли голова болит, то ли живот.", "act": "complaint", "source": "traces/fs-2bd8bf64.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Вчера. Сейчас не болит.", "act": "decline", "source": "traces/fs-2bd8bf64.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Нет, всё хорошо, с подружками гулять пойду сейчас.", "act": "decline", "source": "traces/fs-30a2a638.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Плохо спал. Ну так, хорошо. Спал хорошо.", "act": "complaint", "source": "traces/fs-3238b70a.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Не беспокой меня ещё.", "act": "decline", "source": "traces/fs-4d8f5a8b.jsonl", "coverage": "coverage-3"}
+{"question": "", "text": "Проснулся в четыре, потом долго не мог заснуть, а ещё утром живот немного побаливал.", "act": "complaint", "source": "traces/fs-592f4ea0.jsonl", "coverage": "coverage-4"}
+{"question": "", "text": "Сейчас живот уже почти не болит, вроде прошло.", "act": "decline", "source": "traces/fs-592f4ea0.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Настроение хорошее сегодня. Чувствую себя великолепно. Но вот это вот, то, что живот болит, не очень, конечно.", "act": "complaint", "source": "traces/fs-592f4ea0.jsonl", "coverage": "coverage-5"}
+{"question": "", "text": "И ничего вроде не беспокоит.", "act": "decline", "source": "traces/fs-6e3abff0.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Ничего не болит, всё хорошо.", "act": "decline", "source": "traces/fs-6e3abff0.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Ой, не могу даже сказать, что меня беспокоит. Но вот сердце покалывает, головная боль очень сильная, как будто вот, ну вот все кости ломит.", "act": "complaint", "source": "traces/fs-70509d29.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Всё хорошо, только что покушала.", "act": "decline", "source": "traces/fs-708ab84f.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Не очень, голова болит.", "act": "complaint", "source": "traces/fs-75a8e1a4.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Нет, всё хорошо. Только голова болит вот.", "act": "complaint", "source": "traces/fs-75a8e1a4.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Привет, чувствую себя не очень. Голова болит, чё-то плохо чувствую себя.", "act": "complaint", "source": "traces/fs-77afbbf1.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Ни на что вроде не жалуюсь, всё хорошо.", "act": "decline", "source": "traces/fs-80cf029f.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Какой были нет? Ты чего? Я же сказал, что всё хорошо.", "act": "decline", "source": "traces/fs-80cf029f.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Нет, ничего неважно, всё нормально.", "act": "decline", "source": "traces/fs-80cf029f.jsonl", "coverage": "coverage-8"}
+{"question": "", "text": "Ой, привет. Чувствую себя плохо или хорошо? Вот не знаю, то ли голова болит, то ли жопа болит. Вот не знаю, что именно болит.", "act": "complaint", "source": "traces/fs-8a64bac9.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Привет. Чувствую себя плохо. Головная боль тошнит. Зубная боль ещё.", "act": "complaint", "source": "traces/fs-9621515c.jsonl", "coverage": "coverage-6"}
+{"question": "", "text": "Нет, всё, больше ничего нет. Так всё хорошо у меня.", "act": "decline", "source": "traces/fs-9621515c.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Да, сижу дома, кушаю, вот, хорошо себя вроде чувствую, всё нормально.", "act": "decline", "source": "traces/fs-98a7de1b.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Хорошо, настроение нормальное, всё хорошо.", "act": "decline", "source": "traces/fs-996c3fa1.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Ну, состояние не очень, голова болит и тошнит меня.", "act": "complaint", "source": "traces/fs-a80ee60f.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Ничего вроде не беспокоит.", "act": "decline", "source": "traces/fs-a90f8df0.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Ой, привет. Всё хорошо, вот только что поела.", "act": "decline", "source": "traces/fs-a92d1193.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Уже давно тошнит.", "act": "complaint", "source": "traces/fs-ad907a00.jsonl", "coverage": "coverage-4"}
+{"question": "", "text": "Ой, не знаю, сердце болит и давление.", "act": "complaint", "source": "traces/fs-aec9ce0c.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Нет, говорю, всё нормально, всё хорошо.", "act": "decline", "source": "traces/fs-cb1eec5f.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Привет, не очень. Голова болит.", "act": "complaint", "source": "traces/fs-e1b508bc.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Нет, всё хорошо, только голова болит.", "act": "complaint", "source": "traces/fs-e1b508bc.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Дома что-то холодно, поэтому как будто чуть сонливость у меня небольшая. А так, в принципе, себя хорошо чувствую. Но ногу вот сегодня подвернуло, потому что на улице скользко, чуть нога болит, вот крем мазала ногу.", "act": "complaint", "source": "traces/fs-e2c73edf.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Ой, не знаю, нормально вроде. Всё хорошо себя чувствую.", "act": "decline", "source": "traces/fs-ef7d1e69.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Говорю: «Нет, ничего неважно, всё нормально. Всё хорошо».", "act": "decline", "source": "traces/fs-ef7d1e69.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Никакой помощи не надо, — говорю. Всё хорошо. Пока, — говорю.", "act": "decline", "source": "traces/fs-f3b28dd3.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Привет. Чувствую себя... Ну, сам себя чувствую хорошо. До этого болела у меня голова, и было тошното, плохое самочувствие.", "act": "complaint", "source": "traces/fs-fab680cb.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Горло болит, тяжело кушать тяжёлый дуб. Может, супчик себе сваргать.", "act": "complaint", "source": "traces/fs-fe48f985.jsonl", "coverage": "coverage-6"}

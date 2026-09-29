@@ -74,6 +74,24 @@ def main() -> None:
         for line in seed_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+    n_seed = len(rows)
+    live_path = ROOT / "tools" / "voice_lab" / "live_rows.jsonl"
+    n_live = 0
+    if live_path.is_file():
+        for line in live_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if row.get("act") not in ACT_INDEX or not str(row.get("text", "")).strip():
+                continue
+            rows.append(
+                {"question": str(row.get("question", "")), "text": row["text"], "act": row["act"]}
+            )
+            n_live += 1
+    print(f"rows: seed={n_seed} live={n_live} total={len(rows)}")
     inputs = [f"[Q] {r['question']} [U] {r['text']}" for r in rows]
     targets = [ACT_INDEX[r["act"]] for r in rows]
 

@@ -1,3 +1,27 @@
+# Live loop closed on 9e5ede8 + act v3 shadow artifact (2026-09-29)
+
+SIP REGISTER healthy again after the LAN flap (.194 everywhere, Zoiper
+Registered/Reachable); blackbox LIVE E2E 1/1 PASS on transport. Bridge
+restarted 19612 -> 92201 in a verified no-call window (active_sessions 0);
+health now reports dialogue.engine.version 9e5ede8 (was 1f4f35c). Live
+calls on the new code: good-flow PASS (no more verbatim x3 food repeat),
+bad-flow needed a triage-contract fix in the blackbox oracle+catalog
+(concern owns bad calls on 1f4f35c and HEAD alike — proven by worktree
+replay; ladder expectations now category-aware, bad/so_so only).
+
+Act classifier v3: mined 447 real STT utterances -> 45 live_rows (reviewed)
++ 18 frozen-eval rows (never trained). v3 held mean 0.926 (~v2 0.93);
+frozen live-speech: v2 0.167 vs v3 1.000 (delta +0.833, n=18, same-trace
+distribution caveat recorded in metrics.json). Artifact shadow-only at
+models/semantic_nlp/v3 (gitignored per convention); v2 stays live default.
+
+Gates: pytest 1926/0; hard1000 1315/1315; safety 203/203; redteam 47/47;
+hard_battery 16/16 any rotation day; corpus 500/500; agent+dream PASS;
+policy diff 4/4; ruff clean; blackbox good+bad+so_so live PASS.
+NOT VERIFIED: owner's ears on TTS voice; pilot families; licensed voice.
+
+---
+
 # Consent invariant hardened + consent as separate fact (2026-09-29)
 
 Reviewer challenge accepted: `mission COMPLETED == re-engagement` is now

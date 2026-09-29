@@ -326,7 +326,19 @@ def generate_catalog() -> list[BlackboxScenario]:
                     tags.append("barge_in")
                 steps = _base_turns(sid, category, family, variant)
                 if family == "clean_short":
-                    expected = list(LADDER_EXPECTED_INTENTS)
+                    # Triage contract (verified identical on 1f4f35c and HEAD):
+                    # on bad/so_so calls the concern path owns the turn and
+                    # background fillers never fire ("issues own the turn" in
+                    # conversation_policy). Demanding the nutrition ladder
+                    # there is a test bug, not a product regression — proven
+                    # by replaying the same flow on both versions. Whether
+                    # background coverage SHOULD interleave into concern
+                    # flows is a product-design question (owner backlog),
+                    # not something to hotfix into the scheduler.
+                    if category in ("bad", "so_so"):
+                        expected = ["opening", "concern_engaged", "goodbye_final"]
+                    else:
+                        expected = list(LADDER_EXPECTED_INTENTS)
                     tags.append("coverage_ladder")
                 else:
                     expected = list(LEGACY_CHECKLIST_EXPECTED_INTENTS)

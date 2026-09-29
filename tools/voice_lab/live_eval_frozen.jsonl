@@ -1,0 +1,18 @@
+{"question": "", "text": "Ой, привет. Чувствую себя очень плохо. У меня голова болит и тошнотное состояние. Умираю, короче.", "act": "complaint", "source": "traces/fs-10ca89ef.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Привет. А-а, смотри, э-э, голова болела сегодня. Сейчас вроде чувствую себя хорошо.", "act": "complaint", "source": "traces/fs-1839074e.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Ничего не беспокоит, всё хорошо. Живу более-менее мне.", "act": "decline", "source": "traces/fs-1aff4b1d.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Я же сказал, не только тошнит. Я говорю: «У меня и голова болит, и тошнит, и тело ломит меня всё».", "act": "complaint", "source": "traces/fs-1b34dc2b.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Привет. Чувствую себя хорошо, даже я б сказал бы отлично, но тут такая проблема: у меня болит сильно голова и колено болит.", "act": "complaint", "source": "traces/fs-2b372628.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Ничего не беспокоит.", "act": "decline", "source": "traces/fs-30a2a638.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Не знаю, честно, то ли голова болит, то ли живот болит. Вот не знаю. И то, и то как будто бы болит.", "act": "complaint", "source": "traces/fs-338ee6ab.jsonl", "coverage": "coverage-1"}
+{"question": "", "text": "Да-да, спалось всё хорошо.", "act": "decline", "source": "traces/fs-486eb70d.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Нет, всё хорошо.", "act": "decline", "source": "traces/fs-5b509b4f.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Нет, ничего не надо. Всё хорошо.", "act": "decline", "source": "traces/fs-5b509b4f.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Вроде нормально себя чувствую, хотя ночью почти не спал, просыпался несколько раз. Утром голова немного болела, сейчас уже вроде прошла.", "act": "complaint", "source": "traces/fs-6298a1a3.jsonl", "coverage": "coverage-4"}
+{"question": "", "text": "Голова болит уже давно.", "act": "complaint", "source": "traces/fs-77afbbf1.jsonl", "coverage": "coverage-4"}
+{"question": "", "text": "Ну, из-за того, что голова болит, плохое настроение.", "act": "complaint", "source": "traces/fs-8054b8c5.jsonl", "coverage": "coverage-5"}
+{"question": "", "text": "Давно, давно тошнит.", "act": "complaint", "source": "traces/fs-ad907a00.jsonl", "coverage": "coverage-4"}
+{"question": "", "text": "Привет. Чувствую себя плохо. Голова болит, колено болит, плохое самочувствие, почки болят, спина болит.", "act": "complaint", "source": "traces/fs-c49395f7.jsonl", "coverage": "coverage-6"}
+{"question": "", "text": "Нет, всё хорошо дальше.", "act": "decline", "source": "traces/fs-cb1eec5f.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Нет, хорошо.", "act": "decline", "source": "traces/fs-ec54e568.jsonl", "coverage": "coverage-0"}
+{"question": "", "text": "Ну вот я проснулся где-то в 6:00 утра, потому что мне нужно было выпить чай крепкий. А и потом вот после этого чё-то голова заболела.", "act": "complaint", "source": "traces/fs-fe57cba6.jsonl", "coverage": "coverage-0"}

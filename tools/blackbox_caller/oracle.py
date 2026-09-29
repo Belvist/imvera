@@ -17,6 +17,7 @@ BOT_INTENTS = (
     "background_medication",
     "background_mood",
     "background_sleep",
+    "concern_engaged",
     "summary",
     "goodbye_confirm",
     "goodbye_final",
@@ -113,6 +114,11 @@ def _match_intents(text: str) -> list[IntentObservation]:
 
     patterns: list[tuple[str, str]] = [
         (r"здравствуйте|это сервис амвера|как вы себя чувствуете|как себя чувствуете", "opening"),
+        # Concern engagement on bad/so_so calls (triage owns the call there;
+        # background fillers fire only with no open concern — verified on
+        # 1f4f35c and HEAD alike, see catalog.py triage note).
+        (r"сочувствую|жаль|беспокоит|что болит|когда начал|давно это|"
+         r"насколько сильн|что тревожит", "concern_engaged"),
         (r"покушать|с едой|поели", "background_nutrition"),
         (r"лекарств", "background_medication"),
         (r"настроение", "background_mood"),
