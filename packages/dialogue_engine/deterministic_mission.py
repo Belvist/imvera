@@ -976,6 +976,8 @@ class DeterministicMissionUnderstandingProvider:
                 try:
                     from packages.dialogue_engine.issue_mention_extract import (
                         extract_goal_facts as _facts_for,
+                    )
+                    from packages.dialogue_engine.issue_mention_extract import (
                         extract_issue_mentions as _mentions_for,
                     )
 
