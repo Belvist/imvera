@@ -21,6 +21,11 @@ from pathlib import Path
 from packages.dialogue_engine.semantic_nlp.labels import ACTS, MODEL_ID
 
 ARTIFACT_VERSION = "v2"
+# Live default head version. Override with IMVERA_ACT_HEAD_VERSION only for
+# shadow/eval runs; production promotion is a gated decision, not an env
+# flip. Unknown versions fall back to the default WITH a loud warning
+# (warmup must never take the bridge down over a typo).
+LIVE_DEFAULT_VERSION = "v2"
 LATENCY_BUDGET_MS = 300.0
 # 0.55: model is underconfident on short phrases (correct at 0.55+);
 # safety acts are excluded from override regardless of confidence.
@@ -37,7 +42,7 @@ class ActCandidate:
 class SemanticNLP:
     """Singleton act classifier. Call SemanticNLP.get() then .predict()."""
 
-    _instance: SemanticNLP | None = None
+    _instances: dict[str, SemanticNLP] = {}
 
     def __init__(self, version: str = ARTIFACT_VERSION) -> None:
         import torch
@@ -73,10 +78,31 @@ class SemanticNLP:
         self.predict("Как вы себя чувствуете?", "Хорошо.")
 
     @classmethod
-    def get(cls) -> SemanticNLP:
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+    def get(cls, version: str | None = None) -> SemanticNLP:
+        import logging
+        import os
+
+        ver = (
+            version
+            or os.environ.get("IMVERA_ACT_HEAD_VERSION", "").strip()
+            or LIVE_DEFAULT_VERSION
+        )
+        if ver not in cls._instances:
+            try:
+                cls._instances[ver] = cls(version=ver)
+            except Exception as exc:
+                logging.getLogger("imvera.nlp").warning(
+                    "act head %r failed to load (%s); falling back to %r",
+                    ver,
+                    exc,
+                    LIVE_DEFAULT_VERSION,
+                )
+                if LIVE_DEFAULT_VERSION not in cls._instances:
+                    cls._instances[LIVE_DEFAULT_VERSION] = cls(
+                        version=LIVE_DEFAULT_VERSION
+                    )
+                return cls._instances[LIVE_DEFAULT_VERSION]
+        return cls._instances[ver]
 
     def predict(self, question: str, text: str) -> ActCandidate | None:
         """Return act candidate or None (over budget / empty / error)."""

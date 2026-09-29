@@ -1,0 +1,282 @@
+{"text": "Привет. Чувствую себя, ну, я не знаю, как сказать.", "question": "", "v2": {"act": "answer", "conf": 0.162}, "v3": {"act": "complaint", "conf": 0.561}}
+{"text": "Чувствую себя хорошо. Ты, блядь, подвизы её.", "question": "", "v2": {"act": "stop", "conf": 0.343}, "v3": {"act": "decline", "conf": 0.428}}
+{"text": "Нет. Чего она несёт, блин?", "question": "", "v2": {"act": "goodbye", "conf": 0.202}, "v3": {"act": "decline", "conf": 0.612}}
+{"text": "Чувствую себя плохо.", "question": "", "v2": {"act": "answer", "conf": 0.34}, "v3": {"act": "complaint", "conf": 0.431}}
+{"text": "Не каждый день.", "question": "", "v2": {"act": "greeting", "conf": 0.612}, "v3": {"act": "decline", "conf": 0.363}}
+{"text": "Но вот у кого поглушил чуть живот прибавил.", "question": "", "v2": {"act": "greeting", "conf": 0.24}, "v3": {"act": "decline", "conf": 0.777}}
+{"text": "Покушал, живот приболел.", "question": "", "v2": {"act": "greeting", "conf": 0.444}, "v3": {"act": "decline", "conf": 0.522}}
+{"text": "Что ещё раз?", "question": "", "v2": {"act": "goodbye", "conf": 0.413}, "v3": {"act": "decline", "conf": 0.318}}
+{"text": "Сейчас сердце болит.", "question": "", "v2": {"act": "greeting", "conf": 0.46}, "v3": {"act": "complaint", "conf": 0.462}}
+{"text": "Про что ты?", "question": "", "v2": {"act": "greeting", "conf": 0.402}, "v3": {"act": "decline", "conf": 0.28}}
+{"text": "В целом нормально. Хотя, если честно, ночью спал беспокойно и пару раз просыпался.", "question": "", "v2": {"act": "answer", "conf": 0.546}, "v3": {"act": "complaint", "conf": 0.427}}
+{"text": "А, вроде что-то перекусил, но без особого аппетита. Честно, просто не хотелось особо есть.", "question": "", "v2": {"act": "correction", "conf": 0.402}, "v3": {"act": "decline", "conf": 0.752}}
+{"text": "Наверное, да. Ещё есть такая вещь: голова немного побаливала с утра, но сейчас уже почти прошло, вроде терпимо.", "question": "", "v2": {"act": "correction", "conf": 0.594}, "v3": {"act": "complaint", "conf": 0.685}}
+{"text": "Терпимая, не сильная, скорее фоновая, и она уже почти прошла. Сейчас больше просто усталость.", "question": "", "v2": {"act": "correction", "conf": 0.485}, "v3": {"act": "decline", "conf": 0.435}}
+{"text": "Хорошо себя чувствую.", "question": "", "v2": {"act": "goodbye", "conf": 0.377}, "v3": {"act": "complaint", "conf": 0.235}}
+{"text": "Да, сегодня уже нормально поел.", "question": "", "v2": {"act": "greeting", "conf": 0.466}, "v3": {"act": "decline", "conf": 0.803}}
+{"text": "Нет, я лекарства обычно не принимаю.", "question": "", "v2": {"act": "goodbye", "conf": 0.228}, "v3": {"act": "decline", "conf": 0.841}}
+{"text": "Наз болит.", "question": "", "v2": {"act": "greeting", "conf": 0.475}, "v3": {"act": "goodbye", "conf": 0.367}}
+{"text": "Привет. А-а, смотри, э-э, голова болела сегодня. Сейчас вроде чувствую себя хорошо.", "question": "", "v2": {"act": "correction", "conf": 0.408}, "v3": {"act": "complaint", "conf": 0.833}}
+{"text": "Голова почти прошла.", "question": "", "v2": {"act": "goodbye", "conf": 0.35}, "v3": {"act": "decline", "conf": 0.344}}
+{"text": "Шли достаточно долго уже, уже четыре раза вырвало меня.", "question": "", "v2": {"act": "answer", "conf": 0.188}, "v3": {"act": "complaint", "conf": 0.423}}
+{"text": "Ой, привет. Чувствую себя чё-то не очень.", "question": "", "v2": {"act": "answer", "conf": 0.223}, "v3": {"act": "complaint", "conf": 0.773}}
+{"text": "Ой, головная боль меня, наверное, больше беспокоит сейчас.", "question": "", "v2": {"act": "correction", "conf": 0.335}, "v3": {"act": "complaint", "conf": 0.494}}
+{"text": "Ой, боль достаточно, ну, сильная усиливается.", "question": "", "v2": {"act": "correction", "conf": 0.436}, "v3": {"act": "decline", "conf": 0.509}}
+{"text": "Да нет, наверное. Может, близким только сообщить вот то, что у меня голова очень сильно болит и всё так-то дома всё хорошо.", "question": "", "v2": {"act": "correction", "conf": 0.828}, "v3": {"act": "complaint", "conf": 0.572}}
+{"text": "Да, более-менее нормально пойдёт.", "question": "", "v2": {"act": "answer", "conf": 0.207}, "v3": {"act": "decline", "conf": 0.803}}
+{"text": "Ничего не беспокоит, всё хорошо. Живу более-менее мне.", "question": "", "v2": {"act": "correction", "conf": 0.234}, "v3": {"act": "decline", "conf": 0.758}}
+{"text": "Более-менее же говорю.", "question": "", "v2": {"act": "goodbye", "conf": 0.407}, "v3": {"act": "decline", "conf": 0.431}}
+{"text": "Нет, всё нормально, всё хорошо, ничего не надо.", "question": "", "v2": {"act": "goodbye", "conf": 0.437}, "v3": {"act": "decline", "conf": 0.928}}
+{"text": "Привет. Чувствую себя хорошо.", "question": "", "v2": {"act": "answer", "conf": 0.426}, "v3": {"act": "complaint", "conf": 0.274}}
+{"text": "Привет. Чувствую себя вроде бы хорошо, но состояние такое плохое.", "question": "", "v2": {"act": "answer", "conf": 0.417}, "v3": {"act": "complaint", "conf": 0.795}}
+{"text": "Ну, наверное, со вчерашнего дня плохое самочувствие, вот головная боль.", "question": "", "v2": {"act": "correction", "conf": 0.432}, "v3": {"act": "complaint", "conf": 0.831}}
+{"text": "Не спросишь там, ещё что-то.", "question": "", "v2": {"act": "goodbye", "conf": 0.268}, "v3": {"act": "decline", "conf": 0.844}}
+{"text": "Болеть болеть начала голова сегодня, но в данный момент прошло. С тошнотой такжело, сейчас уже всё нормально стало.", "question": "", "v2": {"act": "correction", "conf": 0.542}, "v3": {"act": "complaint", "conf": 0.816}}
+{"text": "Сейчас хорошо на данный момент, э-э, ни на что не надо обращать внимания. Родным, можешь передать, что со мной всё в порядке, я жива-здорова.", "question": "", "v2": {"act": "stop", "conf": 0.302}, "v3": {"act": "decline", "conf": 0.588}}
+{"text": "Привет. Всё хорошо. Только что покушала.", "question": "", "v2": {"act": "answer", "conf": 0.489}, "v3": {"act": "decline", "conf": 0.815}}
+{"text": "Чувствую себя великолепно.", "question": "", "v2": {"act": "answer", "conf": 0.349}, "v3": {"act": "complaint", "conf": 0.258}}
+{"text": "Ну хорошо, только что покушала.", "question": "", "v2": {"act": "goodbye", "conf": 0.356}, "v3": {"act": "decline", "conf": 0.851}}
+{"text": "Ничего меня не беспокоит.", "question": "", "v2": {"act": "goodbye", "conf": 0.471}, "v3": {"act": "decline", "conf": 0.524}}
+{"text": "Хорошо чувствую себя, но состояние не очень.", "question": "", "v2": {"act": "answer", "conf": 0.391}, "v3": {"act": "complaint", "conf": 0.717}}
+{"text": "Я чувствую себя хорошо.", "question": "", "v2": {"act": "answer", "conf": 0.338}, "v3": {"act": "decline", "conf": 0.34}}
+{"text": "Не бискует, всё нормально.", "question": "", "v2": {"act": "greeting", "conf": 0.295}, "v3": {"act": "decline", "conf": 0.648}}
+{"text": "Хорошо, только что покушала.", "question": "", "v2": {"act": "greeting", "conf": 0.338}, "v3": {"act": "decline", "conf": 0.843}}
+{"text": "Да, было вкусно.", "question": "", "v2": {"act": "greeting", "conf": 0.461}, "v3": {"act": "decline", "conf": 0.477}}
+{"text": "Нет, всё хорошо. С подружками гулять пойду.", "question": "", "v2": {"act": "goodbye", "conf": 0.333}, "v3": {"act": "decline", "conf": 0.897}}
+{"text": "Привет. Чувствую себя хорошо, даже я б сказал бы отлично, но тут такая проблема: у меня болит сильно голова и колено болит.", "question": "", "v2": {"act": "correction", "conf": 0.451}, "v3": {"act": "complaint", "conf": 0.95}}
+{"text": "Головная боль сейчас прошла, но болит колено. Я же говорю, колено болит ещё.", "question": "", "v2": {"act": "correction", "conf": 0.466}, "v3": {"act": "complaint", "conf": 0.916}}
+{"text": "Хмм, да, хотел бы, также хотел бы передать родственникам, что у меня так всё нормально, всё в порядке. Жива-здорова.", "question": "", "v2": {"act": "correction", "conf": 0.481}, "v3": {"act": "complaint", "conf": 0.43}}
+{"text": "Ой, не знаю, как себя чувствуешь. Вроде плохо, вроде бы и хорошо.", "question": "", "v2": {"act": "correction", "conf": 0.391}, "v3": {"act": "complaint", "conf": 0.603}}
+{"text": "Ну не знаю, то ли голова болит, то ли живот.", "question": "", "v2": {"act": "not_recalled", "conf": 0.482}, "v3": {"act": "complaint", "conf": 0.851}}
+{"text": "Вчера. Сейчас не болит.", "question": "", "v2": {"act": "greeting", "conf": 0.398}, "v3": {"act": "decline", "conf": 0.434}}
+{"text": "Ну, сейчас начал болеть.", "question": "", "v2": {"act": "greeting", "conf": 0.523}, "v3": {"act": "decline", "conf": 0.614}}
+{"text": "Ой, привет, очень плохо.", "question": "", "v2": {"act": "greeting", "conf": 0.468}, "v3": {"act": "decline", "conf": 0.44}}
+{"text": "Так-так, сегодня, сегодня, по-моему, в 12:00 началось.", "question": "", "v2": {"act": "answer", "conf": 0.283}, "v3": {"act": "decline", "conf": 0.652}}
+{"text": "Так, давление у меня 140 на 120, высокое очень. Ну, я не знаю, когда начну. Вот когда вот сердце заболело.", "question": "", "v2": {"act": "correction", "conf": 0.505}, "v3": {"act": "complaint", "conf": 0.881}}
+{"text": "Как будто бы чтобы родственники позвонили и вызвали скорую, очень срочно надо.", "question": "", "v2": {"act": "answer", "conf": 0.182}, "v3": {"act": "decline", "conf": 0.748}}
+{"text": "Я же сказал, живот пучит меня.", "question": "", "v2": {"act": "goodbye", "conf": 0.293}, "v3": {"act": "decline", "conf": 0.607}}
+{"text": "Планов нет.", "question": "", "v2": {"act": "goodbye", "conf": 0.471}, "v3": {"act": "decline", "conf": 0.405}}
+{"text": "Очень, голова болит.", "question": "", "v2": {"act": "greeting", "conf": 0.392}, "v3": {"act": "complaint", "conf": 0.811}}
+{"text": "Привет! Всё хорошо, только что покушала.", "question": "", "v2": {"act": "answer", "conf": 0.389}, "v3": {"act": "decline", "conf": 0.814}}
+{"text": "Ничего не беспокоит.", "question": "", "v2": {"act": "goodbye", "conf": 0.515}, "v3": {"act": "decline", "conf": 0.474}}
+{"text": "Да, выспалась.", "question": "", "v2": {"act": "greeting", "conf": 0.414}, "v3": {"act": "decline", "conf": 0.362}}
+{"text": "Нет, всё хорошо, с подружками гулять пойду сейчас.", "question": "", "v2": {"act": "goodbye", "conf": 0.326}, "v3": {"act": "decline", "conf": 0.936}}
+{"text": "Голова, говорю, болит.", "question": "", "v2": {"act": "correction", "conf": 0.326}, "v3": {"act": "complaint", "conf": 0.746}}
+{"text": "Продолжительное время.", "question": "", "v2": {"act": "greeting", "conf": 0.367}, "v3": {"act": "decline", "conf": 0.276}}
+{"text": "Не очень, на самом деле, настроение у меня.", "question": "", "v2": {"act": "answer", "conf": 0.319}, "v3": {"act": "decline", "conf": 0.515}}
+{"text": "Плохо спал. Ну так, хорошо. Спал хорошо.", "question": "", "v2": {"act": "answer", "conf": 0.571}, "v3": {"act": "complaint", "conf": 0.523}}
+{"text": "Планов нету на сегодня.", "question": "", "v2": {"act": "goodbye", "conf": 0.507}, "v3": {"act": "decline", "conf": 0.584}}
+{"text": "Привет. Чувствую себя плохо.", "question": "", "v2": {"act": "answer", "conf": 0.361}, "v3": {"act": "complaint", "conf": 0.455}}
+{"text": "Не знаю, честно, то ли голова болит, то ли живот болит. Вот не знаю. И то, и то как будто бы болит.", "question": "", "v2": {"act": "not_recalled", "conf": 0.572}, "v3": {"act": "complaint", "conf": 0.903}}
+{"text": "Стало лучше.", "question": "", "v2": {"act": "greeting", "conf": 0.396}, "v3": {"act": "decline", "conf": 0.278}}
+{"text": "Началось это ранее.", "question": "", "v2": {"act": "greeting", "conf": 0.369}, "v3": {"act": "decline", "conf": 0.266}}
+{"text": "Нет, нет, нет, нет, нет.", "question": "", "v2": {"act": "correction", "conf": 0.564}, "v3": {"act": "decline", "conf": 0.924}}
+{"text": "Ничего неважно. Всё, давай пока.", "question": "", "v2": {"act": "goodbye", "conf": 0.9}, "v3": {"act": "decline", "conf": 0.592}}
+{"text": "Чувствую себя хорошо.", "question": "", "v2": {"act": "answer", "conf": 0.38}, "v3": {"act": "decline", "conf": 0.275}}
+{"text": "Хорошо, спал.", "question": "", "v2": {"act": "greeting", "conf": 0.471}, "v3": {"act": "decline", "conf": 0.353}}
+{"text": "Ну, более-менее, так, нормально.", "question": "", "v2": {"act": "goodbye", "conf": 0.328}, "v3": {"act": "decline", "conf": 0.711}}
+{"text": "Привет! Чувствую себя хорошо. Только что покушала.", "question": "", "v2": {"act": "answer", "conf": 0.57}, "v3": {"act": "decline", "conf": 0.509}}
+{"text": "Нет, умираю.", "question": "", "v2": {"act": "goodbye", "conf": 0.504}, "v3": {"act": "decline", "conf": 0.519}}
+{"text": "Сейчас, я же говорю, я сейчас умру, я задыхаюсь уже.", "question": "", "v2": {"act": "correction", "conf": 0.257}, "v3": {"act": "decline", "conf": 0.586}}
+{"text": "Сейчас я умираю, блядь.", "question": "", "v2": {"act": "goodbye", "conf": 0.357}, "v3": {"act": "decline", "conf": 0.317}}
+{"text": "Ой, всё, давай пока. Надоело мне, не беспокой меня, я занята.", "question": "", "v2": {"act": "goodbye", "conf": 0.602}, "v3": {"act": "decline", "conf": 0.744}}
+{"text": "Хорошо. Ой, блядь.", "question": "", "v2": {"act": "goodbye", "conf": 0.487}, "v3": {"act": "decline", "conf": 0.563}}
+{"text": "Всё в порядке. Только что покушала.", "question": "", "v2": {"act": "answer", "conf": 0.503}, "v3": {"act": "decline", "conf": 0.8}}
+{"text": "Почему ты не слышишь?", "question": "", "v2": {"act": "greeting", "conf": 0.229}, "v3": {"act": "decline", "conf": 0.412}}
+{"text": "Успел, успел я.", "question": "", "v2": {"act": "goodbye", "conf": 0.404}, "v3": {"act": "decline", "conf": 0.444}}
+{"text": "Да-да-да, есть, есть.", "question": "", "v2": {"act": "greeting", "conf": 0.412}, "v3": {"act": "decline", "conf": 0.437}}
+{"text": "Да-да, спалось всё хорошо.", "question": "", "v2": {"act": "goodbye", "conf": 0.355}, "v3": {"act": "decline", "conf": 0.346}}
+{"text": "Нет, лекарства не принимаю.", "question": "", "v2": {"act": "goodbye", "conf": 0.317}, "v3": {"act": "decline", "conf": 0.801}}
+{"text": "Будто, чтобы родственники позвонили и вызвали скорую.", "question": "", "v2": {"act": "answer", "conf": 0.27}, "v3": {"act": "decline", "conf": 0.726}}
+{"text": "Чувствую себя как-то не очень.", "question": "", "v2": {"act": "answer", "conf": 0.414}, "v3": {"act": "complaint", "conf": 0.854}}
+{"text": "Не знаю, началось это где-то вчера, наверное. Просто колхозище нахуй. Иди на хуй. Вот туда же тебя тогда.", "question": "", "v2": {"act": "not_recalled", "conf": 0.291}, "v3": {"act": "decline", "conf": 0.587}}
+{"text": "Не беспокой меня ещё.", "question": "", "v2": {"act": "goodbye", "conf": 0.621}, "v3": {"act": "decline", "conf": 0.639}}
+{"text": "Начал зук болит у меня.", "question": "", "v2": {"act": "greeting", "conf": 0.439}, "v3": {"act": "decline", "conf": 0.461}}
+{"text": "Почему она говорит Даниил? Откуда?", "question": "", "v2": {"act": "answer", "conf": 0.284}, "v3": {"act": "decline", "conf": 0.305}}
+{"text": "Проснулся в четыре, потом долго не мог заснуть, а ещё утром живот немного побаливал.", "question": "", "v2": {"act": "answer", "conf": 0.491}, "v3": {"act": "complaint", "conf": 0.904}}
+{"text": "Настроение хорошее сегодня. Чувствую себя великолепно. Но вот это вот, то, что живот болит, не очень, конечно.", "question": "", "v2": {"act": "correction", "conf": 0.359}, "v3": {"act": "complaint", "conf": 0.932}}
+{"text": "Спал в целом нормально.", "question": "", "v2": {"act": "greeting", "conf": 0.465}, "v3": {"act": "decline", "conf": 0.447}}
+{"text": "Сегодня планов нету. Отдыхаю.", "question": "", "v2": {"act": "answer", "conf": 0.434}, "v3": {"act": "decline", "conf": 0.581}}
+{"text": "Нет, отстань.", "question": "", "v2": {"act": "goodbye", "conf": 0.471}, "v3": {"act": "decline", "conf": 0.39}}
+{"text": "Нет, нет.", "question": "", "v2": {"act": "greeting", "conf": 0.459}, "v3": {"act": "decline", "conf": 0.683}}
+{"text": "Привет. Чувствую себя великолепно хорошо.", "question": "", "v2": {"act": "answer", "conf": 0.376}, "v3": {"act": "complaint", "conf": 0.38}}
+{"text": "Да-да-да, конечно. Перловку поела.", "question": "", "v2": {"act": "greeting", "conf": 0.373}, "v3": {"act": "decline", "conf": 0.682}}
+{"text": "Нет, всё хорошо.", "question": "", "v2": {"act": "goodbye", "conf": 0.555}, "v3": {"act": "decline", "conf": 0.713}}
+{"text": "Нет, ничего не надо. Всё хорошо.", "question": "", "v2": {"act": "goodbye", "conf": 0.522}, "v3": {"act": "decline", "conf": 0.911}}
+{"text": "Вроде нормально себя чувствую, хотя ночью почти не спал, просыпался несколько раз. Утром голова немного болела, сейчас уже вроде прошла.", "question": "", "v2": {"act": "correction", "conf": 0.602}, "v3": {"act": "complaint", "conf": 0.867}}
+{"text": "Есть удалось? Попить нет, хотя утром вроде бы пил.", "question": "", "v2": {"act": "correction", "conf": 0.512}, "v3": {"act": "decline", "conf": 0.854}}
+{"text": "Таблетки у меня какие-то есть, но я не помню, пил сегодня или нет. Хотя может и пил утром, не уверен.", "question": "", "v2": {"act": "not_recalled", "conf": 0.396}, "v3": {"act": "complaint", "conf": 0.442}}
+{"text": "Живот немного побаливал после еды, но сейчас нормально. Ел сегодня мало, аппетита особого не было. Водик пил вроде нормально, слабость небольшая есть, но я сегодня выходил в магазин и ходить могу нормально.", "question": "", "v2": {"act": "correction", "conf": 0.609}, "v3": {"act": "complaint", "conf": 0.836}}
+{"text": "Ну, стало лучше, но настроение у меня какое-то обычное, обычное, хотя одному дома скучновато. А что вы спрашивали про лекарства?", "question": "", "v2": {"act": "correction", "conf": 0.433}, "v3": {"act": "complaint", "conf": 0.659}}
+{"text": "Раньше, а что ты спрашивал меня про лекарства?", "question": "", "v2": {"act": "stop", "conf": 0.174}, "v3": {"act": "decline", "conf": 0.66}}
+{"text": "Сердце болит с самого утра.", "question": "", "v2": {"act": "answer", "conf": 0.381}, "v3": {"act": "complaint", "conf": 0.841}}
+{"text": "А-а, плохо болело сердце. Я же говорил же.", "question": "", "v2": {"act": "correction", "conf": 0.405}, "v3": {"act": "complaint", "conf": 0.485}}
+{"text": "Чувствую себя хорошо. Я проснулся и начал свой день с этой мысли, почему я снова один? Проснулся один этой ночью. Ты знаешь, я как этот демон, я непобедим. Мне нравятся пирсинги, но её пуси, мне нравится, что для меня она не важны", "question": "", "v2": {"act": "correction", "conf": 0.269}, "v3": {"act": "complaint", "conf": 0.627}}
+{"text": "Чувствую себя хорошо, покушала сегодня. Пойду сейчас гулять с девочками.", "question": "", "v2": {"act": "answer", "conf": 0.533}, "v3": {"act": "decline", "conf": 0.671}}
+{"text": "Плохо себя чувствую.", "question": "", "v2": {"act": "answer", "conf": 0.504}, "v3": {"act": "complaint", "conf": 0.632}}
+{"text": "Лечу себя непонятно.", "question": "", "v2": {"act": "greeting", "conf": 0.527}, "v3": {"act": "decline", "conf": 0.332}}
+{"text": "Меня беспокоит многое.", "question": "", "v2": {"act": "greeting", "conf": 0.42}, "v3": {"act": "decline", "conf": 0.316}}
+{"text": "Говорю, что началось.", "question": "", "v2": {"act": "goodbye", "conf": 0.467}, "v3": {"act": "decline", "conf": 0.443}}
+{"text": "Хватить мане надо на диалог с тобой, блядь.", "question": "", "v2": {"act": "stop", "conf": 0.586}, "v3": {"act": "decline", "conf": 0.575}}
+{"text": "О, да, всё нормально.", "question": "", "v2": {"act": "goodbye", "conf": 0.499}, "v3": {"act": "decline", "conf": 0.646}}
+{"text": "Она поела.", "question": "", "v2": {"act": "greeting", "conf": 0.502}, "v3": {"act": "decline", "conf": 0.384}}
+{"text": "Да вроде нормально всё.", "question": "", "v2": {"act": "goodbye", "conf": 0.457}, "v3": {"act": "decline", "conf": 0.693}}
+{"text": "Я чувствую себя плохо.", "question": "", "v2": {"act": "answer", "conf": 0.296}, "v3": {"act": "complaint", "conf": 0.405}}
+{"text": "А сидеть дома, ничего не делать.", "question": "", "v2": {"act": "goodbye", "conf": 0.287}, "v3": {"act": "decline", "conf": 0.828}}
+{"text": "А нет, это пимба-бомба.", "question": "", "v2": {"act": "greeting", "conf": 0.46}, "v3": {"act": "decline", "conf": 0.679}}
+{"text": "Привет. Чувствую себя, ну, более-менее сегодня.", "question": "", "v2": {"act": "answer", "conf": 0.446}, "v3": {"act": "complaint", "conf": 0.426}}
+{"text": "И ничего вроде не беспокоит.", "question": "", "v2": {"act": "goodbye", "conf": 0.5}, "v3": {"act": "decline", "conf": 0.85}}
+{"text": "Ничего не болит, всё хорошо.", "question": "", "v2": {"act": "goodbye", "conf": 0.347}, "v3": {"act": "decline", "conf": 0.581}}
+{"text": "Ой, не могу даже сказать, что меня беспокоит. Но вот сердце покалывает, головная боль очень сильная, как будто вот, ну вот все кости ломит.", "question": "", "v2": {"act": "correction", "conf": 0.681}, "v3": {"act": "complaint", "conf": 0.974}}
+{"text": "Всё хорошо, только что покушала.", "question": "", "v2": {"act": "answer", "conf": 0.368}, "v3": {"act": "decline", "conf": 0.854}}
+{"text": "Не очень, голова болит.", "question": "", "v2": {"act": "greeting", "conf": 0.302}, "v3": {"act": "complaint", "conf": 0.762}}
+{"text": "Нет, боль, ну, терпимая.", "question": "", "v2": {"act": "correction", "conf": 0.497}, "v3": {"act": "decline", "conf": 0.628}}
+{"text": "Нет, всё хорошо. Только голова болит вот.", "question": "", "v2": {"act": "correction", "conf": 0.46}, "v3": {"act": "complaint", "conf": 0.696}}
+{"text": "Ой, непонятно, то ли хорошо себя чувствует, то ли плохо.", "question": "", "v2": {"act": "correction", "conf": 0.544}, "v3": {"act": "complaint", "conf": 0.562}}
+{"text": "Давно началось уже дня три.", "question": "", "v2": {"act": "greeting", "conf": 0.371}, "v3": {"act": "decline", "conf": 0.476}}
+{"text": "Голова болит уже давно.", "question": "", "v2": {"act": "greeting", "conf": 0.313}, "v3": {"act": "complaint", "conf": 0.815}}
+{"text": "Есть, но не выпил. Не хочу пить таблетки.", "question": "", "v2": {"act": "answer", "conf": 0.272}, "v3": {"act": "decline", "conf": 0.818}}
+{"text": "У меня болит сердце, я сейчас умру.", "question": "", "v2": {"act": "answer", "conf": 0.312}, "v3": {"act": "complaint", "conf": 0.758}}
+{"text": "Ой, привет. Не знаю. Самочувствие такое непонятное.", "question": "", "v2": {"act": "answer", "conf": 0.192}, "v3": {"act": "complaint", "conf": 0.537}}
+{"text": "Ой, не знаю. Ну вот-вот просто плохо мне.", "question": "", "v2": {"act": "correction", "conf": 0.524}, "v3": {"act": "decline", "conf": 0.68}}
+{"text": "Не знаю, вот фильм посмотрел и сразу плохо стало мне.", "question": "", "v2": {"act": "correction", "conf": 0.27}, "v3": {"act": "decline", "conf": 0.506}}
+{"text": "Оль, ну терпимая.", "question": "", "v2": {"act": "greeting", "conf": 0.382}, "v3": {"act": "decline", "conf": 0.446}}
+{"text": "А, ну, в течение часа, наверное.", "question": "", "v2": {"act": "greeting", "conf": 0.269}, "v3": {"act": "decline", "conf": 0.679}}
+{"text": "Ну, из-за того, что голова болит, плохое настроение.", "question": "", "v2": {"act": "correction", "conf": 0.315}, "v3": {"act": "complaint", "conf": 0.862}}
+{"text": "Пойдёт, нормально.", "question": "", "v2": {"act": "goodbye", "conf": 0.536}, "v3": {"act": "decline", "conf": 0.577}}
+{"text": "Планов никаких нету.", "question": "", "v2": {"act": "goodbye", "conf": 0.431}, "v3": {"act": "decline", "conf": 0.577}}
+{"text": "Сходить в магазин.", "question": "", "v2": {"act": "greeting", "conf": 0.367}, "v3": {"act": "decline", "conf": 0.616}}
+{"text": "Не знаю, как я себя чувствую. Да вроде пойдёт.", "question": "", "v2": {"act": "correction", "conf": 0.215}, "v3": {"act": "complaint", "conf": 0.462}}
+{"text": "Ни на что вроде не жалуюсь, всё хорошо.", "question": "", "v2": {"act": "answer", "conf": 0.402}, "v3": {"act": "decline", "conf": 0.839}}
+{"text": "Нормально, нормально, покушала вот.", "question": "", "v2": {"act": "answer", "conf": 0.369}, "v3": {"act": "decline", "conf": 0.768}}
+{"text": "Да нету, нет! Какие нахуй лекарства? Нету!", "question": "", "v2": {"act": "goodbye", "conf": 0.231}, "v3": {"act": "decline", "conf": 0.835}}
+{"text": "Да нет, всё пойдёт, всё пойдёт. Всё пучком.", "question": "", "v2": {"act": "goodbye", "conf": 0.345}, "v3": {"act": "decline", "conf": 0.795}}
+{"text": "Великолепно спала. О, Сталина видела! Сталина во сне видела. Приходил ко мне руку тянул.", "question": "", "v2": {"act": "correction", "conf": 0.359}, "v3": {"act": "complaint", "conf": 0.639}}
+{"text": "Какой были нет? Ты чего? Я же сказал, что всё хорошо.", "question": "", "v2": {"act": "answer", "conf": 0.205}, "v3": {"act": "decline", "conf": 0.862}}
+{"text": "Нет, нету.", "question": "", "v2": {"act": "greeting", "conf": 0.472}, "v3": {"act": "decline", "conf": 0.586}}
+{"text": "Нет, ничего неважно, всё нормально.", "question": "", "v2": {"act": "goodbye", "conf": 0.5}, "v3": {"act": "decline", "conf": 0.906}}
+{"text": "Живот болит после того, как покушал.", "question": "", "v2": {"act": "answer", "conf": 0.238}, "v3": {"act": "complaint", "conf": 0.645}}
+{"text": "Колю покушал когда?", "question": "", "v2": {"act": "greeting", "conf": 0.346}, "v3": {"act": "decline", "conf": 0.482}}
+{"text": "Ой, привет. Чувствую себя плохо или хорошо? Вот не знаю, то ли голова болит, то ли жопа болит. Вот не знаю, что именно болит.", "question": "", "v2": {"act": "correction", "conf": 0.354}, "v3": {"act": "complaint", "conf": 0.949}}
+{"text": "Я же говорю, не знаю, вчера, наверное, что-то из-за магнитной бури.", "question": "", "v2": {"act": "correction", "conf": 0.402}, "v3": {"act": "decline", "conf": 0.686}}
+{"text": "А уже прошла.", "question": "", "v2": {"act": "greeting", "conf": 0.609}, "v3": {"act": "decline", "conf": 0.382}}
+{"text": "Боль отсутствует. Голова, говорю, прошла.", "question": "", "v2": {"act": "correction", "conf": 0.377}, "v3": {"act": "complaint", "conf": 0.744}}
+{"text": "Да, от давления принимаю.", "question": "", "v2": {"act": "greeting", "conf": 0.491}, "v3": {"act": "decline", "conf": 0.64}}
+{"text": "Нет, всё хорошо, с подружками гулять пойду.", "question": "", "v2": {"act": "goodbye", "conf": 0.408}, "v3": {"act": "decline", "conf": 0.915}}
+{"text": "Начала болеть сегодня, но в данный момент уже она прошла.", "question": "", "v2": {"act": "answer", "conf": 0.253}, "v3": {"act": "decline", "conf": 0.808}}
+{"text": "Могу справиться самостоятельно, конечно.", "question": "", "v2": {"act": "goodbye", "conf": 0.318}, "v3": {"act": "decline", "conf": 0.706}}
+{"text": "Нет, всё, больше ничего нет. Так всё хорошо у меня.", "question": "", "v2": {"act": "goodbye", "conf": 0.497}, "v3": {"act": "decline", "conf": 0.862}}
+{"text": "Не знаю, не могу сказать.", "question": "", "v2": {"act": "not_recalled", "conf": 0.721}, "v3": {"act": "decline", "conf": 0.507}}
+{"text": "Наверное, среднее что-то.", "question": "", "v2": {"act": "greeting", "conf": 0.403}, "v3": {"act": "decline", "conf": 0.546}}
+{"text": "Да, сижу дома, кушаю, вот, хорошо себя вроде чувствую, всё нормально.", "question": "", "v2": {"act": "correction", "conf": 0.388}, "v3": {"act": "decline", "conf": 0.735}}
+{"text": "Хорошо, настроение нормальное, всё хорошо.", "question": "", "v2": {"act": "answer", "conf": 0.389}, "v3": {"act": "decline", "conf": 0.651}}
+{"text": "Дома посижу.", "question": "", "v2": {"act": "greeting", "conf": 0.491}, "v3": {"act": "decline", "conf": 0.571}}
+{"text": "Привет. Всё хорошо, только что покушала.", "question": "", "v2": {"act": "answer", "conf": 0.397}, "v3": {"act": "decline", "conf": 0.816}}
+{"text": "Нет, лекарства обычно не принимаю.", "question": "", "v2": {"act": "greeting", "conf": 0.274}, "v3": {"act": "decline", "conf": 0.839}}
+{"text": "Да вроде бы и нормально чувствую, и в то же время плохо себя чувствую, что тут непонятное какое-то состояние.", "question": "", "v2": {"act": "correction", "conf": 0.416}, "v3": {"act": "complaint", "conf": 0.591}}
+{"text": "Да вроде бы поел.", "question": "", "v2": {"act": "greeting", "conf": 0.44}, "v3": {"act": "decline", "conf": 0.835}}
+{"text": "Нет, лекарств никаких не надо принимать мне.", "question": "", "v2": {"act": "goodbye", "conf": 0.284}, "v3": {"act": "decline", "conf": 0.895}}
+{"text": "Я же говорю, чё-то и хорошо, и плохо мне.", "question": "", "v2": {"act": "correction", "conf": 0.262}, "v3": {"act": "decline", "conf": 0.725}}
+{"text": "Нет, наверное, говорю.", "question": "", "v2": {"act": "greeting", "conf": 0.325}, "v3": {"act": "decline", "conf": 0.78}}
+{"text": "Ой, привет. Не знаю, как я себя чувствую.", "question": "", "v2": {"act": "goodbye", "conf": 0.223}, "v3": {"act": "complaint", "conf": 0.549}}
+{"text": "Чувствую себя плохо, головная боль и тошнотное состояние у меня сейчас. Не, это хуйня, ты сразу всё спросил.", "question": "", "v2": {"act": "correction", "conf": 0.394}, "v3": {"act": "complaint", "conf": 0.906}}
+{"text": "Головная боль начала болеть с 6:00 утра до 8 вечера.", "question": "", "v2": {"act": "answer", "conf": 0.6}, "v3": {"act": "complaint", "conf": 0.614}}
+{"text": "Боль была достаточно сильной, но она прошла.", "question": "", "v2": {"act": "answer", "conf": 0.354}, "v3": {"act": "decline", "conf": 0.535}}
+{"text": "Таблетку забыла выпить от сосудов.", "question": "", "v2": {"act": "greeting", "conf": 0.248}, "v3": {"act": "decline", "conf": 0.69}}
+{"text": "Таблетку было выпить от давления.", "question": "", "v2": {"act": "answer", "conf": 0.309}, "v3": {"act": "decline", "conf": 0.508}}
+{"text": "С 10:00 утра, наверное, где-то так.", "question": "", "v2": {"act": "answer", "conf": 0.492}, "v3": {"act": "decline", "conf": 0.399}}
+{"text": "Разде говорил живот.", "question": "", "v2": {"act": "greeting", "conf": 0.526}, "v3": {"act": "decline", "conf": 0.43}}
+{"text": "Я говорю: «А я живот говорил, что у меня болит».", "question": "", "v2": {"act": "correction", "conf": 0.531}, "v3": {"act": "decline", "conf": 0.426}}
+{"text": "Началось это буквально 3 ч назад.", "question": "", "v2": {"act": "answer", "conf": 0.449}, "v3": {"act": "decline", "conf": 0.486}}
+{"text": "Ничего вроде не беспокоит.", "question": "", "v2": {"act": "goodbye", "conf": 0.401}, "v3": {"act": "decline", "conf": 0.755}}
+{"text": "Нормально поел.", "question": "", "v2": {"act": "answer", "conf": 0.479}, "v3": {"act": "decline", "conf": 0.403}}
+{"text": "Ой, привет. Всё хорошо, вот только что поела.", "question": "", "v2": {"act": "goodbye", "conf": 0.254}, "v3": {"act": "decline", "conf": 0.846}}
+{"text": "Всё отвратительно, Вера.", "question": "", "v2": {"act": "goodbye", "conf": 0.381}, "v3": {"act": "decline", "conf": 0.475}}
+{"text": "Уже давно тошнит.", "question": "", "v2": {"act": "greeting", "conf": 0.472}, "v3": {"act": "complaint", "conf": 0.854}}
+{"text": "Давно, давно тошнит.", "question": "", "v2": {"act": "greeting", "conf": 0.446}, "v3": {"act": "complaint", "conf": 0.819}}
+{"text": "Боль достаточно терпимая.", "question": "", "v2": {"act": "greeting", "conf": 0.316}, "v3": {"act": "decline", "conf": 0.391}}
+{"text": "Боль терпимая, Вера.", "question": "", "v2": {"act": "greeting", "conf": 0.448}, "v3": {"act": "decline", "conf": 0.439}}
+{"text": "Тут по факту и есть мой сервис.", "question": "", "v2": {"act": "goodbye", "conf": 0.324}, "v3": {"act": "decline", "conf": 0.655}}
+{"text": "Не понимаю просто, чего она так долго отвечает.", "question": "", "v2": {"act": "not_recalled", "conf": 0.325}, "v3": {"act": "decline", "conf": 0.537}}
+{"text": "Ой, не знаю, сердце болит и давление.", "question": "", "v2": {"act": "correction", "conf": 0.385}, "v3": {"act": "complaint", "conf": 0.78}}
+{"text": "Ой, моя сегодня в 12:00 началось.", "question": "", "v2": {"act": "greeting", "conf": 0.339}, "v3": {"act": "decline", "conf": 0.601}}
+{"text": "Как будто бы чтобы родственникам позвонили и вызвали мне срочно скорую помощь.", "question": "", "v2": {"act": "stop", "conf": 0.229}, "v3": {"act": "decline", "conf": 0.651}}
+{"text": "Ну, терпимая.", "question": "", "v2": {"act": "greeting", "conf": 0.459}, "v3": {"act": "decline", "conf": 0.36}}
+{"text": "Забыл. Забыл.", "question": "", "v2": {"act": "goodbye", "conf": 0.256}, "v3": {"act": "decline", "conf": 0.267}}
+{"text": "Я чувствую себя хорошо, вот только что покушала.", "question": "", "v2": {"act": "answer", "conf": 0.431}, "v3": {"act": "decline", "conf": 0.668}}
+{"text": "Блядь! Как сделать этот вонючий, блядь, Telegram?", "question": "", "v2": {"act": "stop", "conf": 0.216}, "v3": {"act": "decline", "conf": 0.396}}
+{"text": "Нет, плохо.", "question": "", "v2": {"act": "greeting", "conf": 0.512}, "v3": {"act": "decline", "conf": 0.505}}
+{"text": "Да, чувствую себя хорошо.", "question": "", "v2": {"act": "goodbye", "conf": 0.272}, "v3": {"act": "decline", "conf": 0.464}}
+{"text": "Боль терпимая.", "question": "", "v2": {"act": "greeting", "conf": 0.51}, "v3": {"act": "decline", "conf": 0.298}}
+{"text": "Нет, всё хорошо, только голова болит, вот.", "question": "", "v2": {"act": "correction", "conf": 0.663}, "v3": {"act": "complaint", "conf": 0.63}}
+{"text": "Началось, когда покушал.", "question": "", "v2": {"act": "greeting", "conf": 0.451}, "v3": {"act": "decline", "conf": 0.603}}
+{"text": "Смотри, а-а помимо головной боли, что я тебе ещё сказал, что у меня болит?", "question": "", "v2": {"act": "correction", "conf": 0.288}, "v3": {"act": "complaint", "conf": 0.432}}
+{"text": "Я тебе говорю, что если ещё скажешь, что у меня болит?", "question": "", "v2": {"act": "correction", "conf": 0.195}, "v3": {"act": "decline", "conf": 0.449}}
+{"text": "Настроение вроде бы тоже нормальное.", "question": "", "v2": {"act": "answer", "conf": 0.496}, "v3": {"act": "decline", "conf": 0.64}}
+{"text": "Всё, что ли?", "question": "", "v2": {"act": "goodbye", "conf": 0.511}, "v3": {"act": "decline", "conf": 0.569}}
+{"text": "Ой, не знаю, ну вроде нормально пойдёт.", "question": "", "v2": {"act": "correction", "conf": 0.297}, "v3": {"act": "decline", "conf": 0.898}}
+{"text": "Нет, говорю, всё нормально, всё хорошо.", "question": "", "v2": {"act": "goodbye", "conf": 0.436}, "v3": {"act": "decline", "conf": 0.882}}
+{"text": "Ну, конечно, покушала, покушала, вкусно поела, покушала, кофе попила и булочку круассан съела.", "question": "", "v2": {"act": "answer", "conf": 0.32}, "v3": {"act": "decline", "conf": 0.804}}
+{"text": "Нет, нет, всё, ничего не надо было принимать.", "question": "", "v2": {"act": "goodbye", "conf": 0.345}, "v3": {"act": "decline", "conf": 0.958}}
+{"text": "О, настроение сегодня сказочное, великолепное, я б сказала.", "question": "", "v2": {"act": "answer", "conf": 0.297}, "v3": {"act": "decline", "conf": 0.58}}
+{"text": "О, великолепно спалось, великолепно.", "question": "", "v2": {"act": "answer", "conf": 0.271}, "v3": {"act": "complaint", "conf": 0.279}}
+{"text": "Нет, всё хорошо дальше.", "question": "", "v2": {"act": "goodbye", "conf": 0.591}, "v3": {"act": "decline", "conf": 0.767}}
+{"text": "Как будто бы мне нужно, чтобы родственники позвонили и вызвали скорую.", "question": "", "v2": {"act": "answer", "conf": 0.247}, "v3": {"act": "decline", "conf": 0.598}}
+{"text": "Вот когда утром макароны поел.", "question": "", "v2": {"act": "greeting", "conf": 0.52}, "v3": {"act": "decline", "conf": 0.617}}
+{"text": "Болит чуток.", "question": "", "v2": {"act": "greeting", "conf": 0.371}, "v3": {"act": "decline", "conf": 0.336}}
+{"text": "Ну блядь, всё равно типа", "question": "", "v2": {"act": "goodbye", "conf": 0.445}, "v3": {"act": "decline", "conf": 0.637}}
+{"text": "Чувствуй себя плохо, отвратительно, вообще плохо ощущай себя.", "question": "", "v2": {"act": "answer", "conf": 0.328}, "v3": {"act": "complaint", "conf": 0.622}}
+{"text": "Нормально пойдёт.", "question": "", "v2": {"act": "greeting", "conf": 0.328}, "v3": {"act": "decline", "conf": 0.661}}
+{"text": "Планов нет на сегодня.", "question": "", "v2": {"act": "goodbye", "conf": 0.46}, "v3": {"act": "decline", "conf": 0.62}}
+{"text": "Непонятно.", "question": "", "v2": {"act": "goodbye", "conf": 0.446}, "v3": {"act": "decline", "conf": 0.495}}
+{"text": "Это не назначено.", "question": "", "v2": {"act": "goodbye", "conf": 0.58}, "v3": {"act": "decline", "conf": 0.521}}
+{"text": "Голова кружится.", "question": "", "v2": {"act": "greeting", "conf": 0.386}, "v3": {"act": "complaint", "conf": 0.601}}
+{"text": "Привет, не очень. Голова болит.", "question": "", "v2": {"act": "greeting", "conf": 0.266}, "v3": {"act": "complaint", "conf": 0.848}}
+{"text": "Нет, всё хорошо, только голова болит.", "question": "", "v2": {"act": "correction", "conf": 0.459}, "v3": {"act": "complaint", "conf": 0.623}}
+{"text": "Но ведь легче, лёд приложил и кремушком намазал. Вот лежу, отдыхаю с внуком пирожки кушаю.", "question": "", "v2": {"act": "complaint", "conf": 0.27}, "v3": {"act": "decline", "conf": 0.65}}
+{"text": "Это продолжается уже пятый час, твою мать!", "question": "", "v2": {"act": "goodbye", "conf": 0.23}, "v3": {"act": "decline", "conf": 0.547}}
+{"text": "Хуёвое у меня настроение, вера, хуёвое.", "question": "", "v2": {"act": "answer", "conf": 0.353}, "v3": {"act": "complaint", "conf": 0.602}}
+{"text": "Отвратительный верс Пал. Что за вопросы дурацкие?", "question": "", "v2": {"act": "stop", "conf": 0.234}, "v3": {"act": "complaint", "conf": 0.34}}
+{"text": "Пиво себя чувствую. Вера, умираю.", "question": "", "v2": {"act": "greeting", "conf": 0.251}, "v3": {"act": "complaint", "conf": 0.75}}
+{"text": "Я же говорил, что плохо спал.", "question": "", "v2": {"act": "answer", "conf": 0.31}, "v3": {"act": "decline", "conf": 0.498}}
+{"text": "Тебе чё?", "question": "", "v2": {"act": "goodbye", "conf": 0.459}, "v3": {"act": "decline", "conf": 0.339}}
+{"text": "Ой, чувствую себя очень плохо.", "question": "", "v2": {"act": "answer", "conf": 0.242}, "v3": {"act": "complaint", "conf": 0.642}}
+{"text": "О, привет, Вера. Чувствую себя хорошо сегодня.", "question": "", "v2": {"act": "greeting", "conf": 0.298}, "v3": {"act": "complaint", "conf": 0.407}}
+{"text": "Да, вкусно сегодня покушала.", "question": "", "v2": {"act": "greeting", "conf": 0.452}, "v3": {"act": "decline", "conf": 0.738}}
+{"text": "Нет, сегодня нету. Да ничего не надо принимать.", "question": "", "v2": {"act": "goodbye", "conf": 0.236}, "v3": {"act": "decline", "conf": 0.96}}
+{"text": "Нет, супер.", "question": "", "v2": {"act": "greeting", "conf": 0.554}, "v3": {"act": "decline", "conf": 0.393}}
+{"text": "Да, хорошо спал сегодня.", "question": "", "v2": {"act": "greeting", "conf": 0.378}, "v3": {"act": "decline", "conf": 0.435}}
+{"text": "Нет, ничего нету больше.", "question": "", "v2": {"act": "goodbye", "conf": 0.707}, "v3": {"act": "decline", "conf": 0.824}}
+{"text": "Я покушал и попил.", "question": "", "v2": {"act": "answer", "conf": 0.296}, "v3": {"act": "decline", "conf": 0.722}}
+{"text": "Нет, хорошо.", "question": "", "v2": {"act": "greeting", "conf": 0.433}, "v3": {"act": "decline", "conf": 0.518}}
+{"text": "Ой, не знаю, нормально вроде. Всё хорошо себя чувствую.", "question": "", "v2": {"act": "correction", "conf": 0.568}, "v3": {"act": "decline", "conf": 0.737}}
+{"text": "Конечно, успела, кашу поела, суп поела, вот сейчас перекусила бутербродиками с творогом и со сметаной.", "question": "", "v2": {"act": "answer", "conf": 0.294}, "v3": {"act": "decline", "conf": 0.699}}
+{"text": "Нет, нету лекарств. Всё, я всё пропила уже, все лекарства.", "question": "", "v2": {"act": "goodbye", "conf": 0.266}, "v3": {"act": "decline", "conf": 0.882}}
+{"text": "Настроение великолепное, Вера, великолепное настроение.", "question": "", "v2": {"act": "answer", "conf": 0.438}, "v3": {"act": "complaint", "conf": 0.369}}
+{"text": "Конечно, великолепно спала.", "question": "", "v2": {"act": "greeting", "conf": 0.361}, "v3": {"act": "decline", "conf": 0.364}}
+{"text": "Говорю: «Нет, ничего неважно, всё нормально. Всё хорошо».", "question": "", "v2": {"act": "correction", "conf": 0.428}, "v3": {"act": "decline", "conf": 0.845}}
+{"text": "Уже по-другому говорит. Чувствуй себя хорошо.", "question": "", "v2": {"act": "stop", "conf": 0.266}, "v3": {"act": "decline", "conf": 0.561}}
+{"text": "Нет, обращать внимания ни на что не нужно. Всё, спасибо большое, пока.", "question": "", "v2": {"act": "goodbye", "conf": 0.741}, "v3": {"act": "decline", "conf": 0.851}}
+{"text": "Никакой помощи не надо, — говорю. Всё хорошо. Пока, — говорю.", "question": "", "v2": {"act": "goodbye", "conf": 0.515}, "v3": {"act": "decline", "conf": 0.904}}
+{"text": "Привет! Чувствую себя хорошо, настроение хорошее?", "question": "", "v2": {"act": "answer", "conf": 0.615}, "v3": {"act": "complaint", "conf": 0.34}}
+{"text": "Да вроде бы нет, планов толком тоже нет никаких. Так вроде всё нормально.", "question": "", "v2": {"act": "correction", "conf": 0.609}, "v3": {"act": "decline", "conf": 0.942}}
+{"text": "Я ж сказал уже всё.", "question": "", "v2": {"act": "goodbye", "conf": 0.576}, "v3": {"act": "decline", "conf": 0.722}}
+{"text": "Йой-ой-ой. Чувствую себя отвратительно, прямо вообще не знаю даже, как описать.", "question": "", "v2": {"act": "correction", "conf": 0.294}, "v3": {"act": "complaint", "conf": 0.576}}
+{"text": "Ну, не знаю, Вера. Знаешь, вот такое состояние непонятное, то ли хорошо, то ли плохо.", "question": "", "v2": {"act": "correction", "conf": 0.439}, "v3": {"act": "complaint", "conf": 0.434}}
+{"text": "Продолжительное время уже продолжается такое, уже два дня, наверное.", "question": "", "v2": {"act": "answer", "conf": 0.446}, "v3": {"act": "decline", "conf": 0.436}}
+{"text": "Наверное, только это было.", "question": "", "v2": {"act": "greeting", "conf": 0.406}, "v3": {"act": "decline", "conf": 0.566}}
+{"text": "Я говорю: «Нет, наверное». Больше, наверное, ничего. Только это было.", "question": "", "v2": {"act": "correction", "conf": 0.548}, "v3": {"act": "decline", "conf": 0.872}}
+{"text": "Ой, умираю. Ой, плохо умираю.", "question": "", "v2": {"act": "goodbye", "conf": 0.264}, "v3": {"act": "complaint", "conf": 0.408}}
+{"text": "Ой, сердце колет сильно-больно, прямо больно, очень сильно.", "question": "", "v2": {"act": "correction", "conf": 0.349}, "v3": {"act": "complaint", "conf": 0.896}}
+{"text": "А-да-да, правильно, сердце колет.", "question": "", "v2": {"act": "greeting", "conf": 0.392}, "v3": {"act": "decline", "conf": 0.372}}
+{"text": "Покушала.", "question": "", "v2": {"act": "greeting", "conf": 0.727}, "v3": {"act": "decline", "conf": 0.441}}
+{"text": "Нет, вроде бы хорошо, только чуть-чуть горло как будто приболело.", "question": "", "v2": {"act": "correction", "conf": 0.539}, "v3": {"act": "complaint", "conf": 0.814}}
+{"text": "Да, удалось.", "question": "", "v2": {"act": "goodbye", "conf": 0.446}, "v3": {"act": "greeting", "conf": 0.401}}
+{"text": "Горло болит, тяжело кушать тяжёлый дуб. Может, супчик себе сваргать.", "question": "", "v2": {"act": "correction", "conf": 0.434}, "v3": {"act": "complaint", "conf": 0.61}}
+{"text": "Да нормально, горло пополоскаю, да спать потом лягу в обед. Потом вечером проснусь, э-э ребёнка с садика заберу, домой приду.", "question": "", "v2": {"act": "correction", "conf": 0.407}, "v3": {"act": "decline", "conf": 0.809}}
+{"text": "Хорошо чувствую себя.", "question": "", "v2": {"act": "goodbye", "conf": 0.34}, "v3": {"act": "decline", "conf": 0.328}}
+{"text": "Покушал и попил.", "question": "", "v2": {"act": "greeting", "conf": 0.369}, "v3": {"act": "decline", "conf": 0.695}}
+{"text": "Ну, кое-что есть. Сегодня весь день закрутился и вообще не помню, что там было утром.", "question": "", "v2": {"act": "not_recalled", "conf": 0.343}, "v3": {"act": "complaint", "conf": 0.498}}
+{"text": "Ничего не тревожит.", "question": "", "v2": {"act": "goodbye", "conf": 0.427}, "v3": {"act": "decline", "conf": 0.609}}
+{"text": "Да, нормально спал.", "question": "", "v2": {"act": "greeting", "conf": 0.451}, "v3": {"act": "decline", "conf": 0.426}}
+{"text": "Ну вот я проснулся где-то в 6:00 утра, потому что мне нужно было выпить чай крепкий. А и потом вот после этого чё-то голова заболела.", "question": "", "v2": {"act": "answer", "conf": 0.538}, "v3": {"act": "complaint", "conf": 0.75}}
