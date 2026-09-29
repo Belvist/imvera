@@ -2871,13 +2871,30 @@ def _close_partial(state: EngineState) -> tuple[EngineState, list[Effect]]:
     state.closing_reason = "partial_unresolved"
     state.fsm_state = FsmState.FINAL_CLASSIFICATION
     state.bump_revision()
+    if _has_learned_facts(state):
+        text = questions._PARTIAL_CLOSE_WITH_FACTS
+    else:
+        text = questions._PARTIAL_CLOSE
     return _emit_speak(
         state,
-        text=questions._PARTIAL_CLOSE,
+        text=text,
         intent="partial_unresolved_close",
         slot=None,
         marks_question=False,
     )
+
+
+def _has_learned_facts(state: EngineState) -> bool:
+    """Any grounded user content on record: filled slots with values or
+    issue episodes. Decides the honest partial-close wording (fs-0f94e538
+    said «не получилось» after three positive answers)."""
+    for slot, status in (getattr(state, "slots", {}) or {}).items():
+        if str(getattr(status, "value", status)) == "FILLED":
+            values = getattr(state, "slot_values", {}) or {}
+            if str(values.get(slot, "")).strip():
+                return True
+    episodes = getattr(state, "issue_episodes", {}) or {}
+    return bool(episodes)
 
 
 def _on_delivery_deferred(

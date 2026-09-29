@@ -836,3 +836,26 @@ def test_delivered_goal_does_not_steal_other_slot_answer() -> None:
     result = p.understand(_req("Дома посижу.", mission, "sleep"))
     by_id = {a.goal_id: a for a in result.goal_answers}
     assert "sleep" not in by_id, by_id
+
+
+def test_delivered_background_goal_rejects_pain_content() -> None:
+    """Live fs-819ddb39: «Голова болит.» answering a mood probe filled
+    mood="Голова болит." in the family report. Pain belongs to the issue
+    path, never to mood/sleep/plans goals — even when no other slot
+    claims the text. Sleep-shaped mentions (sleep_problem) still pass."""
+    mission = _daily_mission()
+    p = DeterministicMissionUnderstandingProvider()
+    for text, delivered in (
+        ("Голова болит.", "mood"),
+        ("Голова болит.", "sleep"),
+        ("Спина ноет.", "plans"),
+        ("Зуб болит.", "mood"),
+    ):
+        result = p.understand(_req(text, mission, delivered))
+        by_id = {a.goal_id: a for a in result.goal_answers}
+        assert delivered not in by_id, (text, delivered, by_id)
+    # Sleep complaints keep working; mixed content keeps working.
+    result = p.understand(_req("Плохо спала.", mission, "sleep"))
+    assert "sleep" in {a.goal_id for a in result.goal_answers}
+    result = p.understand(_req("Голова болит, настроение плохое.", mission, "mood"))
+    assert "mood" in {a.goal_id for a in result.goal_answers}

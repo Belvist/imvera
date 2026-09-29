@@ -976,6 +976,7 @@ class DeterministicMissionUnderstandingProvider:
                 try:
                     from packages.dialogue_engine.issue_mention_extract import (
                         extract_goal_facts as _facts_for,
+                        extract_issue_mentions as _mentions_for,
                     )
 
                     _fields = {
@@ -992,6 +993,15 @@ class DeterministicMissionUnderstandingProvider:
                         )
                     }
                     if gdef.goal_id not in _fields and _fields:
+                        return None
+                    # Pain is never a mood/sleep/plans answer, even when no
+                    # other slot claims the text («Голова болит.» to a mood
+                    # probe belongs to the issue path, never to mood — live
+                    # fs-819ddb39 wrote mood="Голова болит."). Sleep-shaped
+                    # mentions (sleep_problem kind) are NOT pain and pass.
+                    if gdef.goal_id not in _fields and any(
+                        m.kind == "symptom" for m in _mentions_for(stripped)
+                    ):
                         return None
                 except Exception:  # noqa: BLE001 — fail open to old behavior
                     pass

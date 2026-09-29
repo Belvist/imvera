@@ -211,6 +211,10 @@ _WELLNESS_ACK_TAILS: dict[str, list[str]] = {
 
 _REPAIR_ACK = "Да, слышу."
 _PARTIAL_CLOSE = "Сейчас не получилось узнать, как у вас дела. До свидания."
+# Partial close when facts WERE learned: claiming «не получилось» would be
+# a lie the elder hears (live: three positive answers followed by «не
+# получилось»). Same hangup semantics, honest wording.
+_PARTIAL_CLOSE_WITH_FACTS = "Спасибо, всё записала. До свидания."
 _WRONG_PERSON_FINAL = "Извините, видимо, ошибились номером. До свидания."
 _DEFER_FINAL = "Поняла. Поговорим в другой раз. До свидания."
 _REVOKE_FINAL = "Поняла, больше не буду звонить без вашего согласия. До свидания."
