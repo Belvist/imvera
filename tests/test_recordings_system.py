@@ -95,3 +95,25 @@ def test_hook_never_raises(isolated_dirs) -> None:
             raise RuntimeError("boom")
 
     assert rec.note_call_finalized(Broken()) is False
+
+
+def test_hook_records_real_session(isolated_dirs) -> None:
+    from packages.core.memory_store import InMemoryCallRecordStore
+    from packages.dialogue.session import CallSession
+
+    session = CallSession(
+        call_id="fs-hook",
+        family_id="f",
+        elder_display_name="Тамара Юрьевна",
+        store=InMemoryCallRecordStore(),
+    )
+    opening = session.start()
+    session.state.mandatory_checks.update(identity=True, consent=True, can_talk=True)
+    session.state.greeted = True
+    session.mark_spoken_action(opening.proposal.generation_id)
+    session.handle_user_text("Пока.")
+    assert rec.note_call_finalized(session) is True
+    rows = rec.read_catalog()
+    assert [r["call_id"] for r in rows] == ["fs-hook"]
+    assert rows[0]["schema"] == 1
+    assert isinstance(rows[0]["consent_declined"], bool)

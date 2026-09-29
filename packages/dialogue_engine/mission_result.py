@@ -204,6 +204,13 @@ def build_call_outcomes(
     legacy_public_status: str | None = None,
 ) -> CallOutcomes:
     mr = mission_result or build_mission_result(state)
+    # Consent withdrawal standing at close: a politeness refusal
+    # (elder_asked_to_stop) that was never retracted by completing the
+    # mission means the check-in was declined, not completed. Mission
+    # COMPLETED is the re-engagement evidence — a resumed full check-in
+    # clears the refusal by definition, so no extra tracking is needed.
+    # ADR-005: consent DECLINED precedes GREEN, never the reverse.
+    refused = bool(getattr(state, "elder_asked_to_stop", False)) and mr.status != "COMPLETED"
     if state.target_presence == "unavailable":
         return CallOutcomes(
             call_outcome="NO_ANSWER",
@@ -227,6 +234,15 @@ def build_call_outcomes(
     else:
         call_out = "TECHNICAL"
 
+    if refused and call_out == "COMPLETED":
+        # Consent withdrawn and never re-engaged: the call ended, but the
+        # check-in was declined. Mirrors the revoke_consent/stop_call
+        # precedent above; facts and episodes stay untouched in the snapshot.
+        call_out = "DECLINED"
+        refused_close = True
+    else:
+        refused_close = False
+
     family = "UNSET"
     if state.safety_mode == "red" or state.risk_handling:
         family = "RED"
@@ -237,9 +253,15 @@ def build_call_outcomes(
         family = "RED" if family == "RED" else "UNSET"
     elif legacy_public_status:
         family = legacy_public_status  # type: ignore[assignment]
-    elif call_out == "COMPLETED" and not is_custom_mission(state):
+    elif (call_out == "COMPLETED" or refused_close) and not is_custom_mission(state):
         # P0#4: wire StatusEngine for the engine path (no legacy status).
-        # A completed call is itself evidence of contact/consent/talk.
+        # A completed call is itself evidence of contact/talk — but NOT of
+        # consent when a refusal stands unretracted (fs-42bb57a0: refusal
+        # text filled wellness, mission completed, family went GREEN).
+        # refused_close runs the same engine so the candidate keeps its
+        # care-driven meaning (YELLOW for partial) instead of collapsing
+        # to UNSET; revoke/stop_call closes keep their pinned UNSET above
+        # because refused_close is only set on the normal-close path.
         from packages.contracts.enums import (
             ConsentState,
             DeliveryState,
@@ -250,7 +272,7 @@ def build_call_outcomes(
 
         checks = {
             "identity": True,
-            "consent": True,
+            "consent": not refused,
             "can_talk": True,
             "wellness": state.slots.get("wellness") == SlotStatus.FILLED,
             "mood": state.slots.get("mood") == SlotStatus.FILLED,
@@ -270,7 +292,7 @@ def build_call_outcomes(
             delivery_state=DeliveryState.ANSWERED,
             technical_state=TechnicalState.OK,
             care_state=_care_state(state, mr.status),
-            consent_state=ConsentState.UNKNOWN,
+            consent_state=ConsentState.DECLINED if refused else ConsentState.UNKNOWN,
             safety=SafetySnapshot(),
             mandatory_checks=checks,
             required_checks=required_checks,

@@ -1,3 +1,32 @@
+# False-GREEN consent fix: закрыт контрактом (2026-09-29)
+
+Branch `feature/voice-zoiper-m5`, HEAD `16f00a6` (после коммита). Brief:
+`.run/OPENCODE_FALSE_GREEN_DECLINE_BRIEF.md`, live fail fs-42bb57a0
+(вежливый отказ на opening wellness → family GREEN).
+
+## Что сделано
+
+- `mission_result.build_call_outcomes`: неотозванный отказ
+  (`elder_asked_to_stop`, mission не COMPLETED) на закрытии даёт
+  `call_outcome=DECLINED`; ось согласия wired (`ConsentState.DECLINED`,
+  `checks["consent"]=False`) вместо хардкода UNKNOWN/True.
+- Кандидат идёт через тот же StatusEngine: PARTIAL → YELLOW (care первее
+  consent по ADR-005), GREEN недостижим при отказе. Явные
+  revoke/stop_close держат пиннутый UNSET — не тронуты.
+- Mission COMPLETED после отказа = свидетельство перевовлечения,
+  отказ считается отозванным без нового трекинга.
+- Факты/эпизоды при отказе не трогаем (было чисто и до фикса).
+
+## Ворота
+
+- 3 красных теста стали зелёными: `DECLINED/PARTIAL/YELLOW` на живом
+  классе цитат; DECLINE→no pain probe цел; decline/refusal suites целы.
+- Полный набор: 1918 passed / 0 failed; hard1000 1315/1315; safety 203/203;
+  hard_battery 16/16; корпус 500/500; agent+dream PASS; policy diff 4/4.
+- НЕ проверено: живой SIP/redial; мост на старом коде; прослушивание TTS.
+
+---
+
 # False-worlds в Understand: закрыто, Layer A зелёное (2026-09-27)
 
 Branch `feature/voice-zoiper-m5`, HEAD до коммита `2feb511`. Brief:
