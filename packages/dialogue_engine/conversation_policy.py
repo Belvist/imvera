@@ -1103,6 +1103,26 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         if state.important_to_share_asked and not state.important_to_share_resolved:
             state.important_to_share_resolved = True
         ack = _grounded_ack_for_mentions(turn)
+        # Cross-call continuity (corroboration only): a grounded current
+        # mention matching the previous call's episode digest is marked as
+        # reopened — the returning complaint is not interrogated as brand
+        # new, and the family sees было→стало. Past alone never fires.
+        if state.prior_call_context:
+            from packages.dialogue_engine.check_path import past_site_matches
+
+            _sites = {
+                (getattr(m, "body_site", "") or "").strip().lower()
+                for m in (turn.issue_mentions or [])
+            }
+            _labels = [
+                (getattr(m, "label", "") or "").strip().lower()
+                for m in (turn.issue_mentions or [])
+            ]
+            _reopened = past_site_matches(
+                state.prior_call_context, sites=_sites, labels=_labels
+            )
+            if _reopened and not state.observations.get("past_episode_reopened"):
+                state.observations["past_episode_reopened"] = _reopened
         next_q = _next_episode_plan(state)
         if next_q:
             # Keep pack bridge when switching episodes; don't overwrite with parrot ack.

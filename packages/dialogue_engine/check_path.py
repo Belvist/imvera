@@ -812,6 +812,27 @@ _FOLLOWUP_BY_SYMPTOM: dict[str, str] = {
 }
 
 
+def _past_episode_labels(prior: dict[str, str]) -> list[str]:
+    """Labels carried from the previous call's episode digest.
+
+    Format written by build_call_metadata: `label@site:status | ...`.
+    Returns speakable labels (label part only), up to the stored entries.
+    Never raises on foreign/malformed values — garbage yields [].
+    """
+    raw = (prior.get("past_episodes") or "").strip()
+    if not raw:
+        return []
+    labels: list[str] = []
+    for chunk in raw.split("|"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        label = chunk.split("@", 1)[0].strip().rstrip("., ")[:80]
+        if label:
+            labels.append(label)
+    return labels
+
+
 def prior_followup_question(prior: dict[str, str]) -> str | None:
     concern = (
         prior.get("wellness_concern")
@@ -819,6 +840,13 @@ def prior_followup_question(prior: dict[str, str]) -> str | None:
         or prior.get("symptom_followup")
         or ""
     ).strip()
+    if not concern:
+        # Episode digest carryover: the previous call may have grounded
+        # episodes without a wellness_concern string (e.g. concern asked
+        # but recorded on the episode only). First digest label speaks.
+        _digested = _past_episode_labels(prior)
+        if _digested:
+            concern = _digested[0]
     if not concern:
         return None
     label = symptom_followup_label(concern) or concern
@@ -845,4 +873,76 @@ def build_call_metadata(state: EngineState) -> dict[str, str]:
         meta["pain_at_night"] = state.pain_at_night
     if state.check_path != CheckPath.STANDARD:
         meta["check_path"] = state.check_path.value
+    digest = episode_digest(state)
+    if digest:
+        meta["past_episodes"] = digest
     return meta
+
+
+_BARE_VERB_LABELS = frozenset(
+    {"болит", "боль", "ноет", "ломит", "давит", "беспокоит", "побаливает"}
+)
+
+
+def episode_digest(state: EngineState) -> str:
+    """Compact carryover of this call's grounded episodes for the next call.
+
+    Up to 2 speaker episodes as `label@site:status` joined by ` | `.
+    String-only (snapshot metadata contract); someone else's complaints,
+    bare verbs without a site, and empty labels are skipped — the next
+    call must never inherit debris as biography. Read by
+    prior_followup_question / past_site_matches; corroboration only, never
+    a standalone fact.
+    """
+    parts: list[str] = []
+    sited = any((ep.body_site or "").strip() for ep in state.issue_episodes.values())
+    for ep in state.issue_episodes.values():
+        if len(parts) >= 2:
+            break
+        if (ep.subject or "unknown") == "other_person":
+            continue
+        label = (ep.primary_label or "").strip().rstrip("., ")
+        site = (ep.body_site or "").strip()
+        if not label:
+            continue
+        if not site and label.lower() in _BARE_VERB_LABELS and sited:
+            continue
+        status = (ep.status or "open").strip() or "open"
+        if status not in ("open", "suspended", "resolved"):
+            status = "open"
+        entry = f"{label[:80]}@{site[:40]}:{status}" if site else f"{label[:80]}:{status}"
+        parts.append(entry)
+    return " | ".join(parts)
+
+
+def past_site_matches(
+    prior: dict[str, str] | None, *, sites: set[str], labels: list[str]
+) -> str | None:
+    """Match grounded current mentions against the previous call's digest.
+
+    Returns the matched past label, else None. Corroboration only: the
+    caller must already hold a grounded current mention — a past entry
+    alone never fires. Used to mark `past_episode_reopened` instead of
+    interrogating a returning complaint as brand new.
+    """
+    if not prior:
+        return None
+    entries = (prior.get("past_episodes") or "").strip()
+    if not entries:
+        return None
+    cur_sites = {s.strip().lower() for s in sites if (s or "").strip()}
+    cur_labels = [lb.strip().lower() for lb in labels if (lb or "").strip()]
+    for chunk in entries.split("|"):
+        chunk = chunk.strip().lower()
+        if not chunk:
+            continue
+        head = chunk.split("@", 1)[0].strip()
+        site = ""
+        if "@" in chunk:
+            site = chunk.split("@", 1)[1].split(":", 1)[0].strip()
+        if site and site in cur_sites:
+            return chunk.split("@", 1)[0].strip() or None
+        for cl in cur_labels:
+            if head and (head in cl or cl in head):
+                return chunk.split("@", 1)[0].strip() or None
+    return None
