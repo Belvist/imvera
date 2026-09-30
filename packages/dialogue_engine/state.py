@@ -253,6 +253,24 @@ class EngineState(BaseModel):
     # Asked-question history (spoken question texts, cap 20) — answers
     # «а что ты спрашивал?» and never-repeat audits. Not state for logic.
     asked_history: list[str] = Field(default_factory=list)
+    # Asked-question signatures (normalized, ring cap 8) — the single
+    # repeat check. Written at the same emit funnel as asked_history;
+    # the rephrase picker reads this ring, never its own copy.
+    asked_signatures: list[str] = Field(default_factory=list)
+    # Discourse: what the person is talking about now. Written by
+    # update_discourse from verified semantics only (mentions, grounded
+    # facts, their question) — never from free text. Read by the
+    # FOLLOW_USER_THREAD branch; decays after 3 uncontinued turns.
+    current_thread_label: str = ""
+    current_thread_turns: int = 0
+    # Verbatim span worth one follow-up («внучка приезжала»). Set only
+    # from a substantive turn's own words, consumed once, never from
+    # garbage or silence.
+    open_hook: str = ""
+    open_hook_used: bool = False
+    # Normalized signature of what Vera just acknowledged — anti-parrot
+    # for acks (questions are covered by asked_signatures).
+    last_ack_signature: str = ""
     # Speech ledger: normalized surfaces of everything Vera already said
     # this call (cap 60). Recorded at the single emit funnel for repeat
     # audits and the speech-discipline gate; repair repeats bypass nothing

@@ -434,9 +434,15 @@ def _emit_speak(
             return _schedule_advance(state)
         return _close_partial(state)
     # Asked-history for «а что ты спрашивал?» (cap 20, questions only).
+    # Same funnel writes the normalized signature ring (cap 8) — the
+    # single repeat check the rephrase picker reads.
     if marks_question and text.strip():
+        from packages.dialogue_engine.discourse import normalize_signature
+
         state.asked_history.append(text.strip())
         del state.asked_history[:-20]
+        state.asked_signatures.append(normalize_signature(text))
+        del state.asked_signatures[:-8]
     gen_id = state.next_generation_id()
     gen = state.active_playout_generation + 1
     state.active_playout_generation = gen
@@ -1519,17 +1525,29 @@ def _backchannel_reask(state: EngineState) -> tuple[str, str, str] | None:
         pool = list(questions._PROBE_QUESTION_VARIANTS.get(slot.removeprefix("probe_"), ()))
     else:
         return None
+    from packages.dialogue_engine.discourse import normalize_signature
+
     asked = (delivered.text or "").strip()
     recent = {(q or "").strip() for q in (state.asked_history or [])}
+    recent |= set(state.asked_signatures or [])
     alts = [v for v in pool if v.strip() and v.strip() != asked]
-    fresh = [v for v in alts if v.strip() not in recent]
+    fresh = [
+        v
+        for v in alts
+        if v.strip() not in recent and normalize_signature(v) not in recent
+    ]
     # Per-call anti-repeat: prefer variants unheard this call; when all
     # were heard, repeat the pool head (distance, never silence).
     picks = fresh or alts
     if not picks:
         return None
     rephrase = questions.rotate_pool(state, f"reask:{slot}", picks)
-    ack = questions.rotate_pool(state, "reask-ack", list(_BACKCHANNEL_ACKS))
+    _ack_pool = [
+        a
+        for a in list(_BACKCHANNEL_ACKS)
+        if normalize_signature(a) != (state.last_ack_signature or "")
+    ] or list(_BACKCHANNEL_ACKS)
+    ack = questions.rotate_pool(state, "reask-ack", _ack_pool)
     intent = (delivered.intent or "").strip() or slot
     return (f"{ack} {rephrase}", slot, intent)
 

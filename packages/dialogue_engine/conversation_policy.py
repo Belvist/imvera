@@ -36,6 +36,7 @@ class ConversationObligation(StrEnum):
     RESUME_PENDING_EPISODE = "resume_pending_episode"
     RESUME_SUSPENDED = "resume_suspended"
     IMPORTANT_TO_SHARE = "important_to_share"
+    FOLLOW_USER_THREAD = "follow_user_thread"
     BACKGROUND_GOAL = "background_goal"
     SUMMARY_CLOSE = "summary_close"
     NEVER_SILENT = "never_silent"
@@ -697,7 +698,9 @@ def _correction_plan(state: EngineState, turn: RichUserTurn) -> ResponsePlan:
     )
 
 
-def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
+def _grounded_ack_for_mentions(
+    turn: RichUserTurn, state: EngineState | None = None
+) -> str:
     if not turn.issue_mentions:
         return ""
     labels = [(m.label or "").strip().lower() for m in turn.issue_mentions if m.label]
@@ -760,6 +763,10 @@ def _grounded_ack_for_mentions(turn: RichUserTurn) -> str:
         raw = getattr(turn, "raw_text", "") or ""
         if raw and _has_fatigue_markers(raw) and "Понимаю" not in ack:
             ack = f"{_FATIGUE_ACK} {ack}"
+        if state is not None and ack:
+            from packages.dialogue_engine.discourse import normalize_signature
+
+            state.last_ack_signature = normalize_signature(ack)
         return ack
     raw = getattr(turn, "raw_text", "") or ""
     if raw and _has_fatigue_markers(raw):
@@ -921,6 +928,51 @@ def _is_bare_verb_label(label: str) -> bool:
     return all(w in _BARE_VERBS or w in ("и", "а") for w in words)
 
 
+def _turn_is_easing(turn: RichUserTurn) -> bool:
+    """Easing/resolution reports belong to the improving path, never to a
+    thread follow-up («полегче» → «а что там самое главное?» interrogates)."""
+    from packages.dialogue_engine.question_context import _RESOLVED_UTTERANCE
+
+    if any(
+        str(getattr(m, "status", "") or "").lower() in ("improving", "resolved")
+        for m in (turn.issue_mentions or ())
+    ):
+        return True
+    return bool(_RESOLVED_UTTERANCE.search(turn.raw_text or ""))
+
+
+def _turn_is_nonhealth_eval(turn: RichUserTurn) -> bool:
+    """Film/dream/joke evaluations with health words stay owned by the
+    clarify path («плохо от фильма» → redirect to self, live catch)."""
+    from packages.dialogue_engine.fast_interpreter import (
+        is_nonhealth_evaluation as _film,
+    )
+
+    return bool(_film((turn.raw_text or "").strip()))
+
+
+def _turn_is_unprobed_negative_wellness(state: EngineState) -> bool:
+    """Vague-negative wellness with no concern yet belongs to the
+    concern-probe net (same ownership as the safety net below): a thread
+    follow-up here would swallow a clinical probe."""
+    try:
+        record = state.slot_records.get("wellness")
+    except Exception:  # noqa: BLE001
+        return False
+    if record is None or (state.wellness_concern or "").strip():
+        return False
+    return str(getattr(record, "polarity", "") or "") in ("negative", "uncertain")
+
+
+def _delivered_is_free(state: EngineState) -> bool:
+    """True when no specific answer is pending: nothing delivered, or the
+    generic opening wellness (the 'free' state where a story may lead)."""
+    delivered = getattr(state, "delivered_question", None)
+    if delivered is None:
+        return True
+    return (getattr(delivered, "slot", "") or "") == "wellness"
+
+
 def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
     """Canonical legacy scheduler — mutates EngineState; owns real ResponsePlan."""
     from packages.dialogue_engine.mission_flow import is_custom_mission, schedule_custom_mission
@@ -959,6 +1011,69 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
     # Reluctance: client signals they are done — warm early close with what
     # is recorded, instead of squeezing (never on URGENT path).
     # ADR-014 exception, flagged: IMVERA_COVERAGE_LADDER=1.
+    # FOLLOW_USER_THREAD: the person said something substantive about
+    # their own topic (grounded facts, no new complaint/question) and an
+    # unused hook is on record — stay on their thread once instead of
+    # jumping back to the ladder. The follow-up quotes their own words,
+    # so it cannot invent. Hook consumed once; clinical episodes win
+    # (open episode blocks this branch). Easing reports («полегче») and
+    # non-health evaluations («плохо от фильма») stay owned by their
+    # paths — a thread follow-up there interrogates instead of hearing.
+    if (
+        turn is not None
+        and state.check_path != CheckPath.URGENT
+        and not state.red_state_pending
+        and not _has_open_episodes(state)
+        and state.current_thread_label
+        # Only on the turn that set the thread (turns == 0): firing later
+        # hijacks answers and closing flows («Нет.» after ITS is not an
+        # invitation to ask about an old hook).
+        and state.current_thread_turns == 0
+        and state.open_hook
+        and not state.open_hook_used
+        # A vague-negative wellness self-evaluation («ни шатко ни валко»)
+        # is owned by the concern-probe net, never by the thread.
+        and not _turn_is_unprobed_negative_wellness(state)
+        # A real answer (facts carried to the pending question) advances
+        # the ladder; a story with no facts/mentions answered nothing —
+        # the pending flag alone must not bury it (kernel sets it on any
+        # answer-act while a question is delivered).
+        and (
+            (turn.goal_facts and not turn.answers_pending_question)
+            or (
+                state.current_thread_label == "рассказ"
+                and not turn.goal_facts
+                and not turn.issue_mentions
+                # Vera follows a story only when she waits for nothing
+                # specific: ITS, episode probes, and background questions
+                # own their answers (anaphora, duration, meds).
+                and _delivered_is_free(state)
+            )
+        )
+        and not turn.issue_mentions
+        and not turn.user_question
+        and not turn.correction
+        and turn.control in ("none", "")
+        and not _turn_is_easing(turn)
+        and not _turn_is_nonhealth_eval(turn)
+    ):
+        from packages.dialogue_engine.discourse import normalize_signature
+
+        _hook = state.open_hook.strip().rstrip(".!?")
+        if _hook:
+            _hook = _hook[0].lower() + _hook[1:] if len(_hook) > 1 else _hook
+            _q = f"Вы говорили — {_hook}. А что там самое главное?"
+            state.open_hook_used = True
+            state.current_thread_turns = 0
+            state.last_ack_signature = normalize_signature(_q)
+            return ResponsePlan(
+                obligation=ConversationObligation.FOLLOW_USER_THREAD,
+                action="speak",
+                mandatory_question=_q,
+                intent="thread_followup",
+                slot=None,
+                marks_question=False,
+            )
     # Find-out ladder for an answer that contributed NOTHING (no fill, no
     # facts, no mentions — «Непонятно.», debris): try to find out, each time
     # differently — hint, then concrete options — then record unknown
@@ -1102,7 +1217,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
     if turn and turn.issue_mentions:
         if state.important_to_share_asked and not state.important_to_share_resolved:
             state.important_to_share_resolved = True
-        ack = _grounded_ack_for_mentions(turn)
+        ack = _grounded_ack_for_mentions(turn, state)
         # Cross-call continuity (corroboration only): a grounded current
         # mention matching the previous call's episode digest is marked as
         # reopened — the returning complaint is not interrogated as brand
@@ -1123,6 +1238,24 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             )
             if _reopened and not state.observations.get("past_episode_reopened"):
                 state.observations["past_episode_reopened"] = _reopened
+                # Spoken past: a fresh recurrence of a past complaint is
+                # acknowledged out loud as returning — never as brand new.
+                # Easing reports (improving/resolved) keep their own ack.
+                _recurrence = any(
+                    str(getattr(m, "status", "") or "").lower()
+                    not in ("improving", "resolved")
+                    for m in (turn.issue_mentions or [])
+                )
+                if _recurrence:
+                    from packages.dialogue_engine.discourse import (
+                        normalize_signature,
+                    )
+
+                    ack = (
+                        f"Снова {_reopened}? В прошлый раз тоже было — "
+                        "записала, слушаю."
+                    )
+                    state.last_ack_signature = normalize_signature(ack)
         next_q = _next_episode_plan(state)
         if next_q:
             # Keep pack bridge when switching episodes; don't overwrite with parrot ack.

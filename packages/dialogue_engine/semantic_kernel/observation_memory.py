@@ -554,6 +554,9 @@ def atomic_semantic_apply(state: EngineState, turn: RichUserTurn) -> None:
     )
 
     ingest_rich_turn(state, turn)
+    from packages.dialogue_engine.discourse import update_discourse
+
+    update_discourse(state, turn)
     bound = _bind_observations_to_episodes(state, turn)
 
     store: dict[str, Observation] = dict(state.observations)  # type: ignore[arg-type]
