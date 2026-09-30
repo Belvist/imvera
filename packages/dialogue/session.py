@@ -19,7 +19,6 @@ from packages.contracts.turn import TurnProposal, ValidatedTurn
 from packages.core import create_call_record_store, observation_from_fact, observation_from_risk
 from packages.dialogue.interpretation import UserInterpretation
 from packages.dialogue.interpreter import Interpreter
-from packages.dialogue.planner import Planner
 from packages.dialogue.state import DialogueState
 from packages.dialogue.transition_store import DialogueTransitionStore
 from packages.dialogue.validator import Validator
@@ -713,6 +712,10 @@ class CallSession:
             if meta:
                 self._engine.on_playout_cancelled(meta[0], meta[1])
             return
+        # Flag-off only: engine path returns above. Lazy import keeps the
+        # legacy planner out of the engine module graph (Cut 3b).
+        from packages.dialogue.planner import Planner
+
         Planner.release_question_attempt(self.state, generation_id)
 
     def start(self) -> SessionTurnResult:
@@ -763,6 +766,9 @@ class CallSession:
             self._persist_action_policy_shadow_records()
             return result
         gen = self._next_generation_id()
+        # Flag-off only: engine path returned above (Cut 3b).
+        from packages.dialogue.planner import Planner
+
         proposal = Planner.plan_vera_turn(self.state, self.turn_id, gen)
         validated = Validator.validate(proposal)
         commit = self.transitions.commit_transition(self.state, proposal)
@@ -998,6 +1004,9 @@ class CallSession:
                 persist_error=persist_err,
             )
         gen = self._next_generation_id()
+        # Flag-off only: engine path returned above (Cut 3b).
+        from packages.dialogue.planner import Planner
+
         proposal = Planner.plan_after_user(
             self.state,
             user_text,
@@ -1055,6 +1064,9 @@ class CallSession:
         """Planner-only follow-up after identity intro TTS (no user turn)."""
         self.turn_id += 1
         gen = self._next_generation_id()
+        # Flag-off only (Cut 3b).
+        from packages.dialogue.planner import Planner
+
         proposal = Planner.plan_identity_question(self.state, self.turn_id, gen)
         validated = Validator.validate(proposal)
         commit = self.transitions.commit_transition(self.state, proposal)
@@ -1127,6 +1139,9 @@ class CallSession:
                 "handle_wait_expired: planner path blocked while DialogueEngine is active"
             )
         gen = self._next_generation_id()
+        # Flag-off only: engine-active raises above (Cut 3b).
+        from packages.dialogue.planner import Planner
+
         proposal = Planner.plan_wait_expired(self.state, self.turn_id, gen)
         validated = Validator.validate(proposal)
         commit = self.transitions.commit_transition(self.state, proposal)

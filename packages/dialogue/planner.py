@@ -1,6 +1,5 @@
 """Planner — decides what to do next (not how to say it)."""
 
-import os
 import re
 
 from packages.contracts.core import TerminationReason
@@ -22,12 +21,15 @@ _GOODBYE_MARKERS = ("до свидания", "всего доброго")
 
 
 def direct_wellness_opening_enabled() -> bool:
-    """Lab shortcut: skip identity/consent → wellness. Default ON for automated gates."""
-    return os.environ.get("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+    """Backward-compat alias: canonical home is dialogue_engine.runtime
+    (Cut 3b keeps the engine-active check planner-free)."""
+    from packages.dialogue_engine.runtime import (
+        direct_wellness_opening_enabled as _canonical,
+    )
+
+    return _canonical()
+
+
 _MAX_SLOT_UNCLEAR = 2
 _STT_GARBAGE_PHRASES = frozenset(
     {

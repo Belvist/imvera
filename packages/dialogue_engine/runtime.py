@@ -66,9 +66,20 @@ def git_sha_short() -> str:
     return os.environ.get("IMVERA_GIT_SHA", "unknown")
 
 
-def dialogue_engine_active() -> bool:
-    from packages.dialogue.planner import direct_wellness_opening_enabled
+def direct_wellness_opening_enabled() -> bool:
+    """Lab shortcut: skip identity/consent → wellness. Default ON for automated gates.
 
+    Lives here (not in legacy planner) so the engine-active check never
+    loads the planner module (Cut 3b). Legacy import path re-exports it.
+    """
+    return os.environ.get("IMVERA_VOICE_DIRECT_WELLNESS_OPENING", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def dialogue_engine_active() -> bool:
     return direct_wellness_opening_enabled() and engine_enabled()
 
 

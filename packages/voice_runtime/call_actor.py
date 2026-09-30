@@ -22,10 +22,7 @@ from packages.contracts.outbox import ActionOutboxStatus
 from packages.contracts.providers import TTSProvider
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
 from packages.contracts.turn import TurnProposal
-from packages.dialogue.context_builder import active_question_kind, build_turn_context
 from packages.dialogue.interpretation import to_turn_interpretation
-from packages.dialogue.planner import Planner
-from packages.dialogue.semantic_adapter import adapt_semantic_turn
 from packages.dialogue.session import CallSession, SessionTurnResult
 from packages.dialogue.validator import Validator
 from packages.dialogue_engine.effects import (
@@ -1594,6 +1591,9 @@ class CallActor:
                     self.session.state,
                     action_id,
                 )
+                # Flag-off only: engine branch returns above (Cut 3b).
+                from packages.dialogue.planner import Planner
+
                 await asyncio.to_thread(
                     Planner.release_question_attempt,
                     self.session.state,
@@ -2117,6 +2117,12 @@ class CallActor:
                     need_llm = True
             try:
                 if need_llm:
+                    # Flag-off LLM path only (dead on engine configs):
+                    # legacy context builder stays out of the engine graph.
+                    from packages.dialogue.context_builder import (
+                        build_turn_context,
+                    )
+
                     ctx = build_turn_context(
                         self.session.state,
                         turn_id=turn_id,
@@ -2155,8 +2161,17 @@ class CallActor:
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.INTERPRETATION_READY, {})
             )
-            qkind = active_question_kind(self.session.state)
             if semantic_payload is not None:
+                # Flag-off LLM path only (Cut 3b): adapter + question kind
+                # stay out of the engine module graph.
+                from packages.dialogue.context_builder import (
+                    active_question_kind,
+                )
+                from packages.dialogue.semantic_adapter import (
+                    adapt_semantic_turn,
+                )
+
+                qkind = active_question_kind(self.session.state)
                 interpret_path = "llm"
                 interp, _validated = adapt_semantic_turn(
                     text,
@@ -2764,6 +2779,9 @@ class CallActor:
                 self.session.cancel_playout_action, action_id
             )
             return
+        # Flag-off only (Cut 3b).
+        from packages.dialogue.planner import Planner
+
         await asyncio.to_thread(
             Planner.release_question_attempt,
             self.session.state,
