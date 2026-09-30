@@ -2,7 +2,7 @@
 
 **Status:** accepted  
 **Date:** 2026-09-06  
-**Supersedes:** [ADR-002](002-tts-silero-v5-phrase-chunked.md) for production choice
+**Supersedes:** [ADR-002](superseded/002-tts-silero-v5-phrase-chunked.md) for production choice
 
 ## Context
 

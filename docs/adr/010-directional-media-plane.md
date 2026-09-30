@@ -104,7 +104,7 @@ SIPp deterministic RTP scenarios A–G (see `docs/PLAN.md` Phase 5b). Zoiper rem
 
 ## References
 
-- [ADR-001](./001-telephony-asterisk-websocket.md)
+- [ADR-001](./superseded/001-telephony-asterisk-websocket.md)
 - [AUDIO_CONTRACT.md](../AUDIO_CONTRACT.md)
 - Forensic report: `sip-93be0754bc` (2026-09-08)
 - Asterisk SnoopChannel: spy=in/out, whisper=in/out

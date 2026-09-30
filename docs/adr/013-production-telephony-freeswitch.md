@@ -2,8 +2,8 @@
 
 **Status:** accepted  
 **Date:** 2026-09-08  
-**Supersedes:** [ADR-012](012-self-hosted-telephony-livekit.md) (production path)  
-**Amends:** [ADR-001](001-telephony-asterisk-websocket.md) (Asterisk → lab/archive only)
+**Supersedes:** [ADR-012](superseded/012-self-hosted-telephony-livekit.md) (production path)  
+**Amends:** [ADR-001](superseded/001-telephony-asterisk-websocket.md) (Asterisk → lab/archive only)
 
 ## Context
 

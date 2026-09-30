@@ -1,3 +1,97 @@
+# Cut 3b live: engine path never loads legacy planner (1b232e2, 2026-09-30)
+
+- Displaced owner: legacy Planner import-time presence on the live path.
+  Planner/CallFsm out of `dialogue/__init__` (lazy compat only); flag
+  reader moved to `dialogue_engine.runtime`; Planner imports lazy in all
+  flag-off branches (session 5, actor 2, transition store 1); hidden link
+  found+cut (`dialogue_engine_active` loaded planner via
+  `direct_wellness_opening_enabled`); dead `os` import removed.
+  Validator stays top-level on purpose: pure guard, not a brain.
+- Proof: fresh-interpreter test runs engine call flow (runner + session)
+  and asserts planner absent from sys.modules — was red, now green.
+- Gates: ruff clean, proof 1/1, corpus 500/500, full 1952/0, policy
+  diff 4/4, agent+dream PASS. Flag-off parity tests survive (lazy, not
+  deleted — deletion is a later cut).
+- Bridge kickstarted in no-call window: 757e5dd -> 1b232e2; health ok,
+  NLP all_hot, version_watch OK. NOT PUSHED. NOT VERIFIED: ear proof,
+  :9103, CI.
+- NEXT: session slimming (legacy state mirror) -> package deletion;
+  then :9103 revive-or-remove; branch merge is owner decision.
+
+---
+
+# Live-speech triple slice on 757e5dd: thread + spoken past + signatures (2026-09-30)
+
+- Thread memory, really wired (not a carcass): current_thread/open_hook/
+  last_ack/asked_signatures in EngineState; update_discourse writes from
+  verified semantics in the atomic funnel; FOLLOW_USER_THREAD follows a
+  volunteered story once with the person's own words («Вы говорили —
+  внучка приезжала... А что там самое главное?»). Owned-elsewhere stays
+  owned: easing («полегче»), film/dream evals, real answers, other-person
+  health, pending ITS/probe/meds questions, vague-negative wellness.
+  17 red tests fixed one by one at the root (late-fire lock turns==0,
+  no-hook-from-easing/film, answer-vs-story split, free-state only).
+- Spoken past: fresh recurrence of a digest episode speaks as returning
+  («Снова головная боль? В прошлый раз тоже было — записала, слушаю.»);
+  easing keeps its own ack. Silent reopened mark kept alongside.
+- Signatures: one normalized ring (cap 8) written at the emit funnel
+  drives the rephrase picker (asked_history stays as verbatim recall);
+  rephrase acks avoid the just-spoken ack.
+- Gates before switch: ruff clean, new 9/9 thread + 9/9 carryover, corpus
+  500/500, full 1951 passed / 8 skipped / 0 failed, policy diff 4/4,
+  agent gate PASS (+dream), hard1000 1315/1315, hard_battery 16/16.
+- Bridge kickstarted in verified no-call window: aa8ea76 -> 757e5dd;
+  health ok, NLP all_hot, STT/TTS ready, version_watch OK.
+- NOT VERIFIED: ear proof on 7000 (thread follow-ups, spoken past,
+  no regressions by ear); :9103 fate; remote CI. NOT PUSHED.
+- NEXT: owner redial 7000 -> thread/past by ear; then было→стало
+  questions + report projection; backlog content-fit guard still open.
+
+---
+
+# Memory slice live: past_episodes carryover on aa8ea76 (2026-09-30)
+
+- Displaced owner (ADR-023): thin one-string prior (wellness_concern-only,
+  opening-only). Replacement: `past_episodes` digest (up to 2 speaker
+  episodes, `label@site:status`, string-only — snapshot contract intact)
+  in build_call_metadata; prior_followup speaks from digest when old keys
+  absent (same strings); mid-call grounded match marks
+  `past_episode_reopened` instead of re-interrogating. Past alone never
+  fires (corroboration only). No new services.
+- Gates on HEAD before switch: ruff clean, new 9/9, corpus 500/500, full
+  1942 passed / 8 skipped / 0 failed, policy diff 4/4 explained, agent
+  gate PASS.
+- Bridge kickstarted in verified no-call window (active_sessions 0):
+  6d643fd -> aa8ea76; health ok, NLP all_hot, STT/TTS ready,
+  version_watch --once OK.
+- Memory score: ~20% -> ~80%. Remaining for 100%: mid-call spoken
+  reference to past («снова голова?» вслух), было→стало questions,
+  family report projection of reopened episodes.
+- NOT VERIFIED: live ear proof on new code (owner dial 7000); :9103 fate;
+  remote CI. NOT PUSHED (no push requested).
+- NEXT: owner redial 7000 -> check followup from digest + reopen mark;
+  then spoken-past slice or backlog content-fit guard.
+
+---
+
+# Bridge on HEAD 6d643fd: answer-routing slice live (2026-09-30)
+
+- Displaced owner (ADR-023 slice): buggy answer-routing — pain filling
+  background slots + delivered question stealing another slot's answer.
+  Replacement = 952edfb + 48e06e9 (already in HEAD) + I001 lint fix 6d643fd.
+  No new services; LLM :9103 left down (live flags 0, path doesn't use it).
+- Bridge kickstarted in verified no-call window (active_sessions 0):
+  9e5ede8 -> 6d643fd; health ok, NLP all_hot, STT :9101 + TTS :9102 ready,
+  version_watch --once OK. STT/TTS untouched, no new runtime.
+- Gates on HEAD before switch: ruff clean (1 I001 fixed, no behavior),
+  touched 41/41, corpus 500/500, full 1933 passed / 8 skipped / 0 failed.
+- NOT VERIFIED: live call on new code (owner dial 7000); :9103 worker down
+  (not needed live, needs owner decision to revive or remove); remote CI.
+- NEXT: owner redial 7000 → sleep/plans routing + pain-slot guard by ear;
+  then backlog slice (pending-sleep + plans-text content-fit guard).
+
+---
+
 # Live so_good + answer-routing wart found live (2026-09-29)
 
 - so_so-clean_short live PASS; good-clean_long initially FAIL then

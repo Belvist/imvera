@@ -625,6 +625,57 @@ four precise fixes instead of an architecture rewrite.
 - Gates: 1870 passed / 0 failed / 6 skipped / 1 xfailed; hard battery 16/16;
   agent gate PASS; corpus 500/500; policy diff 4/4; ruff clean. NOT PUSHED.
 
+## Answer-routing slice live on bridge (2026-09-30)
+
+- ADR-023 vertical slice: displaced owner = buggy answer-routing (pain
+  filling background slots; delivered question stealing another slot's
+  answer). Replacement = 952edfb + 48e06e9 + I001 lint fix 6d643fd.
+  No new services layered; LLM :9103 left down (live flags 0).
+- Bridge kickstarted in no-call window 9e5ede8 → 6d643fd; health ok,
+  NLP all_hot, STT/TTS ready, version_watch --once OK.
+- Gates on HEAD: ruff clean, touched 41/41, corpus 500/500, full
+  1933 passed / 8 skipped / 0 failed. NOT PUSHED (no push requested).
+- NOT VERIFIED: live call on new code (owner dial 7000); :9103 fate;
+  remote CI. NEXT: owner redial → sleep/plans routing by ear.
+
+## Cross-call episode carryover slice (2026-09-30)
+
+- ADR-023 slice: displaced owner = thin one-string prior (wellness_concern,
+  opening-only). Replacement = aa8ea76: `past_episodes` digest (2 speaker
+  episodes, string-only) + followup-from-digest + mid-call
+  `past_episode_reopened` mark on grounded match. Corroboration only.
+- Gates: new 9/9, corpus 500/500, full 1942/8/0, policy diff 4/4, agent
+  PASS, ruff clean. Bridge 6d643fd → aa8ea76, version_watch OK.
+- Memory ~20% → ~80%. NOT PUSHED. NOT VERIFIED: ear proof, :9103, CI.
+  NEXT: spoken-past ack («снова голова?» вслух), было→стало, report
+  projection; then backlog content-fit guard.
+
+## Live-speech triple slice: thread + spoken past + signatures (2026-09-30)
+
+- Thread memory live (757e5dd), not a carcass: discourse.py writer in the
+  atomic funnel, FOLLOW_USER_THREAD reader, hook from the person's words
+  consumed once. Owned-elsewhere stays owned (easing, film/dream, real
+  answers, other-person health, pending ITS/probe/meds, vague-negative
+  wellness). 17 red tests fixed at the root, none weakened.
+- Spoken past from the digest («Снова ...? В прошлый раз тоже было»);
+  signature ring drives rephrase; last-ack anti-parrot.
+- Gates: 1951/0 full, corpus 500/500, policy diff 4/4, agent+dream PASS,
+  hard1000 1315/1315, hard_battery 16/16, ruff clean. Bridge aa8ea76 →
+  757e5dd, version_watch OK. NOT PUSHED. NOT VERIFIED: ear proof (7000),
+  :9103, CI. NEXT: redial by ear → было→стало + report projection.
+
+## Cut 3b: engine path never loads legacy planner (2026-09-30)
+
+- 1b232e2: planner/fsm out of dialogue __init__ (lazy compat), flag
+  reader in dialogue_engine.runtime, lazy Planner in all flag-off
+  branches. Hidden link cut (dialogue_engine_active loaded planner).
+  Validator stays: guard, not brain. Fresh-interpreter proof test
+  (was red, now green). Flag-off parity tests survive — deletion later.
+- Gates: ruff clean, corpus 500/500, full 1952/0, policy diff 4/4,
+  agent+dream PASS. Bridge 757e5dd → 1b232e2, version_watch OK.
+  NOT PUSHED. NOT VERIFIED: ear proof, :9103, CI. NEXT: session
+  slimming → package deletion → :9103 fate → branch merge (owner).
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
