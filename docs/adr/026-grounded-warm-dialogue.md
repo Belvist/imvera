@@ -18,12 +18,12 @@ memory. It must follow an accepted conversational event or grounded fact.
 Keep one reducer/state, one scheduler and one Renderer. Add a bounded optional
 `ResponsePlan.acknowledgement_kind`, default None. Its accepted meanings are
 `not_recalled`, `resume_mission`, `temporal_answer`, `strong_answer` and
-`tolerable_answer`. `acknowledgement_value` carries an accepted duration quote,
+`tolerable_answer` and `current_relief`. `acknowledgement_value` carries an accepted duration quote,
 default empty. No vendor, second planner, new service, migration or runtime flag.
 
 The reducer marks `TurnContext.answer_not_recalled` only after discharging the
 actual pending unknown answer. The scheduler attaches the acknowledgment only
-to ordinary question plans, outside risk/RED/control. Renderer formulates it.
+to ordinary question plans and the first summary, outside risk/RED/control. Renderer formulates it.
 An actual custom-goal resumption gets an explicit transition, with no inference
 that symptoms recovered. Repeated rendering cannot duplicate that transition.
 
@@ -73,6 +73,19 @@ lead remains unsited. Clear kernel REPAIR outranks an ANSWER model vote, with
 explicit unused reason in the existing adjudication trace. Unknown/ambiguous targets abstain. Safety/control and question
 budgets retain priority. Four existing clarification-copy assertions now expect
 the plain-language explanation; their question identity and fact checks remain.
+
+Responsive extension (2026-10-01, merged base `996bad8`):
+[all paired replies, source fingerprints and integration handoff](../live-calls/responsive-dialogue-2026-10-01.md).
+Fully answered reports and late reports receive an accepted-fact reaction even
+when no probe remains. No clarification is announced unless a clinical question
+is actually planned. Head anatomy alone cannot imply pain. Topic handoffs name
+the next episode. Trailing quote punctuation does not suppress accepted degree
+reactions or change the stored quote. `current_relief` requires a confirmed
+speaker current=resolved observation from this turn matching the episode;
+administrative completion and historical reports do not qualify. Existing
+personal-story hooks invite elaboration once. Summary Renderer/emission share
+components and do not duplicate acknowledgments or gratitude. Peer warmth
+banks are retained; both peer and new tests enter the rich CI target.
 
 ## Verification and comparison
 

@@ -384,6 +384,9 @@ def summary_close_speech(
                 "На сегодня всё. Берегите себя."
             )
     if ack:
+        if ack.startswith("Спасибо"):
+            thanks = f"Спасибо, {name}. " if name else "Спасибо. "
+            core = core.removeprefix(thanks)
         return f"{ack} {core}"
     return core
 
@@ -398,6 +401,7 @@ def goodbye_final_speech(state: EngineState) -> str:
 def episode_ack(
     kind: str, label: str, *, turn_seq: int = 0,
     conversational: bool = False, additional_labels: tuple[str, ...] = (),
+    clarifying: bool = True,
 ) -> str:
     """Acknowledgment for a grounded episode fact, chosen by meaning.
 
@@ -406,11 +410,18 @@ def episode_ack(
     """
     if conversational and kind in ("new", "answer"):
         clauses = [_complaint_clause(item) for item in (label, *additional_labels)]
+        if len(clauses) > 1 and not all(clauses):
+            # Literal grounded labels remain speakable even when a predicate
+            # has no grammar projection. Never rename dizziness as pain.
+            labels = list(dict.fromkeys(item.lower() for item in (label, *additional_labels)))
+            tail = " Давайте по порядку." if clarifying else ""
+            return f"Слышу вас: {' и '.join(labels)}.{tail}"
         if all(clauses):
             unique = list(dict.fromkeys(clauses))
             if len(unique) > 1:
                 joined = ", ".join(unique[:-1]) + " и " + unique[-1]
-                return f"Понимаю, {joined}. Давайте по порядку."
+                tail = " Давайте по порядку." if clarifying else ""
+                return f"Понимаю, {joined}.{tail}"
             if re.search(r"\b(болит|болят|ноет|ноют|ломит|ломят)\b", unique[0]):
                 return f"Жаль, что {unique[0]}."
             return f"Слышу, {unique[0]}."
@@ -419,6 +430,28 @@ def episode_ack(
         return f"Поняла вас. {label} — зафиксировала."
     template = pool[turn_seq % len(pool)] if turn_seq else pool[0]
     return template.format(label=label)
+
+
+def reported_symptoms_ack(labels: tuple[str, ...]) -> str:
+    """Quote accepted past/uncertain-time reports without claiming current pain or relief."""
+    unique = list(dict.fromkeys(label.strip().lower().rstrip(".!?") for label in labels if label))
+    return f"Слышу вас: {' и '.join(unique)}." if unique else ""
+
+
+def current_relief_ack() -> str:
+    return "Рада, что сейчас вам легче."
+
+
+def shared_information_ack() -> str:
+    return "Спасибо, что рассказали."
+
+
+def strong_pain_transition(site: str, kind: str, label: str) -> str:
+    return f"Понимаю, сильная боль — это тяжело. {episode_transition(site, kind, label)}"
+
+
+def thread_followup(hook: str) -> str:
+    return f"Вы говорили: «{hook}». Я вас слушаю. Хотите рассказать чуть подробнее?"
 
 
 def _complaint_clause(label: str) -> str:

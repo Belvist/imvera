@@ -2,6 +2,13 @@
 
 ## Unreleased — 2026-10-01
 
+- React to fully accepted complaints and new reports before summary without adding questions.
+- Preserve dizziness/numbness in multi-report speech instead of inventing headache from anatomy.
+- Name the next complaint after strong pain; tolerate trailing punctuation in accepted-degree reactions.
+- Require a confirmed current-turn speaker observation for relief; invite personal stories using the existing hook once.
+- Render summary acknowledgments once, share canonical speech components and avoid duplicate gratitude.
+- Add 28 responsive-dialogue cases and the peer's three warmth tests to the rich CI gate.
+
 - Keep pain/tremor owners distinct across ingest, observations and recap; preserve literal nonpain predicates and reject other-person clinical fills.
 - Protect canonical repair from erroneous model answer votes without bypassing safety/control.
 - Accept grounded endurance answers and single-owner elliptical degree without unnecessary severity re-asks.

@@ -700,7 +700,7 @@ def _correction_plan(state: EngineState, turn: RichUserTurn) -> ResponsePlan:
 
 
 def _grounded_ack_for_mentions(
-    turn: RichUserTurn, state: EngineState | None = None
+    turn: RichUserTurn, state: EngineState | None = None, *, clarifying: bool = True,
 ) -> str:
     if not turn.issue_mentions:
         return ""
@@ -708,10 +708,17 @@ def _grounded_ack_for_mentions(
         m for m in turn.issue_mentions if getattr(m, "subject", "unknown") != "other_person"
     ]
     labels = [(m.label or "").strip().lower() for m in speaker_mentions if m.label]
-    sites = {(m.body_site or "").strip().lower() for m in speaker_mentions if m.body_site}
-    has_head = any("голов" in x for x in labels) or "голова" in sites
-    has_belly = any("живот" in x for x in labels) or "живот" in sites
+    from packages.dialogue_engine.issue_memory import clinical_issue_concept
+
+    active_pain = [m for m in speaker_mentions
+                   if getattr(m, "status", "unknown") not in ("improving", "resolved")
+                   and clinical_issue_concept(m.label) == "pain"]
+    has_head = any(m.body_site == "голова" or "голов" in m.label.lower() for m in active_pain)
+    has_belly = any(m.body_site == "живот" or "живот" in m.label.lower() for m in active_pain)
     has_nausea = any("тошн" in x for x in labels)
+    if not clarifying and any(getattr(m, "status", "unknown") != "active"
+                              for m in speaker_mentions):
+        return questions.reported_symptoms_ack(tuple(m.label for m in speaker_mentions))
     # Multi-complaint: warm acknowledgment of the whole picture (not «Понимаю, болит»).
     if has_head and (has_belly or has_nausea):
         parts: list[str] = ["головная боль"]
@@ -725,10 +732,11 @@ def _grounded_ack_for_mentions(
             joined = " и ".join(parts)
         return (
             f"Поняла вас. {joined[0].upper() + joined[1:]} — "
-            "это неприятно, давайте уточним по порядку."
+            + ("это неприятно, давайте уточним по порядку." if clarifying else "это неприятно.")
         )
     if has_belly and has_nausea:
-        return "Поняла вас. Живот и тошнота — это неприятно, давайте уточним по порядку."
+        tail = ", давайте уточним по порядку." if clarifying else "."
+        return "Поняла вас. Живот и тошнота — это неприятно" + tail
     _sited = [
         m
         for m in speaker_mentions
@@ -765,6 +773,7 @@ def _grounded_ack_for_mentions(
             _episode_ack_kind(turn, primary),
             spoken_label,
             turn_seq=_utterance_seq(turn),
+            clarifying=clarifying,
             conversational=getattr(primary, "status", "unknown") == "active",
             additional_labels=tuple(
                 m.label for m in speakable
@@ -833,7 +842,7 @@ def _bridge_ack_for_episode(ep, prev=None) -> str:
     if _prev_episode_reported_strong_pain(prev):
         # Never answer «Сильно [болит]» with «Хорошо» — acknowledge the pain
         # first, then ask the next episode's question (collects, cares).
-        return "Понимаю, сильная боль — это тяжело."
+        return questions.strong_pain_transition(ep.body_site or "", ep.kind, ep.primary_label)
     label = (ep.primary_label or "").strip()
     return questions.episode_transition(
         (ep.body_site or "").strip(), ep.kind,
@@ -1074,7 +1083,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         _hook = state.open_hook.strip().rstrip(".!?")
         if _hook:
             _hook = _hook[0].lower() + _hook[1:] if len(_hook) > 1 else _hook
-            _q = f"Вы говорили — {_hook}. А что там самое главное?"
+            _q = questions.thread_followup(_hook)
             state.open_hook_used = True
             state.current_thread_turns = 0
             state.last_ack_signature = normalize_signature(_q)
@@ -1474,7 +1483,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 bg = _background_goal_plan(state, filled=filled)
                 if bg:
                     return bg
-            return _summary_plan(state, acknowledge="Хорошо, записала.")
+            return _summary_plan(state, acknowledge=questions.shared_information_ack())
         if its_class in ("USER_QUESTION_OR_META", "REPAIR", "UNCLEAR", "CONTROL"):
             # Do not resolve ITS — keep conversation open.
             return ResponsePlan(
@@ -1864,6 +1873,10 @@ def _elder_asked_to_stop(
     )
 
 
+def _speech_equivalent_quote(value: str) -> str:
+    return value.strip().rstrip(".!?…").casefold()
+
+
 def _turn_has_accepted_episode_value(state: EngineState, turn: RichUserTurn) -> bool:
     """A filled clinical answer is not an invitation to interrogate its wording."""
     ep = get_active_episode(state)
@@ -1877,7 +1890,8 @@ def _turn_has_accepted_episode_value(state: EngineState, turn: RichUserTurn) -> 
     degree = extract_grounded_severity_value(turn.raw_text)
     duration = extract_grounded_duration_value(turn.raw_text)
     return bool(
-        (degree and degree.casefold() == str(ep.known_attributes.get("severity", "")).casefold())
+        (degree and _speech_equivalent_quote(degree)
+         == _speech_equivalent_quote(str(ep.known_attributes.get("severity", ""))))
         or (duration and any(duration.casefold() in str(ep.known_attributes.get(k, "")).casefold()
                              for k in ("duration", "onset")))
     )
@@ -1944,16 +1958,21 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
         turn_context,
         legacy=_schedule_next_action_legacy,
     )
-    ordinary_question = (
-        plan.action == "speak" and plan.marks_question
+    ordinary_response = (
+        ((plan.action == "speak" and plan.marks_question)
+         or (plan.action == "close_summary" and not state.summary_delivered))
         and not plan.control and not plan.safety_class
         and state.safety_mode != "red" and not state.risk_handling
         and not state.red_state_pending
+        and state.check_path != CheckPath.URGENT
     )
-    if ordinary_question and not plan.acknowledge:
+    if ordinary_response:
+        _acknowledge_accepted_report(state, turn_context, plan)
+    if ordinary_response and not plan.acknowledge:
         if turn_context.newly_filled_slots:
             plan.acknowledge_facts = list(turn_context.newly_filled_slots)
         _acknowledge_accepted_episode_answer(state, turn_context, plan, answered_episode_id)
+        _acknowledge_accepted_relief(state, turn_context, plan)
     if (
         turn_context.answer_not_recalled
         and plan.action == "speak"
@@ -1981,6 +2000,56 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
             f"Я спрашивала: «{_history_about(state, turn.user_question)}»."
         )
     return plan
+
+
+def _acknowledge_accepted_report(
+    state: EngineState, ctx: TurnContext, plan: ResponsePlan,
+) -> None:
+    """React to persisted speaker reports even when no clinical probe remains."""
+    turn = ctx.turn
+    if (
+        turn is None or turn.control not in ("none", "") or turn.user_question
+        or turn.correction or turn.not_recalled or plan.acknowledgement_kind
+        or plan.acknowledge not in ("", "Поняла.", "Хорошо.", "Хорошо, записала.")
+        or plan.obligation in (ConversationObligation.REPAIR, ConversationObligation.CONTROL,
+                               ConversationObligation.HANDLE_CORRECTION)
+    ):
+        return
+    from packages.dialogue_engine.issue_memory import _find_episode_for_mention
+
+    accepted = []
+    for mention in turn.issue_mentions:
+        ep_id = _find_episode_for_mention(state, mention)
+        ep = state.issue_episodes.get(ep_id or "")
+        if (mention.subject == "speaker" and ep is not None and ep.subject == "speaker"
+                and turn.utterance_id in ep.evidence_turn_ids):
+            accepted.append(mention)
+    if accepted:
+        grounded = turn.model_copy(update={"issue_mentions": tuple(accepted)})
+        plan.acknowledge = _grounded_ack_for_mentions(
+            grounded, state, clarifying=bool(plan.question_needs),
+        )
+
+
+def _acknowledge_accepted_relief(
+    state: EngineState, ctx: TurnContext, plan: ResponsePlan,
+) -> None:
+    """Clinical resolution needs a confirmed current-turn observation."""
+    turn = ctx.turn
+    if (turn is None or turn.issue_mentions or turn.user_question or turn.correction
+            or turn.control not in ("none", "") or plan.acknowledgement_kind):
+        return
+    for obs in state.observations.values():
+        ep = state.issue_episodes.get(getattr(obs, "episode_id", "") or "")
+        if (getattr(obs, "source_turn_id", None) == turn.utterance_id
+                and getattr(obs, "attribute", None) == "current"
+                and getattr(obs, "status", None) == "confirmed"
+                and getattr(obs, "subject", None) == "speaker"
+                and getattr(obs, "value", None) == "resolved"
+                and ep is not None and ep.subject == "speaker"
+                and ep.known_attributes.get("current") == "resolved"):
+            plan.acknowledgement_kind = "current_relief"
+            return
 
 
 def _acknowledge_accepted_episode_answer(
@@ -2016,7 +2085,7 @@ def _acknowledge_accepted_episode_answer(
         return
     severity = extract_grounded_severity_value(turn.raw_text)
     accepted = ep.known_attributes.get("severity", "")
-    if not severity or severity.casefold() != accepted.casefold():
+    if not severity or _speech_equivalent_quote(severity) != _speech_equivalent_quote(accepted):
         return
     if _STRONG_PAIN.search(severity):
         plan.acknowledgement_kind = "strong_answer"
