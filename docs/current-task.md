@@ -282,6 +282,19 @@ canonical == TTS == delivered speech, and a single farewell.
 
 ---
 
+# Fourth merge live on 996bad8: codex adaptive + our warmth (2026-10-01)
+
+- His 23e4010 (warm tied to meaning, conversational continuity battery)
+  + 85141f7 (adaptive answers, repair, episode ownership, 43 cases).
+  One conflict (bare-ack rotation): kept our warmth + his bridge line.
+- Gates on merged: full 2202/0, corpus 500/500, diff 4/4, agent+dream,
+  hard1000 1349/1349, battery 16/16, ruff clean. Pushed normally
+  (feature only). Bridge in no-call window -> 996bad8, hot, watch OK.
+- NOT VERIFIED: ear proof on merged tree, :9103, remote CI.
+- NEXT: owner ear 7000 -> D1 migration go/no-go.
+
+---
+
 # Warm speech live on 2420549 (2026-10-01)
 
 - Acks carry empathy (same kinds/sizes, labels verbatim): «очень жаль»,
