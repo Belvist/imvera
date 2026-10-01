@@ -1021,6 +1021,18 @@ def _apply_rich_turn(
     if safety_done is not None:
         return safety_done
 
+    # Explicit farewell closes from any non-terminal state on the rich
+    # path too (the scheduler has no farewell branch — ITS would eat
+    # «ну пока» as its answer). Safety wins: an active risk episode
+    # falls through to the safety path, never to goodbye.
+    if not getattr(state, "risk_handling", False) and not getattr(
+        state, "risk_episode_id", None
+    ):
+        if _is_explicit_farewell(user_text):
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            return _emit_goodbye_final(state)
+
     if turn.answers_pending_question and state.pending_episode_attribute:
         state.delivered_question = None
         state.planned_question = None
@@ -3119,8 +3131,16 @@ def _is_explicit_farewell(text: str) -> bool:
         return False
     if any(marker in low for marker in questions._GOODBYE_MARKERS):
         return True
-    if low in {
+    if any(marker in low for marker in ("прощайте", "прощай", "до встречи")):
+        return True
+    # Elderly «ладно, пока» / «ну пока» / «ну давай»: strip leading
+    # fillers first. «пока всё» stays a decline — handled before this
+    # ever runs (decline outranks farewell by construction).
+    _stripped = re.sub(r"^(?:ну|ладно|так|вот|давай|давайте)\b[\s,]*", "", low).strip()
+    _stripped = re.sub(r"[\s,]*(?:ну|ладно)$", "", _stripped).strip()
+    if _stripped in {
         "пока",
+        "давай",
         "заканчиваем",
         "закончили",
         "закончим",

@@ -35,6 +35,11 @@ BODY_SITE_LEMMAS: frozenset[str] = frozenset(
         "висок",
         "лоб",
         "нос",
+        # Elder-speech sites (battery 2026-09-30; collision-checked: рот
+        # is 3 letters so the 4-letter fuzzy matcher skips it as a source;
+        # лицо only matches лицо-forms within length 2).
+        "рот",
+        "лицо",
         "печень",
         "почка",
         # Extended sites (hard1000 coverage; each verified against the
@@ -99,6 +104,39 @@ ISSUE_VERB_LEMMAS: frozenset[str] = frozenset(
         "мешать",
         "затруднять",
         "дрожать",
+        # Elder-speech verbs (battery 2026-09-30) — mirrors the mention
+        # layer's generic verb list so kernel spans agree.
+        "щемить",
+        "гудеть",
+        "звенеть",
+        "слезиться",
+        "чесаться",
+        "гореть",
+        "сохнуть",
+        "хрустеть",
+        "скрючивать",
+        "сводить",
+        "колотить",
+        "рвать",
+        "хрипеть",
+        "драть",
+        "шатать",
+        "подкашивать",
+        "неметь",
+        "отекать",
+        "пухнуть",
+        "темнеть",
+        "потеть",
+        "задыхаться",
+        "слабить",
+        "закрепить",
+        "частить",
+        "замирать",
+        "скакать",
+        "заклинить",
+        "отниматься",
+        "хворать",
+        "лихорадить",
     }
 )
 
@@ -150,6 +188,8 @@ SENSATION_NOUNS: frozenset[str] = frozenset(
         "туман",
         "двоение",
         "сухость",
+        "мокрота",
+        "лихорадка",
         "першение",
         "горечь",
         "жажда",

@@ -116,7 +116,75 @@ _SENSATION_SITE = re.compile(
     r"синяк\w*|сыпь|головокружение|тошнот\w*|рвот\w*|каш\w*|насморк\w*|"
     r"чихан\w*|икот\w*|отрыжк\w*|изжог\w*|запор\w*|понос\w*|гной\w*|"
     r"сухость|першение|горечь|жажд\w*|бол[ьи]\w*|кров[ьи]\w*)\b"
-    r"\s+(в|на|у|во|из|ис|с|со|от|до|под|над|к|ко|за)\s+([а-яё\-]+(?:\s+[а-яё\-]+){0,2})",
+    r"\s+(в|на|у|во|из|ис|с|со|от|до|под|над|к|ко|за|внизу|внутри)\s+"
+    r"([а-яё\-]+(?:\s+[а-яё\-]+){0,2})",
+    re.I,
+)
+# Function loss: the part stopped working («заклинило», «не
+# поднимается»). Paired with a site in the clause; bare «не могу» alone
+# is not a complaint (could be the phone, the door, anything).
+_FUNCTION_LOSS = re.compile(
+    r"\b(заклинило|заклинивает|отнима\w*|отнял\w*|не\s+"
+    r"(?:поднимается|поднимаются|разгибается|сгибается|держит|держат|"
+    r"слушается|слушаются|двигается|двигаются|гнутся|шевелится))\b",
+    re.I,
+)
+
+
+def _find_clause_site(lower_clause: str) -> tuple[str, str]:
+    """First lexicon site in the clause → (lemma, raw token)."""
+    for _tok in re.findall(r"[а-яё\-]{3,}", lower_clause):
+        _norm = _normalize_site_token(_tok)
+        if _site_in_lexicon(_norm):
+            return _norm, _tok
+    return "", ""
+
+
+# Vital-sign complaints. Bare давление/температура name the complaint;
+# пульс/сахар need a qualifier (else «мерила сахар» — a procedure).
+_VITALS_PROCEDURE = re.compile(
+    r"\b(мерил\w*|измер\w*|померил\w*|сдава\w*|сдать|анализ\w*)\b",
+    re.I,
+)
+_VITALS_BAD_QUALIFIER = re.compile(
+    r"\b(скач\w*|высок\w*|низк\w*|поднял\w*|упал\w*|зашкали\w*|"
+    r"частит|частят|замира\w*|колотит\w*|стучит)\b",
+    re.I,
+)
+# «Давление нормальное» reports no complaint — an ok-qualifier without
+# a bad one silences the vitals rule (live contract).
+_VITALS_OK_QUALIFIER = re.compile(
+    r"\b(нормальн\w*|в\s+норме|хорош\w*|обычн\w*|стабильн\w*|"
+    r"как\s+всегда|как\s+обычно)\b",
+    re.I,
+)
+_VITALS_COMPLAINT = re.compile(
+    r"\b(давление|давленьице|температура|температурка)\b"
+    r"|\b(пульс|сахар)\b\s*(?:\s+\w+){0,2}?\s*"
+    r"(скач\w*|высок\w*|низк\w*|поднял\w*|упал\w*|зашкали\w*|"
+    r"частит|частят|замира\w*|колотит\w*|стучит)\b"
+    r"|\b(давление|температура|пульс)\s+(скачет|высокое|низкое|поднялось|упало)\b",
+    re.I,
+)
+
+
+def _vital_label(m: re.Match[str]) -> str:
+    for _g in m.groups():
+        if _g:
+            return _g.strip()
+    return "давление"
+
+
+# Bare systemic complaints: the elder naming it is the complaint, no
+# site possible («неможется», «расхворалась», «мокрота», «закрепило»).
+# Deliberately NOT hunger/thirst/appetite or mood words — those belong
+# to the wellness/background paths, and NOT bare pain verbs (covered).
+_BARE_SYSTEMIC = re.compile(
+    r"\b(неможется|не\s+можется|расхвор\w*|хвора\w*|хворь|"
+    r"лихорад\w*|лихорадка|мокрот\w*|изжог\w*|одыш\w*|удушье|"
+    r"головокруж\w*|тошнот\w*|рвот\w*|запор\w*|понос\w*|"
+    r"насморк\w*|чихан\w*|отрыжк\w*|икот\w*|сердцебиение|"
+    r"каш\w*|слабост\w*|потливост\w*|мути\w*)\b",
     re.I,
 )
 _SENSATION_EAR_NOISE = re.compile(
@@ -357,6 +425,61 @@ def _clause_mentions(
             )
             first_symptom = False
             break
+
+    # Function loss without a pain verb («шею заклинило», «плечо не
+    # поднимается»): a known site + a loss predicate in the same clause.
+    # Runs when nothing fired yet, so no duplicates by construction.
+    if not mentions or not any(m.role in ("primary", "independent") for m in mentions):
+        _loss = _FUNCTION_LOSS.search(n)
+        if _loss:
+            _lsite, _lraw = _find_clause_site(n)
+            if _lsite:
+                _verb = _loss.group(0).strip()
+                add(
+                    label=f"{_lsite} {_verb}",
+                    kind="symptom",
+                    body_site=_lsite,
+                    role="primary" if first_symptom else "independent",
+                    quote=clause,
+                )
+                first_symptom = False
+
+    # Vital signs («давление скачет», bare «давление»): invisible
+    # otherwise. Procedures («мерила сахар», «сдала кровь») never fire —
+    # measuring is not complaining.
+    if not mentions or not any(m.role in ("primary", "independent") for m in mentions):
+        if not _VITALS_PROCEDURE.search(n) and not (
+            _VITALS_OK_QUALIFIER.search(n)
+            and not _VITALS_BAD_QUALIFIER.search(n)
+        ):
+            _vit = _VITALS_COMPLAINT.search(n)
+            if _vit:
+                add(
+                    label=_cap_site(_vital_label(_vit)),
+                    kind="symptom",
+                    body_site=None,
+                    role="primary" if first_symptom else "independent",
+                    quote=clause,
+                )
+                first_symptom = False
+
+    # Bare systemic complaints («неможется», «мокрота», «закрепило»):
+    # no site, no verb pair — but an elder naming it IS the complaint.
+    # Last resort only; questions and already-covered clauses never reach
+    # here with empty mentions... except truly empty ones, hence the
+    # explicit guards: no '?', no user-question/repair markers.
+    if not mentions:
+        if "?" not in clause and not _REPAIR_HEARING.search(n):
+            _bare = _BARE_SYSTEMIC.search(n)
+            if _bare:
+                add(
+                    label=_cap_site(_bare.group(0).strip()),
+                    kind="symptom",
+                    body_site=None,
+                    role="primary" if first_symptom else "independent",
+                    quote=clause,
+                )
+                first_symptom = False
     return mentions
 
 
@@ -404,9 +527,20 @@ _GENERIC_BODY_PAIN = re.compile(
     r"\s+(?:болит|болит[аиуы]?|ноет|ноют|ломит|ломит[аи]?|давит|стреляет|"
     r"стрелял|жж[её]т|жг[её]т|пульсирует|колет|першит|першило|"
     r"залож\w*|онем\w*|тошн\w*|кашл\w*|тян\w*|урч\w*|"
-    r"крут\w*|выкруч\w*|слом\w*)\b"
+    r"крут\w*|выкруч\w*|слом\w*|"
+    # Elder-speech verbs (battery 2026-09-30): explicit forms where a
+    # stem collides (горит/говорит, печёт/печень, частит/часто).
+    r"щем\w*|гуд\w*|звен\w*|слез\w*|чеш\w*|горит|горят|сохн\w*|"
+    r"хруст\w*|скрюч\w*|сводит|сводят|колотит\w*|рвет|рвёт|рвало|"
+    r"хрип\w*|дер[её]т|дерут|шата\w*|подкашив\w*|неме\w*|дрож\w*|"
+    r"отек\w*|опух\w*|пухн\w*|темне\w*|мутн\w*|поте\w*|задыха\w*|"
+    r"закрепило|слабит|частит|частят|замира\w*|стучит|скач\w*|"
+    r"печет|печёт|мути\w*)\b"
     r"|\b(?:болит|болит[аиуы]?|ноет|ноют|ломит|давит|тянет|крутит|"
-    r"заложило|онемело|тошнит|кашляет|першит|сломал\w*|выкруч\w*|урчит)\b"
+    r"заложило|онемело|тошнит|кашляет|першит|сломал\w*|выкруч\w*|урчит|"
+    r"щемит|гудит|звенит|слезятся|чешется|горит|сохнет|хрустит|"
+    r"скрючивает|сводит|колотится|рвёт|хрипит|дерёт|шатает|немеют|"
+    r"дрожат|отекают|темнеет|потею|задыхаюсь|частит|замирает|скачет)\b"
     r"\s+([а-яё]{3,})\b",
     re.I,
 )
