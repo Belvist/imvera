@@ -69,16 +69,22 @@ class DialogueEngine:
         self._started = False
         self._completed_playout_generations: set[int] = set()
 
-    def build_rich_turn(self, text: str, *, utterance_id: str) -> RichUserTurn:
-        """Build RichUserTurn using this engine's state + optional provider DI."""
-        from packages.dialogue_engine.turn_understanding import build_rich_turn_from_text
+    def build_rich_turn(
+        self, text: str, *, utterance_id: str,
+        act_candidate: SemanticTurn | None = None,
+        candidate_confident: bool = False,
+    ) -> RichUserTurn:
+        """Canonical SDK understanding; models supply candidates, never state."""
+        from packages.dialogue_engine.turn_understanding import TurnUnderstandingV2
 
-        return build_rich_turn_from_text(
+        return TurnUnderstandingV2().resolve(
             text,
             utterance_id=utterance_id,
             engine_state=self.state,
             mission_provider=self.mission_understanding_provider,
-        )
+            act_candidate=act_candidate,
+            candidate_confident=candidate_confident,
+        ).turn
 
     @property
     def outbox(self) -> EffectOutbox:

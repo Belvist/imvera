@@ -21,6 +21,7 @@ from packages.dialogue_engine.issue_mention_extract import (
     extract_issue_mentions,
 )
 from packages.dialogue_engine.mission import GoalAnswerCandidate
+from packages.dialogue_engine.semantic import SemanticTurn
 from packages.dialogue_engine.semantic_kernel.types import (
     Observation,
     SemanticRelation,
@@ -49,6 +50,7 @@ class RichUserTurn(BaseModel):
     episode_attributes: tuple = ()
 
     correction: bool = False
+    not_recalled: bool = False
 
     semantic_spans: tuple[SemanticSpan, ...] = ()
     semantic_relations: tuple[SemanticRelation, ...] = ()
@@ -78,11 +80,10 @@ class StrategyVote:
 
 @dataclass(frozen=True)
 class ResolvedTurn:
-    """Single-resolver output (P2 Cut 1): the turn plus its trace.
+    """Canonical turn plus producer/adjudication trace.
 
-    The turn field set is IDENTICAL to RichUserTurn built by the legacy
-    entry points — the resolver only records how it was built, never
-    changes what was built (parity-harness enforced).
+    With no act candidate, preserves the text builder's behavior. An
+    explicit non-generative candidate is fused before the reducer sees it.
     """
 
     turn: RichUserTurn
@@ -92,8 +93,94 @@ class ResolvedTurn:
 
 
 class TurnUnderstandingV2:
-    """Single resolution facade (P2): delegates to existing builders and
-    owns the final choice. Producers move in later cuts; nothing deleted."""
+    """Single resolution facade: grounded producers and bounded act votes."""
+
+    def apply_act_candidate(
+        self,
+        turn: RichUserTurn,
+        candidate: SemanticTurn | None,
+        *,
+        confident: bool,
+        engine_state: object | None = None,
+    ) -> tuple[RichUserTurn, bool, str]:
+        """Fuse a non-generative act vote into the turn the reducer consumes.
+
+        A dialogue act is not an answer/value extractor. Grounded facts,
+        deterministic controls, risk and questions retain precedence. Return
+        the applied flag and reason so trace never calls an ignored vote used.
+        """
+        from packages.dialogue_engine.mission_grounding import evidence_grounded_in_utterance
+        from packages.dialogue_engine.semantic import SemanticAct
+        from packages.dialogue_engine.semantic_nlp.model import CONFIDENCE_THRESHOLD
+
+        if not confident or candidate is None:
+            return turn, False, "abstained"
+        if getattr(candidate, "confidence", 0.0) < CONFIDENCE_THRESHOLD:
+            return turn, False, "below_confidence_threshold"
+        if not evidence_grounded_in_utterance(
+            getattr(candidate, "source_quote", ""), turn.raw_text
+        ):
+            return turn, False, "candidate_evidence_not_grounded"
+        if (
+            turn.control not in {"", "none"} or turn.risk_candidates or turn.user_question
+            or turn.consent_answer != "not_applicable"
+        ):
+            return turn, False, "protected_control_risk_or_question"
+        if (
+            turn.issue_mentions or turn.goal_facts or turn.observations
+            or turn.correction or turn.goal_dispositions
+        ):
+            return turn, False, "grounded_meaning_wins"
+        if engine_state is not None and turn.goal_answers:
+            from packages.dialogue_engine.mission_grounding import filter_grounded_goal_answers
+            from packages.dialogue_engine.mission_seed import mission_from_state
+
+            mission = mission_from_state(engine_state)
+            typed_goals = {
+                goal.goal_id for goal in mission.goals if goal.answer_type != "free_text"
+            }
+            grounded = filter_grounded_goal_answers(
+                turn.goal_answers, mission=mission, utterance=turn.raw_text,
+            )
+            if any(answer.goal_id in typed_goals for answer in grounded):
+                return turn, False, "grounded_meaning_wins"
+        act = getattr(candidate, "act", None)
+        if act == SemanticAct.BACKCHANNEL and engine_state is not None:
+            from packages.dialogue_engine.reducer import (
+                _AFFIRM_ONLY,
+                _DENY_ONLY,
+                _is_yes_no_question,
+            )
+
+            question = getattr(engine_state, "delivered_question", None)
+            word = turn.raw_text.strip().lower().rstrip(".!?…")
+            if (
+                question and _is_yes_no_question(question.text)
+                and word in (_AFFIRM_ONLY | _DENY_ONLY)
+            ):
+                return turn, False, "delivered_yes_no_answer_wins"
+        mapping = {
+            SemanticAct.BACKCHANNEL: "backchannel",
+            SemanticAct.REPAIR_REQUEST: "repair",
+            SemanticAct.ANSWER: "answer",
+        }
+        if act not in mapping:
+            # Goodbye, stop and safety remain deterministic, even if a model
+            # proposes one of them with high confidence.
+            return turn, False, "act_requires_deterministic_control"
+        not_recalled = bool(getattr(candidate, "not_recalled", False))
+        updates = {
+            "dialogue_act": mapping[act],
+            # Recognizing an answer act does not prove its relation to the
+            # delivered question. Preserve Understand's answer binding.
+            "answers_pending_question": act == SemanticAct.ANSWER and turn.answers_pending_question,
+            "not_recalled": not_recalled,
+        }
+        if act != SemanticAct.ANSWER or not_recalled:
+            # Context binding alone may have guessed a free-text answer.
+            # A repair/backchannel/not-recalled vote cannot become that fact.
+            updates["goal_answers"] = ()
+        return turn.model_copy(update=updates), True, "applied_to_canonical_turn"
 
     def resolve(
         self,
@@ -102,6 +189,8 @@ class TurnUnderstandingV2:
         utterance_id: str,
         engine_state: object | None = None,
         mission_provider: object | None = None,
+        act_candidate: SemanticTurn | None = None,
+        candidate_confident: bool = False,
     ) -> ResolvedTurn:
         import time
 
@@ -122,6 +211,17 @@ class TurnUnderstandingV2:
                 detail="legacy canonical path, delegated verbatim",
             )
         )
+        if act_candidate is not None:
+            step = time.monotonic()
+            turn, applied, reason = self.apply_act_candidate(
+                turn, act_candidate, confident=candidate_confident, engine_state=engine_state
+            )
+            votes.append(StrategyVote(
+                strategy="act_candidate_resolution",
+                elapsed_ms=round((time.monotonic() - step) * 1000.0, 2),
+                confident=applied,
+                detail=reason,
+            ))
         return ResolvedTurn(
             turn=turn,
             trace=tuple(votes),

@@ -1,4 +1,4 @@
-"""Cut 1 gate: composer-written bridges are validated, fallback is byte-identical."""
+"""Cut 1 gate: offline bridge candidates are validated against their source."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ pytestmark = pytest.mark.dialogue_engine
 
 
 def test_accept_paraphrase() -> None:
-    from packages.voice_runtime.bridge_gate import validate_bridge
+    from tools.voice_lab.bridge_gate import validate_bridge
 
     ok, reason = validate_bridge(
         "Сочувствую, боль действительно сильная",
@@ -19,7 +19,7 @@ def test_accept_paraphrase() -> None:
 
 
 def test_accept_identical_to_original() -> None:
-    from packages.voice_runtime.bridge_gate import validate_bridge
+    from tools.voice_lab.bridge_gate import validate_bridge
 
     orig = "Поняла вас. Головная боль — зафиксировала."
     ok, reason = validate_bridge(orig, original_bridge=orig, user_text="Голова болит.")
@@ -27,7 +27,7 @@ def test_accept_identical_to_original() -> None:
 
 
 def test_reject_measured_qwen_improvisation() -> None:
-    from packages.voice_runtime.bridge_gate import validate_bridge
+    from tools.voice_lab.bridge_gate import validate_bridge
 
     # Measured :9103 output for user «Сильно болит»: adds a move + misspells.
     ok, reason = validate_bridge(
@@ -39,7 +39,7 @@ def test_reject_measured_qwen_improvisation() -> None:
 
 
 def test_reject_question_promise_verdict_ask() -> None:
-    from packages.voice_runtime.bridge_gate import validate_bridge
+    from tools.voice_lab.bridge_gate import validate_bridge
 
     kw = {
         "original_bridge": "Поняла вас. Живот болит — зафиксировала.",
@@ -60,7 +60,7 @@ def test_reject_question_promise_verdict_ask() -> None:
 
 
 def test_reject_parrot_of_last_vera_line() -> None:
-    from packages.voice_runtime.bridge_gate import validate_bridge
+    from tools.voice_lab.bridge_gate import validate_bridge
 
     ok, reason = validate_bridge(
         "поняла вас. живот болит — зафиксировала.",

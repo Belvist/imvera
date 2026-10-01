@@ -87,6 +87,7 @@ def test_past_resolved_no_issue_no_summary_claim() -> None:
     joined = " ".join(s for res in out for s in _speeches(res)).lower()
     _no_pain_probes([joined])
     assert "сегодня беспокоили" not in joined
+    assert "я записала:" not in joined
     assert not (r.state.wellness_concern or "").strip()
     assert getattr(r.state, "last_protocol_act", None) in ("SIDE_TOPIC", "DECLINE", None)
 

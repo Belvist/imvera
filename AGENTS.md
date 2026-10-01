@@ -15,6 +15,13 @@ You do not improvise architecture. You do not ship without verification gates.
 
 ## Cursor Workflow (active task)
 
+For Dialogue SDK / CDK integrations, read
+[`docs/dialogue-sdk-integration.md`](docs/dialogue-sdk-integration.md) and
+[ADR-025](docs/adr/025-grounded-dialogue-sdk.md). Owner order (2026-09-30):
+no generative LLM in live conversation; models propose meaning, the single
+DialogueEngine decides and formulates. Act proposals must be adjudicated into
+canonical RichUserTurn; log actual use separately from proposal confidence.
+
 For multi-step voice/SIP work, keep `docs/current-task.md` updated (outcome, branch/SHA, decisions, criteria, next op).
 
 ```text

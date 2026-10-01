@@ -187,8 +187,8 @@ def identity_answer() -> str:
 
 def opening_custom_greeting(elder_display_name: str) -> str:
     return (
-        f"Здравствуйте! Это Вера, голосовой помощник сервиса Амвера. "
-        f"Звоню насчёт {elder_display_name}."
+        f"Здравствуйте, {elder_display_name}! "
+        "Это Вера, голосовой помощник сервиса Амвера."
     )
 
 
@@ -307,6 +307,27 @@ def schedule_custom_mission(state: EngineState, turn_context) -> ResponsePlan | 
             marks_question=False,
         )
 
+    # 3b) Health interrupts any mission, using the SAME episode planner as
+    # daily check. Previously only household issues suspended custom goals,
+    # so a complaint was recorded while Vera repeated an unrelated question.
+    if any(
+        ep.kind != "other" and ep.status != "resolved" and ep.subject != "other_person"
+        for ep in state.issue_episodes.values()
+    ):
+        from packages.dialogue_engine.conversation_policy import (
+            _grounded_ack_for_mentions,
+            _next_episode_plan,
+        )
+
+        suspend = capture_mission_suspend(state)
+        if suspend is not None:
+            state.suspended_obligation = suspend
+        episode_plan = _next_episode_plan(state)
+        if episode_plan is not None:
+            if turn and turn.issue_mentions and not episode_plan.acknowledge:
+                episode_plan.acknowledge = _grounded_ack_for_mentions(turn)
+            return episode_plan
+
     # 4) resume suspended goal after issue handling
     if state.suspended_obligation and state.suspended_obligation.kind == "goal_question":
         if _open_other_episode_needs_help(state):
@@ -317,6 +338,12 @@ def schedule_custom_mission(state: EngineState, turn_context) -> ResponsePlan | 
             state.pending_resume_goal_id = gid
             plan = resume_mission_goal_plan(state, gid)
             if plan:
+                if turn and turn.issue_mentions:
+                    from packages.dialogue_engine.conversation_policy import (
+                        _grounded_ack_for_mentions,
+                    )
+
+                    plan.acknowledge = _grounded_ack_for_mentions(turn)
                 return plan
 
     # 5) new / open other-kind issue → one household follow-up, suspend mission
@@ -341,7 +368,12 @@ def schedule_custom_mission(state: EngineState, turn_context) -> ResponsePlan | 
     # 7) next unresolved mission goal
     gdef = next_askable_goal(state)
     if gdef:
-        return ask_mission_goal_plan(state, gdef)
+        ack = ""
+        if turn and turn.issue_mentions:
+            from packages.dialogue_engine.conversation_policy import _grounded_ack_for_mentions
+
+            ack = _grounded_ack_for_mentions(turn)
+        return ask_mission_goal_plan(state, gdef, acknowledge=ack)
 
     # 8) final open / close — asked flag committed only after delivery
     if not state.important_to_share_asked and not state.important_to_share_planned:

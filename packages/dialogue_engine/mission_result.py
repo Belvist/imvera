@@ -49,10 +49,13 @@ def _has_open_complaints(state: EngineState) -> bool:
     for ep in values:
         if ep is None:
             continue
-        if getattr(ep, "status", "open") not in _OPEN_EPISODE:
-            continue
         if getattr(ep, "subject", "unknown") == "other_person":
             continue
+        if getattr(ep, "status", "open") not in _OPEN_EPISODE:
+            # Finishing the questionnaire is not symptom resolution. An
+            # explicitly still-active symptom must keep its care signal.
+            if (ep.known_attributes or {}).get("current") != "active":
+                continue
         return True
     if (getattr(state, "wellness_concern", "") or "").strip():
         return True
@@ -79,11 +82,23 @@ def _grounded_evidence_quotes(state: EngineState, goal) -> list[str]:
     """Public evidence = grounded quote text only (never synthetic ev-... IDs)."""
     quotes: list[str] = []
     seen: set[str] = set()
+    # The current accepted SlotRecord goes first; an earlier observation
+    # for the same goal must not be paired with a later corrected value.
+    if goal is not None:
+        record = state.slot_records.get(goal.resolved_goal_id())
+        if record is not None and record.value == goal.answer and record.source_text:
+            quote = record.source_text.strip()
+            seen.add(quote.casefold())
+            quotes.append(quote)
     for eid in getattr(goal, "evidence_ids", ()) or ():
         if not isinstance(eid, str):
             continue
         obs = state.observations.get(eid) if hasattr(state.observations, "get") else None
         if obs is None:
+            continue
+        if getattr(obs, "status", None) == "superseded":
+            continue
+        if goal is not None and getattr(obs, "value", None) != goal.answer:
             continue
         quote = str(getattr(obs, "evidence", "") or "").strip()
         if not quote or quote.startswith("ev-"):
@@ -217,7 +232,15 @@ def build_call_outcomes(
             mission_status="NOT_RUN",
             candidate_family_status="UNSET",
         )
-    if state.closing_reason in {"stop_call", "revoke_consent", "defer"} or (
+    # Merged 2026-10-01: a refusal must not hide a LATER symptom either.
+    # Re-engagement = mission COMPLETED or a live open complaint — then
+    # the normal path computes (YELLOW floors care), never forced DECLINED.
+    _reengaged = mr.status == "COMPLETED" or _has_open_complaints(state)
+    if state.elder_asked_to_stop and not _reengaged:
+        # A final goodbye must not erase the earlier refusal. This is a
+        # call outcome, not evidence of revoking consent to future calls.
+        call_out = "DECLINED"
+    elif state.closing_reason in {"stop_call", "revoke_consent", "defer"} or (
         state.call_closed and state.closing_reason
     ):
         reason = state.closing_reason or ""
@@ -246,6 +269,10 @@ def build_call_outcomes(
     family = "UNSET"
     if state.safety_mode == "red" or state.risk_handling:
         family = "RED"
+    elif call_out == "DECLINED" and not _has_open_complaints(state):
+        # DECLINED hides nothing while a complaint is live: the symptom
+        # floors care at YELLOW below (merged 2026-10-01).
+        family = "UNSET"
     elif legacy_public_status in {"RED", "YELLOW", "GREEN"} and not is_custom_mission(state):
         family = legacy_public_status  # type: ignore[assignment]
     elif is_custom_mission(state):
@@ -320,6 +347,7 @@ def mission_context_for_llm(state: EngineState):
             "allowed_values": list(g.allowed_values),
             "required": g.required,
             "priority": g.priority,
+            "semantic_scope": g.semantic_scope,
         }
         for g in mission.goals
     )

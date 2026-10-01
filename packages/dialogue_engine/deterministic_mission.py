@@ -967,6 +967,42 @@ class DeterministicMissionUnderstandingProvider:
                     except Exception:  # noqa: BLE001 — fail closed to re-ask
                         return None
                 return speaker
+            # Merged (local + origin): complaint interruption first, then
+            # slot-ownership guard on the surviving text. Both fail safe
+            # (None → re-ask); a residual span still passes the ownership
+            # check below so a complaint fragment never fills a slot.
+            if gdef.source != "daily_check_preset" and gdef.semantic_scope == "general":
+                from packages.dialogue_engine.issue_mention_extract import extract_issue_mentions
+
+                # Complaints are an interruption, not a name, shopping list,
+                # address etc. Reuse Understand's grounded issue extraction;
+                # no mission-specific phrase/verb dictionaries. In mixed
+                # answers retain only an exact contiguous non-issue span.
+                clauses = split_mission_clauses(stripped)
+                _clause_mentions = [
+                    (clause, extract_issue_mentions(clause.text))
+                    for clause in clauses
+                ]
+                # Only symptom-kind mentions interrupt (merged 2026-10-01:
+                # «Плохо спала.» to a sleep probe is the ANSWER —
+                # sleep_problem kind must fall through to the slot guard
+                # below, never die as an interruption).
+                if not any(
+                    m.kind == "symptom"
+                    for _, _found in _clause_mentions
+                    for m in _found
+                ):
+                    pass
+                else:
+                    kept = [
+                        clause
+                        for clause, _found in _clause_mentions
+                        if not _found
+                    ]
+                    if len(kept) != len(clauses):
+                        if len(kept) != 1:
+                            return None  # Multiple residual spans need a provider.
+                        stripped = kept[0].text
             # Other background slots: a delivered question must not claim an
             # answer that positively belongs to a DIFFERENT slot («Дома
             # посижу.» answering a sleep probe fills plans, never sleep —

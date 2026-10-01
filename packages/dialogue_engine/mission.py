@@ -29,6 +29,9 @@ class GoalDefinition(BaseModel):
     semantic_hints: tuple[str, ...] = ()
     # Map allowed value → utterance phrases that mean that value for this goal.
     answer_aliases: dict[str, tuple[str, ...]] = Field(default_factory=dict)
+    # General tasks must not consume an unsolicited health complaint as the
+    # requested free-text value. Apps explicitly declare health questions.
+    semantic_scope: Literal["general", "speaker_health"] = "general"
 
     model_config = {"frozen": True}
 
@@ -72,6 +75,7 @@ def daily_check_mission() -> CallMission:
             answer_type="free_text",
             allowed_values=(),
             source="daily_check_preset",
+            semantic_scope="speaker_health" if slot == "wellness" else "general",
             # Wellness find-out ladder asks up to 3 times differently
             # (ask → hint → options) before explicit unknown.
             max_attempts=3 if slot == "wellness" else 2,

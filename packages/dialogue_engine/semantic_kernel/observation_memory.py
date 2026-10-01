@@ -573,6 +573,10 @@ def atomic_semantic_apply(state: EngineState, turn: RichUserTurn) -> None:
     if turn.kernel_corrections:
         apply_corrections(state, turn.kernel_corrections, bound)
     _apply_bound_observations_to_episodes(state, bound)
+    for episode in state.issue_episodes.values():
+        for attribute in list(episode.unanswered_attributes):
+            if episode.known_attributes.get(attribute):
+                episode.unanswered_attributes.pop(attribute)
     _apply_mission_goal_answers(state, turn)
 
     # Same-turn temporal for a new issue: same clause, or sole episode if temporal

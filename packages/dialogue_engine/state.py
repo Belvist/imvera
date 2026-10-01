@@ -125,6 +125,9 @@ class IssueEpisode(BaseModel):
     evidence_turn_ids: list[str] = Field(default_factory=list)
 
     known_attributes: dict[str, str] = Field(default_factory=dict)
+    # Unanswered questions are evidence of missing information, never facts
+    # about the symptom. Keep the caller's own quote for honest reporting.
+    unanswered_attributes: dict[str, str] = Field(default_factory=dict)
 
     status: Literal["open", "suspended", "resolved"] = "open"
 

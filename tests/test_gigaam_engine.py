@@ -33,10 +33,36 @@ def test_ensure_gigaam_artifacts_skips_existing(tmp_path: Path) -> None:
     resolved = "v3_e2e_rnnt"
     ckpt = tmp_path / f"{resolved}.ckpt"
     ckpt.write_bytes(b"x" * 64)
-    with patch("services.stt.gigaam_engine._verify_checksum") as verify:
+    (tmp_path / f"{resolved}_tokenizer.model").write_bytes(b"existing tokenizer")
+    with (
+        patch("services.stt.gigaam_engine._verify_checksum") as verify,
+        patch("services.stt.gigaam_engine._download_file") as download,
+    ):
         root = ensure_gigaam_artifacts(resolved, tmp_path)
     assert root == tmp_path
     verify.assert_called_once()
+    download.assert_not_called()
+
+
+def test_existing_checkpoint_downloads_only_missing_tokenizer(tmp_path: Path) -> None:
+    resolved = "v3_e2e_rnnt"
+    (tmp_path / f"{resolved}.ckpt").write_bytes(b"x" * 64)
+
+    def download_tokenizer(url: str, dest: Path) -> Path:
+        dest.write_bytes(b"downloaded tokenizer")
+        return dest
+
+    with (
+        patch("services.stt.gigaam_engine._verify_checksum") as verify,
+        patch(
+            "services.stt.gigaam_engine._download_file", side_effect=download_tokenizer,
+        ) as download,
+    ):
+        assert ensure_gigaam_artifacts(resolved, tmp_path) == tmp_path
+    verify.assert_called_once()
+    download.assert_called_once()
+    assert download.call_args.args[0].endswith(f"/{resolved}_tokenizer.model")
+    assert download.call_args.args[1] == tmp_path / f"{resolved}_tokenizer.model"
 
 
 def test_load_asr_backend_unknown_engine() -> None:

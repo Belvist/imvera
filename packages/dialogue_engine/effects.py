@@ -27,12 +27,11 @@ class SpeakEffect(Effect):
     semantic_scope_id: str = ""
     supersedes_effect_id: str = ""
     reissue_count: int = 0
-    # Cut 1 (ADR-020): pre-join spans. When bridge_llm_allowed, the delivery
-    # layer may ask the composer to rewrite bridge_text ONLY; question_text
-    # is fixed and always spoken. Empty = single-span legacy effect.
+    # Pre-join spans retained for delivery trace. ADR-025 retired generative
+    # bridge rewriting: the complete canonical text always goes to TTS.
     bridge_text: str = ""
     question_text: str = ""
-    bridge_llm_allowed: bool = False
+    bridge_llm_allowed: bool = False  # Historical serialized field; never consulted.
 
 
 class InterpretEffect(Effect):

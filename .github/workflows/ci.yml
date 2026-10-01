@@ -112,6 +112,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Differential loads the pinned v8 policy at c0fa158b; a shallow
+          # checkout cannot supply its historical tree/blob objects.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

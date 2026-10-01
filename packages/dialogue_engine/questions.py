@@ -350,12 +350,12 @@ def summary_close_speech(
     if concerns:
         if name:
             core = (
-                f"Спасибо, {name}. Я записала: сегодня беспокоили {concerns}. "
+                f"Спасибо, {name}. Я записала: {concerns}. "
                 "На сегодня всё. Берегите себя."
             )
         else:
             core = (
-                f"Спасибо. Я записала: сегодня беспокоили {concerns}. "
+                f"Спасибо. Я записала: {concerns}. "
                 "На сегодня всё. Берегите себя."
             )
     elif name:

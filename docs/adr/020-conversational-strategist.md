@@ -3,6 +3,12 @@
 Date: 2026-09-22
 Status: proposed
 
+Amendment 2026-09-30: [ADR-025](025-grounded-dialogue-sdk.md) retires the
+generative bridge composer from the live SDK. Its flag/runtime eligibility
+and rewriting path are removed; historical proposals below are not active
+integration instructions. The owner requires non-generative understanding
+and deterministic engine speech.
+
 ## Context (verified, not opined)
 
 - Live engine path bypasses the LLM renderer: `packages/voice_runtime/call_actor.py:2374`

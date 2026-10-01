@@ -207,6 +207,122 @@ Branch `feature/voice-zoiper-m5`, HEAD `16f00a6` (после коммита). Br
 - Полный набор: 1918 passed / 0 failed; hard1000 1315/1315; safety 203/203;
   hard_battery 16/16; корпус 500/500; agent+dream PASS; policy diff 4/4.
 - НЕ проверено: живой SIP/redial; мост на старом коде; прослушивание TTS.
+# Grounded Dialogue SDK — 2026-09-30 → 2026-10-01
+
+CI follow-up (2026-10-01): SDK commit `d29f239` was delivered through GitHub
+Git Data API after Git HTTPS rejected push. Remote commit and tree matched
+the tested local objects exactly; main stayed at `fe214c58`.
+[Run 36795171154](https://github.com/Belvist/imvera/actions/runs/36795171154):
+8 jobs passed; full test job ran PostgreSQL and reported **1933 passed /
+5 missing-model failures / 3 skipped**. The extra 6 passes are the DB checks
+skipped without a local PostgreSQL server. `policy-diff` separately failed
+because its shallow checkout lacked pinned v8 objects at `c0fa158b`.
+Reproduced in a fresh depth-1 clone: identical FATAL; after fetching full
+history: PASS changed=4 / expected=4 / unexplained=0. Workflow now requests
+`fetch-depth: 0` for that job, matching the other frozen-history gates.
+No expected-delta manifest or failure assertion was weakened.
+The real model artifacts are neither tracked nor present among GitHub release
+assets; owner was asked where to obtain them. Model/live acceptance stays open.
+
+Branch: `feature/voice-zoiper-m5`. Base: `be2db5438cf37bb84009cac5bd425672b3737e6a`.
+Owner explicitly authorized implementation, fixes, commit and push to this branch.
+Owner constraint: no generative LLM in live dialogue; models understand, engine decides/formulates.
+Implementation: [ADR-025](adr/025-grounded-dialogue-sdk.md).
+Agent handoff: [integration guide](dialogue-sdk-integration.md).
+Research: [Fish Audio / Newo.ai](research/voice-dialogue-competitors-2026-09-30.md).
+
+## CHANGED
+
+- Act proposals now reach canonical RichUserTurn through TurnUnderstandingV2, with truthful
+  `proposed / used / resolution_reason` trace; grounded facts, consent/control, risk, typed
+  enum/bool answers and delivered yes/no answers retain precedence.
+- Existing SDK build_rich_turn supports explicit non-generative act candidates. Understand
+  stays read-only; no new FSM/planner/model vendor.
+- Removed the live generative bridge composer, deadline/eligibility code and flag use.
+  Canonical engine text goes directly to TTS. Old effect field is serialized compatibility
+  only; offline bridge validator moved to tools/voice_lab. Composer tests migrated to a
+  stricter no-LLM canonical delivery contract (old flag both on/off).
+- Slot answer writes now keep mission lifecycle/value coherent; current SlotRecord evidence
+  is preferred and superseded/stale quotes are excluded from the current answer.
+- Polite refusal remains DECLINED after goodbye; it does not invent revocation of future consent.
+- Rich and semantic not-recalled handling share the reducer operation. Episode unanswered
+  quotes are separate from known symptom attributes; temporal/severity questions advance.
+  Custom free-text goals stay honestly partial; declared enum unknown retains its typed answer.
+- General free-text no longer consumes recognized health complaints. Mixed turns keep an
+  exact answer span. Free-text provider value must be grounded inside its real quote.
+- Custom health interruptions use the shared episode planner, preserve the delivered goal,
+  and resume it after clarification; episode answers cannot satisfy the suspended mission goal.
+- Explicit current=active keeps the care signal after completion of questioning.
+- Fixed noun-list summary grammar/custom greeting addressing. Stronger false-world negative check.
+- Fixed GigaAM cache unit fixture: both files present means zero downloads; missing-tokenizer
+  behavior has a separate offline assertion. Existing checksum assertions preserved.
+
+## VERIFIED
+
+Python 3.12.14, Linux x86_64, 3 vCPU / AMD EPYC 9V74. Working directory:
+`/workspace/imvera-feature-review`; executable `/workspace/imvera-review-venv/bin/python`;
+`PYTHONPATH=/workspace/imvera-feature-review` for all commands below.
+
+| Command | Result |
+| --- | --- |
+| `python -m pytest tests/ -q -p no:cacheprovider` | 1927 passed / 5 failed (missing model runtime) / 9 skipped; no deselection |
+| `python -m pytest tests/test_dialogue_sdk_grounded_progress.py tests/test_politeness_refusal.py tests/test_engine_canonical_delivery.py -k 'not declared_enum_unknown' -q -p no:cacheprovider` | Same 34 checks: base **17 failed / 17 passed**, changed tree **34 passed / 2 deselected**; the two extra enum cases are covered in full suite |
+| `python -m pytest tests/test_dialogue_sdk_grounded_progress.py tests/test_dialogue_sdk_act_resolution.py -q -p no:cacheprovider` | 28 passed, including canonical model vote routing and typed unknown |
+| `python scripts/dialogue_corpus_gate.py` | 500/500 PASS |
+| `python scripts/hard_battery.py` | 16/16 PASS |
+| `python scripts/agent_dialogue_gate.py` | agent_dialogue_gate PASS + dream_narrative_gate PASS |
+| `python tools/voice_lab/policy_diff_v8_v9.py` | PASS, changed=4 / expected=4 / unexplained=0 |
+| `python -m ruff check packages services tests scripts tools` | All checks passed |
+| `git diff --check` | Clean |
+| `python scripts/dialogue_sdk_demo.py --json` | 5 actual engine conversations; 18 text turns, p50 1.716 ms / p95 101.552 ms |
+
+Comparison uses a detached worktree at the base commit, with the same new regression fixtures
+copied into it; no baseline product code edited. Act routing uses controlled classifier votes,
+not a claim of neural model accuracy. The original full-suite baseline was 1896 passed,
+8 failed, 9 skipped, 1 external-network test deselected. The three refusal failures are fixed;
+other new comparison failures reveal previously uncovered defects. Existing tests were not
+skipped or weakened; GigaAM's network surprise is repaired by testing its actual cache contract.
+
+Text demo timing excludes STT/TTS/SIP and act inference, includes cold text construction,
+and has only 18 samples. It is not a load test, comparison against competitor latency or
+an end-to-end SLO proof. Gate scripts run on the modified tree at base SHA + dirty state;
+post-commit checks identify the actual commit before push.
+
+## NOT VERIFIED
+
+Five existing model checks are run and fail because torch / transformers / real gitignored
+artifacts are absent in this workspace. Their actual model behavior and hot readiness
+are unverified; neither fake warmth nor skip decorators were added:
+
+- `test_media_bridge_readiness_green_without_llm` (test_deterministic_mission_understanding)
+- `test_warmup_all_hot` (test_nlp_warmup)
+- `test_live_shapes`, `test_abstains_on_hedge_and_empty`,
+  `test_mission_fallback_uses_model_before_judge` (test_polarity_model)
+
+Live Mac/MPS/SIP/Zoiper, spoken-vs-canonical trace, barge-in and real end-to-end latency are
+NOT VERIFIED: that lab is not connected to this cloud workspace. No deployment performed.
+
+## REMAINING RISKS
+
+- Daily snapshot partial and candidate status still have different inherited admission
+  assumptions. Core must provide real identity/elder consent/can_talk evidence; completion
+  must not be used to fabricate consent. Public verdict still belongs to Core.
+- General free-text guard covers recognized health interruptions, not universal relevance.
+  Multiple disconnected answer spans need a measured semantic provider/schema; do not
+  promote the existing shadow cross-encoder without evaluation.
+- Existing synchronous neural inference/event-loop and voice-m5 limits require real measured
+  capacity work; this slice does not prove 100/100000 simultaneous audio calls.
+- ADR-024 proof monitor is incomplete (legal_set_complete=False); no trained neuro ranker or
+  online improvement claim is made.
+
+## NEXT GATE
+
+On the actual voice runtime, supply the pinned act v2 / relation xenc_v3 / polarity_v1 artifacts,
+run warmup and pass all five model checks. Then verify runtime SHA and replay the 5 SDK demo
+scenarios plus safety/barge-in via SIP before accepting the live demonstration.
+
+Rollback: revert the slice commit; no migration/new service/credential required.
+Commit/push destination is owner-authorized m5; no release tag or main change.
 
 ---
 
