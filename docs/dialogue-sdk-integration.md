@@ -1,8 +1,18 @@
 # Интеграция Dialogue SDK — руководство следующему агенту
 
-Дата: 2026-09-30. Рабочая ветка: `feature/voice-zoiper-m5`.
+Дата: 2026-10-01. Рабочая ветка: `feature/voice-zoiper-m5`.
 Контракт: [ADR-025](adr/025-grounded-dialogue-sdk.md), границы обучения:
 [ADR-024](adr/024-bounded-neuro-learning.md).
+
+Тёплая манера: [ADR-026](adr/026-grounded-warm-dialogue.md).
+`ResponsePlan.acknowledgement_kind` задаёт смысл реакции, а Renderer — текст.
+`not_recalled` выставляется только после реального снятия вопроса как неизвестного;
+`resume_mission` — при реальном возврате к приостановленной цели. Не добавляй
+случайные «понимаю» в TTS/CallActor и не обещай выздоровление. При завершении
+по control жалоба из той же реплики сохраняется через atomic apply, а вопрос
+и ответы миссии из этого control-turn не добавляются.
+Протокол сравнения и загрузки настоящих чужих транскриптов:
+[elder-care comparison](research/elder-care-dialogue-comparison-2026-10-01.md).
 
 ## Что пользователь разрешил и чего требует
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from packages.dialogue_engine import questions
 from packages.dialogue_engine.question_context import QuestionNeed
@@ -39,6 +39,7 @@ class ResponsePlan:
     mandatory_question: str = ""
     tone: str = "warm"
     clarification: bool = False
+    acknowledgement_kind: Literal["not_recalled", "resume_mission"] | None = None
 
 
 def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan:
@@ -63,6 +64,12 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
 
     facts = plan.acknowledge_facts or plan.facts_to_reference
     ack = plan.acknowledge or _acknowledge_fills(state, facts)
+    if plan.acknowledgement_kind == "not_recalled":
+        ack = questions.not_recalled_ack()
+    elif plan.acknowledgement_kind == "resume_mission":
+        resume = questions.mission_resume_ack()
+        if not ack.endswith(resume):
+            ack = " ".join(part for part in (ack, resume) if part)
     question = plan.mandatory_question
 
     if plan.answer_user_question and plan.mandatory_question:
@@ -175,23 +182,31 @@ def _acknowledge_fills(state: EngineState, filled: list[str]) -> str:
     if not filled:
         return ""
 
+    wellness = state.slot_records.get("wellness") if "wellness" in filled else None
+    # A good overall answer cannot erase bad sleep/mood in the same turn.
+    # Prefer the accepted negative fact; the planner still owns any follow-up.
+    if wellness is not None and wellness.polarity == "negative":
+        return questions.wellness_ack(
+            polarity=wellness.polarity, value=wellness.value, turn_seq=state.turn_seq,
+        )
+
+    if "sleep" in filled:
+        rec = state.slot_records.get("sleep")
+        pol = rec.polarity if rec else None
+        value = rec.value if rec else state.slot_values.get("sleep", "")
+        if pol == "negative" or (pol is None and _looks_bad_sleep(value)):
+            return "Понимаю, ночь была тяжёлая."
+
+    if "mood" in filled:
+        rec = state.slot_records.get("mood")
+        if rec is not None and rec.polarity == "negative":
+            return "Понимаю. Спасибо, что рассказали о настроении."
+
     if "wellness" in filled:
         rec = state.slot_records.get("wellness")
         pol = rec.polarity if rec else None
         val = rec.value if rec else state.slot_values.get("wellness", "")
         return questions.wellness_ack(polarity=pol, value=val, turn_seq=state.turn_seq)
-
-    if "sleep" in filled:
-        rec = state.slot_records.get("sleep")
-        pol = rec.polarity if rec else None
-        if pol == "negative" or _looks_bad_sleep(rec.value if rec else ""):
-            return "Понимаю, ночь была тяжёлая."
-
-    if "mood" in filled:
-        rec = state.slot_records.get("mood")
-        pol = rec.polarity if rec else None
-        if pol == "negative":
-            return "Понимаю."
 
     if "plans" in filled:
         return "Хорошо, поняла."
@@ -200,8 +215,9 @@ def _acknowledge_fills(state: EngineState, filled: list[str]) -> str:
 
 
 def _looks_bad_sleep(text: str) -> bool:
-    t = text.lower()
-    return any(x in t for x in ("не спал", "плохо", "мало", "беспокойн", "почти не"))
+    import re
+
+    return bool(re.search(r"\b(?:не\s+спал\w*|плохо|мало|беспокойн\w*|почти\s+не)\b", text, re.I))
 
 
 def slot_polarity_from_candidate(cand) -> str | None:

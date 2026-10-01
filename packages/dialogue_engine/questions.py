@@ -198,15 +198,16 @@ _SLOT_CLARIFICATION_TAILS: dict[str, list[str]] = {
 _WELLNESS_ACK_TAILS: dict[str, list[str]] = {
     "negative": [
         "Я вас внимательно слушаю.",
-        "Расскажите, что беспокоит сильнее всего.",
-        "Я всё записываю.",
+        "Спасибо, что рассказали.",
+        "Давайте разберёмся по порядку.",
     ],
     "uncertain": [
         "Я запишу это.",
-        "Уточните чуть подробнее, пожалуйста.",
+        "Спасибо, что сказали.",
         "Я вас слушаю.",
     ],
     "positive": ["Рада за вас.", "Очень хорошо.", "Ну и славно."],
+    "neutral": ["Спасибо, что рассказали.", "Спасибо, что сказали.", "Я вас слушаю."],
 }
 
 _REPAIR_ACK = "Да, слышу."
@@ -222,7 +223,6 @@ _PAUSE_ACK = "Хорошо, подожду."
 _GOODBYE_CONFIRM = "Вы хотите закончить разговор?"
 _GOODBYE_FINAL = "До свидания. Хорошего дня."
 _GOODBYE_MARKERS = ("до свидания", "всего доброго")
-_WELLNESS_ACK = "Хорошо."
 _WELLNESS_ACK_GOOD = "Рада это слышать."
 _WELLNESS_ACK_NORMAL = "Понятно."
 _WELLNESS_ACK_OKAY = "Хорошо, поняла."
@@ -467,13 +467,25 @@ def wellness_ack(
         normal_short = re.match(r"^(нормально|обычно|ничего|обычное)\.?$", core, re.I)
         if normal_short or "нормально" in value.lower():
             base = _WELLNESS_ACK_NORMAL
+            tails = _WELLNESS_ACK_TAILS["neutral"]
         elif pol == "positive":
             base = _WELLNESS_ACK_GOOD
+            tails = _WELLNESS_ACK_TAILS["positive"]
         else:
-            base = _WELLNESS_ACK
-        tails = _WELLNESS_ACK_TAILS["positive"]
+            base = _WELLNESS_ACK_UNCERTAIN
+            tails = _WELLNESS_ACK_TAILS["neutral"]
     tail = tails[turn_seq % len(tails)]
     return f"{base} {tail}".strip()
+
+
+def not_recalled_ack() -> str:
+    """A discharged unknown is respected, never medical reassurance."""
+    return "Понимаю, не будем угадывать."
+
+
+def mission_resume_ack() -> str:
+    """Explain an actual planner transition; do not infer symptom recovery."""
+    return "Вернёмся к моему вопросу."
 
 
 def opening_speech(elder_display_name: str, prior_context: dict[str, str] | None = None) -> str:

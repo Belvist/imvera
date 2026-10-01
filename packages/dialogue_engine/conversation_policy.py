@@ -49,6 +49,7 @@ class TurnContext:
     user_text: str = ""
     answer_slot: str | None = None
     clarify: bool = False
+    answer_not_recalled: bool = False
 
 
 @dataclass(frozen=True)
@@ -724,7 +725,7 @@ def _grounded_ack_for_mentions(
             "это неприятно, давайте уточним по порядку."
         )
     if has_belly and has_nausea:
-        return "Поняла вас. Живот и тошнота — это серьёзно, я вас слушаю."
+        return "Поняла вас. Живот и тошнота — это неприятно, давайте уточним по порядку."
     _sited = [
         m
         for m in turn.issue_mentions
@@ -1857,6 +1858,17 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
         turn_context,
         legacy=_schedule_next_action_legacy,
     )
+    if (
+        turn_context.answer_not_recalled
+        and plan.action == "speak"
+        and plan.marks_question
+        and not plan.control
+        and not plan.safety_class
+        and state.safety_mode != "red"
+        and not state.risk_handling
+        and not state.red_state_pending
+    ):
+        plan.acknowledgement_kind = "not_recalled"
     # «А что ты спрашивал?» — answer with the last asked question, then
     # continue the plan (never steamroll a question-back into summary).
     # Topic-aware: «...про лекарства?» quotes the meds question, not just

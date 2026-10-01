@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — 2026-10-01
+
+- Acknowledge discharged unknown answers and explain actual custom-goal resumption.
+- Prefer negative sleep/mood facts over positive wellness in the same rendered turn.
+- Keep neutral acknowledgments proportionate and remove extra asks/unsupported severity.
+- Recognize polite “разговаривать” refusal in the existing DECLINE matcher.
+- Preserve a grounded same-turn complaint before existing closing controls.
+- Add a frozen 16-case comparison suite with attributable transcript import and elder-care research.
+- Keep live audio, human warmth ratings, model readiness and competitor runs explicitly unverified.
+
 ## Unreleased — 2026-09-30
 
 - Route bounded NLP act votes into canonical dialogue turns with truthful usage trace.

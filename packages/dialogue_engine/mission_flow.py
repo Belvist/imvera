@@ -99,11 +99,13 @@ def resume_mission_goal_plan(state: EngineState, goal_id: str) -> ResponsePlan |
     goal = state.goals.get(goal_id)
     if goal is None or goal.lifecycle in _TERMINAL:
         return None
-    return ask_mission_goal_plan(
+    plan = ask_mission_goal_plan(
         state,
         gdef,
         obligation="resume_mission_goal",
     )
+    plan.acknowledgement_kind = "resume_mission"
+    return plan
 
 
 def capture_mission_suspend(state: EngineState) -> SuspendedObligation | None:
@@ -163,13 +165,13 @@ def answer_user_question_text(question: str) -> str:
         return _IDENTITY
     if any(w in low for w in ("зачем", "почему спраш", "для чего")):
         return (
-            "Я собираю сведения для сервиса Амвера, чтобы близкие были в курсе. "
-            "Я не вызываю службы и не обещаю действий."
+            "Я помогаю близким быть в курсе того, как у вас дела. "
+            "Ответы из этого разговора сохраняются в сервисе Амвера для семьи."
         )
     if any(w in low for w in ("что будет", "информац", "увидит", "переда")):
         return (
-            "Сведения сохраняются для семьи в сервисе Амвера. "
-            "Я сама никуда не звоню и ничего не обещаю."
+            "Ответы из этого разговора сохраняются в сервисе Амвера для семьи. "
+            "Дальнейшие действия решают близкие."
         )
     if any(w in low for w in ("когда", "ещё позвон", "еще позвон")):
         return "О следующих звонках решает семья в приложении Амвера."
