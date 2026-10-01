@@ -2,6 +2,12 @@
 
 ## Unreleased — 2026-10-01
 
+- Keep semantic status inside sentence/contrast boundaries; food/sleep assessments cannot resolve a different complaint.
+- Retain explicit spoken duration evidence, excluding pronoun references and unknown answers.
+- Clear interrupted background coverage and avoid general concern re-asks after recorded symptoms.
+- Preserve reflexive tremor, distinct symptoms at one site and grammatical plural labels in speech/recaps.
+- Add the fs-2baf87ec regression and adjacent semantic cases to the mandatory kernel CI gate.
+- Reject untyped clinical fills from coarse classifier/personal memory and repair clarification requests without inventing severity.
 - Acknowledge discharged unknown answers and explain actual custom-goal resumption.
 - Prefer negative sleep/mood facts over positive wellness in the same rendered turn.
 - Keep neutral acknowledgments proportionate and remove extra asks/unsupported severity.

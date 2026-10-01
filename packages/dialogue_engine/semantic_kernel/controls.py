@@ -92,6 +92,15 @@ def match_repair(text: str) -> Level0Match | None:
         norm,
     ):
         return Level0Match(dialogue_act="repair", control="none")
+    # Clarify the question's meaning, including the observed STT form.
+    # A mixed request + real complaint must continue through the kernel,
+    # otherwise LEVEL0 would erase the clinical evidence.
+    if re.match(r"^(?:уточни(?:те)?|конкретизируй(?:те)?|конкретнись)\b", norm):
+        from packages.dialogue_engine.semantic_kernel.span_parser import parse_spans
+        from packages.dialogue_engine.semantic_kernel.types import SpanType
+
+        if not any(s.type == SpanType.ISSUE for s in parse_spans(norm)):
+            return Level0Match(dialogue_act="repair", control="none")
     for prefix in sorted(_REPAIR_PREFIXES, key=len, reverse=True):
         if norm == prefix or norm.startswith(prefix + " ") or norm.startswith(prefix + ","):
             return Level0Match(dialogue_act="repair", control="none")

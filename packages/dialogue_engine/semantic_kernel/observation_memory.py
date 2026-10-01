@@ -28,6 +28,10 @@ if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState
     from packages.dialogue_engine.turn_understanding import RichUserTurn
 
+_PAIN_EQUIVALENCE = re.compile(
+    r"\b(?:(?:по|при|за|раз)?бол\w*|побалива\w*|боль|ноет|ноют|ныть)\b", re.I
+)
+
 
 def _oid() -> str:    return f"obs-{uuid.uuid4().hex[:8]}"
 
@@ -106,7 +110,10 @@ def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
         body_site = body_spans[0].normalized if body_spans else None
         issue_norm = issue.normalized or issue.text.lower()
         issue_surface = issue.text.strip().lower() or issue_norm
-        label = f"{body_site} {issue_surface}".strip() if body_site else issue.text
+        # Keep the spoken noun's number/case; the lemma is a memory key,
+        # not a grammatical subject («руки ноют», never «рука ноют»).
+        body_surface = body_spans[0].text.lower() if body_spans else ""
+        label = f"{body_surface} {issue_surface}".strip() if body_site else issue.text
         clause = clause_for_position(clauses, issue.start)
         clause_subject = _subject_for_clause(clause, has_issue=True)
         subject = subject_for_issue(
@@ -138,7 +145,9 @@ def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
                 temporal=temporal,
                 confidence=issue.confidence,
                 source_turn_id=result.utterance_id,
-                evidence=issue.text,
+                # Keep the full original tremor clause, including uncertain
+                # coordinated words. Never rewrite «кровят» into a diagnosis.
+                evidence=clause if issue_norm in ("трястись", "дрожать") else issue.text,
                 status="confirmed",
             )
         )
@@ -250,12 +259,33 @@ def build_reference_observations(
         )
         return tuple(observations)
 
-    time_spans = [s for s in result.spans if s.type in (SpanType.TIME, SpanType.DURATION)]
+    reference_ids = {r.source_span_id for r in result.relations
+                     if r.type == RelationType.REFERS_TO}
+    time_spans = [s for s in result.spans
+                  if s.type in (SpanType.TIME, SpanType.DURATION)
+                  and s.span_id not in reference_ids]
     status_spans = [s for s in result.spans if s.type == SpanType.STATUS]
     severity_spans = [s for s in result.spans if s.type == SpanType.SEVERITY]
     pending = state.pending_episode_attribute
 
-    if pending and not any(r.type == RelationType.REFERS_TO for r in result.relations):
+    if pending:
+        if pending not in ("onset", "duration") and not any(
+            s.type == SpanType.ISSUE for s in result.spans
+        ):
+            from packages.dialogue_engine.issue_memory import extract_grounded_duration_value
+
+            grounded_duration = extract_grounded_duration_value(raw)
+            if grounded_duration and not ep.known_attributes.get("duration"):
+                for span in time_spans:
+                    if span.type == SpanType.DURATION and span.text == grounded_duration:
+                        observations.append(Observation(
+                            observation_id=_oid(), episode_id=ep_id, attribute="duration",
+                            value=span.text, normalized_value=span.normalized,
+                            body_site=body_site, issue_normalized=issue_norm,
+                            source_turn_id=result.utterance_id, evidence=span.text,
+                            status="confirmed",
+                            temporal=TemporalFrame(duration=span.text, raw_evidence=span.text),
+                        ))
         if pending in ("onset", "duration"):
             from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
 
@@ -283,6 +313,19 @@ def build_reference_observations(
                         ),
                     )
                 )
+                for span in time_spans:
+                    if span.type != SpanType.DURATION or span.text not in value:
+                        continue
+                    if attr == "duration":
+                        continue
+                    observations.append(Observation(
+                        observation_id=_oid(), episode_id=ep_id, attribute="duration",
+                        value=span.text, normalized_value=span.normalized,
+                        body_site=body_site, issue_normalized=issue_norm,
+                        source_turn_id=result.utterance_id, evidence=span.text,
+                        status="confirmed",
+                        temporal=TemporalFrame(duration=span.text, raw_evidence=span.text),
+                    ))
                 return tuple(observations)
         if pending == "severity" and severity_spans:
             span = severity_spans[0]
@@ -304,12 +347,16 @@ def build_reference_observations(
 
     refers = [r for r in result.relations if r.type == RelationType.REFERS_TO]
     if not refers:
-        return ()
+        return tuple(observations)
 
     from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
 
     grounded_temporal = extract_grounded_onset_value(raw)
     for span in time_spans:
+        if span.type == SpanType.DURATION and pending and pending not in ("onset", "duration"):
+            # The scoped out-of-order consumer above already adjudicated
+            # quantities. REFERS_TO must not bypass its ownership/overwrite guard.
+            continue
         # Reject weak TIME tokens («там») unless a grounded temporal anchor exists.
         if not grounded_temporal:
             continue
@@ -364,27 +411,6 @@ def build_reference_observations(
             )
         )
 
-    if not observations and result.raw_text.strip():
-        lower = result.raw_text.lower()
-        if any(w in lower for w in ("час", "день", "дней", "недел", "утр", "вчера", "давно")):
-            observations.append(
-                Observation(
-                    observation_id=_oid(),
-                    episode_id=ep_id,
-                    attribute="duration",
-                    value=result.raw_text.strip(),
-                    normalized_value=result.raw_text.strip().lower(),
-                    body_site=body_site,
-                    issue_normalized=issue_norm,
-                    source_turn_id=result.utterance_id,
-                    evidence=result.raw_text.strip(),
-                    status="confirmed",
-                    temporal=TemporalFrame(
-                        duration=result.raw_text.strip(),
-                        raw_evidence=result.raw_text,
-                    ),
-                )
-            )
     return tuple(observations)
 
 
@@ -945,7 +971,7 @@ def observations_to_issue_mentions(
             # Past marker («утром») without explicit resolution («прошло»,
             # «лучше», «не болит») is improving — earns ONE current check,
             # never silent burial (spec scenario 12).
-            _ev = f"{obs.evidence} {raw_text}".lower()
+            _ev = clause_for_position(clause_bounds(raw_text), start).lower()
             if any(
                 w in _ev
                 for w in ("прошл", "лучше", "получше", "не болит", "нормально")
@@ -958,7 +984,9 @@ def observations_to_issue_mentions(
         elif obs.temporal.onset:
             temporal = "past" if "вчера" in obs.temporal.onset.lower() else "now"
         label = obs.value
-        if body_site and body_site not in label.lower():
+        if body_site and body_site not in label.lower() and not any(
+            normalize_text(token) == body_site for token in label.split()
+        ):
             label = f"{body_site} {obs.evidence}".strip()
         mentions.append(
             IssueMention(
@@ -1043,6 +1071,21 @@ def merge_legacy_mentions(
     for legacy in legacy_mentions:
         key = (legacy.body_site or "", legacy.label.lower())
         if key in kernel_keys:
+            continue
+        # The kernel verb and legacy noun phrase can express the same pain
+        # in one clause. Do not add a second mention merely for another label.
+        same_pain = next((k for k in merged
+                         if legacy.body_site and k.body_site == legacy.body_site
+                         and _PAIN_EQUIVALENCE.search(legacy.label)
+                         and _PAIN_EQUIVALENCE.search(k.label)
+                         and k.evidence.start < legacy.evidence.end
+                         and legacy.evidence.start < k.evidence.end), None)
+        if same_pain:
+            if legacy.label == "головная боль":
+                # Existing public canonical noun phrase, kernel semantics.
+                merged = [k.model_copy(update={"label": legacy.label,
+                           "canonical_key": legacy.canonical_key})
+                          if k is same_pain else k for k in merged]
             continue
         # A kernel mention with no body_site and a single-word label is a
         # bare verb («болит») — strictly less informative than a sited

@@ -44,7 +44,7 @@ test-action-policy-shadow:
 
 test-semantic-kernel:
 	@echo "GATE: Semantic Kernel adversarial corpus + invariants"
-	$(PYTHON) -m pytest tests/test_semantic_kernel.py -q
+	$(PYTHON) -m pytest tests/test_semantic_kernel.py tests/test_live_clarification_loop.py -q
 
 test-voice-perception:
 	@echo "GATE: Post-STT admission, text echo metrics, fragment hold/merge"

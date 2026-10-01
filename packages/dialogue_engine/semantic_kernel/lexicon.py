@@ -104,6 +104,7 @@ ISSUE_VERB_LEMMAS: frozenset[str] = frozenset(
         "мешать",
         "затруднять",
         "дрожать",
+        "трястись",
         # Elder-speech verbs (battery 2026-09-30) — mirrors the mention
         # layer's generic verb list so kernel spans agree.
         "щемить",

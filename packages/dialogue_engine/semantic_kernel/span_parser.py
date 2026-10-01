@@ -34,7 +34,8 @@ def _yo_variants(words: frozenset[str]) -> list[str]:
 _DURATION = re.compile(
     r"\b("
     r"(?:первый|второй|третий|четвёртый|четвертый|пятый)\s+(?:день|час)|"
-    r"\d+\s*(?:день|дня|дней|недел\w*|месяц\w*|год\w*|час\w*)|"
+    r"(?:\d+|один|одна|одну|два|две|три|четыре|пять|шесть|семь|восемь|"
+    r"девять|десять|полтора|полторы)\s*(?:день|дня|дней|недел\w*|месяц\w*|год\w*|час\w*|минут\w*)|"
     r"пару\s+дней|несколько\s+дней"
     r")\b",
     re.I,
@@ -86,7 +87,7 @@ _ISSUE_SURFACE = re.compile(
     r"залож\w*|онем\w*|тошн\w*|кашл\w*|урч\w*|стрел\w*|"
     r"щем\w*|гуд\w*|звен\w*|слез\w*|чеш\w*|горит|горят|сохн\w*|хруст\w*|"
     r"скрюч\w*|сводит|сводят|колотит\w*|рвет|рвёт|рвало|хрип\w*|дер[её]т|"
-    r"шата\w*|неме\w*|дрож\w*|отек\w*|пухн\w*|темне\w*|мутн\w*|поте\w*|"
+    r"шата\w*|неме\w*|дрож\w*|тряс[её]тся|трясутся|отек\w*|пухн\w*|темне\w*|мутн\w*|поте\w*|"
     r"задыха\w*|слабит|закрепило|частит|частят|скач\w*)$",
     re.I,
 )
@@ -199,6 +200,10 @@ def _issue_from_token(token: str) -> bool:
     if _ISSUE_SURFACE.match(raw):
         return True
     for verb in ISSUE_VERB_LEMMAS:
+        if verb == "трястись":
+            # Reflexive tremor ≠ a transitive action («трясу коврик»).
+            # Inflected reflexive forms are handled by morphology above.
+            continue
         stem = verb[:4]
         if len(stem) >= 4 and (raw.startswith(stem) or lemma.startswith(stem)):
             return True

@@ -37,7 +37,14 @@ def _relations_in_clause(spans: tuple[SemanticSpan, ...]) -> list[SemanticRelati
     for sp in spans:
         if sp.type == SpanType.BODY_SITE:
             target = _nearest_issue(sp, issues)
-            if target:
+            # A single anatomical subject can own coordinated predicates
+            # («руки болят и трясутся»). Multiple sites keep nearest binding.
+            bodies = [s for s in spans if s.type == SpanType.BODY_SITE]
+            targets = [target] if target else []
+            if len(bodies) == 1:
+                targets.extend(issue for issue in issues if issue is not target
+                               and issue.normalized in ("дрожать", "трястись"))
+            for target in targets:
                 relations.append(
                     SemanticRelation(
                         type=RelationType.BODY_OF,
@@ -89,6 +96,13 @@ def _relations_in_clause(spans: tuple[SemanticSpan, ...]) -> list[SemanticRelati
                 )
         elif sp.type == SpanType.STATUS:
             target = _nearest_issue(sp, issues)
+            bodies = [s for s in spans if s.type == SpanType.BODY_SITE]
+            if sp.normalized == "нормально" and bodies and all(
+                body.start > sp.end for body in bodies
+            ):
+                # «Поел нормально и руки ноют»: the later anatomical
+                # subject cannot own the preceding independent assessment.
+                continue
             if target:
                 relations.append(
                     SemanticRelation(

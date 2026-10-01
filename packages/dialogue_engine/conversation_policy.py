@@ -783,10 +783,16 @@ def _episode_ack_kind(turn: RichUserTurn, mention) -> str:
     they reported a symptom for the first time.
     """
     status = str(getattr(mention, "status", "") or "").lower()
-    if status in ("improving", "resolved"):
+    raw = str(getattr(turn, "raw_text", "") or "")
+    from packages.dialogue_engine.question_context import utterance_indicates_resolved
+    from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds, clause_for_position
+
+    evidence = getattr(mention, "evidence", None)
+    clause = clause_for_position(clause_bounds(raw), evidence.start) if evidence else raw
+    # «Утром поболел» infers past/unknown-current, not actual improvement.
+    if status == "resolved" or (status == "improving" and utterance_indicates_resolved(clause)):
         return "improving"
     severity = str(getattr(mention, "severity", "") or "")
-    raw = str(getattr(turn, "raw_text", "") or "")
     if (severity and _STRONG_PAIN.search(severity)) or _STRONG_PAIN.search(raw):
         return "strong"
     if getattr(turn, "answers_pending_question", False):
@@ -1216,6 +1222,9 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             return bg
 
     if turn and turn.issue_mentions:
+        # Acute turns replace the delivered background question before this
+        # branch can return. Its pending filler must not steal the next answer.
+        state.pending_coverage_domain = None
         if state.important_to_share_asked and not state.important_to_share_resolved:
             state.important_to_share_resolved = True
         ack = _grounded_ack_for_mentions(turn, state)
@@ -1550,6 +1559,15 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         # concern and must not stand the net down (live: «мне плохо» at
         # summary slid to goodbye because ITS was already asked).
         _health_concern = (state.wellness_concern or "").strip()
+        _episode_concern_known = any(
+            ep.subject == "speaker" and ep.evidence_turn_ids and ep.mentions
+            for ep in state.issue_episodes.values()
+        )
+        # Completed questioning does not erase the complaint. A fresh vague
+        # deterioration can still need its own concern clarification.
+        _known_concern_covers_turn = _episode_concern_known and (
+            not _turn_reports_fresh_negative(turn) or bool(turn and turn.issue_mentions)
+        )
         _negative_no_concern = (
             _well is not None
             and (
@@ -1559,6 +1577,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             )
             and not _health_concern
             and not _declined
+            and not _known_concern_covers_turn
         ) or (state.red_state_pending and not _concern_bits.strip())
         if _negative_no_concern and (
             state.check_path != CheckPath.URGENT or state.red_state_pending

@@ -324,6 +324,10 @@ def concern_summary_phrase(state: EngineState) -> str:
             ml = (m.label or "").lower()
             if "тошн" in ml and "тошнота" not in bits:
                 bits.append("тошнота")
+            # Different symptoms at the same site are not duplicate pain.
+            # Keep the literal tremor report in the spoken recap too.
+            if ("тряс" in ml or "дрож" in ml) and ml not in bits:
+                bits.append(ml)
     if not bits:
         return ""
     if len(bits) == 1:

@@ -171,6 +171,16 @@ def extract_grounded_onset_value(
             or _DURATION_MARKERS.search(n)
             or _AFTER_EVENT_ANCHOR.search(n)
         ):
+            from packages.dialogue_engine.semantic_kernel.span_parser import parse_spans
+            from packages.dialogue_engine.semantic_kernel.types import SpanType
+
+            spans = parse_spans(text)
+            if (any(s.type == SpanType.DURATION for s in spans)
+                    and not any(s.type == SpanType.ISSUE for s in spans)
+                    and not extract_grounded_duration_value(text)):
+                # An explicit quantity about medication/plans is not this
+                # episode's onset merely because the temporal question is open.
+                continue
             if len(clauses) == 1:
                 return raw_text.strip().rstrip(",;")
             return text.rstrip(",;")
@@ -203,6 +213,34 @@ def extract_grounded_severity_value(
                 return raw_text.strip().rstrip(",;")
             start, end = match.span()
             return text[start:end]
+    return None
+
+
+def extract_grounded_duration_value(
+    raw_text: str, *, exclude_clauses: tuple[str, ...] = (),
+) -> str | None:
+    """A quantity answering this episode, without another predicate owner.
+
+    Bare time or a deictic continuation belongs to the pending episode;
+    «две недели принимаю таблетки / буду дома» does not. This conservative
+    boundary is for out-of-order evidence, not a general activity parser.
+    """
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_token
+    from packages.dialogue_engine.semantic_kernel.span_parser import parse_spans
+    from packages.dialogue_engine.semantic_kernel.types import SpanType
+
+    complements = {"это", "оно", "так", "уже", "около", "примерно", "почти", "всего",
+                   "вот", "длиться", "продолжаться", "тянуться", "боль"}
+    for clause in _original_clause_slices(raw_text):
+        if _clause_excluded(clause, exclude_clauses) or _UNKNOWN_ATTRIBUTE_ANSWER.search(clause):
+            continue
+        for span in parse_spans(clause):
+            if span.type != SpanType.DURATION:
+                continue
+            rest = clause[:span.start] + " " + clause[span.end:]
+            tokens = re.findall(r"[а-яёa-z]+", rest, flags=re.I)
+            if all(normalize_token(token) in complements for token in tokens):
+                return span.text
     return None
 
 
@@ -349,14 +387,20 @@ def _headache_episode_id(state: EngineState) -> str | None:
 
 def _dedupe_primary_mentions(mentions: tuple[IssueMention, ...]) -> tuple[IssueMention, ...]:
     """Kernel often emits two primaries for one body site (живот болит + боль в животе)."""
-    seen_sites: set[str] = set()
+    seen_sites: set[tuple[str, str]] = set()
     seen_primaries: set[str] = set()
     out: list[IssueMention] = []
     for mention in mentions:
         if mention.body_site and mention.role in ("primary", "independent"):
-            if mention.body_site in seen_sites:
+            label = _canonical_label(mention.label, getattr(mention, "canonical_key", ""))
+            pain = bool(re.search(
+                r"\b(?:(?:по|при|за|раз)?бол\w*|побалива\w*|боль|ноет|ноют|ныть)\b",
+                mention.label, re.I,
+            ))
+            site_key = (mention.body_site, "pain" if pain else label)
+            if site_key in seen_sites:
                 continue
-            seen_sites.add(mention.body_site)
+            seen_sites.add(site_key)
         elif mention.role in ("primary", "independent"):
             label = _canonical_label(mention.label, getattr(mention, "canonical_key", ""))
             if label in seen_primaries:
@@ -777,12 +821,15 @@ def _record_out_of_order_value(
     (live fs-4d8f5a8b, hard-battery `abdominal`). Probe order is a product
     plan; evidence is the elder's words — consume the evidence.
 
-    Deliberately severity-only. A generalized version also wrote a `current`
-    answer into `onset`/`duration` («Сейчас не беспокоит.» is not a temporal
-    anchor) — fabricated data is worse than a missing value. Temporal steps
-    keep their own pending-only handling, and a recorded value is never
-    overwritten.
+    Degree and explicit DURATION spans are independent evidence. Generic
+    current answers («Сейчас не беспокоит.») are never borrowed as temporal
+    values, and recorded values are never overwritten.
     """
+    # Explicit quantities have their own semantic type; a generic current
+    # answer must never become a duration just because another step is open.
+    duration = extract_grounded_duration_value(turn.raw_text, exclude_clauses=exclude)
+    if duration:
+        ep.known_attributes.setdefault("duration", duration)
     if pending == "severity":
         return False
     if (ep.known_attributes or {}).get("severity"):
@@ -935,14 +982,34 @@ def _second_tier_judgement(
     """
     from packages.dialogue_engine.slotclf import judge
 
+    # A slot classifier/personal phrase memory may propose an answer, but
+    # cannot move an explicitly different symptom/domain into this attribute.
+    # First-tier extractors above already consumed any grounded valid value.
+    if turn.issue_mentions or any(f.field != "wellness" for f in turn.goal_facts):
+        return False
+    from packages.dialogue_engine.semantic_kernel.span_parser import parse_spans
+    from packages.dialogue_engine.semantic_kernel.types import SpanType
+
+    duration_spans = [s for s in parse_spans(turn.raw_text) if s.type == SpanType.DURATION]
+    if duration_spans and (
+        attribute == "severity" or not extract_grounded_duration_value(turn.raw_text)
+    ):
+        return False
+
+    grounded_value = turn.raw_text.strip()[:80]
+    if attribute in ("onset", "duration"):
+        grounded_value = extract_grounded_onset_value(turn.raw_text)
+    elif attribute == "severity":
+        grounded_value = extract_grounded_severity_value(turn.raw_text)
+
     # Tier 1.5 — personal memory (this client's trusted resolutions only).
     client_id = getattr(state, "client_id", "")
     if client_id:
         from packages.dialogue_engine.caller_memory import resolve as _mem_resolve
 
         _mem = _mem_resolve(client_id, attribute, turn.raw_text)
-        if _mem == "answer":
-            ep.known_attributes[attribute] = turn.raw_text.strip()[:80]
+        if _mem == "answer" and grounded_value:
+            ep.known_attributes[attribute] = grounded_value
             state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
             _maybe_clear_pending_attribute(state, episode_id, attribute)
             finalize_episode_if_complete(ep)
@@ -967,6 +1034,9 @@ def _second_tier_judgement(
         verdict,
     )
     if verdict == "answer":
+        if not grounded_value:
+            _log.info("second_tier attribute=%s accepted=False reason=untyped_answer", attribute)
+            return False
         if client_id:
             # Learn in process: high-confidence global resolution becomes a
             # personal hypothesis (trusted after 3 consistent hits).
@@ -975,7 +1045,7 @@ def _second_tier_judgement(
 
             if (judge_proba(attribute, turn.raw_text) or 0.0) >= 0.8:
                 _mem_record(client_id, attribute, turn.raw_text, "answer")
-        ep.known_attributes[attribute] = turn.raw_text.strip()[:80]
+        ep.known_attributes[attribute] = grounded_value
         state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
         _maybe_clear_pending_attribute(state, episode_id, attribute)
         finalize_episode_if_complete(ep)

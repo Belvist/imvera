@@ -1,3 +1,82 @@
+# fs-2baf87ec root fix: grounded binding, temporal ownership, no untyped clinical fills (2026-10-01)
+
+Branch: `feature/voice-zoiper-m5`; base `919dfba` (runtime code `04cf7ba`).
+Local isolated checkout: `codex/live-loop-fix`; publish this linear slice to
+m5 only, with unchanged-parent check. No bridge/worker/SIP restart here.
+
+## CHANGED
+
+- Kernel clause/status binding no longer resolves a headache from «поел
+  нормально» in another sentence. Raw noun number retained in spoken labels.
+- Explicit spoken DURATION, reference-token exclusion, scoped out-of-order
+  duration and foreign-predicate guard. No reference raw-text fallback.
+- Acute turns clear interrupted background coverage before early return;
+  known episodes stop general concern re-probing, fresh deterioration/RED
+  can still probe. Distinct same-site tremor and pain both survive memory
+  and recap; uncertain «кровят» remains in original tremor evidence.
+- Classifier/personal memory `answer` cannot manufacture onset/duration/
+  severity without typed grounding or learn rejected answers. Clarification
+  requests use repair; past-only symptoms do not get fabricated improvement.
+- 44 semantic regression cases (actual caller inputs + neighbouring meanings)
+  wired into `make test-semantic-kernel`. Existing pinned tests/manifest
+  unchanged. Agent integration guidance and detailed root report:
+  [fs-2baf87ec-fix](live-calls/fs-2baf87ec-fix.md).
+
+## VERIFIED
+
+Python 3.12; commands use `PYTHONPATH=/workspace/imvera-live-review` and
+`/workspace/imvera-review-venv/bin/python` as PYTHON. No model stubs/skips
+added; torch CPU and transformers installed in the execution environment.
+
+| Command | Result |
+| --- | --- |
+| Same final `tests/test_live_clarification_loop.py` on untouched 919dfba product in baseline worktree | 30 failed, 14 passed (30 failures are not 30 independent bugs) |
+| `make test-semantic-kernel` | 294 passed, including all 44 new cases |
+| `python -m pytest tests -q` (exclusive final full run) | 2119 passed, 8 failed, 9 skipped, 108.07s |
+| Same 8 failed model cases on baseline, plus medication regression control | Same 8 failed, 3 passed; missing v2/v3/polarity_v1/xenc_v3 artifacts, unchanged product baseline |
+| `python scripts/dialogue_corpus_gate.py` | 500/500 PASS, 5.63s |
+| `python scripts/hard1000_gate.py` | 1349/1349 PASS |
+| `python scripts/hard_battery.py` | 16/16 PASS |
+| `python scripts/agent_dialogue_gate.py` | agent + dream PASS |
+| `python tools/voice_lab/policy_diff_v8_v9.py --stdout-only` | 4 changed / 4 expected / 0 unexplained |
+| `make lint`, `git diff --check` | PASS |
+| Text safety probes with clarification prefix + no breathing / ambulance / loss of consciousness | All 3 urgent_close, closing_reason urgent |
+
+Initial full runs caught a canonical-label regression and then a duplicate
+past-pain regression after medication. Fixed at source, old expectations
+unchanged; neither remains in the final failures. Later expanded scope
+checks exposed reference and coarse-classifier grounding bypasses; these
+were fixed before the final full run above. `ruff check .` additionally
+sees 9 existing errors in archived audit/lab files outside the configured
+`make lint` paths; those historical files were not changed.
+
+## NOT VERIFIED
+
+- Live model inference/readiness: gitignored deployment artifacts are absent
+  here. The full suite is NOT green and local 2084/0 on Mac is not our proof.
+- SIP/RTP, STT, TTS/playback and latency through Zoiper; no access to source
+  JSONL/audio or active Mac processes. No live/human acceptance claim.
+- GitHub run for the final commit is checked after publication separately.
+
+## REMAINING RISKS
+
+- Exact caller transcript has no severity answer. It must not be fabricated:
+  after repair/nonanswers the existing bounded partial-close can occur with
+  one farewell. A cooperative «Терпимая» or explicit «Не помню» advances
+  through the normal grounded/discharged path; verify by phone.
+- Conservative out-of-order quantity grammar abstains on other predicate
+  ownership; unparsed paraphrases need review, not raw clinical writes.
+- «Кровят» cannot be diagnosed/corrected from this transcript alone.
+
+## NEXT GATE
+
+Agent on the Mac verifies the published SHA + all real NLP models and runs
+the same gates, then owner/authorized agent repeats 7000 with source trace
+and audio. Confirm complaint/temporal ownership, partial-vs-complete truth,
+canonical == TTS == delivered speech, and a single farewell.
+
+---
+
 # SIP network flip 192.168.1.194 -> 10.20.0.131 (2026-10-01)
 
 - Mac left home LAN for 10.20.0.131; FS still advertised .1.194, so RTP
