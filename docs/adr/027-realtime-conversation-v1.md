@@ -62,10 +62,36 @@ on a new complaint after cancellation and reject delayed completion callbacks.
 
 ## Interfaces and readiness
 
+### Follow-up: bounded prefix previews (2026-10-01)
+
+The configured GigaAM v3_e2e_rnnt backend exposes full-WAV transcription.
+Public upstream commit `7447938d791c4f3e643386ee22c33777004293a5`
+uses full-context Conformer attention/convolution and locally initialized RNNT
+decoder state. Reusing decoder state alone is not correct incremental ASR.
+
+Keep that checkpoint and add an explicit, opt-in `prefix_batch` preview to
+the existing worker/provider/CallActor owners. It recomputes cumulative PCM
+prefixes at 1/2/4/8 seconds, at most four submissions / 15 seconds of total
+preview input per utterance. One actor preview may be outstanding; a busy
+worker rejects preview admission atomically rather than queueing it ahead of
+final speech. Capabilities state native_streaming=false and revisable=true.
+Final recognition remains mandatory and authoritative. Previews are observation
+events only: no interpretation, slots, consent, actions, timers or TTS changes.
+Endpoint/reset/disconnect invalidates the preview epoch before cancelling it;
+late output cannot cross that boundary. PCM/WAV lifetime belongs to the executor
+closure, and queued cancelled/expired requests do not call the model.
+
+`IMVERA_STT_PREVIEW=0` remains the default. Prefix recomputation does not reduce
+final ASR work and a running CPU job cannot be preempted by cancelling HTTP;
+it can delay final recognition. Enable only on the lab for paired M5 load and
+latency measurements. No checkpoint, dependency or provider is replaced, no
+continuous recognition or live latency improvement is claimed by this slice.
+
 VAD silence_elapsed_ms/speech_candidate → existing collector → final STT.
 No partial transcript changes facts, slots or actions. Actual streaming recognition
-needs a separately evaluated adapter/checkpoint and revision/final/cancel protocol.
-Existing GigaAM production adapter is still final-only. Natural free-form LLM
+needs a separately evaluated adapter/checkpoint; the revision/final/cancel
+preview protocol above prepares that boundary. Existing GigaAM remains a batch
+backend, with final-only default and explicit opt-in prefix previews. Natural free-form LLM
 Renderer is NOT implemented; retired composer remains retired. Prosody knobs and
 warm instruction already exist in config/voice-m5.yaml; no unheard tuning is shipped.
 
@@ -78,8 +104,9 @@ Offline EnergyVad PCM endpoint: 1120→640ms with 500ms VAD silence, 1280→800m
 with 650ms VAD silence, -480ms in each of eight cases. Input hashes match and
 post-onset speech order is retained. These are frame-time diagnostic results,
 not real model/SIP latency, listener warmth, capacity or competitor superiority.
-Barge-in remains operator opt-in through existing flags until live proof; no
-new rollout flag or alternate delivery owner. Persistent pipelines can still
+Barge-in remains operator opt-in through existing flags until live proof;
+STT previews use a separate default-OFF lab flag, with no alternate delivery
+owner. Persistent pipelines can still
 incur storage/provider delay after the stop request; p50/p95 require live traces.
 
 ## Alternatives considered

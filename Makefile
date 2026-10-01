@@ -38,7 +38,8 @@ test-dialogue-runtime:
 	@echo "GATE: CallActor rich path + LLM worker contract"
 	$(PYTHON) -m pytest tests/test_call_actor_rich_path.py tests/test_llm_worker_contract.py \
 		tests/test_call_actor_deferred_delivery.py tests/test_call_actor_llm_fallback.py \
-		tests/test_realtime_conversation.py tests/test_realtime_engine_cancel.py tests/test_turn_pipeline.py \
+		tests/test_realtime_conversation.py tests/test_realtime_engine_cancel.py \
+		tests/test_stt_previews.py tests/test_stt_preview_probe.py tests/test_turn_pipeline.py \
 		tests/test_voice_perception.py tests/test_uplink_preroll.py \
 		tests/test_transport_cancel.py tests/test_inference_stop_epoch.py \
 		tests/test_call_actor_audible_playout.py tests/test_call_actor_multi_phrase_playback.py -q

@@ -21,6 +21,7 @@ from packages.contracts.interpretation import TurnInterpretation
 from packages.contracts.outbox import ActionOutboxStatus
 from packages.contracts.providers import TTSProvider
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
+from packages.contracts.stt import STT_PREVIEW_CHECKPOINTS_MS
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.interpretation import to_turn_interpretation
 from packages.dialogue.session import CallSession, SessionTurnResult
@@ -174,6 +175,8 @@ class CallActorConfig:
     echo_ref_gate: bool = False
     # Interrupt Vera on clear user speech during playback (lab; default off).
     lab_barge_in: bool = False
+    # Batch prefix observations, not stateful streaming; M5 load gate first.
+    stt_prefix_previews: bool = False
 
 
 @dataclass
@@ -269,6 +272,10 @@ class CallActor:
     _playout_first_send_mono: float | None = None
     _fragment_state: FragmentState = field(default_factory=FragmentState)
     _fragment_timer_task: object | None = None
+    _stt_preview_task: asyncio.Task | None = None
+    _stt_preview_epoch: int = 0
+    _stt_preview_segment_seq: int | None = None
+    _stt_preview_step: int = 0
 
     def _forensic_active(self) -> bool:
         return os.environ.get("IMVERA_FORENSIC", "0") in {"1", "true", "yes"}
@@ -430,6 +437,7 @@ class CallActor:
 
     async def stop(self) -> None:
         self._stopped = True
+        self._invalidate_stt_preview()
         await self._queue.put(ActorEvent(ActorEventType.STOP))
         if self._task:
             await self._task
@@ -467,6 +475,7 @@ class CallActor:
         if self._stopped or self._transport_closed or self._capture_lost:
             return
         self._capture_lost = True
+        self._invalidate_stt_preview()
         await self.media.emit(
             RuntimeEvent(self.call_id, RuntimeEventType.CAPTURE_LOST, {})
         )
@@ -504,6 +513,7 @@ class CallActor:
                 await self._on_pcm(event.pcm, event.sample_rate)
 
     async def _finalize_disconnect(self) -> None:
+        self._invalidate_stt_preview()
         if self.session.is_finalized():
             return
         try:
@@ -551,6 +561,7 @@ class CallActor:
             and self._input_resampler.source_rate == capture_sample_rate
         ):
             return
+        self._invalidate_stt_preview()
         self._input_resampler = StatefulResampler(
             capture_sample_rate, self.config.target_sample_rate
         )
@@ -605,6 +616,7 @@ class CallActor:
         if not callable(finalize):
             return False
         segment = finalize()
+        self._invalidate_stt_preview()
         if not segment:
             return False
         if not self._turn_manager.should_emit_utterance():
@@ -643,6 +655,87 @@ class CallActor:
         """Clear utterance assembly state after assistant playback — VAD stays hot."""
         if self._utterance_builder is not None:
             self._utterance_builder.reset_pending()
+        self._invalidate_stt_preview()
+
+    def _invalidate_stt_preview(self) -> None:
+        """Invalidate before cancelling; final recognition never waits for this."""
+        self._stt_preview_epoch += 1
+        task = self._stt_preview_task
+        self._stt_preview_task = None
+        self._stt_preview_segment_seq = None
+        self._stt_preview_step = 0
+        if task is not None and not task.done():
+            task.cancel()
+
+    async def _maybe_schedule_stt_preview(self, builder: object) -> None:
+        if (not self.config.stt_prefix_previews or not isinstance(builder, UtteranceBuilder)
+                or self._stopped or self._transport_closed):
+            return
+        if not builder.collecting:
+            if self._stt_preview_segment_seq is not None:
+                self._invalidate_stt_preview()
+            return
+        if not self._turn_manager.should_emit_utterance() or self._active_generation:
+            return
+        if self._stt_preview_segment_seq != builder.segment_seq:
+            self._invalidate_stt_preview()
+            self._stt_preview_segment_seq = builder.segment_seq
+        if self._stt_preview_step >= len(STT_PREVIEW_CHECKPOINTS_MS):
+            return
+        checkpoint = STT_PREVIEW_CHECKPOINTS_MS[self._stt_preview_step]
+        pcm = builder.preview_prefix(checkpoint)
+        if pcm is None:
+            return
+        self._stt_preview_step += 1  # consume even when busy; never accumulate work
+        if self._stt_preview_task is not None and not self._stt_preview_task.done():
+            await self._emit_stage("stt.preview.skipped", reason="preview_inflight",
+                                   segment_seq=builder.segment_seq, duration_ms=checkpoint)
+            return
+        epoch = self._stt_preview_epoch
+        self._stt_preview_task = asyncio.create_task(self._run_stt_preview(
+            pcm, builder, builder.segment_seq, epoch, checkpoint,
+        ))
+
+    async def _run_stt_preview(
+        self, pcm: bytes, builder: UtteranceBuilder, segment_seq: int,
+        epoch: int, duration_ms: int,
+    ) -> None:
+        utterance_id = f"u-{self._utterance_seq + 1}"
+        partial_id = f"{self.call_id}:s{segment_seq}:e{epoch}:p{duration_ms}"
+        started = time.monotonic()
+        try:
+            await self._emit_stage("stt.preview.request", utterance_id=utterance_id,
+                                   partial_id=partial_id, segment_seq=segment_seq,
+                                   duration_ms=duration_ms, partial_mode="prefix_batch")
+            result = await asyncio.wait_for(self.stt.transcribe_partial(
+                pcm, self.config.target_sample_rate, call_id=self.call_id,
+                partial_id=partial_id,
+            ), timeout=2.0)
+            if (epoch != self._stt_preview_epoch or self._stopped or self._transport_closed
+                    or builder is not self._active_builder() or not builder.collecting
+                    or builder.segment_seq != segment_seq):
+                return
+            if time.monotonic() - started > 2.0:
+                raise TimeoutError("STT preview budget exceeded")
+            if (result.is_final or result.partial_id != partial_id
+                    or result.partial_mode != "prefix_batch"):
+                raise ValueError("STT preview identity/mode/finality mismatch")
+            # Observation only. Never enter rich-turn interpretation, session
+            # mutation, question ledger, control actions or speech generation.
+            await self.media.emit(RuntimeEvent(self.call_id, RuntimeEventType.STT_PARTIAL, {
+                "utterance_id": utterance_id, "partial_id": partial_id,
+                "segment_seq": segment_seq, "preview_epoch": epoch,
+                "text": result.text, "is_final": False, "revisable": True,
+                "partial_mode": "prefix_batch", "duration_ms": duration_ms,
+                "model_revision": result.model_revision or "",
+                "stt_elapsed_ms": int((time.monotonic() - started) * 1000),
+            }))
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
+            if epoch == self._stt_preview_epoch and not self._stopped:
+                await self._emit_stage("stt.preview.unavailable", partial_id=partial_id,
+                                       error=str(exc)[:200])
 
     def _push_echo_downlink(self, pcm_s16le: bytes, sample_rate: int) -> None:
         """Feed injected downlink into playback reference at uplink/VAD sample rate."""
@@ -829,6 +922,7 @@ class CallActor:
         return perception.playback_ref._ref
 
     def _on_bot_playback_started(self) -> None:
+        self._invalidate_stt_preview()
         intent = self._last_delivered_intent or ""
         self._ensure_perception().on_playback_started(intent)
 
@@ -994,6 +1088,7 @@ class CallActor:
             except TypeError:
                 built = builder.on_frame(pcm, started, ended)  # type: ignore[misc]
         if built:
+            self._invalidate_stt_preview()
             if isinstance(built, bytes):
                 pcm_out = built
                 duration_ms = int(len(pcm_out) / max(2, self.config.target_sample_rate * 2) * 1000)
@@ -1036,6 +1131,8 @@ class CallActor:
             self._inflight_utterances.add(utterance_seq)
             self._turn_manager.on_stt_submitted()
             asyncio.create_task(self._handle_utterance(pcm_out, utterance_seq))
+        else:
+            await self._maybe_schedule_stt_preview(builder)
 
     async def _replay_uplink_preroll(self, preroll: bytes) -> None:
         """Feed buffered user speech into fresh VAD after half-duplex unmute.
@@ -1798,6 +1895,8 @@ class CallActor:
                     deadline=budget.deadline,
                     utterance_id=utterance_id,
                 )
+                if getattr(stt_result, "is_final", True) is not True:
+                    raise ValueError("STT final adapter returned an unconfirmed result")
                 stt_elapsed_ms = int((time.monotonic() - stt_started) * 1000)
             except Exception as exc:
                 await self._submit_utterance_outcome(
@@ -3189,6 +3288,7 @@ class CallActor:
         await self._cancel_wait_timer()
         self._transport_closed = True
         self._stopped = True
+        self._invalidate_stt_preview()
         await self.media.hangup()
         if engine is not None:
             engine.outbox.mark_completed(effect.effect_id)
@@ -3272,7 +3372,8 @@ def build_call_actor(
         call_id=call_id,
         family_id=family_id,
         session=session,
-        stt=HttpSTTProvider(stt_url, client=shared),
+        stt=HttpSTTProvider(stt_url, client=shared,
+                            prefix_previews=os.environ.get("IMVERA_STT_PREVIEW", "0") == "1"),
         tts=HttpTTSProvider(tts_url, client=shared),
         llm=HttpLLMProvider(llm_url, client=shared),
         media=media,
@@ -3286,5 +3387,6 @@ def build_call_actor(
             uplink_preroll_ms=uplink_preroll_ms(),
             echo_ref_gate=echo_ref_gate_enabled(),
             lab_barge_in=lab_barge_in_enabled(),
+            stt_prefix_previews=os.environ.get("IMVERA_STT_PREVIEW", "0") == "1",
         ),
     )

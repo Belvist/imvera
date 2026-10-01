@@ -2,6 +2,12 @@
 
 ## Unreleased — 2026-10-01
 
+- Wire opt-in bounded STT prefix previews through the existing worker/provider/CallActor; advertise revisable prefix_batch, not native streaming.
+- Keep previews observational, discard late output, require authoritative final and skip busy checkpoints without replica retry.
+- Fix queued cancellation/deadline checks and WAV lifetime on HTTP cancellation; address provider cancellation and report real STT queue load.
+- Add 28 STT preview/cancellation/finality contracts and document the default-OFF M5 load gate.
+- Add a same-WAV paired HTTP STT probe with hashes, explicit worker metadata and six WAV/request-boundary checks; phone latency remains a separate live gate.
+
 - Forward runtime interruption to the existing SDK playout-cancel event; release the question and reject late completion without inventing delivery.
 - Add two real SDK/runtime cancellation-and-resumption cases to the runtime CI gate.
 

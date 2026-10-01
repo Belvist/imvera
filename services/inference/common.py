@@ -50,8 +50,12 @@ class InferenceExecutor:
         with self._lock:
             return self._pending
 
-    def submit(self, fn: Callable[[], T]) -> concurrent.futures.Future[T]:
+    def submit(
+        self, fn: Callable[[], T], *, idle_only: bool = False,
+    ) -> concurrent.futures.Future[T]:
         with self._lock:
+            if idle_only and self._pending:
+                raise QueueFullError("inference worker busy; preview not admitted")
             if self._pending >= self._max_queue:
                 raise QueueFullError("inference queue full")
             self._pending += 1
@@ -65,9 +69,9 @@ class InferenceExecutor:
 
         return self._executor.submit(wrapped)
 
-    async def run(self, fn: Callable[[], T]) -> T:
+    async def run(self, fn: Callable[[], T], *, idle_only: bool = False) -> T:
         loop = asyncio.get_running_loop()
-        fut = self.submit(fn)
+        fut = self.submit(fn, idle_only=idle_only)
         return await loop.run_in_executor(None, fut.result)
 
 

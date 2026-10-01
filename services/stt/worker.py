@@ -6,6 +6,8 @@ import base64
 import logging
 import os
 import tempfile
+import threading
+import time
 import wave
 from pathlib import Path
 from typing import Any
@@ -15,6 +17,7 @@ import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from packages.contracts.stt import STT_PREVIEW_CHECKPOINTS_MS, STTCapabilities
 from services.inference.common import (
     InferenceExecutor,
     QueueFullError,
@@ -45,9 +48,20 @@ class TranscribeRequest(BaseModel):
     call_id: str
     turn_id: int = 0
     utterance_id: str = ""
-    sample_rate: int = 16000
+    sample_rate: int = Field(default=16000, gt=0, le=48000)
     pcm_b64: str
     deadline: float | None = None
+    # Relative budget: monotonic clocks on different worker hosts differ.
+    timeout_s: float | None = Field(default=None, gt=0, le=60)
+
+
+class PreviewRequest(TranscribeRequest):
+    partial_id: str = Field(min_length=1, max_length=160)
+    timeout_s: float = Field(default=2.0, gt=0, le=2.0)
+
+
+class _CancelledSTT(RuntimeError):
+    pass
 
 
 app = FastAPI(title="IMVERA STT Worker", version="0.2.0")
@@ -135,26 +149,79 @@ def warmup() -> None:
         state.ready = False
 
 
-mount_health(app, state, "stt")
+mount_health(app, state, "stt", executor_supplier=lambda: executor)
+
+
+@app.get("/v1/capabilities")
+def capabilities() -> dict[str, Any]:
+    enabled = os.environ.get("IMVERA_STT_PREVIEW", "0") == "1"
+    return STTCapabilities(
+        partial_mode="prefix_batch" if enabled else "unsupported",
+        preview_checkpoints_ms=STT_PREVIEW_CHECKPOINTS_MS if enabled else (),
+        max_preview_duration_ms=STT_PREVIEW_CHECKPOINTS_MS[-1] if enabled else 0,
+        model_revision=state.model_revision,
+    ).model_dump()
 
 
 @app.post("/v1/transcribe")
 async def transcribe(req: TranscribeRequest) -> dict[str, Any]:
+    return await _run_transcription(req, preview=False)
+
+
+@app.post("/v1/preview")
+async def preview(req: PreviewRequest) -> dict[str, Any]:
+    if capabilities()["partial_mode"] != "prefix_batch":
+        raise HTTPException(503, detail="prefix previews disabled; final-only worker")
+    result = await _run_transcription(req, preview=True)
+    return {
+        "request_id": req.request_id,
+        "partial_id": req.partial_id,
+        "text": result["text"],
+        "is_final": False,
+        "partial_mode": "prefix_batch",
+        "duration_ms": result["duration_ms"],
+        "model_revision": result["model_revision"],
+        "revisable": True,
+    }
+
+
+async def _run_transcription(
+    req: TranscribeRequest, *, preview: bool,
+) -> dict[str, Any]:
     if not state.ready or _asr is None:
         raise HTTPException(503, detail=state.warmup_error or "not ready")
-    if req.request_id in state.cancelled_requests:
-        raise HTTPException(499, detail="cancelled")
-    try:
+    abandoned = threading.Event()
+    deadline = time.monotonic() + req.timeout_s if req.timeout_s is not None else None
+
+    def check_request() -> None:
+        with state.lock:
+            cancelled = req.request_id in state.cancelled_requests
+        if abandoned.is_set() or cancelled:
+            raise _CancelledSTT("cancelled")
+        check_deadline(deadline)
         check_deadline(req.deadline)
-    except (TimeoutError, QueueFullError) as exc:
+
+    try:
+        check_request()
+    except _CancelledSTT as exc:
+        raise HTTPException(499, detail="cancelled") from exc
+    except TimeoutError as exc:
         raise executor_http_error(exc) from exc
     try:
-        pcm = base64.b64decode(req.pcm_b64)
+        pcm = base64.b64decode(req.pcm_b64, validate=True)
     except Exception as exc:
         raise HTTPException(400, detail=f"invalid pcm_b64: {exc}") from exc
+    if len(pcm) % 2:
+        raise HTTPException(400, detail="pcm_s16le must contain complete 16-bit samples")
+    duration_ms = int(len(pcm) / 2 / req.sample_rate * 1000)
+    if preview and len(pcm) not in {
+        req.sample_rate * 2 * ms // 1000 for ms in STT_PREVIEW_CHECKPOINTS_MS
+    }:
+        raise HTTPException(422, detail="preview requires a bounded 1/2/4/8 second prefix")
     if len(pcm) < 320:
         return {
             "request_id": req.request_id,
+            "is_final": True,
             "text": "",
             "asr_quality": "UNUSABLE",
             "duration_ms": 0,
@@ -162,29 +229,44 @@ async def transcribe(req: TranscribeRequest) -> dict[str, Any]:
         }
 
     cfg = _load_config()
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        wav_path = Path(tmp.name)
-    _pcm_to_wav(pcm, req.sample_rate, wav_path)
-    duration_ms = int(len(pcm) / 2 / req.sample_rate * 1000)
+
+    def infer() -> dict[str, Any]:
+        # The synchronous job owns the WAV even if HTTP is cancelled while
+        # queued/running. Never unlink a file another thread still needs.
+        try:
+            check_request()
+            with tempfile.TemporaryDirectory(prefix="imvera-stt-") as directory:
+                wav_path = Path(directory) / "input.wav"
+                _pcm_to_wav(pcm, req.sample_rate, wav_path)
+                check_request()
+                result = _transcribe_sync(
+                    wav_path, pcm=pcm, sample_rate=req.sample_rate,
+                    duration_ms=duration_ms, asr_cfg=cfg["models"]["asr"],
+                )
+                # In-flight model computation cannot be preempted; discard its
+                # output rather than claim cancellation stopped CPU inference.
+                check_request()
+                return result
+        finally:
+            with state.lock:
+                state.cancelled_requests.discard(req.request_id)
+
     try:
-        result = await executor.run(
-            lambda: _transcribe_sync(
-                wav_path,
-                pcm=pcm,
-                sample_rate=req.sample_rate,
-                duration_ms=duration_ms,
-                asr_cfg=cfg["models"]["asr"],
-            )
-        )
+        if preview:
+            result = await executor.run(infer, idle_only=True)
+        else:
+            result = await executor.run(infer)
+    except _CancelledSTT as exc:
+        raise HTTPException(499, detail="cancelled") from exc
     except (TimeoutError, QueueFullError) as exc:
         raise executor_http_error(exc) from exc
     finally:
-        wav_path.unlink(missing_ok=True)
+        abandoned.set()
     pcm_rms = round(pcm_rms_s16le(pcm), 1)
     logger.info(
-        "stt call_id=%s utterance_id=%s duration_ms=%d pcm_rms=%.1f "
+        "stt preview=%s call_id=%s utterance_id=%s duration_ms=%d pcm_rms=%.1f "
         "raw=%r text=%r quality=%s model=%s",
-        req.call_id,
+        preview, req.call_id,
         req.utterance_id or "-",
         duration_ms,
         pcm_rms,
@@ -195,6 +277,7 @@ async def transcribe(req: TranscribeRequest) -> dict[str, Any]:
     )
     return {
         "request_id": req.request_id,
+        "is_final": not preview,
         "duration_ms": duration_ms,
         "pcm_rms": pcm_rms,
         "engine": _asr_engine,
@@ -207,7 +290,8 @@ async def transcribe(req: TranscribeRequest) -> dict[str, Any]:
 def cancel(body: dict[str, Any]) -> dict[str, str]:
     rid = body.get("request_id")
     if rid:
-        state.cancelled_requests.add(rid)
+        with state.lock:
+            state.cancelled_requests.add(rid)
     return {"status": "accepted"}
 
 

@@ -1,3 +1,85 @@
+# Realtime Conversation v1: bounded STT previews and cancellation (2026-10-01)
+
+Owner: «продолжи доделывать», Newo-like live dialogue. Continuation on published
+fbff72cdf91749907569f133624118f6efaecdc5, m5 only. No-generative-live-LLM order
+persists; optional change question unanswered. Local branch codex/live-loop-fix;
+main untouched. No deployment, M5/model/SIP access or competitor recording here.
+
+## CHANGED
+
+- Existing STT worker/provider/CallActor now carry explicit opt-in prefix_batch
+  previews using the same backend. No new model/dependency/service/brain.
+  GET /v1/capabilities advertises revisable, final_required, native_streaming=false.
+- Exact cumulative 1/2/4/8-second prefixes; at most four actor attempts / 15 seconds
+  extra audio per utterance, one task, busy checkpoints skipped, atomic idle-only
+  executor admission, no preview replica retry. Default IMVERA_STT_PREVIEW=0.
+- Preview is observational only: no interpretation, SDK/state mutation, clinical
+  fact, consent, actions, timers or TTS. Epoch invalidation before cancellation
+  rejects late output at endpoint/reset/disconnect/playback start. Final remains
+  mandatory; explicitly non-final final-endpoint output is quarantined.
+- WAV creation/use/cleanup belongs to synchronous inference closure. Queued
+  cancelled/expired requests do not call the model; HTTP cancellation keeps an
+  in-use WAV alive and discards eventual output. Provider sends request-addressed
+  best-effort cancel and relative timeout; readiness reports real executor load.
+- 28 STT/Actor/SDK/HTTP contracts, six WAV/HTTP probe contracts; extend existing
+  runtime CI gate. Paired same-WAV probe records source/input hashes, explicit
+  worker metadata, preview status and final-request p50/p95; no phone SLO claim.
+- ADR-027, SDK handoff, [Mac-agent protocol and command](realtime-conversation-v1.md),
+  Changelog. Actual upstream GigaAM lacks correct stateful encoder continuation;
+  retained RNNT decoder alone would not make it streaming.
+
+## VERIFIED
+
+Python 3.12, PYTHONPATH=cwd, /workspace/imvera-review-venv/bin/python.
+WAV-reading/mock HTTP inference boundary fixtures; no speech-quality score.
+
+| Check | Result |
+| --- | --- |
+| Five cancellation/deadline/WAV/health cases on unchanged fbff72c product | 5 failed / 23 deselected, 32.91s |
+| New STT tests + existing realtime/SDK/longform/replica/performance tests | 67 passed, 8.54s |
+| Six WAV/probe HTTP contracts | 6 passed, 2.37s |
+| Final expanded make test-dialogue-runtime | 137 passed, 10.01s |
+| make test-dialogue-rich / test-semantic-kernel | 185 / 294 passed |
+| Full python -m pytest -q before six isolated probe tests were added | 2271 passed / 8 inherited failed / 9 skipped, 129.39s |
+| Same eight inherited failures | Missing act v2/v3, polarity_v1/xenc_v3 artifacts; full suite NOT green |
+| Existing same-input EnergyVad probe after this source change | 8/8 single segments/content preserved, endpoint 640ms/800ms; no regression |
+| Ruff including tools, git diff --check; probe --help | PASS |
+
+Self-review: final request never awaits preview HTTP cleanup; a running CPU model
+cannot be preempted, so no false inference-stop claim. Worker preview admission
+cannot queue ahead of already outstanding final work. Existing final replica
+policy preserved. Safety/control semantics, canonical speech and model config
+unchanged. Deterministic policy/corpus gates were verified on fbff72c; this slice
+does not edit their owners. Remote parent checked before exact-object publication
+with force=false; final SHA/CI reported after push.
+
+## NOT VERIFIED
+
+Real GigaAM/MLX/Silero model behavior, M5 throughput/CPU/RAM, actual partial word
+quality, latency benefit, 7000 audio/SIP/barge-in, physical stop, prosody/listener
+warmth, Newo recording/competitor execution and production capacity.
+
+## REMAINING RISKS
+
+Prefix recomputation does not reduce final ASR work; an admitted running CPU job
+can delay final recognition. Default OFF until live comparison. Server caps prefix
+size; per-utterance attempt bound lives in CallActor, not an external rate limiter.
+Stateful streaming needs a separately benchmarked checkpoint/adapter; natural
+free-form LLM Renderer remains unimplemented under the standing owner constraint.
+Probe boundary is source WAV end, not acoustic speech end; worker hardware/revision
+are explicit operator notes, not remotely verified fields. Full CI test job on
+fbff72c failed collection for missing torch; nine specialized jobs succeeded.
+
+## NEXT GATE
+
+Mac agent verifies actual code/model SHA and endpoints, enables preview only for
+the lab worker/bridge, runs same-WAV paired STT probe and full 7000 audio/JSONL gate.
+Compare final latency/CPU/queue with preview=0/1; keep 0 if it worsens. Actual two-way
+recording and listener A/B are required before human-likeness or competitor claims.
+No approval asked for already authorized code/commit/push; no live rollout here.
+
+---
+
 # Realtime Conversation v1: delivery fixes, not text-polish (2026-10-01)
 
 Owner requests Newo-like human live conversation: turn-taking, interruptions,
