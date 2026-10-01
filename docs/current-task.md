@@ -362,6 +362,19 @@ canonical == TTS == delivered speech, and a single farewell.
 
 ---
 
+# Fifth merge live on d9e24f6: responsive dialogue (2026-10-01)
+
+- cf19cc8 (attentive reports/closings, ack clarifying flag, responsive
+  battery) merged clean, no conflicts. Thread branch speaks via his
+  single thread_followup owner — behavior in current owners.
+- Gates on merged: full 2230/0, corpus 500/500, diff 4/4, agent+dream,
+  hard1000 1349/1349, battery 16/16, ruff clean. Pushed normally
+  (feature only). Bridge in no-call window -> d9e24f6, hot, watch OK.
+- NOT VERIFIED: ear proof, :9103, remote CI.
+- NEXT: owner ear 7000 -> D1 migration go/no-go.
+
+---
+
 # Fourth merge live on 996bad8: codex adaptive + our warmth (2026-10-01)
 
 - His 23e4010 (warm tied to meaning, conversational continuity battery)
