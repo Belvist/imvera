@@ -1,3 +1,26 @@
+# Cleanup cut live on 7ce67d2: audits archived, dead weights dropped (2026-09-30)
+
+- Full orphan audit first: services/* are all live (voice_gateway +
+  voice_service started by voice_up; inference pinned by Makefile/tests;
+  blackbox tools covered by tests) — NOT deleted, early advice corrected.
+  packages/dialogue has zero orphans (session holds 68 test files +
+  bridge) — deletion is a migration program, not a slice (see below).
+- Deleted for real: 1.7GB dead model weights (xenc_v1/v2/v4/v4tmp, v1;
+  live pins v2/xenc_v3); audits out of root into archive/audits;
+  001/002/011/012 into adr/superseded with cross-links fixed.
+- Own mistake caught by gates: v3 was a tested artifact (env-override
+  test) — retrained via script (held 0.963), test green. Grep is not
+  proof; gates are.
+- Gates: full 1952/0 after restore, version_watch OK. No runtime change
+  in this cut; bridge restarted to 7ce67d2 for version parity (no-call
+  window). NOT PUSHED. NOT VERIFIED: ear proof, :9103, CI.
+- Migration program for packages/dialogue (counts measured): 74 test
+  files touch legacy modules; 768/1960 tests run flag-off default.
+  Slices: D1 port flag-off planner tests -> engine; D2 session slimming;
+  D3 package deletion. NEXT: owner go/no-go on D1.
+
+---
+
 # Cut 3b live: engine path never loads legacy planner (1b232e2, 2026-09-30)
 
 - Displaced owner: legacy Planner import-time presence on the live path.

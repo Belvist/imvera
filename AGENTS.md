@@ -676,6 +676,16 @@ four precise fixes instead of an architecture rewrite.
   NOT PUSHED. NOT VERIFIED: ear proof, :9103, CI. NEXT: session
   slimming → package deletion → :9103 fate → branch merge (owner).
 
+## Cleanup cut: orphans dropped, dialogue migration scoped (2026-09-30)
+
+- 7ce67d2: audits → archive/audits, 001/002/011/012 → adr/superseded
+  (links fixed), 1.7GB dead weights dropped (live pins v2/xenc_v3).
+  services/* all live — NOT deleted. dialogue/ has zero orphans
+  (68 test files + bridge): deletion = migration program (74 files,
+  768 flag-off tests). Own v3 deletion caught by gates, retrained
+  (held 0.963). Gates 1952/0, bridge → 7ce67d2. NOT PUSHED.
+  NEXT: owner go/no-go on migration D1.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
