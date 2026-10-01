@@ -208,6 +208,29 @@ ResolvedTurn. `apply_act_candidate` возвращает `(turn, applied, reason
 попрощаться. `ANSWER` — тип хода, а не доказательство ответа именно на
 доставленный вопрос. На yes/no вопрос «ага» остаётся ответом.
 
+## Голосовой runtime и Realtime v1
+
+[Передача на стенд, сравнение PCM и следующие этапы](realtime-conversation-v1.md).
+Barge-in принадлежит CallActor/PerceptionSession, не Renderer. Generation
+инвалидируется и останавливается до медленных внешних отмен/хранилища.
+После остановки передавать существующий cancel_playout_action для action generation:
+он посылает PlayoutCancelled в reducer и освобождает playing/planned question.
+Сохранять терминальный CANCELLED effect в outbox-индексе для позднего completion.
+Отправленные частично семплы дают DELIVERY_UNKNOWN, нулевые — CANCELLED.
+Не повторять ACK и не считать отменённый вопрос доставленным. Не выдавать
+ESL +OK за слышимую остановку. Защищённые opening/identity/consent политики
+сохраняются. STT по умолчанию final-only. Opt-in IMVERA_STT_PREVIEW=1
+на bridge и STT worker включает ограниченный prefix_batch через тот же
+backend, не native streaming. GET /v1/capabilities — фактический контракт;
+unsupported/429/503 не превращать в фиктивный пустой transcript или fallback.
+STT_PARTIAL — только revisable наблюдение, никогда не State fact, consent,
+клинический атрибут или текст для TTS. Итоговый запрос остаётся обязательным.
+Endpoint/reset/disconnect/озвучка инвалидируют preview epoch до отмены;
+поздние результаты не проходят. Проверка нагрузки/финальной задержки на
+M5 обязательна до включения для пользователей: prefix ASR может её ухудшить.
+Тёплая инструкция TTS уже есть; изменение её текста не доказывает качество
+интонации. Генеративный live Renderer этим этапом не восстановлен.
+
 ## События доставки обязательны
 
 После `start()` и каждого `on_user_turn()` забирай эффекты из outbox. SpeakEffect

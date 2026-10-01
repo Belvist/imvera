@@ -131,6 +131,14 @@ class SileroVad:
     def in_speech(self) -> bool:
         return self._in_speech
 
+    @property
+    def silence_elapsed_ms(self) -> int:
+        return self._silence_ms
+
+    @property
+    def speech_candidate(self) -> bool:
+        return self._speech_ms > 0 and self._silence_ms == 0
+
 
 def create_vad(sample_rate: int, config: VadConfig | None = None) -> EnergyVad | SileroVad:
     import os

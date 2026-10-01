@@ -46,6 +46,7 @@ class UtteranceBuilder:
         self._speech_frames = 0
         self._post_roll_remaining = 0
         self._post_roll: list[bytes] = []
+        self._segment_seq = 0
 
     def seed_external_preroll(self, pcm: bytes) -> None:
         """Attach blocked-period tail at speech_start (ADR-010; no VAD replay)."""
@@ -60,6 +61,22 @@ class UtteranceBuilder:
     @property
     def collecting(self) -> bool:
         return self._collecting or self._endpoint_pending
+
+    @property
+    def segment_seq(self) -> int:
+        """Acoustic segment identity; a micro-pause does not create a new turn."""
+        return self._segment_seq
+
+    def preview_prefix(self, duration_ms: int) -> bytes | None:
+        """Copy an exact bounded prefix; never consume/finalize the segment."""
+        if not self.collecting or duration_ms <= 0:
+            return None
+        # Frames are fixed-size on the runtime path. Avoid joining every 20ms.
+        if (len(self._segment) + len(self._post_roll)) * self.config.frame_ms < duration_ms:
+            return None
+        pcm = b"".join(self._segment + self._post_roll)
+        prefix_bytes = self.sample_rate * 2 * duration_ms // 1000
+        return pcm[:prefix_bytes] if len(pcm) >= prefix_bytes else None
 
     def reset_pending(self) -> None:
         """Clear in-progress endpoint without emitting (listen handoff)."""
@@ -86,6 +103,7 @@ class UtteranceBuilder:
         speech_started: bool,
         speech_ended: bool,
         speech_active: bool,
+        silence_elapsed_ms: int | None = None,
     ) -> BuiltUtterance | None:
         frame_ms = self.config.frame_ms
         hold_frames = max(1, self.config.silence_hold_ms // frame_ms)
@@ -95,6 +113,7 @@ class UtteranceBuilder:
         if not self._collecting:
             self._pre_roll.append(pcm)
             if speech_started:
+                self._segment_seq += 1
                 self._collecting = True
                 self._endpoint_pending = False
                 self._silence_frames = 0
@@ -127,6 +146,12 @@ class UtteranceBuilder:
         elif speech_ended or not speech_active:
             self._endpoint_pending = True
             self._silence_frames += 1
+            if speech_ended and silence_elapsed_ms is not None:
+                # VAD already waited for silence. The collector's hold is a
+                # minimum total pause, not a second sequential endpoint timer.
+                self._silence_frames = max(
+                    self._silence_frames, max(0, silence_elapsed_ms) // frame_ms,
+                )
 
         if len(self._segment) >= max_frames:
             return self._maybe_emit(min_frames, silence_tail_ms=self._silence_frames * frame_ms)

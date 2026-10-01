@@ -21,6 +21,7 @@ from packages.contracts.interpretation import TurnInterpretation
 from packages.contracts.outbox import ActionOutboxStatus
 from packages.contracts.providers import TTSProvider
 from packages.contracts.runtime import RuntimeEvent, RuntimeEventType
+from packages.contracts.stt import STT_PREVIEW_CHECKPOINTS_MS
 from packages.contracts.turn import TurnProposal
 from packages.dialogue.interpretation import to_turn_interpretation
 from packages.dialogue.session import CallSession, SessionTurnResult
@@ -174,6 +175,8 @@ class CallActorConfig:
     echo_ref_gate: bool = False
     # Interrupt Vera on clear user speech during playback (lab; default off).
     lab_barge_in: bool = False
+    # Batch prefix observations, not stateful streaming; M5 load gate first.
+    stt_prefix_previews: bool = False
 
 
 @dataclass
@@ -269,6 +272,10 @@ class CallActor:
     _playout_first_send_mono: float | None = None
     _fragment_state: FragmentState = field(default_factory=FragmentState)
     _fragment_timer_task: object | None = None
+    _stt_preview_task: asyncio.Task | None = None
+    _stt_preview_epoch: int = 0
+    _stt_preview_segment_seq: int | None = None
+    _stt_preview_step: int = 0
 
     def _forensic_active(self) -> bool:
         return os.environ.get("IMVERA_FORENSIC", "0") in {"1", "true", "yes"}
@@ -430,6 +437,7 @@ class CallActor:
 
     async def stop(self) -> None:
         self._stopped = True
+        self._invalidate_stt_preview()
         await self._queue.put(ActorEvent(ActorEventType.STOP))
         if self._task:
             await self._task
@@ -467,6 +475,7 @@ class CallActor:
         if self._stopped or self._transport_closed or self._capture_lost:
             return
         self._capture_lost = True
+        self._invalidate_stt_preview()
         await self.media.emit(
             RuntimeEvent(self.call_id, RuntimeEventType.CAPTURE_LOST, {})
         )
@@ -504,6 +513,7 @@ class CallActor:
                 await self._on_pcm(event.pcm, event.sample_rate)
 
     async def _finalize_disconnect(self) -> None:
+        self._invalidate_stt_preview()
         if self.session.is_finalized():
             return
         try:
@@ -551,6 +561,7 @@ class CallActor:
             and self._input_resampler.source_rate == capture_sample_rate
         ):
             return
+        self._invalidate_stt_preview()
         self._input_resampler = StatefulResampler(
             capture_sample_rate, self.config.target_sample_rate
         )
@@ -605,6 +616,7 @@ class CallActor:
         if not callable(finalize):
             return False
         segment = finalize()
+        self._invalidate_stt_preview()
         if not segment:
             return False
         if not self._turn_manager.should_emit_utterance():
@@ -635,8 +647,6 @@ class CallActor:
         """Block false speech.started from Vera echo during TTS."""
         if not self._active_generation:
             return False
-        if self.config.lab_barge_in:
-            return False
         return self._ensure_perception().should_suppress_speech_start(
             pcm, playback_active=True
         )
@@ -645,6 +655,87 @@ class CallActor:
         """Clear utterance assembly state after assistant playback — VAD stays hot."""
         if self._utterance_builder is not None:
             self._utterance_builder.reset_pending()
+        self._invalidate_stt_preview()
+
+    def _invalidate_stt_preview(self) -> None:
+        """Invalidate before cancelling; final recognition never waits for this."""
+        self._stt_preview_epoch += 1
+        task = self._stt_preview_task
+        self._stt_preview_task = None
+        self._stt_preview_segment_seq = None
+        self._stt_preview_step = 0
+        if task is not None and not task.done():
+            task.cancel()
+
+    async def _maybe_schedule_stt_preview(self, builder: object) -> None:
+        if (not self.config.stt_prefix_previews or not isinstance(builder, UtteranceBuilder)
+                or self._stopped or self._transport_closed):
+            return
+        if not builder.collecting:
+            if self._stt_preview_segment_seq is not None:
+                self._invalidate_stt_preview()
+            return
+        if not self._turn_manager.should_emit_utterance() or self._active_generation:
+            return
+        if self._stt_preview_segment_seq != builder.segment_seq:
+            self._invalidate_stt_preview()
+            self._stt_preview_segment_seq = builder.segment_seq
+        if self._stt_preview_step >= len(STT_PREVIEW_CHECKPOINTS_MS):
+            return
+        checkpoint = STT_PREVIEW_CHECKPOINTS_MS[self._stt_preview_step]
+        pcm = builder.preview_prefix(checkpoint)
+        if pcm is None:
+            return
+        self._stt_preview_step += 1  # consume even when busy; never accumulate work
+        if self._stt_preview_task is not None and not self._stt_preview_task.done():
+            await self._emit_stage("stt.preview.skipped", reason="preview_inflight",
+                                   segment_seq=builder.segment_seq, duration_ms=checkpoint)
+            return
+        epoch = self._stt_preview_epoch
+        self._stt_preview_task = asyncio.create_task(self._run_stt_preview(
+            pcm, builder, builder.segment_seq, epoch, checkpoint,
+        ))
+
+    async def _run_stt_preview(
+        self, pcm: bytes, builder: UtteranceBuilder, segment_seq: int,
+        epoch: int, duration_ms: int,
+    ) -> None:
+        utterance_id = f"u-{self._utterance_seq + 1}"
+        partial_id = f"{self.call_id}:s{segment_seq}:e{epoch}:p{duration_ms}"
+        started = time.monotonic()
+        try:
+            await self._emit_stage("stt.preview.request", utterance_id=utterance_id,
+                                   partial_id=partial_id, segment_seq=segment_seq,
+                                   duration_ms=duration_ms, partial_mode="prefix_batch")
+            result = await asyncio.wait_for(self.stt.transcribe_partial(
+                pcm, self.config.target_sample_rate, call_id=self.call_id,
+                partial_id=partial_id,
+            ), timeout=2.0)
+            if (epoch != self._stt_preview_epoch or self._stopped or self._transport_closed
+                    or builder is not self._active_builder() or not builder.collecting
+                    or builder.segment_seq != segment_seq):
+                return
+            if time.monotonic() - started > 2.0:
+                raise TimeoutError("STT preview budget exceeded")
+            if (result.is_final or result.partial_id != partial_id
+                    or result.partial_mode != "prefix_batch"):
+                raise ValueError("STT preview identity/mode/finality mismatch")
+            # Observation only. Never enter rich-turn interpretation, session
+            # mutation, question ledger, control actions or speech generation.
+            await self.media.emit(RuntimeEvent(self.call_id, RuntimeEventType.STT_PARTIAL, {
+                "utterance_id": utterance_id, "partial_id": partial_id,
+                "segment_seq": segment_seq, "preview_epoch": epoch,
+                "text": result.text, "is_final": False, "revisable": True,
+                "partial_mode": "prefix_batch", "duration_ms": duration_ms,
+                "model_revision": result.model_revision or "",
+                "stt_elapsed_ms": int((time.monotonic() - started) * 1000),
+            }))
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
+            if epoch == self._stt_preview_epoch and not self._stopped:
+                await self._emit_stage("stt.preview.unavailable", partial_id=partial_id,
+                                       error=str(exc)[:200])
 
     def _push_echo_downlink(self, pcm_s16le: bytes, sample_rate: int) -> None:
         """Feed injected downlink into playback reference at uplink/VAD sample rate."""
@@ -831,8 +922,8 @@ class CallActor:
         return perception.playback_ref._ref
 
     def _on_bot_playback_started(self) -> None:
+        self._invalidate_stt_preview()
         intent = self._last_delivered_intent or ""
-        self._tl().mark("playout")
         self._ensure_perception().on_playback_started(intent)
 
     async def _await_echo_tail(self) -> None:
@@ -917,6 +1008,11 @@ class CallActor:
             self._track_uplink_pcm(pcm, fed_to_vad=True)
         started, ended = self._vad.feed(pcm)  # type: ignore[union-attr]
         speech_active = bool(getattr(self._vad, "in_speech", False))
+        builder = self._active_builder()
+        if builder is not None and getattr(builder, "collecting", False):
+            # Resume the existing segment on acoustic onset; waiting for VAD's
+            # second min_speech window can otherwise cut speech at post-roll.
+            speech_active |= bool(getattr(self._vad, "speech_candidate", False))
         if started and self._should_suppress_speech_start_during_playback(pcm):
             started = False
         if started and self._blocked_preroll_pending:
@@ -929,9 +1025,12 @@ class CallActor:
             self._tl().mark("vad_start")
             self._forensic_segment_echo_max = 0.0
             self._segment_acoustic_echo_verdict = None
-            self._turn_manager.on_vad_speech_started(self._monotonic())
-            if self.config.lab_barge_in and playback_active:
+            interrupting = (self.config.lab_barge_in and playback_active
+                            and self._turn_manager.policy.barge_in)
+            if interrupting:
                 self._turn_manager.note_barge_in_candidate(self._monotonic())
+            else:
+                self._turn_manager.on_vad_speech_started(self._monotonic())
             await self._emit_stage(
                 "audio.speech_started",
                 playback_active=playback_active,
@@ -959,30 +1058,37 @@ class CallActor:
             await self.media.emit(
                 RuntimeEvent(self.call_id, RuntimeEventType.SPEECH_STARTED, {})
             )
-            if playback_active and self.config.lab_barge_in:
+            if interrupting:
                 gen = self._active_generation
                 self._turn_manager.confirm_barge_in()
-                await self._interrupt_playback(flush=True)
                 await self._emit_stage(
                     "bargein_detected",
                     generation_id=gen,
-                    echo_ref_gate=True,
+                    echo_ref_gate=bool(self.config.echo_ref_gate),
                 )
+                await self._interrupt_playback(flush=True)
+                self._turn_manager.on_vad_speech_started(self._monotonic())
         if ended:
             self._turn_manager.on_vad_speech_ended()
         builder = self._active_builder()
         built = None
         if builder is not None:
             try:
+                timing = (
+                    {"silence_elapsed_ms": getattr(self._vad, "silence_elapsed_ms", None)}
+                    if isinstance(builder, UtteranceBuilder) else {}
+                )
                 built = builder.on_frame(
                     pcm,
                     speech_started=started,
                     speech_ended=ended,
                     speech_active=speech_active,
+                    **timing,
                 )
             except TypeError:
                 built = builder.on_frame(pcm, started, ended)  # type: ignore[misc]
         if built:
+            self._invalidate_stt_preview()
             if isinstance(built, bytes):
                 pcm_out = built
                 duration_ms = int(len(pcm_out) / max(2, self.config.target_sample_rate * 2) * 1000)
@@ -1002,6 +1108,7 @@ class CallActor:
                 segment_rms=round(segment_rms, 1),
                 playback_active=playback_active,
                 silence_tail_ms=silence_tail_ms,
+                vad_silence_ms=getattr(self._vad, "silence_elapsed_ms", None),
                 turn_phase=str(self._turn_manager.phase),
             )
             if not self._turn_manager.should_emit_utterance():
@@ -1024,6 +1131,8 @@ class CallActor:
             self._inflight_utterances.add(utterance_seq)
             self._turn_manager.on_stt_submitted()
             asyncio.create_task(self._handle_utterance(pcm_out, utterance_seq))
+        else:
+            await self._maybe_schedule_stt_preview(builder)
 
     async def _replay_uplink_preroll(self, preroll: bytes) -> None:
         """Feed buffered user speech into fresh VAD after half-duplex unmute.
@@ -1786,6 +1895,8 @@ class CallActor:
                     deadline=budget.deadline,
                     utterance_id=utterance_id,
                 )
+                if getattr(stt_result, "is_final", True) is not True:
+                    raise ValueError("STT final adapter returned an unconfirmed result")
                 stt_elapsed_ms = int((time.monotonic() - stt_started) * 1000)
             except Exception as exc:
                 await self._submit_utterance_outcome(
@@ -2542,7 +2653,6 @@ class CallActor:
     async def _interrupt_playback(self, *, flush: bool) -> None:
         if flush:
             self._bump_control_epoch()
-        await self._cancel_active_llm()
         self._hold_turn_finalize = False
         self._render_generation = None
         self._playback_turn_generation = None
@@ -2551,18 +2661,21 @@ class CallActor:
         if self._playback and self._playback._ledger:
             sent_samples = self._playback._ledger.sent_samples
             interrupted_text = self._playback._ledger.canonical_text or ""
-        if self._outbox_action_id:
-            await self._finalize_outbox_action(
-                sent_samples=sent_samples,
-                outcome="cancelled",
-            )
         if not self._playback or not self._active_generation:
+            await self._cancel_active_llm()
+            if self._outbox_action_id:
+                await self._finalize_outbox_action(sent_samples=sent_samples, outcome="cancelled")
             return
         gen = self._active_generation
+        cancel_started = self._monotonic()
         # Remember partial speech so post-interrupt STT echo is discarded.
         if sent_samples > 0 and interrupted_text:
             self._remember_assistant_phrase(interrupted_text)
         self._playback.cancel_generation(gen)
+        # Invalidate before any await: a sender/finalizer must not observe this
+        # generation as active while provider cancellation or storage is slow.
+        self._active_generation = None
+        self._force_listen_enabled()
         asyncio.create_task(self.tts.cancel(gen))
         if self._tts_task and not self._tts_task.done():
             self._tts_task.cancel()
@@ -2572,23 +2685,29 @@ class CallActor:
         local_ack: dict[str, Any] = {}
         if self.media.cancel_generation is not None:
             try:
-                local_ack = await self.media.cancel_generation(gen)
+                local_ack = await asyncio.wait_for(self.media.cancel_generation(gen), timeout=0.25)
             except Exception as exc:
                 local_ack = {"generation_id": gen, "error": str(exc)[:200]}
         else:
             asyncio.create_task(self.media.flush())
+        local_cancel_ms = round((self._monotonic() - cancel_started) * 1000, 1)
         downstream: dict[str, Any] = {}
         if self.media.request_downstream_stop is not None:
             try:
-                downstream = await self.media.request_downstream_stop()
+                downstream = await asyncio.wait_for(
+                    self.media.request_downstream_stop(), timeout=0.25,
+                )
             except Exception as exc:
-                downstream = {"error": str(exc)[:200]}
+                downstream = {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:200]}
         await self._emit_stage(
             "transport.cancel",
             generation_id=gen,
             cancel_requested_at=cancel_requested_at,
             local_purge_ack=local_ack,
             downstream_ack=downstream,
+            local_cancel_ms=local_cancel_ms,
+            stop_request_elapsed_ms=round((self._monotonic() - cancel_started) * 1000, 1),
+            audible_stop_verified=False,
         )
         await self.media.emit(
             RuntimeEvent(
@@ -2597,12 +2716,26 @@ class CallActor:
                 {"generation_id": gen},
             )
         )
-        self._active_generation = None
-        self._force_listen_enabled()
         self._playback_uplink_buf.clear()
         self._tts_resamplers = {
             k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
         }
+        if (self.session.uses_dialogue_engine()
+                and self._pending_mark_render_gen == gen and self._pending_mark_spoken_id):
+            action_generation = self._pending_mark_spoken_id
+            self._pending_mark_spoken_id = None
+            self._pending_mark_render_gen = None
+            self._pending_speak_effect_id = None
+            await asyncio.to_thread(self.session.cancel_playout_action, action_generation)
+            await self._emit_stage(
+                "dialogue.playout_cancelled", generation_id=gen,
+                action_generation_id=action_generation,
+            )
+        # Non-audio work follows the stop request. Its duration may never delay
+        # generation invalidation, PCM purge, or the downstream break command.
+        await self._cancel_active_llm()
+        if self._outbox_action_id:
+            await self._finalize_outbox_action(sent_samples=sent_samples, outcome="cancelled")
 
     async def _speak_cached_pcm(
         self,
@@ -2655,12 +2788,7 @@ class CallActor:
             )
             if not first_logged and out_pcm:
                 first_logged = True
-                await self._emit_stage(
-                    "tts.first_pcm",
-                    generation_id=generation_id,
-                    samples=len(out_pcm) // 2,
-                    cached=True,
-                )
+                await self._note_tts_first_pcm(generation_id, len(out_pcm) // 2, cached=True)
             if out_pcm and self._effective_echo_ref_gate():
                 self._push_echo_downlink(out_pcm, self._output_sample_rate)
             env = AudioEnvelope(
@@ -2787,6 +2915,8 @@ class CallActor:
                     out_pcm = self._resample_tts_chunk(
                         generation_id, chunk.pcm_s16le, chunk.sample_rate
                     )
+                    if out_pcm:
+                        await self._note_tts_first_pcm(generation_id, len(out_pcm) // 2)
                     env = AudioEnvelope(
                         call_id=self.call_id,
                         generation_id=generation_id,
@@ -2876,6 +3006,19 @@ class CallActor:
             return
         await self._wait_phrase_playback_drained()
 
+    async def _note_tts_first_pcm(
+        self, generation_id: str, samples: int, *, cached: bool = False,
+    ) -> None:
+        if samples <= 0 or generation_id in self._tts_first_pcm_gens:
+            return
+        self._tts_first_pcm_gens.add(generation_id)
+        self._tl().mark("tts_first_pcm")
+        if self._tts_slow_watch and not self._tts_slow_watch.done():
+            self._tts_slow_watch.cancel()
+        await self._emit_stage(
+            "tts.first_pcm", generation_id=generation_id, samples=samples, cached=cached,
+        )
+
     async def _watch_tts_slow_start(self, generation_id: str, phrase_id: str) -> None:
         try:
             await asyncio.sleep(5.0)
@@ -2927,20 +3070,20 @@ class CallActor:
                     error=str(exc)[:200],
                 )
                 continue
+            if self._playback.is_cancelled(chunk.generation_id):
+                # A blocked send can finish after interruption. The transport
+                # reports that bounded race; it is not a fresh playback start.
+                continue
             if self._playout_first_send_mono is None:
                 self._playout_first_send_mono = self._monotonic()
+                self._tl().mark("playout")
+                await self.media.emit(RuntimeEvent(
+                    self.call_id, RuntimeEventType.PLAYBACK_STARTED,
+                    {"generation_id": chunk.generation_id, "phrase_id": chunk.phrase_id,
+                     "boundary": "transport_send_completed", "audible_start_verified": False},
+                ))
             if self._effective_echo_ref_gate():
                 self._push_echo_downlink(chunk.pcm_s16le, chunk.sample_rate)
-            if chunk.sequence == 0:
-                self._tts_first_pcm_gens.add(chunk.generation_id)
-                if self._tts_slow_watch and not self._tts_slow_watch.done():
-                    self._tts_slow_watch.cancel()
-                await self._emit_stage(
-                    "tts.first_pcm",
-                    generation_id=chunk.generation_id,
-                    samples=len(chunk.pcm_s16le) // 2,
-                )
-                self._tl().mark("tts_first_pcm")
             if not self.config.telephony_stream:
                 duration = (len(chunk.pcm_s16le) // 2) / chunk.sample_rate
                 await asyncio.sleep(duration)
@@ -3145,6 +3288,7 @@ class CallActor:
         await self._cancel_wait_timer()
         self._transport_closed = True
         self._stopped = True
+        self._invalidate_stt_preview()
         await self.media.hangup()
         if engine is not None:
             engine.outbox.mark_completed(effect.effect_id)
@@ -3228,7 +3372,8 @@ def build_call_actor(
         call_id=call_id,
         family_id=family_id,
         session=session,
-        stt=HttpSTTProvider(stt_url, client=shared),
+        stt=HttpSTTProvider(stt_url, client=shared,
+                            prefix_previews=os.environ.get("IMVERA_STT_PREVIEW", "0") == "1"),
         tts=HttpTTSProvider(tts_url, client=shared),
         llm=HttpLLMProvider(llm_url, client=shared),
         media=media,
@@ -3242,5 +3387,6 @@ def build_call_actor(
             uplink_preroll_ms=uplink_preroll_ms(),
             echo_ref_gate=echo_ref_gate_enabled(),
             lab_barge_in=lab_barge_in_enabled(),
+            stt_prefix_previews=os.environ.get("IMVERA_STT_PREVIEW", "0") == "1",
         ),
     )

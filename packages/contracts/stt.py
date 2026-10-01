@@ -4,6 +4,18 @@ from pydantic import BaseModel, Field
 
 from packages.contracts.enums import AsrQuality
 
+STT_PREVIEW_CHECKPOINTS_MS = (1000, 2000, 4000, 8000)
+
+
+class STTCapabilities(BaseModel):
+    partial_mode: str = "unsupported"
+    native_streaming: bool = False
+    revisable: bool = True
+    final_required: bool = True
+    preview_checkpoints_ms: tuple[int, ...] = ()
+    max_preview_duration_ms: int = 0
+    model_revision: str = ""
+
 
 class CriticalTermMatch(BaseModel):
     term: str
@@ -22,6 +34,9 @@ class STTPartial(BaseModel):
     is_final: bool = False
     avg_logprob: float | None = None
     no_speech_prob: float | None = None
+    partial_mode: str = ""
+    duration_ms: int | None = None
+    model_revision: str | None = None
 
 
 class STTResult(BaseModel):

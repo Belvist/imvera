@@ -2,6 +2,23 @@
 
 ## Unreleased — 2026-10-01
 
+- Wire opt-in bounded STT prefix previews through the existing worker/provider/CallActor; advertise revisable prefix_batch, not native streaming.
+- Keep previews observational, discard late output, require authoritative final and skip busy checkpoints without replica retry.
+- Fix queued cancellation/deadline checks and WAV lifetime on HTTP cancellation; address provider cancellation and report real STT queue load.
+- Add 28 STT preview/cancellation/finality contracts and document the default-OFF M5 load gate.
+- Add a same-WAV paired HTTP STT probe with hashes, explicit worker metadata and six WAV/request-boundary checks; phone latency remains a separate live gate.
+
+- Forward runtime interruption to the existing SDK playout-cancel event; release the question and reject late completion without inventing delivery.
+- Add two real SDK/runtime cancellation-and-resumption cases to the runtime CI gate.
+
+- Count VAD-observed silence once at endpointing and retain speech resumed in post-roll.
+- Invalidate and stop cancelled audio before remote LLM cancellation or outbox storage.
+- Keep protected turn policies authoritative under barge-in; preserve detection ordering and user speech phase.
+- Bound transport cancellation waits and distinguish command ACK from audible stop.
+- Measure first TTS PCM and first transport send at actual boundaries; read the runtime timeline schema.
+- Replace the final-only STT partial stub with an explicit unsupported error.
+- Add 20 PCM/runtime contracts, an eight-input PCM probe and the Realtime v1 agent handoff.
+
 - React to fully accepted complaints and new reports before summary without adding questions.
 - Preserve dizziness/numbness in multi-report speech instead of inventing headache from anatomy.
 - Name the next complaint after strong pain; tolerate trailing punctuation in accepted-degree reactions.
