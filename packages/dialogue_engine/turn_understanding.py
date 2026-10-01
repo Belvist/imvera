@@ -121,6 +121,8 @@ class TurnUnderstandingV2:
             getattr(candidate, "source_quote", ""), turn.raw_text
         ):
             return turn, False, "candidate_evidence_not_grounded"
+        if turn.dialogue_act == "repair" and turn.kernel_route == "kernel_l0":
+            return turn, False, "deterministic_repair_wins"
         if (
             turn.control not in {"", "none"} or turn.risk_candidates or turn.user_question
             or turn.consent_answer != "not_applicable"

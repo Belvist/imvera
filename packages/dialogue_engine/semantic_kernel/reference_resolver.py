@@ -18,6 +18,40 @@ _REF = re.compile(
     r"сейчас\s+уже\s+лучше|уже\s+лучше|получше)\b",
     re.I,
 )
+_TOPIC_REQUEST = re.compile(
+    r"^(?:давайте|давай)\s+(?:(?:лучше|сначала|теперь)\s+)?"
+    r"(?:(?:поговорим|поговорим\s+сначала|обсудим)\s+)?"
+    r"(?:про|о|об)\s+(?P<topic>[а-яё]+(?:\s+[а-яё]+){0,2})[.!?…]*$", re.I,
+)
+
+
+def topic_request_span(text: str) -> SemanticSpan | None:
+    """An explicit conversational request is not a clinical assessment."""
+    match = _TOPIC_REQUEST.fullmatch(text.strip())
+    if match is None:
+        return None
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_token
+
+    topic = match.group("topic")
+    return SemanticSpan(
+        span_id=_sid(), type=SpanType.BODY_SITE, text=topic,
+        start=match.start("topic"), end=match.end("topic"),
+        normalized=" ".join(normalize_token(token) for token in topic.lower().split()),
+    )
+
+
+def requested_episode(text: str, state: EngineState | None) -> str | None:
+    span = topic_request_span(text)
+    if span is None or state is None or state.call_closed:
+        return None
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+
+    matches = [ep.episode_id for ep in state.issue_episodes.values()
+               if ep.status != "resolved" and ep.subject == "speaker"
+               and ep.evidence_turn_ids and any(m.evidence.quote for m in ep.mentions)
+               and (ep.body_site == span.normalized
+                    or normalize_text(ep.primary_label) == span.normalized)]
+    return matches[0] if len(matches) == 1 else None
 
 
 def is_exclusive_topic_reference(

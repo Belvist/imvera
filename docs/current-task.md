@@ -1,3 +1,89 @@
+# Adaptive conversation: ordinary answers, plain repair, chosen topic (2026-10-01)
+
+Owner: «это всё? а ещё лучше можем и как ты это делал». Persistent order:
+no generative live LLM; models propose meaning, engine decides/formulates;
+commit/push only feature/voice-zoiper-m5. Base 23e4010, isolated checkout
+codex/live-loop-fix. No model training, runtime/container/database/SIP restart.
+
+## CHANGED
+
+- Kernel recognizes bounded endurance grammar, retains quoted evidence, and
+  binds a degree-only continuation to one immediately preceding speaker issue.
+- Meaning repair explains severity in plain words and preserves question_id /
+  clinical need. An erroneous model ANSWER cannot replace clear kernel REPAIR;
+  existing usage trace reports deterministic_repair_wins rather than model used.
+- Explicit known-topic requests use existing REFERS_TO. Canonical scheduling
+  wrapper validates the unique open speaker owner and existing budget before
+  selecting it; retains the interrupted episode in the existing queue, facts,
+  unknown attributes and custom mission's suspended goal.
+- Preference «лучше про...» cannot create recovery. Ingest, observations and
+  recap distinguish same-site pain/tremor and other-person facts. Shared clinical
+  concept preserves pain paraphrases; unsited «ещё болит» stays a new vague lead.
+  Legacy generic fallback retains the nonpain predicate rather than inventing pain.
+- An accepted clinical value no longer triggers a story-followup. Nonpain degree
+  does not imply pain in speech. Safety/control/RED/consent, budgets, canonical
+  delivery, frozen action-policy manifest and provider configuration unchanged.
+- 43 new cases (71 continuity cases total). Four existing clarification-copy
+  assertions explicitly changed to plain wording; question/fact checks retained.
+  No test deletions, new skips, model stubs or expectation changes elsewhere.
+- [Root causes, mechanism and agent handoff](live-calls/fs-2baf87ec-adaptive.md),
+  [all paired text responses](live-calls/fs-2baf87ec-adaptive-replay.md), SDK guide
+  and ADR-026 updated. Comparison against competitors is not measured here.
+
+## VERIFIED
+
+Python 3.12; PYTHONPATH=cwd, /workspace/imvera-review-venv/bin/python. Final
+product tree at /workspace/imvera-live-review; baseline is detached 23e4010
+with only the same final continuity test transferred (product bytes unchanged).
+
+| Command/check | Result |
+| --- | --- |
+| Same final continuity tests on baseline 23e4010 | 31 failed / 40 passed; includes four declared copy changes, not 31 independent bugs |
+| python -m pytest tests/test_conversational_continuity.py -q | 71 passed |
+| Product pack + continuity + warmth, pinned existing tests retained | 116 passed |
+| make test-dialogue-rich | 154 passed |
+| make test-semantic-kernel | 294 passed |
+| python -m pytest -q, final full run | 2190 passed / 8 failed / 9 skipped, 111.37s |
+| Same eight model cases on unchanged baseline 23e4010 | Same eight failures, 4.51s; real model artifacts absent |
+| python scripts/dialogue_corpus_gate.py | 500/500 PASS, 5.92s |
+| python scripts/hard1000_gate.py | 1349/1349 PASS |
+| python scripts/hard_battery.py | 16/16 PASS |
+| python scripts/agent_dialogue_gate.py | agent + dream PASS |
+| python tools/voice_lab/policy_diff_v8_v9.py --stdout-only | 4 changed / 4 expected / 0 unexplained |
+| make lint, git diff --check | PASS |
+| Paired ScenarioRunner capture | Identical inputs in all 8 cases; full outputs + source fingerprints linked above |
+
+Intermediate full run found an unsited-new-lead regression after tightening
+clinical ownership. Fixed in source; original multi-symptom/no-hangup contract
+passed unchanged, then full/gates rerun. Baseline model failures are exactly
+act v2/v3, warmup/polarity_v1/xenc_v3 artifacts. Full suite is NOT green.
+Source self-review: one owner per layer, no transport rewriting/second state,
+no local verdict changes, unknown/ambiguous goals abstain, safety gates retained.
+Publication uses exact Git objects with expected-parent guard, force=false.
+GitHub jobs and remote SHA are checked separately after publication.
+
+## NOT VERIFIED
+
+Heavy live-model accuracy/readiness, Mac/7000, source audio, latency, prosody,
+barge-in and listener warmth. No competitor execution or superiority claim.
+
+## REMAINING RISKS
+
+Bounded grammar is not arbitrary language understanding. Unknown/ambiguous
+requested topics abstain; budget exhaustion can leave attributes unknown.
+Some existing fully answered limb-pain paths still lead with «Хорошо»; shown
+in the paired replay. The transcript evidence supports text/state improvements,
+not «indistinguishable from a person» or deployed voice acceptance.
+
+## NEXT GATE
+
+Mac agent fetches published m5 SHA, checks real model readiness and calls 7000
+with endurance, meaning/hearing repair, topic-return, pain/tremor and urgent/
+refusal cases. Save JSONL + audio, verify canonical == TTS == delivered text,
+per-issue values, one question and honest unknown outcome; listen for warmth.
+
+---
+
 # Conversation continuity: warm reaction, named question, honest repair (2026-10-01)
 
 Owner: make the dialogue feel like a real caring conversation. Earlier owner

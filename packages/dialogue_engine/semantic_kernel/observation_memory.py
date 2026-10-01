@@ -239,8 +239,11 @@ def build_reference_observations(
     )
     observations: list[Observation] = []
     raw = result.raw_text.strip()
+    from packages.dialogue_engine.check_path import is_other_person_health_frame
     from packages.dialogue_engine.question_context import utterance_indicates_resolved
 
+    if is_other_person_health_frame(raw):
+        return ()
     if utterance_indicates_resolved(raw):
         observations.append(
             Observation(
@@ -453,16 +456,20 @@ def _match_episode_for_observation(
 ) -> str | None:
     if obs.episode_id:
         return obs.episode_id
-    if obs.body_site:
-        for ep_id, ep in state.issue_episodes.items():
-            if ep.body_site == obs.body_site:
-                return ep_id
     if obs.issue_normalized:
-        norm = obs.issue_normalized.lower()
+        from packages.dialogue_engine.issue_memory import clinical_issue_concept
+
+        concept = clinical_issue_concept(obs.issue_normalized)
         for ep_id, ep in state.issue_episodes.items():
-            stored = (getattr(ep, "canonical_key", "") or "").strip()
-            key = stored.lower() if stored else normalize_text(ep.primary_label or "")
-            if norm in key or (ep.body_site and norm.startswith(ep.body_site)):
+            if not obs.body_site and ep.body_site and turn.issue_mentions:
+                continue
+            if obs.body_site and ep.body_site != obs.body_site:
+                continue
+            if (obs.subject.value in ("speaker", "other_person")
+                    and ep.subject in ("speaker", "other_person")
+                    and obs.subject.value != ep.subject):
+                continue
+            if concept == clinical_issue_concept(ep.primary_label, ep.canonical_key):
                 return ep_id
     if (
         obs.attribute in ("onset", "duration", "severity", "current")

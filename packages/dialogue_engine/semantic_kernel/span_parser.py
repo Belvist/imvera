@@ -97,6 +97,33 @@ _SEVERITY = re.compile(
     + r")\b",
     re.I,
 )
+_TOLERANCE = re.compile(
+    r"\b(?:(?:не\s+)?(?:могу|можно)\s+терпеть|терпеть\s+(?:не\s+)?могу)\b", re.I,
+)
+
+
+def tolerance_severity_spans(text: str) -> tuple[SemanticSpan, ...]:
+    """Endurance answers with a closed complement, not tolerance of people/noise."""
+    allowed = {"я", "это", "боль", "пока", "ещё", "еще", "уже", "ну", "да", "вполне"}
+    result = []
+    clauses = clause_bounds(text)
+    for index, (start, _end, clause) in enumerate(clauses):
+        if index and re.fullmatch(
+            r"(?:я\s+)?(?:не\s+знаю|не\s+помню|не\s+уверен[а]?)", clauses[index - 1][2], re.I,
+        ):
+            continue
+        for match in _TOLERANCE.finditer(clause):
+            rest = clause[:match.start()] + " " + clause[match.end():]
+            if not all(token.lower() in allowed for token in _TOKEN.findall(rest)):
+                continue
+            quote = match.group(0)
+            result.append(SemanticSpan(
+                span_id=_sid(), type=SpanType.SEVERITY, text=quote,
+                start=start + match.start(), end=start + match.end(),
+                normalized="сильно" if re.search(r"\bне\b", quote, re.I) else "терпимо",
+                confidence=0.9,
+            ))
+    return tuple(result)
 _STATUS = re.compile(
     r"\b(прошл\w*|лучше|получше|нормально|уже\s+не\s+бол\w*|не\s+болит|"
     r"почти\s+не\s+бол\w*|залечил\w*|выздоров\w*)\b",
@@ -249,6 +276,7 @@ def parse_spans(text: str) -> tuple[SemanticSpan, ...]:
         acc.add(SpanType.TIME, m.group(0), m.start(), m.end(), 0.88)
     for m in _SEVERITY.finditer(raw):
         acc.add(SpanType.SEVERITY, m.group(0), m.start(), m.end(), 0.85)
+    acc.spans.extend(tolerance_severity_spans(raw))
     for m in _STATUS.finditer(raw):
         acc.add(SpanType.STATUS, m.group(0), m.start(), m.end(), 0.86)
     for m in _NEGATION.finditer(raw):

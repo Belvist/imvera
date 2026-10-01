@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING
 _RESOLVED_UTTERANCE = re.compile(
     r"\b("
     r"не\s+болит|уже\s+не\s+бол|боль\s+прошл\w*|всё\s+прошл\w*|все\s+прошл\w*|"
-    r"прошл\w*|полегче|получше|легче|лучше|уже\s+почти\s+не|почти\s+прошл\w*"
+    r"прошл\w*|полегче|получше|легче|лучше(?!\s+(?:про|о|об)\b)|"
+    r"уже\s+почти\s+не|почти\s+прошл\w*"
     r")\b",
     re.I,
 )
@@ -272,7 +273,9 @@ def repair_question_text(
             # Active memory may have moved while delivered speech is still
             # older. Never explain a different pending question in its place.
             if ctx.slot == intent:
-                return questions.explain_episode_question(ep.primary_label, question)
+                return questions.explain_episode_question(
+                    ep.primary_label, question, attribute=ctx.attribute,
+                )
     if ctx is not None and ctx.text.strip():
         return ctx.text
     from packages.dialogue_engine import questions

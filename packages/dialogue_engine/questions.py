@@ -281,6 +281,8 @@ def service_spoken_name() -> str:
 
 def concern_summary_phrase(state: EngineState) -> str:
     """Short spoken list of what Vera heard — for warmer goodbye."""
+    from packages.dialogue_engine.issue_memory import clinical_issue_concept
+
     bits: list[str] = []
     seen: set[str] = set()
     eps = list(state.issue_episodes.values())
@@ -296,11 +298,12 @@ def concern_summary_phrase(state: EngineState) -> str:
             continue
         label = (ep.primary_label or "").strip().lower()
         site = (ep.body_site or "").strip().lower()
-        # Same-site dupes («голова болела» + «головная боль») list once.
-        site_key = site or None
+        # Deduplicate a restated symptom, not every symptom at that site.
+        concept = clinical_issue_concept(label, ep.canonical_key)
+        site_key = f"{site}:{concept}" if site else None
         if site_key and site_key in seen:
             continue
-        key = site or label
+        key = site_key or label
         if not key or key in seen:
             continue
         seen.add(key)
@@ -310,9 +313,9 @@ def concern_summary_phrase(state: EngineState) -> str:
             continue
         if "круж" in label or ep.kind == "dizziness":
             bits.append("головокружение")
-        elif site == "голова" or "голов" in label:
+        elif concept == "pain" and (site == "голова" or "голов" in label):
             bits.append("головная боль")
-        elif site == "живот" or "живот" in label:
+        elif concept == "pain" and (site == "живот" or "живот" in label):
             bits.append("боль в животе")
         elif "тошн" in label:
             bits.append("тошнота")
@@ -442,18 +445,27 @@ def temporal_answer_ack(value: str) -> str:
     return f"Поняла, это продолжается уже {value.lower()}."
 
 
-def severity_answer_ack(*, strong: bool) -> str:
-    return "Сочувствую, сильную боль тяжело переносить." if strong else "Поняла, сейчас терпимо."
+def severity_answer_ack(*, strong: bool, pain: bool = True) -> str:
+    if strong:
+        return ("Сочувствую, сильную боль тяжело переносить." if pain
+                else "Сочувствую, это тяжело переносить.")
+    return "Поняла, сейчас терпимо."
 
 
 def requests_question_explanation(text: str) -> bool:
     """A delivery distinction inside accepted REPAIR, not a new dialogue act."""
-    return bool(re.search(r"\b(уточни\w*|конкрет\w*|не\s+понял\w*)\b", text, re.I))
+    return bool(re.search(
+        r"\b(уточни\w*|конкрет\w*|не\s+понял\w*|не\s+понимаю|что\s+значит)\b", text, re.I,
+    ))
 
 
-def explain_episode_question(label: str, question: str) -> str:
+def explain_episode_question(label: str, question: str, *, attribute: str = "") -> str:
     if label.strip().lower() == "головная боль":
+        if attribute == "severity":
+            return "Я спрашиваю про головную боль. Её можно терпеть или она очень сильная?"
         return f"Я спрашиваю про головную боль. {question}"
+    if attribute == "severity":
+        return f"Уточню про {label.lower()}. Это можно терпеть или очень тяжело переносить?"
     return f"Уточню вопрос. {question}"
 
 
@@ -473,6 +485,13 @@ def episode_transition(site: str, kind: str, label: str = "") -> str:
     if topic:
         return f"Теперь про {topic}."
     return f"{label[0].upper() + label[1:]} — давайте уточним."
+
+
+def requested_episode_ack(site: str, kind: str, label: str) -> str:
+    transition = episode_transition(site, kind, label)
+    if transition.startswith("Теперь про "):
+        return "Хорошо, сначала про " + transition.removeprefix("Теперь про ")
+    return "Хорошо. " + transition
 
 
 def without_listener_prefix(text: str) -> str:

@@ -57,6 +57,23 @@ Existing exact call-level consent controls are preserved. This slice does not
 redefine “не хочу” or introduce an inference of future consent. Explicit urgent
 signals still take the frozen urgent path before ordinary controls or warmth.
 
+Adaptive extension (2026-10-01, base `23e4010`):
+[reproduction, existing owners and agent guidance](../live-calls/fs-2baf87ec-adaptive.md).
+Bounded endurance grammar and a single-owner elliptical degree resolve ordinary
+answers without classifier-only clinical fills. Meaning repair changes wording
+while retaining the delivered obligation. Explicit topic requests use existing
+REFERS_TO and the episode queue; the canonical scheduling wrapper validates
+them before generic action routing, without changing the frozen policy manifest
+or taking mission_flow's suspended goal. Clinical facts remain untouched by
+that request. Episode ingest, observation binding and recap share a clinical
+concept match: same-site pain paraphrases merge, tremor stays distinct, and
+another person's clinical answers cannot fill the speaker's pending attributes.
+Legacy generic fallback preserves the actual nonpain predicate. A new unsited
+lead remains unsited. Clear kernel REPAIR outranks an ANSWER model vote, with
+explicit unused reason in the existing adjudication trace. Unknown/ambiguous targets abstain. Safety/control and question
+budgets retain priority. Four existing clarification-copy assertions now expect
+the plain-language explanation; their question identity and fact checks remain.
+
 ## Verification and comparison
 
 New behavioral contracts include memory difficulty without medical reassurance,
