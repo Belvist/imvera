@@ -50,6 +50,16 @@ escape as one bounded transport race; it cannot restart the cancelled generation
 Existing action finalization still records sent audio as delivery unknown when
 cancelled; it never marks an unheard question as delivered.
 
+SDK cancellation follow-up (base 98e1a7c): physical stop also invokes the
+existing CallSession.cancel_playout_action using its pending action generation.
+This dispatches existing PlayoutCancelled and releases playing/planned question
+without creating delivery. Pending actor delivery pointers are cleared for that
+generation. Session retains the cancelled effect's address in its existing outbox
+index so late completions find terminal CANCELLED before any persistence call.
+Partial sent audio stays DELIVERY_UNKNOWN; zero audio stays CANCELLED. Duplicate
+cancel does not bump state again. Two real SDK/runtime cases prove resumption
+on a new complaint after cancellation and reject delayed completion callbacks.
+
 ## Interfaces and readiness
 
 VAD silence_elapsed_ms/speech_candidate → existing collector → final STT.

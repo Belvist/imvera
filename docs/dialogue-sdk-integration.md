@@ -213,6 +213,10 @@ ResolvedTurn. `apply_act_candidate` возвращает `(turn, applied, reason
 [Передача на стенд, сравнение PCM и следующие этапы](realtime-conversation-v1.md).
 Barge-in принадлежит CallActor/PerceptionSession, не Renderer. Generation
 инвалидируется и останавливается до медленных внешних отмен/хранилища.
+После остановки передавать существующий cancel_playout_action для action generation:
+он посылает PlayoutCancelled в reducer и освобождает playing/planned question.
+Сохранять терминальный CANCELLED effect в outbox-индексе для позднего completion.
+Отправленные частично семплы дают DELIVERY_UNKNOWN, нулевые — CANCELLED.
 Не повторять ACK и не считать отменённый вопрос доставленным. Не выдавать
 ESL +OK за слышимую остановку. Защищённые opening/identity/consent политики
 сохраняются. Current STT final-only; transcribe_partial даёт явную ошибку,

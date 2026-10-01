@@ -8,6 +8,12 @@ peer merge; preserve it. No deployment, live model or Mac/Zoiper access here.
 
 ## CHANGED
 
+- Follow-up on published 98e1a7c: CallActor forwards interruption to the
+  existing SDK cancel_playout_action / PlayoutCancelled reducer event, clears
+  pending delivery pointers, releases playing/planned question. Session retains
+  terminal effect addressing so late completion cannot invent delivery. Sent
+  partial audio stays DELIVERY_UNKNOWN; zero audio stays CANCELLED. Two new
+  real SDK/runtime resumption cases fail on 98e1a7c and pass here.
 - Existing VAD exposes observed silence/acoustic candidate to the existing
   UtteranceBuilder. Count hold once, keep post-roll and preserve speech resumed
   near its end; VAD thresholds, PCM contract and engine facts unchanged.
@@ -21,7 +27,7 @@ peer merge; preserve it. No deployment, live model or Mac/Zoiper access here.
   Existing histogram reads actual stage.timing/stage=timeline schema.
 - Replace unused final-only STT empty partial stub with explicit unsupported
   ProviderUnavailable; actual realtime recognition is not implemented or claimed.
-- 20 new PCM/runtime contracts; expand the existing runtime CI gate to include
+- 22 new PCM/runtime+SDK contracts; expand the existing runtime CI gate to include
   cancellation, perception, endpointing, audible-duration and stale-generation
   tests. No old assertions, skips or models changed.
 - [Realtime proof + Mac-agent handoff](realtime-conversation-v1.md), ADR-027,
@@ -36,11 +42,13 @@ Synthetic PCM 16kHz, 20ms frames, EnergyVad; no neural speech quality claim.
 | Check | Result |
 | --- | --- |
 | Same final new tests on detached d9e24f6 product baseline | 17 failed / 3 passed, 25.97s; includes telemetry/unsupported contracts, not 17 independent bugs |
-| New tests on final source | 20 passed, 0.86s |
-| make test-dialogue-runtime (expanded existing gate) | 101 passed, 3.69s |
-| make test-dialogue-rich | 185 passed, 5.00s |
-| make test-semantic-kernel | 294 passed, 1.59s |
-| python -m pytest -q | 2241 passed / 8 failed / 9 skipped, 107.81s |
+| New PCM/runtime tests | 20 passed |
+| Real SDK cancel/late completion/resumption cases | 2 passed; 2 failed on unchanged 98e1a7c |
+| SDK follow-up + existing cancellation/effect delivery contracts | 77 passed |
+| make test-dialogue-runtime (expanded existing gate) | 103 passed, 3.83s |
+| make test-dialogue-rich | 185 passed, 4.57s |
+| make test-semantic-kernel | 294 passed, 1.54s |
+| python -m pytest -q | 2243 passed / 8 failed / 9 skipped, 129.34s |
 | Same eight inherited failures | Unavailable act v2/v3, polarity_v1/xenc_v3 artifacts; full suite NOT green |
 | Identical-input PCM probe | 8 input hashes match, one segment and speech content/order preserved |
 | EnergyVad silence=500ms | 1120→640ms endpoint frame-time, -480ms |

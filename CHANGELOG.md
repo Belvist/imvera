@@ -2,6 +2,9 @@
 
 ## Unreleased — 2026-10-01
 
+- Forward runtime interruption to the existing SDK playout-cancel event; release the question and reject late completion without inventing delivery.
+- Add two real SDK/runtime cancellation-and-resumption cases to the runtime CI gate.
+
 - Count VAD-observed silence once at endpointing and retain speech resumed in post-roll.
 - Invalidate and stop cancelled audio before remote LLM cancellation or outbox storage.
 - Keep protected turn policies authoritative under barge-in; preserve detection ordering and user speech phase.

@@ -47,7 +47,7 @@ bargein_detected идёт до stop, пользовательская фаза �
 
 | Файл | Before SHA256 | After SHA256 |
 | --- | --- | --- |
-| packages/voice_runtime/call_actor.py | `148eb06ecd21d33984d373ec16589a9948b58fe430fce2f72e139bde5ca6899f` | `10cc9913796c92566216450d20faef167a41157a372e12129eed1c902bb2f019` |
+| packages/voice_runtime/call_actor.py | `148eb06ecd21d33984d373ec16589a9948b58fe430fce2f72e139bde5ca6899f` | `316ed16554792b71dc7efe3389b57558b1091a011b16819a882653c4e9db4930` |
 | packages/voice_runtime/utterance_builder.py | `005aa8068f1941fd1395a811ba3da8b7448dbf75900b64bb805acd4c6ae5d1d1` | `2e4707042d6bb730146092898ea8bd0b9313e3bf73e65cd952f104c700b90394` |
 | packages/voice_runtime/vad.py | `c84e1d940a2c13ca8031abb0ff2964b510c321557b7fff6970821ebf25f0feb1` | `a080743939f4675a57b968c4bb2b7d1e380a2471011d34bdaeaba28dd204e05d` |
 | packages/voice_runtime/silero_vad.py | `f3dc7a420f6e37aeed2d963da2b8862601c24aa8bec0d1377925de68e91707f8` | `36a0038f54f188579aa59e0026f3426fe2c6adf507bf1bc93b53b007e1a00164` |
@@ -74,6 +74,24 @@ python tools/voice_lab/policy_diff_v8_v9.py --stdout-only
 4. Снять JSONL и двустороннее аудио. Сопоставить generation, bargein_detected, transport.cancel, local purge и настоящий последний downlink sample. Измерить слышимую остановку, не только ESL ACK: целевой p95 <250 мс. Ошибка/timeout означает gate fail, а не обещание успеха.
 5. Для каждого ответа измерить конец пользовательской речи → endpoint → stt.final → решение/канонический текст → первый PCM → реальный первый downlink. Полные turn p50 <1с / p95 ≤2с — целевой gate, здесь не проверен. Opening histogram не заменяет этот замер.
 6. Одни и те же фразы прослушать с минимум 3 слушателями: ясность, спокойствие, паузы, темп, вопросительная интонация. Запись конкурента должна иметь источник и одинаковый сценарий для измеренного сравнения.
+
+## Проводка отмены до единственного SDK
+
+Дополнительная правка поверх первого опубликованного коммита 98e1a7c:
+CallActor передаёт отмену в существующий CallSession.cancel_playout_action
+после остановки аудио, очищает pending delivery для этой generation.
+Иначе SDK effect оставался STARTED, playing/planned question — открытым,
+несмотря на остановку PCM. Никакого нового владельца состояния нет:
+событие PlayoutCancelled обрабатывает существующий reducer.
+
+Session сохраняет адрес терминального CANCELLED effect в существующем
+outbox-индексе. Позднее событие completion находит этот статус и не может
+выдать отменённый вопрос за доставленный. Повторная отмена идемпотентна.
+При уже отправленных семплах persistence остаётся DELIVERY_UNKNOWN;
+при нулевых — CANCELLED. Отмена не удаляет прежнюю delivered question.
+Два SDK/runtime теста падают на 98e1a7c и проходят на конечном коде;
+проверяют следующий содержательный ход и новую generation, а не только флаг.
+Runtime CI теперь включает их; всего 103 runtime-проверки.
 
 ## После live gate — следующие отдельные замены
 

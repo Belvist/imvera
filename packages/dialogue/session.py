@@ -705,7 +705,9 @@ class CallSession:
 
     def cancel_playout_action(self, generation_id: str) -> None:
         if self._engine is not None:
-            effect_id = self._playout_effect_meta.pop(generation_id, None)
+            # Retain the terminal effect address: a delayed completion must
+            # find CANCELLED in the authoritative outbox before persistence.
+            effect_id = self._playout_effect_meta.get(generation_id)
             if effect_id:
                 self._engine.outbox.mark_cancelled(effect_id, reason="barge_in")
             meta = self._playout_meta.pop(generation_id, None)

@@ -2621,6 +2621,17 @@ class CallActor:
         self._tts_resamplers = {
             k: v for k, v in self._tts_resamplers.items() if not k.startswith(gen)
         }
+        if (self.session.uses_dialogue_engine()
+                and self._pending_mark_render_gen == gen and self._pending_mark_spoken_id):
+            action_generation = self._pending_mark_spoken_id
+            self._pending_mark_spoken_id = None
+            self._pending_mark_render_gen = None
+            self._pending_speak_effect_id = None
+            await asyncio.to_thread(self.session.cancel_playout_action, action_generation)
+            await self._emit_stage(
+                "dialogue.playout_cancelled", generation_id=gen,
+                action_generation_id=action_generation,
+            )
         # Non-audio work follows the stop request. Its duration may never delay
         # generation invalidation, PCM purge, or the downstream break command.
         await self._cancel_active_llm()
