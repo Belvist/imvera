@@ -128,6 +128,37 @@ canonical == TTS == delivered speech, and a single farewell.
 
 ---
 
+# Warm speech live on 2420549 (2026-10-01)
+
+- Acks carry empathy (same kinds/sizes, labels verbatim): «очень жаль»,
+  «сочувствую», «спасибо, что рассказали». ITS pool: two formal variants
+  replaced, status markers kept (самочувств/важно). «Да, слышу вас» и
+  «Угу, слушаю» убраны из ротаций.
+- 6 contract pins migrated deliberately (wording only, assertions strict);
+  dream-naive substring + rotation order preserved by rewording, not by
+  weakening. Gates: 2131/0, corpus 500/500, diff 4/4, agent+dream,
+  hard1000 1349/1349, battery 16/16.
+- Bridge in no-call window -> 2420549, hot, watch OK. NOT PUSHED.
+  NOT VERIFIED: ear proof of warmth. NEXT: owner ear 7000.
+
+---
+
+# Codex fix 0895277 live on bridge (2026-10-01)
+
+- Fast-forward 919dfba -> 0895277, no conflicts. His fix: sentence/status
+  binding, temporal ownership, interrupted coverage, same-site tremor,
+  untyped fills gated from model/memory. 44 new checks green here too.
+- Own results: full 2128/0, corpus 500/500, diff 4/4, agent+dream PASS,
+  hard1000 1349/1349, battery 16/16, ruff clean. His 8 model-failures are
+  cloud-only (no torch there) — locally those 8 pass, warmup/all-hot OK.
+- Bridge in no-call window -> 0895277, health ok, watch OK.
+- NOT VERIFIED: owner redial 7000 with recording (his NEXT GATE — needs
+  your ear, I cannot dial). Remote CI on 0895277.
+- NEXT: owner redial 7000, same script as fs-2baf87ec (headache 2 weeks
+  + tremor) -> compare with evidence doc.
+
+---
+
 # Third merge live on 04cf7ba: warm dialogue + full verification (2026-10-01)
 
 - 04b85dc (warm acks, not-recalled, complaint-through-close, resume ack,

@@ -707,6 +707,14 @@ four precise fixes instead of an architecture rewrite.
   hard1000 1349/1349. Bridge -> b18a1de, watch OK. NOT PUSHED.
   NOT VERIFIED: ear, :9103, remote CI on merged tree.
 
+## Third merge: warm dialogue live + pushed (2026-10-01, 04cf7ba)
+
+- 04b85dc merged (ADR-026, warmth, not-recalled, complaint-through-close).
+  Mid-merge worktree revert recovered via index; fusion verified by hand.
+  His 128 checks + own full 2084/0, corpus 500/500, diff 4/4, agent+dream,
+  hard1000 1349/1349. Pushed normally (feature only). Bridge -> 04cf7ba.
+  NOT VERIFIED: ear, :9103, remote CI. NEXT: ear 7000, D1 go/no-go.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)
