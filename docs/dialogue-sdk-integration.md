@@ -208,6 +208,18 @@ ResolvedTurn. `apply_act_candidate` возвращает `(turn, applied, reason
 попрощаться. `ANSWER` — тип хода, а не доказательство ответа именно на
 доставленный вопрос. На yes/no вопрос «ага» остаётся ответом.
 
+## Голосовой runtime и Realtime v1
+
+[Передача на стенд, сравнение PCM и следующие этапы](realtime-conversation-v1.md).
+Barge-in принадлежит CallActor/PerceptionSession, не Renderer. Generation
+инвалидируется и останавливается до медленных внешних отмен/хранилища.
+Не повторять ACK и не считать отменённый вопрос доставленным. Не выдавать
+ESL +OK за слышимую остановку. Защищённые opening/identity/consent политики
+сохраняются. Current STT final-only; transcribe_partial даёт явную ошибку,
+а не фиктивный пустой partial. Partial будущего ASR — кандидат, не State fact.
+Тёплая инструкция TTS уже есть; изменение её текста не доказывает качество
+интонации. Генеративный live Renderer этим этапом не восстановлен.
+
 ## События доставки обязательны
 
 После `start()` и каждого `on_user_turn()` забирай эффекты из outbox. SpeakEffect

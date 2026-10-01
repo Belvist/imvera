@@ -1,6 +1,6 @@
 """Latency histogram from call timelines (reviewer item 10).
 
-Reads forensic trace JSONL (events with type == "timeline") and prints
+Reads forensic trace JSONL (stage.timing with stage=timeline, or legacy timeline) and prints
 p50/p95 per SLO segment. No live system needed.
 
 Usage:
@@ -49,9 +49,11 @@ def main() -> int:
                     row = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if row.get("type") != "timeline":
-                    continue
                 payload = row.get("payload", row)
+                if not (row.get("type") == "timeline" or (
+                    row.get("type") == "stage.timing" and payload.get("stage") == "timeline"
+                )):
+                    continue
                 n += 1
                 for seg in SEGMENTS:
                     val = payload.get(seg)

@@ -40,7 +40,9 @@ class HttpSTTProvider:
         call_id: str,
         partial_id: str,
     ) -> STTPartial:
-        return STTPartial(partial_id=partial_id, text="", is_final=False)
+        raise ProviderUnavailable(
+            "Current STT adapter is final-only; partial transcription is unsupported"
+        )
 
     async def transcribe_final(
         self,

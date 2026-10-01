@@ -1,3 +1,92 @@
+# Realtime Conversation v1: delivery fixes, not text-polish (2026-10-01)
+
+Owner requests Newo-like human live conversation: turn-taking, interruptions,
+latency, partial STT, natural Renderer and prosody. Current no-generative-live-LLM
+constraint persists; optional Renderer question has no answer, so not assumed
+changed. Existing m5 commit/push authorization persists. Base d9e24f6 includes
+peer merge; preserve it. No deployment, live model or Mac/Zoiper access here.
+
+## CHANGED
+
+- Existing VAD exposes observed silence/acoustic candidate to the existing
+  UtteranceBuilder. Count hold once, keep post-roll and preserve speech resumed
+  near its end; VAD thresholds, PCM contract and engine facts unchanged.
+- Generation invalidation, local PCM cancellation and downstream stop request
+  precede remote LLM cancellation/outbox storage. Bound callbacks at 250ms each;
+  failures remain visible. Existing generation-addressed transport remains owner.
+- Remove barge flag's bypass of protected intent policy. Preserve candidate /
+  confirmation order, detection-before-stop and USER_SPEAKING after interruption.
+- Mark first TTS PCM at provider/cache output and playback start only after
+  successful transport send. Do not mark a cancelled send race as fresh start.
+  Existing histogram reads actual stage.timing/stage=timeline schema.
+- Replace unused final-only STT empty partial stub with explicit unsupported
+  ProviderUnavailable; actual realtime recognition is not implemented or claimed.
+- 20 new PCM/runtime contracts; expand the existing runtime CI gate to include
+  cancellation, perception, endpointing, audible-duration and stale-generation
+  tests. No old assertions, skips or models changed.
+- [Realtime proof + Mac-agent handoff](realtime-conversation-v1.md), ADR-027,
+  SDK integration guide and Changelog. Natural LLM Renderer/prosody/provider
+  replacement are documented next slices, not shipped by this one.
+
+## VERIFIED
+
+Python 3.12, PYTHONPATH=cwd, /workspace/imvera-review-venv/bin/python.
+Synthetic PCM 16kHz, 20ms frames, EnergyVad; no neural speech quality claim.
+
+| Check | Result |
+| --- | --- |
+| Same final new tests on detached d9e24f6 product baseline | 17 failed / 3 passed, 25.97s; includes telemetry/unsupported contracts, not 17 independent bugs |
+| New tests on final source | 20 passed, 0.86s |
+| make test-dialogue-runtime (expanded existing gate) | 101 passed, 3.69s |
+| make test-dialogue-rich | 185 passed, 5.00s |
+| make test-semantic-kernel | 294 passed, 1.59s |
+| python -m pytest -q | 2241 passed / 8 failed / 9 skipped, 107.81s |
+| Same eight inherited failures | Unavailable act v2/v3, polarity_v1/xenc_v3 artifacts; full suite NOT green |
+| Identical-input PCM probe | 8 input hashes match, one segment and speech content/order preserved |
+| EnergyVad silence=500ms | 1120→640ms endpoint frame-time, -480ms |
+| EnergyVad silence=650ms | 1280→800ms endpoint frame-time, -480ms |
+| dialogue_corpus_gate | 500/500 PASS |
+| hard1000 / hard_battery | 1349/1349 and 16/16 PASS |
+| agent_dialogue_gate | agent + dream PASS |
+| policy_diff_v8_v9 --stdout-only | 4 expected / 0 unexplained PASS |
+| Repo Ruff (packages/services/tests/scripts/tools), git diff --check | PASS |
+
+Initial focused run found compatibility with older collectors lacking collecting;
+fixed via optional telemetry without changing their contract or old tests.
+First successful send remains a transport boundary, not acoustic proof; matching
+trace explicitly records audible_start_verified/stop_verified=false. Self-review:
+one delivery owner, no speech rewrite/second planner, deterministic safety/control
+unchanged, no verdict ownership move. Exact Git-object publication has expected
+parent checks and force=false; remote SHA/CI verified separately after push.
+
+## NOT VERIFIED
+
+Mac/7000, deployed endpoints/image/flags, actual Silero/GigaAM/MLX model quality,
+actual downlink break effect, live p50/p95, listener warmth, barge-in SLO, prosody,
+competitor recording/execution and capacity. Recording requested, none attached.
+Newo public article inspected; marketing design is not a benchmark.
+
+## REMAINING RISKS
+
+Current STT still final-only; free-form natural LLM Renderer is not implemented.
+VAD thresholds/echo classification need actual elderly-phone calibration. Storage
+and remote model cancellation can still delay input processing after audio stop;
+callback waits can total 500ms on two failures. +OK does not prove audible silence;
+a bounded in-flight frame may escape the socket. Barge-in remains existing opt-in,
+opening/identity/consent protected. Histogram reports first audio of a call, not
+all-turn latency; collect per-turn correlated audio/JSONL for the SLO.
+
+## NEXT GATE
+
+Mac agent follows realtime-conversation-v1.md: verify published SHA, endpoints,
+real model readiness, explicit flags; compare existing barge-in=0/1 on the same
+7000 scenarios, capture audio+JSONL, measure real stop and full turn p50/p95,
+check late PCM/echo/speech preservation/canonical text. Listener A/B and the
+owner's Renderer decision then determine the next slice. No further approval
+requested for already authorized implementation/publication.
+
+---
+
 # Responsive dialogue: complete answers and humane transitions (2026-10-01)
 
 Owner: «можно уже до конца доделать, чтобы было идеально и человечно».

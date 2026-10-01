@@ -2,6 +2,14 @@
 
 ## Unreleased — 2026-10-01
 
+- Count VAD-observed silence once at endpointing and retain speech resumed in post-roll.
+- Invalidate and stop cancelled audio before remote LLM cancellation or outbox storage.
+- Keep protected turn policies authoritative under barge-in; preserve detection ordering and user speech phase.
+- Bound transport cancellation waits and distinguish command ACK from audible stop.
+- Measure first TTS PCM and first transport send at actual boundaries; read the runtime timeline schema.
+- Replace the final-only STT partial stub with an explicit unsupported error.
+- Add 20 PCM/runtime contracts, an eight-input PCM probe and the Realtime v1 agent handoff.
+
 - React to fully accepted complaints and new reports before summary without adding questions.
 - Preserve dizziness/numbness in multi-report speech instead of inventing headache from anatomy.
 - Name the next complaint after strong pain; tolerate trailing punctuation in accepted-degree reactions.

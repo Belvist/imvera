@@ -67,3 +67,13 @@ class EnergyVad:
     @property
     def in_speech(self) -> bool:
         return self._in_speech
+
+    @property
+    def silence_elapsed_ms(self) -> int:
+        """Silence already observed by VAD, including its endpoint hold."""
+        return self._silence_ms
+
+    @property
+    def speech_candidate(self) -> bool:
+        """Acoustic speech before the minimum onset duration has elapsed."""
+        return self._speech_ms > 0 and self._silence_ms == 0
