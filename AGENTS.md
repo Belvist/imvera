@@ -693,6 +693,15 @@ four precise fixes instead of an architecture rewrite.
   (held 0.963). Gates 1952/0, bridge → 7ce67d2. NOT PUSHED.
   NEXT: owner go/no-go on migration D1.
 
+## Merge with codex SDK slices live (2026-10-01, b18a1de)
+
+- His d29f239 (grounded SDK, generative retired, ADR-025) + b5adf12 (CI)
+  merged via merge commit. 2 conflicts hand-sewn; 3 merge-reds fixed at
+  root (sleep-answer, reengagement YELLOW x2 — refusal never hides a
+  later symptom). Gates: 2047/0, corpus 500/500, diff 4/4, agent+dream,
+  hard1000 1349/1349. Bridge -> b18a1de, watch OK. NOT PUSHED.
+  NOT VERIFIED: ear, :9103, remote CI on merged tree.
+
 ## Related Files
 
 - `docs/PLAN.md` — master implementation plan v1.2 (historical freeze candidate)

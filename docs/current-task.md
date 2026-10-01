@@ -1,3 +1,21 @@
+# Merge live on b18a1de: codex SDK slices + our thread/past/cut-3b (2026-10-01)
+
+- His 2 (d29f239 grounded SDK + generative retired, ADR-025; b5adf12 CI
+  history) merged into our 13 via merge commit (no rebase, both histories
+  kept). 2 conflicts sewn by hand: mission complaint-interruption +
+  slot-ownership fused; outcomes DECLINED refined — refusal never hides
+  a later symptom (YELLOW stands, his goodbye-keeps-refusal kept).
+- 3 merge-reds fixed at root (sleep-answer pass, reengagement YELLOW x2);
+  hard1000 pairing fixed (мокрота/лихорадка). Nothing weakened.
+- Gates on merged: full 2047/0, corpus 500/500, diff 4/4, agent+dream
+  PASS, hard1000 1349/1349, battery 16/16, ruff clean.
+- Bridge in no-call window -> b18a1de; health ok, version_watch OK.
+  NOT PUSHED (merge not pushed — push only on your word). NOT VERIFIED:
+  ear proof, :9103, remote CI on merged tree.
+- NEXT: your ear on 7000 -> D1 migration go/no-go -> было→стало.
+
+---
+
 # Cleanup cut live on 7ce67d2: audits archived, dead weights dropped (2026-09-30)
 
 - Full orphan audit first: services/* are all live (voice_gateway +
