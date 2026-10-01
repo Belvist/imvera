@@ -843,7 +843,7 @@ def _bridge_ack_for_episode(ep, prev=None) -> str:
 # understood is dishonest — «Слушаю вас» tells the truth and the clarifying
 # question that follows does the work. (Speech-discipline gate bans the old
 # «Поняла вас.»/«Хорошо, поняла вас.» standalones.)
-_BARE_ACK_ROTATION = ("Слушаю вас.", "Да, слышу вас.", "Я вас слушаю.")
+_BARE_ACK_ROTATION = ("Слушаю вас.", "Поняла вас.", "Я вас слушаю.")
 _BRIDGE_ACK_ROTATION = ("Хорошо.", "Поняла вас.", "Так, поняла вас.")
 
 

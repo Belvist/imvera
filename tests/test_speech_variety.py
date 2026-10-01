@@ -20,7 +20,7 @@ def test_day_zero_yields_canonical(monkeypatch: pytest.MonkeyPatch) -> None:
     assert questions.slot_question("mood") == "А какое у вас сегодня настроение?"
     assert questions.slot_question("sleep") == "Как вы спали?"
     assert questions.probe_question("concern") == "Что именно беспокоит?"
-    assert questions.important_to_share_question().startswith("Поняла вас. Есть ли")
+    assert questions.important_to_share_question().startswith("Поняла вас. А кроме этого")
 
 
 def test_rotation_varies_by_day(monkeypatch: pytest.MonkeyPatch) -> None:
