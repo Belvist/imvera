@@ -1,3 +1,71 @@
+# SIP network flip 192.168.1.194 -> 10.20.0.131 (2026-10-01)
+
+- Mac left home LAN for 10.20.0.131; FS still advertised .1.194, so RTP
+  died. Fixed with the regen script (no hand edits):
+  `python3 scripts/freeswitch_write_zoiper_runtime.py` + `sofia profile
+  internal rescan reload`. Ext-SIP/RTP now 10.20.0.131, profile RUNNING.
+- Both networks saved: this flip is one command; back home = same command
+  (auto-detects) or IMVERA_SIP_MEDIA_HOST=192.168.1.194. Zoiper domain on
+  the Mac must match the current IP (user action in app).
+- Zoiper registration seen via stale realm, Contact public IP — needs
+  re-register after domain fix; then owner redial 7000.
+- Done by agent: Zoiper Config.xml domain -> 10.20.0.131 (order matters:
+  quit first, edit while stopped, launch — it rewrites the file on quit).
+  Registered as zoiper@10.20.0.131, Reachable. Contact still public IP
+  (STUN on) — if no audio on 7000, next step is STUN off in Zoiper.
+  Home flip-back = regen script + same Zoiper procedure with .1.194.
+
+---
+
+# Clean restart: no stale processes, all on 04cf7ba (2026-10-01)
+
+- Process audit: no duplicates, no stale code. Bridge 04cf7ba, STT/TTS
+  x2 replicas fresh, family watcher restarted. Port :8001 is another
+  project (earai) — left alone. Failing mossvoice/qwen services are not
+  ours — untouched.
+- Every port has exactly one listener (9210/9101/9102/9111/9112).
+  Bridge ok + hot, STT/TTS x2 ready, version_watch OK, docker healthy.
+- No code changed; no version move.
+
+---
+
+# Full contour rebuild + live media proof (2026-10-01, still 04cf7ba)
+
+- Git in sync with origin (0/0). Cleanup verified in place: root clean,
+  archive/audits + adr/superseded present, models/ live-only (v2, xenc_v3,
+  polarity, retrained v3).
+- Rebuild judgement: FreeSWITCH image pinned + dialogue-only changes, so
+  no source rebuild — clean container restart instead (healthy, profiles
+  RUNNING; voximplant REGED, novofon TRYING as before — blocked provider,
+  not touched). DB untouched deliberately (9 days healthy, data inside).
+- Workers + bridge restarted from merged tree in no-call window, warmed:
+  bridge 04cf7ba ok, NLP all_hot, STT gigaam:v3 ready, TTS silero v5
+  ready, version_watch OK.
+- Live media proof post-restart: STT transcribed real grandma audio
+  («Ой, боль достаточно, ну, сильная усиливается»); TTS synthesized
+  168KB PCM. SIP E2E still needs owner Zoiper dial; :9103 still down
+  (flags 0, out of live path).
+- No code changed; no bridge version move. Docs dirty by design (journal).
+
+---
+
+# Third merge live on 04cf7ba: warm dialogue + full verification (2026-10-01)
+
+- 04b85dc (warm acks, not-recalled, complaint-through-close, resume ack,
+  comparison battery, ADR-026) merged. Tree fight mid-merge (worktree
+  reverted underfoot) recovered via index; auto-merge verified by hand
+  (mission fusion intact). Nothing picked ours/theirs blindly.
+- His checklist on merged tree: refusals, not-recalled, corrections,
+  interruption+resume, complaint-at-close, canonical TTS — 128 green.
+- Own results: full 2084/0, corpus 500/500, diff 4/4, agent+dream PASS,
+  hard1000 1349/1349, battery 16/16, ruff clean.
+- Pushed normally (04b85dc..04cf7ba, feature branch only, main untouched).
+  Bridge in no-call window -> 04cf7ba, watch OK.
+- NOT VERIFIED: ear proof on merged tree, :9103, remote CI on merged tree.
+- NEXT: ear 7000 -> D1 migration go/no-go.
+
+---
+
 # Merge live on b18a1de: codex SDK slices + our thread/past/cut-3b (2026-10-01)
 
 - His 2 (d29f239 grounded SDK + generative retired, ADR-025; b5adf12 CI
