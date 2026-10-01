@@ -393,7 +393,6 @@ def _emit_speak(
     goal_id: str | None = None,
     bridge_text: str = "",
     question_text: str = "",
-    bridge_llm_allowed: bool = False,
 ) -> tuple[EngineState, list[Effect]]:
     from packages.dialogue_engine.speech_ledger import (
         record as _record_surface,
@@ -523,7 +522,6 @@ def _emit_speak(
         marks_question=marks_question,
         bridge_text=bridge_text,
         question_text=question_text,
-        bridge_llm_allowed=bridge_llm_allowed,
     )
     return state, [effect]
 
@@ -925,32 +923,7 @@ def _emit_from_plan(
         goal_id=goal_id,
         bridge_text=getattr(rendered, "acknowledge", "") or "",
         question_text=getattr(rendered, "mandatory_question", "") or "",
-        bridge_llm_allowed=_bridge_llm_eligible(rendered),
     )
-
-
-def _bridge_llm_eligible(rendered) -> bool:
-    """Cut 1 (ADR-020): only clinical episode questions may have their bridge
-    rewritten by the composer. Safety/terminal/summary/goodbye/urgent/control
-    and anything without a fixed question are NEVER eligible."""
-    intent = str(getattr(rendered, "intent", "") or "")
-    if not intent.startswith("episode_"):
-        return False
-    if not (getattr(rendered, "acknowledge", "") or "").strip():
-        return False
-    if not (getattr(rendered, "mandatory_question", "") or "").strip():
-        return False
-    action = str(getattr(rendered, "action", "") or "")
-    if action in {
-        "close_urgent",
-        "close_summary",
-        "close_partial",
-        "control",
-        "goodbye",
-        "summary",
-    }:
-        return False
-    return True
 
 
 def _schedule_advance(
@@ -1017,6 +990,17 @@ def _apply_rich_turn(
     control_outcome = _apply_rich_control(state, turn)
     if control_outcome is not None:
         return control_outcome
+
+    if (
+        _is_not_recalled_answer(turn, user_text)
+        and (state.delivered_question is not None or answer_slot)
+        and not turn.issue_mentions
+        and not turn.goal_facts
+        and not turn.goal_answers
+        and not turn.correction
+        and not turn.user_question
+    ):
+        return _resolve_unknown_answer(state, user_text, answer_slot)
 
     if turn.dialogue_act == "repair" or _is_repair_text(user_text):
         state.processing_turn_id = None
@@ -1123,6 +1107,19 @@ def _apply_rich_turn(
 
     turn = filter_rich_turn_mentions(state, turn)
     atomic_semantic_apply(state, turn)
+    if turn.issue_mentions:
+        from packages.dialogue_engine.mission_flow import (
+            capture_mission_suspend,
+            is_custom_mission,
+        )
+
+        if is_custom_mission(state):
+            # Preserve the delivered goal before advancement clears delivery
+            # markers. Atomic apply already accepted any mixed-turn answer,
+            # so an already satisfied goal cannot be suspended by mistake.
+            suspended = capture_mission_suspend(state)
+            if suspended is not None:
+                state.suspended_obligation = suspended
     # Background mood/sleep/plans may fill as projection — never before apply,
     # and never as exclusive owner of the turn.
     _harvest_off_context_background_slots(state, turn, answer_slot=answer_slot)
@@ -1860,10 +1857,29 @@ def _resolve_unknown_answer(
         state.slots[slot] = SlotStatus.UNRESOLVED
         goal = state.goals.get(slot)
         if goal is not None:
-            goal.lifecycle = GoalLifecycle.UNCLEAR
+            goal.lifecycle = (
+                GoalLifecycle.SKIPPED if slot in state.mission_goal_ids
+                and state.mission_preset != "daily_check" else GoalLifecycle.UNCLEAR
+            )
             goal.status = SlotStatus.UNRESOLVED
         state.observations[f"{slot}_unknown"] = quote
         state.slot_unclear_counts.pop(slot, None)
+    # Episode questions are not ordinary mission slots. Record the declined
+    # recall on the active episode so its planner cannot recreate the same
+    # onset/duration question; never write "unknown" as a known attribute.
+    if state.pending_episode_attribute:
+        from packages.dialogue_engine.issue_memory import (
+            _mark_temporal_asked,
+            get_active_episode,
+        )
+
+        episode = get_active_episode(state)
+        if episode is not None:
+            attribute = state.pending_episode_attribute
+            episode.unanswered_attributes[attribute] = quote
+            if attribute in {"onset", "duration"}:
+                _mark_temporal_asked(state, episode)
+        state.pending_episode_attribute = None
     state.processing_turn_id = None
     state.processing_effect_id = None
     state.waiting_on_slot = None

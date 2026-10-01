@@ -1,8 +1,8 @@
-"""Cut 1 (ADR-020): HardValidator for composer-written bridges.
+"""Offline surface-validation experiment (retired from live SDK, ADR-025).
 
-The composer may rewrite ONLY the bridge span; the question is fixed and always
-spoken. Any violation rejects the candidate and delivery falls back to the
-deterministic bridge (byte-identical). This module never speaks, never mutates.
+Historical Cut 1 validator for surface experiments. It compares a candidate
+bridge to source evidence; it never speaks, mutates state or loads a model.
+Production SDK delivery does not import this module or generate bridges.
 """
 
 from __future__ import annotations

@@ -5,7 +5,7 @@ from __future__ import annotations
 from packages.contracts.enums import SlotStatus
 from packages.dialogue_engine.context import SlotValue
 from packages.dialogue_engine.semantic import SemanticAct, SemanticTurn
-from packages.dialogue_engine.state import EngineState
+from packages.dialogue_engine.state import EngineState, GoalLifecycle
 
 _MAX_UNCLEAR = 2
 
@@ -44,6 +44,10 @@ def apply_slot_answer(
     )
     goal = state.ensure_goal(slot)
     goal.status = SlotStatus.FILLED
+    goal.lifecycle = GoalLifecycle.SATISFIED
+    goal.answer = value
+    # SlotRecord is the evidence owner for slot answers; mission_result also
+    # reads it. Keep goal progress coherent with that same accepted write.
     state.slot_unclear_counts.pop(slot, None)
 
 

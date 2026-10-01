@@ -106,6 +106,9 @@ def _step_satisfied(state: EngineState, ep: IssueEpisode, family: ProductFamily,
     if episode_is_resolved(ep):
         return True
 
+    if step in ep.unanswered_attributes:
+        return True  # Question discharged; no clinical value inferred.
+
     # Explicit refusal to date the symptom («дальше/пропусти»): temporal
     # steps are done without a value — advance, never re-ask, never invent.
     if step in ("onset", "duration") and ep.known_attributes.get("_temporal_skipped"):

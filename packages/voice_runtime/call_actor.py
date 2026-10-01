@@ -109,10 +109,6 @@ _QUESTION_DELIVERY_INTENTS = frozenset(
 )
 _SENTENCE_END = re.compile(r"[.!?…]+(?:\s|$)")
 
-# Cut 1 (ADR-020): composer deadline for a bridge span. Measured Qwen3-4B
-# render on live phrases: min 652 / p50 706 / max 933 ms — 0.8 s holds at
-# p50 and degrades to instant deterministic fallback at the tail.
-COMPOSER_BRIDGE_DEADLINE_S = 0.8
 
 EmitFn = Callable[[RuntimeEvent], Awaitable[None]]
 
@@ -2062,6 +2058,17 @@ class CallActor:
                     sem, nlp_confident, nlp_info = nlp_candidate_turn(
                         question_text, text, answer_slot
                     )
+                    if rich_turn is not None:
+                        from packages.dialogue_engine.turn_understanding import TurnUnderstandingV2
+
+                        rich_turn, applied, reason = TurnUnderstandingV2().apply_act_candidate(
+                            rich_turn, sem, confident=nlp_confident,
+                            engine_state=self.session._engine.state,
+                        )
+                        nlp_info["proposed"] = nlp_confident
+                        nlp_info["used"] = applied
+                        nlp_info["resolution_reason"] = reason
+                        nlp_confident = applied
                     await self._emit_stage(
                         "interpret.nlp_candidate",
                         utterance_id=utterance_id,
@@ -2356,91 +2363,6 @@ class CallActor:
             )
             await self._speak_validated_proposal(sub, fx.text, render_generation)
 
-    async def _maybe_compose_bridge(
-        self, result: SessionTurnResult, planner_text: str
-    ) -> str:
-        """Cut 1 (ADR-020): let the composer rewrite ONLY the bridge span.
-
-        Returns the text to speak: composer bridge + fixed question on success,
-        byte-identical planner_text on any failure/off/deadline. Never raises.
-        """
-        try:
-            if os.environ.get("IMVERA_COMPOSER_BRIDGE", "0") != "1":
-                return planner_text
-            fx = result.speak_effect
-            if (
-                fx is None
-                or not isinstance(fx, SpeakEffect)
-                or not fx.bridge_llm_allowed
-            ):
-                return planner_text
-            bridge = (fx.bridge_text or "").strip()
-            question = (fx.question_text or "").strip()
-            if not bridge or not question:
-                return planner_text
-            llm = getattr(self, "llm", None)
-            if llm is None:
-                return planner_text
-            from packages.voice_runtime.bridge_gate import validate_bridge
-
-            await self._emit_stage("composer.requested", intent=fx.intent)
-            action = {
-                "intent": "bridge_compose",
-                "planner_text": bridge,
-                "fixed_question": question,
-                "user_text": result.user_text,
-                "pending_question": question,
-                "delivered_phrases": list(self._delivered_phrases[-6:]),
-            }
-            facts: list[dict] = []
-            deadline = time.monotonic() + min(
-                COMPOSER_BRIDGE_DEADLINE_S, self.config.llm_deadline_s
-            )
-            request_id = f"compose-{uuid.uuid4().hex[:8]}"
-            self._active_llm_request_id = request_id
-            deltas: list[str] = []
-            done_text = ""
-            completed = False
-            try:
-                async with asyncio.timeout(COMPOSER_BRIDGE_DEADLINE_S + 0.5):
-                    async for chunk in llm.render_stream(
-                        action, facts, deadline, request_id=request_id
-                    ):
-                        if self._stopped or self._transport_closed:
-                            break
-                        if getattr(chunk, "done", False):
-                            done_text = (chunk.text or "").strip()
-                            completed = True
-                            break
-                        if getattr(chunk, "delta", False) and chunk.text:
-                            deltas.append(chunk.text)
-            finally:
-                if self._active_llm_request_id == request_id:
-                    self._active_llm_request_id = None
-                if not completed:
-                    try:
-                        await llm.cancel_request(request_id)
-                    except Exception:
-                        pass
-            candidate = done_text or "".join(deltas).strip()
-            ok, reason = validate_bridge(
-                candidate,
-                original_bridge=bridge,
-                user_text=result.user_text,
-                last_vera_line=(
-                    self._delivered_phrases[-1] if self._delivered_phrases else ""
-                ),
-            )
-            if not ok:
-                await self._emit_stage("composer.rejected", reason=reason)
-                return planner_text
-            await self._emit_stage("composer.accepted")
-            core = candidate.rstrip(".!?…").rstrip()
-            return f"{core}. {question}"
-        except Exception:
-            await self._emit_stage("composer.fallback", reason="exception")
-            return planner_text
-
     async def _deliver_session_turn(self, result: SessionTurnResult) -> None:
         self._tl().mark("decision")
         if result.proposal.intent == "wait_for_continuation":
@@ -2504,9 +2426,13 @@ class CallActor:
         self._playback_turn_generation = None
         render_deadline = time.monotonic() + self.config.llm_deadline_s
 
-        if result.from_engine or result.proposal.intent in ENGINE_SPEAK_INTENTS:
-            composed = await self._maybe_compose_bridge(result, planner_text)
-            await self._speak_validated_proposal(result, composed, render_generation)
+        if (
+            self.session.uses_dialogue_engine()
+            or result.from_engine or result.proposal.intent in ENGINE_SPEAK_INTENTS
+        ):
+            # ADR-025: canonical engine text goes directly to TTS. A stale
+            # composer flag must never enable generative dialogue in the SDK.
+            await self._speak_validated_proposal(result, planner_text, render_generation)
             await self._deliver_followup_speaks(result, render_generation)
             return
 

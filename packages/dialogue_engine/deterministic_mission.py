@@ -967,6 +967,22 @@ class DeterministicMissionUnderstandingProvider:
                     except Exception:  # noqa: BLE001 — fail closed to re-ask
                         return None
                 return speaker
+            if gdef.source != "daily_check_preset" and gdef.semantic_scope == "general":
+                from packages.dialogue_engine.issue_mention_extract import extract_issue_mentions
+
+                # Complaints are an interruption, not a name, shopping list,
+                # address etc. Reuse Understand's grounded issue extraction;
+                # no mission-specific phrase/verb dictionaries. In mixed
+                # answers retain only an exact contiguous non-issue span.
+                clauses = split_mission_clauses(stripped)
+                kept = [
+                    clause for clause in clauses
+                    if not extract_issue_mentions(clause.text)
+                ]
+                if len(kept) != len(clauses):
+                    if len(kept) != 1:
+                        return None  # Multiple residual spans need a provider.
+                    return kept[0].text
             return stripped
         # Future free_text: require strong hint/alias — not any non-empty utterance.
         if _match_answer_aliases(stripped, gdef) is not None:

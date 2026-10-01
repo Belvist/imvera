@@ -1,4 +1,4 @@
-"""Cut 1 delivery: composer bridge accepted/rejected/fallback in CallActor."""
+"""ADR-025: canonical engine speech is delivered without a generative rewrite."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from packages.dialogue.validator import Validator
 from packages.dialogue_engine.effects import SpeakEffect
 from packages.voice_runtime.call_actor import CallActor, CallActorConfig, MediaCallbacks
 from packages.voice_runtime.playback import PlaybackQueue
-from services.llm.http_provider import RenderChunk
 
 pytestmark = pytest.mark.dialogue_engine
 
@@ -126,41 +125,14 @@ def run_delivery(monkeypatch, stream, env_on: bool = True) -> list[str]:
     return asyncio.run(scenario())
 
 
-def test_composer_accept_rewrites_bridge_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def stream():
-        yield RenderChunk("Сочувствую, боль", delta=True)
-        yield RenderChunk(" действительно сильная", delta=True)
-        yield RenderChunk("Сочувствую, боль действительно сильная", done=True)
-
-    spoken, calls = run_delivery(monkeypatch, stream)
-    assert calls == ["render"]
-    assert spoken == ["Сочувствую, боль действительно сильная. " + QUESTION]
-
-
-def test_composer_reject_keeps_original_byte_identical(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("env_on", [False, True])
+def test_sdk_never_calls_composer_even_with_stale_flag(
+    monkeypatch: pytest.MonkeyPatch, env_on: bool,
 ) -> None:
     async def stream():
-        yield RenderChunk("Нужно проверить, как вы чувствуетесь", done=True)
+        raise AssertionError("generative LLM is forbidden in the dialogue SDK")
+        yield  # Async iterator; must never be advanced.
 
-    spoken, calls = run_delivery(monkeypatch, stream)
-    assert calls == ["render"]
-    assert " ".join(spoken) == ORIGINAL
-
-
-def test_composer_llm_error_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def stream():
-        raise RuntimeError("worker down")
-        yield  # pragma: no cover
-
-    spoken, calls = run_delivery(monkeypatch, stream)
-    assert " ".join(spoken) == ORIGINAL
-
-
-def test_composer_flag_off_never_calls_llm(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def stream():
-        raise AssertionError("must not run")
-
-    spoken, calls = run_delivery(monkeypatch, stream, env_on=False)
+    spoken, calls = run_delivery(monkeypatch, stream, env_on=env_on)
     assert calls == []
-    assert " ".join(spoken) == ORIGINAL
+    assert spoken == [ORIGINAL]

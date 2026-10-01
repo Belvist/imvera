@@ -66,6 +66,11 @@ def validate_goal_answer_candidate(
         return False, "missing_evidence"
     if not evidence_grounded_in_utterance(evidence, utterance):
         return False, "evidence_not_grounded"
+    if gdef.answer_type == "free_text" and not evidence_grounded_in_utterance(value, evidence):
+        # A valid quote does not license an invented value next to it.
+        # Normalized categories belong in enum/bool schemas; free text is
+        # an extractive span of the caller's evidence, never a paraphrase.
+        return False, "free_text_value_not_grounded"
 
     if candidate.confidence < 0.0 or candidate.confidence > 1.0:
         return False, "invalid_confidence"
