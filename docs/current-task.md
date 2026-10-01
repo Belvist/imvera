@@ -1,3 +1,83 @@
+# Responsive dialogue: complete answers and humane transitions (2026-10-01)
+
+Owner: «можно уже до конца доделать, чтобы было идеально и человечно».
+Persistent authorization: no generative live LLM, models propose meaning,
+engine decides/formulates; commit/push feature/voice-zoiper-m5 only. Base
+996bad869ad82d7ee8a6715a7b49e3f262e2d706 includes the peer merge and warmth
+banks; preserved. Isolated checkout codex/live-loop-fix. No runtime restart.
+
+## CHANGED
+
+- Existing scheduler reacts to an accepted current-turn speaker report even
+  when all clinical attributes are already answered, or before the first summary.
+  No extra question; clarification is announced only if actually planned.
+- Multi-report speech uses symptom concept, preserving dizziness/numbness
+  instead of inventing headache from anatomy. Strong-pain handoff names the
+  next issue. Accepted severity reactions tolerate trailing punctuation while
+  preserving the stored quote.
+- Relief requires a confirmed, matching speaker current=resolved observation
+  from this turn. Administrative completion, historical symptoms, other people
+  and topic preferences cannot create that reaction.
+- Existing personal hook invites a story once. Summary runs through Renderer,
+  composes ACK/body exactly once and avoids duplicate gratitude; actual emitted
+  bridge_text + question_text equals canonical text. Banks stay in questions.py.
+- 28 new cases, plus the peer's three warmth tests now in the rich CI target.
+  Existing tests/expectations unchanged, no skips or model stubs added.
+- [Root causes, every paired response, fingerprints and agent handoff](live-calls/responsive-dialogue-2026-10-01.md),
+  SDK integration guide and ADR-026 updated. Safety/control/RED/consent, frozen
+  policy manifest, question budgets, mission resume and providers unchanged.
+
+## VERIFIED
+
+Python 3.12, PYTHONPATH=cwd, /workspace/imvera-review-venv/bin/python.
+Same final new test file on detached 996bad8 baseline, product unchanged.
+
+| Check | Result |
+| --- | --- |
+| New tests on baseline | 20 failed / 8 passed; includes wording contracts, not 20 independent bugs |
+| New tests on final source | 28 passed |
+| Rich CI target, including peer warmth tests | 185 passed |
+| Semantic kernel gate | 294 passed |
+| Baseline full suite | 2193 passed / 8 failed / 9 skipped, 134.89s |
+| Final full suite | 2221 passed / 8 failed / 9 skipped, 109.21s |
+| Corpus | 500/500 PASS |
+| Hard1000 | 1349/1349 PASS |
+| Hard battery | 16/16 PASS |
+| Agent + dream | PASS |
+| Policy differential | 4 changed / 4 expected / 0 unexplained, PASS |
+| Ruff, phrase discipline, git diff --check | PASS |
+| Paired text capture | 10 identical-input scenarios, complete before/after outputs and source hashes |
+
+Initial full run exposed one new phrase-discipline failure: gratitude was in
+policy instead of the phrase owner. Moved it to questions.py; original pinned
+phrase test passes unchanged. Repeated full run recorded above. Eight baseline
+failures need unavailable v2/v3/polarity_v1/xenc_v3 artifacts; no full-green claim.
+Self-review: one authoritative scheduler, accepted evidence before speech intent,
+no new clinical verdict or parallel state; no transport rewriting. Publication
+uses exact tested Git objects, expected-parent guard and force=false.
+
+## NOT VERIFIED
+
+Live-model accuracy/readiness, source audio, Mac/7000, prosody, latency, barge-in,
+listener warmth and competitor runs. No deployment or superiority claim.
+
+## REMAINING RISKS
+
+Bounded parsing does not cover arbitrary speech. Some ordinary prompts still
+use the existing short wording. Text reactions alone do not establish humane
+voice quality or perfection; historical-current inference needs real-model
+validation. Unknown values remain unknown and urgent/control retain priority.
+
+## NEXT GATE
+
+Mac agent checks published m5 SHA and real model readiness, then records calls
+7000 for complete report, late tremor, named handoff, dizziness, personal story,
+relief, unknown severity, refusal and urgent signals. Save JSONL + audio; verify
+per-issue values, canonical==TTS==delivered, one question and one farewell;
+listen for tone, pauses and interruption recovery. Integration handoff linked above.
+
+---
+
 # Adaptive conversation: ordinary answers, plain repair, chosen topic (2026-10-01)
 
 Owner: «это всё? а ещё лучше можем и как ты это делал». Persistent order:

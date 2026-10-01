@@ -918,7 +918,8 @@ def _emit_from_plan(
     if plan.action == "close_urgent":
         return _emit_urgent_close(state)
     if plan.action == "close_summary":
-        return _emit_summary(state, acknowledge=getattr(plan, "acknowledge", "") or "")
+        rendered = render_response_plan(plan, state)
+        return _emit_summary(state, acknowledge=rendered.acknowledge)
     if plan.action == "close_partial":
         return _close_partial(state)
     if plan.action == "control":
@@ -2575,12 +2576,15 @@ def _emit_summary(state: EngineState, *, acknowledge: str = "") -> tuple[EngineS
     state.fsm_state = FsmState.SUMMARY
     state.summary_spoken = True
     state.bump_revision()
+    text = questions.summary_close_speech(state, acknowledge=acknowledge)
     return _emit_speak(
         state,
-        text=questions.summary_close_speech(state, acknowledge=acknowledge),
+        text=text,
         intent="summary",
         slot=None,
         marks_question=False,
+        bridge_text=acknowledge,
+        question_text=text.removeprefix(acknowledge + " ") if acknowledge else text,
     )
 
 

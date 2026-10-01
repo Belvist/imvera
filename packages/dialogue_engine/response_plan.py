@@ -40,7 +40,8 @@ class ResponsePlan:
     tone: str = "warm"
     clarification: bool = False
     acknowledgement_kind: Literal[
-        "not_recalled", "resume_mission", "temporal_answer", "strong_answer", "tolerable_answer"
+        "not_recalled", "resume_mission", "temporal_answer", "strong_answer", "tolerable_answer",
+        "current_relief",
     ] | None = None
     acknowledgement_value: str = ""
 
@@ -50,13 +51,6 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
     if plan.action == "close_urgent":
         plan.mandatory_question = questions._URGENT_CLOSE
         plan.intent = "urgent_close"
-        plan.marks_question = False
-        return plan
-    if plan.action == "close_summary":
-        plan.mandatory_question = questions.summary_close_speech(
-            state, acknowledge=plan.acknowledge
-        )
-        plan.intent = "summary"
         plan.marks_question = False
         return plan
     if plan.action == "close_partial":
@@ -77,6 +71,16 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
         resume = questions.mission_resume_ack()
         if not ack.endswith(resume):
             ack = " ".join(part for part in (ack, resume) if part)
+    elif plan.acknowledgement_kind == "current_relief":
+        ack = questions.current_relief_ack()
+
+    if plan.action == "close_summary":
+        text = questions.summary_close_speech(state, acknowledge=ack)
+        plan.acknowledge = ack
+        plan.mandatory_question = text.removeprefix(ack + " ") if ack else text
+        plan.intent = "summary"
+        plan.marks_question = False
+        return plan
     question = plan.mandatory_question
 
     if plan.answer_user_question and plan.mandatory_question:
