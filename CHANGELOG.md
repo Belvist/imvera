@@ -13,6 +13,7 @@
 - Correct summary noun-list grammar and custom greeting name addressing.
 - Add SDK integration/agent guidance, competitor research and reproducible text demos.
 - Keep GigaAM cache tests offline while verifying missing-tokenizer downloads explicitly.
+- Fetch pinned policy history in the CI differential job without weakening its gate.
 
 Live voice acceptance and model-artifact verification remain pending; this is a
 development-branch change, not a deployed release.

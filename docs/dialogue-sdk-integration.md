@@ -17,6 +17,10 @@
 он не даёт разрешения на переписывание. Offline surface validator находится
 в `tools/voice_lab/bridge_gate.py`, а не в production voice_runtime.
 
+CI differential требует полной Git-истории: `policy-diff` читает v8 из
+`c0fa158b`, поэтому checkout этого job должен использовать `fetch-depth: 0`.
+Не исправляй отсутствие исторических объектов изменением ожидаемых policy deltas.
+
 Один звонок → один DialogueEngine/EngineState. Владельцы:
 
 ```text

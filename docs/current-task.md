@@ -1,5 +1,20 @@
 # Grounded Dialogue SDK — 2026-09-30 → 2026-10-01
 
+CI follow-up (2026-10-01): SDK commit `d29f239` was delivered through GitHub
+Git Data API after Git HTTPS rejected push. Remote commit and tree matched
+the tested local objects exactly; main stayed at `fe214c58`.
+[Run 36795171154](https://github.com/Belvist/imvera/actions/runs/36795171154):
+8 jobs passed; full test job ran PostgreSQL and reported **1933 passed /
+5 missing-model failures / 3 skipped**. The extra 6 passes are the DB checks
+skipped without a local PostgreSQL server. `policy-diff` separately failed
+because its shallow checkout lacked pinned v8 objects at `c0fa158b`.
+Reproduced in a fresh depth-1 clone: identical FATAL; after fetching full
+history: PASS changed=4 / expected=4 / unexplained=0. Workflow now requests
+`fetch-depth: 0` for that job, matching the other frozen-history gates.
+No expected-delta manifest or failure assertion was weakened.
+The real model artifacts are neither tracked nor present among GitHub release
+assets; owner was asked where to obtain them. Model/live acceptance stays open.
+
 Branch: `feature/voice-zoiper-m5`. Base: `be2db5438cf37bb84009cac5bd425672b3737e6a`.
 Owner explicitly authorized implementation, fixes, commit and push to this branch.
 Owner constraint: no generative LLM in live dialogue; models understand, engine decides/formulates.
