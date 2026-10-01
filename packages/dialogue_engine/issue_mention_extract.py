@@ -418,7 +418,8 @@ def _clause_mentions(
                     else site.lower()
                 )
             add(
-                label=f"{site} {_agree_verb(site)}",
+                label=(f"{site} {_agree_verb(site)}" if _PAIN_VERB.search(g.group(0))
+                       else g.group(0)),
                 kind="symptom",
                 body_site=_body,
                 role="primary" if first_symptom else "independent",

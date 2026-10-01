@@ -280,6 +280,8 @@ def service_spoken_name() -> str:
 
 def concern_summary_phrase(state: EngineState) -> str:
     """Short spoken list of what Vera heard — for warmer goodbye."""
+    from packages.dialogue_engine.issue_memory import clinical_issue_concept
+
     bits: list[str] = []
     seen: set[str] = set()
     eps = list(state.issue_episodes.values())
@@ -295,11 +297,12 @@ def concern_summary_phrase(state: EngineState) -> str:
             continue
         label = (ep.primary_label or "").strip().lower()
         site = (ep.body_site or "").strip().lower()
-        # Same-site dupes («голова болела» + «головная боль») list once.
-        site_key = site or None
+        # Deduplicate a restated symptom, not every symptom at that site.
+        concept = clinical_issue_concept(label, ep.canonical_key)
+        site_key = f"{site}:{concept}" if site else None
         if site_key and site_key in seen:
             continue
-        key = site or label
+        key = site_key or label
         if not key or key in seen:
             continue
         seen.add(key)
@@ -309,9 +312,9 @@ def concern_summary_phrase(state: EngineState) -> str:
             continue
         if "круж" in label or ep.kind == "dizziness":
             bits.append("головокружение")
-        elif site == "голова" or "голов" in label:
+        elif concept == "pain" and (site == "голова" or "голов" in label):
             bits.append("головная боль")
-        elif site == "живот" or "живот" in label:
+        elif concept == "pain" and (site == "живот" or "живот" in label):
             bits.append("боль в животе")
         elif "тошн" in label:
             bits.append("тошнота")
@@ -392,17 +395,107 @@ def goodbye_final_speech(state: EngineState) -> str:
     return _GOODBYE_FINAL
 
 
-def episode_ack(kind: str, label: str, *, turn_seq: int = 0) -> str:
+def episode_ack(
+    kind: str, label: str, *, turn_seq: int = 0,
+    conversational: bool = False, additional_labels: tuple[str, ...] = (),
+) -> str:
     """Acknowledgment for a grounded episode fact, chosen by meaning.
 
     Falls back to the neutral form for an unknown signal — never invents a
     branch of its own.
     """
+    if conversational and kind in ("new", "answer"):
+        clauses = [_complaint_clause(item) for item in (label, *additional_labels)]
+        if all(clauses):
+            unique = list(dict.fromkeys(clauses))
+            if len(unique) > 1:
+                joined = ", ".join(unique[:-1]) + " и " + unique[-1]
+                return f"Понимаю, {joined}. Давайте по порядку."
+            if re.search(r"\b(болит|болят|ноет|ноют|ломит|ломят)\b", unique[0]):
+                return f"Жаль, что {unique[0]}."
+            return f"Слышу, {unique[0]}."
     pool = _EPISODE_ACK.get(kind)
     if not pool:
         return f"Поняла вас. {label} — зафиксировала."
     template = pool[turn_seq % len(pool)] if turn_seq else pool[0]
     return template.format(label=label)
+
+
+def _complaint_clause(label: str) -> str:
+    """Grammar projection of a grounded label; never infer another symptom."""
+    normalized = label.strip().lower().rstrip(".!?")
+    canonical = {
+        "головная боль": "голова болит",
+        "боль в животе": "живот болит",
+        "тошнота": "тошнит",
+        "головокружение": "кружится голова",
+    }
+    if normalized in canonical:
+        return canonical[normalized]
+    if re.search(
+        r"\b(болит|болят|ноет|ноют|ломит|ломят|трясётся|трясется|"
+        r"трясутся|дрожит|дрожат|тошнит)\b", normalized,
+    ):
+        return normalized
+    return ""
+
+
+def temporal_answer_ack(value: str) -> str:
+    return f"Поняла, это продолжается уже {value.lower()}."
+
+
+def severity_answer_ack(*, strong: bool, pain: bool = True) -> str:
+    if strong:
+        return ("Сочувствую, сильную боль тяжело переносить." if pain
+                else "Сочувствую, это тяжело переносить.")
+    return "Поняла, сейчас терпимо."
+
+
+def requests_question_explanation(text: str) -> bool:
+    """A delivery distinction inside accepted REPAIR, not a new dialogue act."""
+    return bool(re.search(
+        r"\b(уточни\w*|конкрет\w*|не\s+понял\w*|не\s+понимаю|что\s+значит)\b", text, re.I,
+    ))
+
+
+def explain_episode_question(label: str, question: str, *, attribute: str = "") -> str:
+    if label.strip().lower() == "головная боль":
+        if attribute == "severity":
+            return "Я спрашиваю про головную боль. Её можно терпеть или она очень сильная?"
+        return f"Я спрашиваю про головную боль. {question}"
+    if attribute == "severity":
+        return f"Уточню про {label.lower()}. Это можно терпеть или очень тяжело переносить?"
+    return f"Уточню вопрос. {question}"
+
+
+def episode_transition(site: str, kind: str, label: str = "") -> str:
+    if not label:
+        # No grounded topic to name: retain the existing bare-label contract.
+        return "Хорошо."
+    topics = {
+        "голова": "головную боль", "живот": "боль в животе",
+        "рука": "руки", "нога": "ноги",
+    }
+    if site in ("голова", "живот") and not re.search(
+        r"\b(боль|болит|болят|ноет|ноют)\b", label.lower(),
+    ):
+        topics.pop(site)
+    topic = "сон" if kind == "sleep_problem" else topics.get(site)
+    if topic:
+        return f"Теперь про {topic}."
+    return f"{label[0].upper() + label[1:]} — давайте уточним."
+
+
+def requested_episode_ack(site: str, kind: str, label: str) -> str:
+    transition = episode_transition(site, kind, label)
+    if transition.startswith("Теперь про "):
+        return "Хорошо, сначала про " + transition.removeprefix("Теперь про ")
+    return "Хорошо. " + transition
+
+
+def without_listener_prefix(text: str) -> str:
+    """Remove only a redundant acknowledgment, keeping the question intact."""
+    return re.sub(r"^(Поняла вас|Поняла|Записала|Хорошо)\.\s*", "", text)
 
 
 def important_to_share_question(state: EngineState | None = None) -> str:
@@ -477,6 +570,8 @@ def wellness_ack(
         else:
             base = _WELLNESS_ACK_UNCERTAIN
             tails = _WELLNESS_ACK_TAILS["neutral"]
+    if base == _WELLNESS_ACK_GOOD:
+        return base
     tail = tails[turn_seq % len(tails)]
     return f"{base} {tail}".strip()
 
@@ -568,7 +663,9 @@ def slot_question(
     return _SLOT_QUESTIONS.get(slot, "Повторите, пожалуйста, коротко.")
 
 
-def repair_response(delivered_text: str) -> str:
+def repair_response(delivered_text: str, *, explanation: bool = False) -> str:
+    if explanation:
+        return _repeat_question(delivered_text)
     return f"{_REPAIR_ACK} {_repeat_question(delivered_text)}"
 
 

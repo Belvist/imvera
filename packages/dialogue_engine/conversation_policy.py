@@ -704,8 +704,11 @@ def _grounded_ack_for_mentions(
 ) -> str:
     if not turn.issue_mentions:
         return ""
-    labels = [(m.label or "").strip().lower() for m in turn.issue_mentions if m.label]
-    sites = {(m.body_site or "").strip().lower() for m in turn.issue_mentions if m.body_site}
+    speaker_mentions = [
+        m for m in turn.issue_mentions if getattr(m, "subject", "unknown") != "other_person"
+    ]
+    labels = [(m.label or "").strip().lower() for m in speaker_mentions if m.label]
+    sites = {(m.body_site or "").strip().lower() for m in speaker_mentions if m.body_site}
     has_head = any("голов" in x for x in labels) or "голова" in sites
     has_belly = any("живот" in x for x in labels) or "живот" in sites
     has_nausea = any("тошн" in x for x in labels)
@@ -728,16 +731,18 @@ def _grounded_ack_for_mentions(
         return "Поняла вас. Живот и тошнота — это неприятно, давайте уточним по порядку."
     _sited = [
         m
-        for m in turn.issue_mentions
+        for m in speaker_mentions
         if m.role in ("primary", "independent", "unknown")
         and (m.body_site or "").strip()
     ]
     _any_primary = [
         m
-        for m in turn.issue_mentions
+        for m in speaker_mentions
         if m.role in ("primary", "independent", "unknown")
     ]
-    candidates = list(_sited or _any_primary or turn.issue_mentions)
+    candidates = list(_sited or _any_primary or speaker_mentions)
+    if not candidates:
+        return ""
     # Prefer a speakable label: skip bare verbs and broken glue when a
     # fuller mention of the same complaint exists («голова боль» next to
     # «головная боль» must not win the acknowledgment).
@@ -760,6 +765,11 @@ def _grounded_ack_for_mentions(
             _episode_ack_kind(turn, primary),
             spoken_label,
             turn_seq=_utterance_seq(turn),
+            conversational=getattr(primary, "status", "unknown") == "active",
+            additional_labels=tuple(
+                m.label for m in speakable
+                if m is not primary and getattr(m, "status", "unknown") == "active"
+            ) if getattr(primary, "status", "unknown") == "active" else (),
         )
         raw = getattr(turn, "raw_text", "") or ""
         if raw and _has_fatigue_markers(raw) and "Понимаю" not in ack:
@@ -793,7 +803,7 @@ def _episode_ack_kind(turn: RichUserTurn, mention) -> str:
     if status == "resolved" or (status == "improving" and utterance_indicates_resolved(clause)):
         return "improving"
     severity = str(getattr(mention, "severity", "") or "")
-    if (severity and _STRONG_PAIN.search(severity)) or _STRONG_PAIN.search(raw):
+    if (severity and _STRONG_PAIN.search(severity)) or _STRONG_PAIN.search(clause):
         return "strong"
     if getattr(turn, "answers_pending_question", False):
         return "answer"
@@ -810,6 +820,10 @@ def _prev_episode_reported_strong_pain(prev) -> bool:
     """True when the episode we switch away from just grounded strong pain."""
     if prev is None:
         return False
+    from packages.dialogue_engine.issue_memory import clinical_issue_concept
+
+    if clinical_issue_concept(prev.primary_label, getattr(prev, "canonical_key", "")) != "pain":
+        return False
     severity = str((prev.known_attributes or {}).get("severity", ""))
     return bool(severity and _STRONG_PAIN.search(severity))
 
@@ -820,22 +834,11 @@ def _bridge_ack_for_episode(ep, prev=None) -> str:
         # Never answer «Сильно [болит]» with «Хорошо» — acknowledge the pain
         # first, then ask the next episode's question (collects, cares).
         return "Понимаю, сильная боль — это тяжело."
-    site = (ep.body_site or "").strip()
     label = (ep.primary_label or "").strip()
-    if site == "живот" or "живот" in label.lower():
-        return "Хорошо."
-    if site == "голова" or "голов" in label.lower():
-        return "Хорошо."
-    if ep.kind == "sleep_problem" or "сон" in label.lower():
-        return "Хорошо. Про сон —"
-    if _is_verb_phrase_label(label):
-        # A generic body site keeps the elder's own clause («зук болит»).
-        # Speak it as a clause — «Про зук болит» is ungrammatical.
-        return f"Хорошо. {label[0].upper() + label[1:]} —"
-    if label and not _is_bare_verb_label(label):
-        return f"Хорошо. Про {label} —"
-    progress = len(getattr(ep, "known_attributes", None) or {})
-    return _BRIDGE_ACK_ROTATION[progress % len(_BRIDGE_ACK_ROTATION)]
+    return questions.episode_transition(
+        (ep.body_site or "").strip(), ep.kind,
+        label if not _is_bare_verb_label(label) else "",
+    )
 
 
 # Last-resort fallback when a turn has content but no speakable label.
@@ -998,11 +1001,12 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         from packages.dialogue_engine.question_context import repair_question_text
 
         slot = state.answer_context_slot() or "wellness"
-        repair_text = repair_question_text(state, slot)
+        explanation = questions.requests_question_explanation(turn.raw_text)
+        repair_text = repair_question_text(state, slot, explain=explanation)
         return ResponsePlan(
             obligation=ConversationObligation.REPAIR,
             action="speak",
-            mandatory_question=questions.repair_response(repair_text),
+            mandatory_question=questions.repair_response(repair_text, explanation=explanation),
             intent="repair_repeat",
             slot=slot,
             marks_question=False,
@@ -1060,6 +1064,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         and not turn.issue_mentions
         and not turn.user_question
         and not turn.correction
+        and not _turn_has_accepted_episode_value(state, turn)
         and turn.control in ("none", "")
         and not _turn_is_easing(turn)
         and not _turn_is_nonhealth_eval(turn)
@@ -1859,6 +1864,64 @@ def _elder_asked_to_stop(
     )
 
 
+def _turn_has_accepted_episode_value(state: EngineState, turn: RichUserTurn) -> bool:
+    """A filled clinical answer is not an invitation to interrogate its wording."""
+    ep = get_active_episode(state)
+    if ep is None or not turn.answers_pending_question:
+        return False
+    from packages.dialogue_engine.issue_memory import (
+        extract_grounded_duration_value,
+        extract_grounded_severity_value,
+    )
+
+    degree = extract_grounded_severity_value(turn.raw_text)
+    duration = extract_grounded_duration_value(turn.raw_text)
+    return bool(
+        (degree and degree.casefold() == str(ep.known_attributes.get("severity", "")).casefold())
+        or (duration and any(duration.casefold() in str(ep.known_attributes.get(k, "")).casefold()
+                             for k in ("duration", "onset")))
+    )
+
+
+def _requested_episode_plan(state: EngineState, ctx: TurnContext) -> ResponsePlan | None:
+    """Follow an evidenced topic request without answering the interrupted probe."""
+    turn = ctx.turn
+    if (
+        turn is None or turn.dialogue_act != "question" or turn.control not in ("none", "")
+        or turn.issue_mentions or turn.goal_facts or turn.correction
+        or state.safety_mode == "red" or state.risk_handling or state.red_state_pending
+        or state.check_path == CheckPath.URGENT
+    ):
+        return None
+    from packages.dialogue_engine.product import product_episode_complete
+    from packages.dialogue_engine.semantic_kernel.reference_resolver import requested_episode
+    from packages.dialogue_engine.semantic_kernel.types import RelationType
+
+    target = requested_episode(turn.raw_text, state)
+    if target is None or not any(
+        r.type == RelationType.REFERS_TO and r.target_span_id == target
+        for r in turn.semantic_relations
+    ):
+        return None
+    ep = state.issue_episodes[target]
+    if product_episode_complete(state, ep):
+        return None
+    need = _missing_question_need(state, ep)
+    if need is None:
+        return None
+    # Keep the previous episode's facts and missing attributes in the existing
+    # queue. Custom mission's suspended goal remains owned by mission_flow.
+    old = state.active_episode_id
+    if old and old != target and old not in state.pending_episode_ids:
+        state.pending_episode_ids.insert(0, old)
+    state.pending_episode_ids = [eid for eid in state.pending_episode_ids if eid != target]
+    state.active_episode_id = target
+    state.pending_episode_attribute = None
+    return _episode_plan(state, ep, need, bridge=questions.requested_episode_ack(
+        ep.body_site or "", ep.kind, ep.primary_label,
+    ))
+
+
 def schedule_next_action(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
     """Thin routing wrapper via DecisionRouter.
 
@@ -1871,12 +1934,26 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
     refusal = _elder_asked_to_stop(state, turn_context)
     if refusal is not None:
         return refusal
+    requested = _requested_episode_plan(state, turn_context)
+    if requested is not None:
+        return requested
 
+    answered_episode_id = state.active_episode_id
     plan = route_schedule_next_action(
         state,
         turn_context,
         legacy=_schedule_next_action_legacy,
     )
+    ordinary_question = (
+        plan.action == "speak" and plan.marks_question
+        and not plan.control and not plan.safety_class
+        and state.safety_mode != "red" and not state.risk_handling
+        and not state.red_state_pending
+    )
+    if ordinary_question and not plan.acknowledge:
+        if turn_context.newly_filled_slots:
+            plan.acknowledge_facts = list(turn_context.newly_filled_slots)
+        _acknowledge_accepted_episode_answer(state, turn_context, plan, answered_episode_id)
     if (
         turn_context.answer_not_recalled
         and plan.action == "speak"
@@ -1904,6 +1981,61 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
             f"Я спрашивала: «{_history_about(state, turn.user_question)}»."
         )
     return plan
+
+
+def _acknowledge_accepted_episode_answer(
+    state: EngineState, ctx: TurnContext, plan: ResponsePlan, episode_id: str | None,
+) -> None:
+    """Speech intent follows an accepted value, never a coarse answer vote."""
+    turn = ctx.turn
+    if (
+        turn is None or turn.issue_mentions or turn.user_question or turn.correction
+        or turn.not_recalled or plan.acknowledgement_kind
+        or not (
+            (ctx.answer_slot or "").startswith("episode_")
+            or ctx.answer_slot in ("probe_duration", "probe_severity")
+            or (ctx.answer_slot is None and turn.answers_pending_question)
+        )
+    ):
+        return
+    ep = state.issue_episodes.get(episode_id or "")
+    if ep is None or ep.subject == "other_person":
+        return
+    from packages.dialogue_engine.issue_memory import (
+        extract_grounded_duration_value,
+        extract_grounded_severity_value,
+    )
+
+    duration = extract_grounded_duration_value(turn.raw_text)
+    if duration and any(
+        duration.casefold() in str(ep.known_attributes.get(key, "")).casefold()
+        for key in ("onset", "duration")
+    ):
+        plan.acknowledgement_kind = "temporal_answer"
+        plan.acknowledgement_value = duration
+        return
+    severity = extract_grounded_severity_value(turn.raw_text)
+    accepted = ep.known_attributes.get("severity", "")
+    if not severity or severity.casefold() != accepted.casefold():
+        return
+    if _STRONG_PAIN.search(severity):
+        plan.acknowledgement_kind = "strong_answer"
+    elif re.search(r"\bтерпим\w*\b", severity, re.I):
+        plan.acknowledgement_kind = "tolerable_answer"
+    else:
+        from packages.dialogue_engine.semantic_kernel.span_parser import tolerance_severity_spans
+
+        degrees = tolerance_severity_spans(severity)
+        if degrees:
+            plan.acknowledgement_kind = (
+                "tolerable_answer" if degrees[0].normalized == "терпимо" else "strong_answer"
+            )
+    if plan.acknowledgement_kind == "strong_answer":
+        from packages.dialogue_engine.issue_memory import clinical_issue_concept
+
+        if clinical_issue_concept(ep.primary_label, ep.canonical_key) != "pain":
+            plan.acknowledgement_kind = None
+            plan.acknowledge = questions.severity_answer_ack(strong=True, pain=False)
 
 
 def _defuse_red_state(state: EngineState, marker: str) -> None:

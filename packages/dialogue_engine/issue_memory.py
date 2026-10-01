@@ -150,6 +150,12 @@ def _clause_excluded(clause: str, exclude_clauses: tuple[str, ...]) -> bool:
     return False
 
 
+def _other_person_clause(clause: str) -> bool:
+    from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
+
+    return _subject_for_clause(clause, has_issue=False).value == "other_person"
+
+
 def extract_grounded_onset_value(
     raw_text: str,
     *,
@@ -161,7 +167,7 @@ def extract_grounded_onset_value(
         text = clause.strip()
         if not text:
             continue
-        if _clause_excluded(text, exclude_clauses):
+        if _clause_excluded(text, exclude_clauses) or _other_person_clause(text):
             continue
         n = _norm(text)
         if _UNKNOWN_ATTRIBUTE_ANSWER.search(n):
@@ -193,16 +199,22 @@ def extract_grounded_severity_value(
     exclude_clauses: tuple[str, ...] = (),
 ) -> str | None:
     """Return severity only when a clause contains a grounded severity marker."""
+    from packages.dialogue_engine.semantic_kernel.span_parser import tolerance_severity_spans
+
+    tolerance = tolerance_severity_spans(raw_text)
     clauses = _original_clause_slices(raw_text) or [raw_text.strip()]
     for clause in clauses:
         text = clause.strip()
         if not text:
             continue
-        if _clause_excluded(text, exclude_clauses):
+        if _clause_excluded(text, exclude_clauses) or _other_person_clause(text):
             continue
         n = _norm(text)
         if _UNKNOWN_ATTRIBUTE_ANSWER.search(n):
             continue
+        for degree in tolerance:
+            if degree.text in text:
+                return degree.text
         for match in _SEVERITY_ANCHOR.finditer(n):
             # A negated degree («не сильно», «не очень беспокоит») answers
             # the opposite — never record it as a severity value. Later
@@ -342,32 +354,46 @@ def _merge_mention(episode: IssueEpisode, mention: IssueMention, turn_id: str) -
             episode.known_attributes.setdefault("quality", "poor")
 
 
+def clinical_issue_concept(label: str, canonical_key: str = "") -> str:
+    """Same-site pain paraphrases share an owner; tremor is a different issue."""
+    key = _canonical_label(label, canonical_key)
+    if re.search(r"\b(?:тряс\w*|тряст\w*|дрож\w*)\b", key, re.I):
+        return "tremor"
+    if re.search(
+        r"\b(?:(?:по|при|за|раз)?бол\w*|побалива\w*|боль|ноет|ноют|ныть|лом\w*)\b",
+        key, re.I,
+    ):
+        return "pain"
+    from packages.dialogue_engine.semantic_kernel.lexicon import BODY_SITE_LEMMAS
+
+    # Reference projections can repeat an anatomical subject. It does not
+    # change the clinical predicate («горло першит» / «горло горло першит»).
+    return " ".join(token for token in key.split() if token not in BODY_SITE_LEMMAS)
+
+
 def _find_episode_for_mention(state: EngineState, mention: IssueMention) -> str | None:
-    key = (mention.body_site or mention.label).lower()
     site = (mention.body_site or "").lower()
-    mkey = _canonical_label(mention.label, getattr(mention, "canonical_key", ""))
-    # Prefer the active episode on site match: answering a pending probe by
-    # restating the symptom («В 8:00 начала болеть голова») must fill the
-    # pending attribute, never spawn a duplicate (live fs-07799215).
-    active = state.issue_episodes.get(state.active_episode_id or "")
-    if active is not None:
-        if site and (
-            (active.body_site or "").lower() == site
-            or site in (active.primary_label or "").lower()
-        ):
-            return active.episode_id
-        if not site and _canonical_label(
-            active.primary_label, getattr(active, "canonical_key", "")
-        ) == mkey:
-            return active.episode_id
-    for ep_id, ep in state.issue_episodes.items():
-        if ep.body_site and ep.body_site.lower() == key:
-            return ep_id
-        if _canonical_label(ep.primary_label, getattr(ep, "canonical_key", "")) == mkey:
-            return ep_id
-        # Cross-form site match: «Голова болеть» (site голова) attaches to
-        # «голова болит», «живот приболел» to «живот болит».
-        if site and site in (ep.primary_label or "").lower():
+    key = _canonical_label(mention.label, getattr(mention, "canonical_key", ""))
+    concept = clinical_issue_concept(mention.label, key)
+    # Prefer the active owner for a restated answer, but never match by
+    # anatomy alone: pain, tremor and another person's symptoms are distinct.
+    ids = list(state.issue_episodes)
+    if state.active_episode_id in ids:
+        ids.remove(state.active_episode_id)
+        ids.insert(0, state.active_episode_id)
+    for ep_id in ids:
+        ep = state.issue_episodes[ep_id]
+        if (mention.subject in ("speaker", "other_person")
+                and ep.subject in ("speaker", "other_person") and mention.subject != ep.subject):
+            continue
+        if site and ep.body_site and ep.body_site.lower() != site:
+            continue
+        if (not site and ep.body_site
+                and key != _canonical_label(ep.primary_label, ep.canonical_key)):
+            # «Ещё болит» is a fresh vague lead, not evidence that it is
+            # the previously discussed headache/abdomen.
+            continue
+        if concept == clinical_issue_concept(ep.primary_label, ep.canonical_key):
             return ep_id
     return None
 
@@ -393,11 +419,7 @@ def _dedupe_primary_mentions(mentions: tuple[IssueMention, ...]) -> tuple[IssueM
     for mention in mentions:
         if mention.body_site and mention.role in ("primary", "independent"):
             label = _canonical_label(mention.label, getattr(mention, "canonical_key", ""))
-            pain = bool(re.search(
-                r"\b(?:(?:по|при|за|раз)?бол\w*|побалива\w*|боль|ноет|ноют|ныть)\b",
-                mention.label, re.I,
-            ))
-            site_key = (mention.body_site, "pain" if pain else label)
+            site_key = (mention.body_site, clinical_issue_concept(mention.label, label))
             if site_key in seen_sites:
                 continue
             seen_sites.add(site_key)
@@ -860,6 +882,10 @@ def _fill_pending_attribute_for_episode(
         return
     ep = state.issue_episodes.get(episode_id)
     if ep is None:
+        return
+    from packages.dialogue_engine.check_path import is_other_person_health_frame
+
+    if is_other_person_health_frame(turn.raw_text):
         return
     from packages.dialogue_engine.question_context import (
         mark_episode_resolved,

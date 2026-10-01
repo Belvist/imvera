@@ -2,6 +2,17 @@
 
 ## Unreleased — 2026-10-01
 
+- Keep pain/tremor owners distinct across ingest, observations and recap; preserve literal nonpain predicates and reject other-person clinical fills.
+- Protect canonical repair from erroneous model answer votes without bypassing safety/control.
+- Accept grounded endurance answers and single-owner elliptical degree without unnecessary severity re-asks.
+- Explain an unclear severity question in ordinary words while preserving its identity and obligation.
+- Follow explicit requests to discuss a known open episode, retaining the interrupted episode and its unknown values.
+- Prevent topic-preference “лучше про...” from fabricating clinical recovery and clinical answers from triggering story follow-ups.
+
+- Compose conversational acknowledgments from grounded symptom clauses; preserve plural and unfamiliar labels.
+- Reflect accepted duration/severity before a follow-up, name the headache explicitly and explain the question on clarification.
+- Keep custom-mission repair with the delivered question; do not clear it through normal advancement.
+- Name episode handoffs, avoid duplicate positive reactions and wire conversational continuity into the rich CI gate.
 - Keep semantic status inside sentence/contrast boundaries; food/sleep assessments cannot resolve a different complaint.
 - Retain explicit spoken duration evidence, excluding pronoun references and unknown answers.
 - Clear interrupted background coverage and avoid general concern re-asks after recorded symptoms.

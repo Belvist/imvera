@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import re
+
 from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
+from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
 from packages.dialogue_engine.semantic_kernel.types import (
     RelationType,
     SemanticRelation,
@@ -138,7 +141,34 @@ def parse_relations(
         return tuple(_relations_in_clause(spans))
 
     relations: list[SemanticRelation] = []
-    for start, end, _clause in clause_bounds(raw_text):
+    previous = None
+    for start, end, clause in clause_bounds(raw_text):
         clause_spans = tuple(s for s in spans if start <= s.start < end)
         relations.extend(_relations_in_clause(clause_spans))
+        # A degree-only continuation may omit its subject («голова болит,
+        # но терпимо»). Carry only one immediately preceding speaker issue;
+        # never guess across another activity/person or multiple complaints.
+        if previous is not None and not any(s.type == SpanType.ISSUE for s in clause_spans):
+            pstart, pend, pclause = previous
+            owners = [s for s in spans if s.type == SpanType.ISSUE and pstart <= s.start < pend]
+            degrees = [s for s in clause_spans if s.type == SpanType.SEVERITY]
+            rest = clause
+            for degree in sorted(degrees, key=lambda s: s.start, reverse=True):
+                a, b = degree.start - start, degree.end - start
+                rest = rest[:a] + " " + rest[b:]
+            words = re.findall(r"[а-яёa-z]+", rest.lower())
+            if (
+                len(owners) == 1 and degrees
+                and all(w in {"но", "однако", "пока", "уже", "вполне", "это", "ещё", "еще"}
+                        for w in words)
+                and not re.search(r"[.!?]", raw_text[pend:start])
+                and _subject_for_clause(pclause, has_issue=True).value == "speaker"
+                and not any(r.type == RelationType.NEGATES and r.target_span_id == owners[0].span_id
+                            for r in relations)
+            ):
+                relations.extend(SemanticRelation(
+                    type=RelationType.SEVERITY_OF, source_span_id=degree.span_id,
+                    target_span_id=owners[0].span_id, confidence=0.85,
+                ) for degree in degrees)
+        previous = (start, end, clause)
     return tuple(relations)

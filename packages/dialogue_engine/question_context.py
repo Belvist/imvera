@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING
 _RESOLVED_UTTERANCE = re.compile(
     r"\b("
     r"не\s+болит|уже\s+не\s+бол|боль\s+прошл\w*|всё\s+прошл\w*|все\s+прошл\w*|"
-    r"прошл\w*|полегче|получше|легче|лучше|уже\s+почти\s+не|почти\s+прошл\w*"
+    r"прошл\w*|полегче|получше|легче|лучше(?!\s+(?:про|о|об)\b)|"
+    r"уже\s+почти\s+не|почти\s+прошл\w*"
     r")\b",
     re.I,
 )
@@ -255,9 +256,26 @@ def question_context_from_state(state: EngineState) -> QuestionContext | None:
     return None
 
 
-def repair_question_text(state: EngineState, fallback_slot: str = "wellness") -> str:
+def repair_question_text(
+    state: EngineState, fallback_slot: str = "wellness", *, explain: bool = False,
+) -> str:
     """Text to repeat on repair — never derives from unknown dynamic slot keys."""
     ctx = question_context_from_state(state)
+    if explain and ctx and ctx.episode_id and ctx.attribute:
+        from packages.dialogue_engine import questions
+        from packages.dialogue_engine.conversation_policy import (
+            episode_question_for_attribute_with_state,
+        )
+
+        ep = state.issue_episodes.get(ctx.episode_id)
+        if ep is not None:
+            question, intent = episode_question_for_attribute_with_state(state, ep, ctx.attribute)
+            # Active memory may have moved while delivered speech is still
+            # older. Never explain a different pending question in its place.
+            if ctx.slot == intent:
+                return questions.explain_episode_question(
+                    ep.primary_label, question, attribute=ctx.attribute,
+                )
     if ctx is not None and ctx.text.strip():
         return ctx.text
     from packages.dialogue_engine import questions

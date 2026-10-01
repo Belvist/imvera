@@ -19,13 +19,19 @@ from packages.dialogue_engine.semantic_kernel.observation_memory import (
     merge_legacy_mentions,
     observations_to_issue_mentions,
 )
-from packages.dialogue_engine.semantic_kernel.reference_resolver import resolve_references
+from packages.dialogue_engine.semantic_kernel.reference_resolver import (
+    requested_episode,
+    resolve_references,
+    topic_request_span,
+)
 from packages.dialogue_engine.semantic_kernel.relation_parser import parse_relations
 from packages.dialogue_engine.semantic_kernel.span_parser import parse_spans
 from packages.dialogue_engine.semantic_kernel.subject_resolver import resolve_subject
 from packages.dialogue_engine.semantic_kernel.types import (
     CorrectionRecord,
+    RelationType,
     SemanticKernelResult,
+    SemanticRelation,
     SpanType,
 )
 
@@ -91,6 +97,20 @@ def interpret(
             level=0,
             route="kernel_l0",
             elapsed_ms=elapsed,
+        )
+
+    topic = topic_request_span(raw)
+    if topic is not None:
+        episode_id = requested_episode(raw, engine_state)
+        relations = () if episode_id is None else (SemanticRelation(
+            type=RelationType.REFERS_TO, source_span_id=topic.span_id,
+            target_span_id=episode_id,
+        ),)
+        return SemanticKernelResult(
+            raw_text=raw, utterance_id=utterance_id, dialogue_act="question",
+            spans=(topic,), relations=relations, user_question=raw,
+            confidence=1.0, route="kernel_topic_request",
+            elapsed_ms=(time.perf_counter() - started) * 1000,
         )
 
     spans = list(parse_spans(raw))
@@ -163,7 +183,8 @@ def kernel_to_rich_turn(
     mentions = observations_to_issue_mentions(result.observations, result.raw_text)
     from packages.dialogue_engine.issue_mention_extract import extract_issue_mentions
 
-    legacy = extract_issue_mentions(result.raw_text)
+    legacy = (() if result.route == "kernel_topic_request"
+              else extract_issue_mentions(result.raw_text))
     mentions = merge_legacy_mentions(mentions, legacy, result.raw_text)
     if engine_state is not None:
         mentions = filter_phantom_generic_issues(
@@ -176,7 +197,8 @@ def kernel_to_rich_turn(
         r.type.value == "REFERS_TO" for r in result.relations
     )
     needs_clarify = (result.level >= 3 or "vague_issue" in result.ambiguity) and not ref_only
-    goal_facts = extract_goal_facts(result.raw_text, answer_slot=answer_slot)
+    goal_facts = (() if result.route == "kernel_topic_request"
+                  else extract_goal_facts(result.raw_text, answer_slot=answer_slot))
     turn = RichUserTurn(
         utterance_id=result.utterance_id,
         raw_text=result.raw_text,
