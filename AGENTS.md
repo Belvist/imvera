@@ -22,6 +22,11 @@ no generative LLM in live conversation; models propose meaning, the single
 DialogueEngine decides and formulates. Act proposals must be adjudicated into
 canonical RichUserTurn; log actual use separately from proposal confidence.
 
+For warm dialogue changes, read [ADR-026](docs/adr/026-grounded-warm-dialogue.md).
+Warmth follows grounded facts/dispositions and actual transitions. Renderer owns
+speech; no random response decorator in CallActor/TTS. Competitor comparisons
+must use captured attributable responses; absent external runs remain NOT_RUN.
+
 For multi-step voice/SIP work, keep `docs/current-task.md` updated (outcome, branch/SHA, decisions, criteria, next op).
 
 ```text

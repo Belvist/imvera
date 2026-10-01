@@ -1,0 +1,29 @@
+{
+  "version": "elder-checkin-v1",
+  "language": "ru",
+  "elder_display_name": "Тамара Юрьевна",
+  "speech_day": "0",
+  "speech_hour": "12",
+  "cases": [
+    {"id": "neutral_daily", "mission": "daily", "inputs": ["Нормально.", "Настроение хорошее.", "Спал хорошо.", "Сегодня буду дома.", "Нет, больше ничего.", "До свидания."]},
+    {"id": "mixed_good_and_bad", "mission": "daily", "inputs": ["Чувствую себя хорошо. Настроение плохое. Спал плохо.", "С утра.", "Терпимо."]},
+    {"id": "volunteered_facts", "mission": "daily", "inputs": ["Чувствую себя хорошо. Настроение хорошее. Спал хорошо. Сегодня буду дома.", "Нет, больше ничего.", "До свидания."]},
+    {"id": "unknown_onset", "mission": "daily", "inputs": ["Голова болит.", "Не помню.", "Терпимая."]},
+    {"id": "unknown_custom", "mission": "errands", "inputs": ["Не помню.", "После обеда.", "Нет, больше ничего.", "До свидания."]},
+    {"id": "interrupted_shopping", "mission": "shopping", "inputs": ["Голова болит.", "Сегодня.", "Терпимая.", "Молока и хлеба.", "Нет, больше ничего.", "До свидания."]},
+    {"id": "mixed_shopping", "mission": "shopping", "inputs": ["Молока и хлеба. Сегодня сильно болит голова.", "Нет, больше ничего."]},
+    {"id": "polite_refusal", "mission": "daily", "inputs": ["Спасибо, не хочу разговаривать.", "До свидания."]},
+    {"id": "control_with_complaint", "mission": "daily", "inputs": ["Не хочу разговаривать, сильно болит голова."]},
+    {"id": "hearing_repair", "mission": "daily", "inputs": ["Не расслышала, повторите.", "Чувствую себя хорошо."]},
+    {"id": "purpose_question", "mission": "shopping", "inputs": ["А зачем вы спрашиваете?", "Молока.", "Нет, больше ничего.", "До свидания."]},
+    {"id": "emergency_over_refusal", "mission": "daily", "inputs": ["Не хочу разговаривать, не могу дышать."]},
+    {"id": "multiple_complaints", "mission": "daily", "inputs": ["Живот болит и тошнит.", "Сегодня."]},
+    {"id": "false_world", "mission": "daily", "inputs": ["Мне приснилось, что болит голова. Сейчас чувствую себя хорошо."]},
+    {"id": "correction", "mission": "daily", "inputs": ["Чувствую себя хорошо. Настроение хорошее. Спал хорошо.", "Нет, я перепутал, спал плохо."]},
+    {"id": "unknown_with_fact", "mission": "shopping", "inputs": ["Не помню, когда началось, но сегодня сильно болит голова."]}
+  ],
+  "missions": {
+    "shopping": {"mission_id": "shopping", "goals": [{"goal_id": "items", "prompt_hint": "Какие продукты вам купить?", "answer_type": "free_text", "allowed_values": []}]},
+    "errands": {"mission_id": "errands", "goals": [{"goal_id": "items", "prompt_hint": "Какие продукты вам купить?", "answer_type": "free_text", "allowed_values": []}, {"goal_id": "time", "prompt_hint": "Когда удобно зайти?", "answer_type": "free_text", "allowed_values": []}]}
+  }
+}

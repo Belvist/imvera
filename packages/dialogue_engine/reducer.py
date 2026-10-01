@@ -934,6 +934,7 @@ def _schedule_advance(
     user_text: str = "",
     answer_slot: str | None = None,
     clarify: bool = False,
+    answer_not_recalled: bool = False,
 ) -> tuple[EngineState, list[Effect]]:
     """Canonical post-mutation advance — scheduler only, not slot ladder."""
     from packages.dialogue_engine.protocol.acts import consume_need
@@ -959,6 +960,7 @@ def _schedule_advance(
         user_text=user_text,
         answer_slot=answer_slot,
         clarify=clarify,
+        answer_not_recalled=answer_not_recalled,
     )
     plan = schedule_next_action(state, ctx)
     return _emit_from_plan(state, plan)
@@ -1366,6 +1368,17 @@ def _apply_rich_control(
     control = turn.control
     if control in ("none", ""):
         return None
+
+    if control in {"stop_call", "defer", "revoke_consent"} and turn.issue_mentions:
+        # Ending the conversation does not erase a complaint in that same
+        # turn. Preserve grounded observations through their existing owner,
+        # without answering mission goals or asking another question.
+        from packages.dialogue_engine.issue_memory import filter_rich_turn_mentions
+
+        evidence_turn = filter_rich_turn_mentions(state, turn).model_copy(update={
+            "goal_answers": (), "goal_dispositions": (), "goal_facts": (),
+        })
+        atomic_semantic_apply(state, evidence_turn)
 
     state.processing_turn_id = None
     state.processing_effect_id = None
@@ -1886,7 +1899,7 @@ def _resolve_unknown_answer(
     state.delivered_question = None
     state.planned_question = None
     state.bump_revision()
-    return _schedule_advance(state, user_text=user_text)
+    return _schedule_advance(state, user_text=user_text, answer_not_recalled=True)
 
 
 RELATION_FILL_THRESHOLD = 0.6

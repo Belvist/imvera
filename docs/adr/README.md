@@ -33,6 +33,7 @@ Record irreversible technical decisions here.
 | [023](023-replacement-and-cleanup-law.md) | Replacement and cleanup law | accepted |
 | [024](024-bounded-neuro-learning.md) | Bounded neuro learning and dialogue proof chain | accepted |
 | [025](025-grounded-dialogue-sdk.md) | Grounded dialogue SDK and canonical act adjudication | accepted for implementation; live voice NOT VERIFIED |
+| [026](026-grounded-warm-dialogue.md) | Grounded warmth through existing dialogue owners | accepted for implementation; live/human warmth NOT VERIFIED |
 
 ADR-012 is **lab/spike only** for production telephony (see ADR-013).  
 ADR-014 **does not** stamp `ARCHITECTURE = FROZEN` until gates 1–7 are VERIFIED.

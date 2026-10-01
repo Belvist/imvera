@@ -1,3 +1,109 @@
+# Grounded warm dialogue and elder-care comparison — 2026-10-01
+
+Branch: `feature/voice-zoiper-m5`; slice base `b5adf1204ae876905606f804d7218a9619f9a99d`.
+Owner requested warmer human reception, comparison and closer competitors.
+Prior no-generative-LLM / commit-and-push-to-m5 authorization persists.
+Decision: [ADR-026](adr/026-grounded-warm-dialogue.md).
+Agent integration: [guide](dialogue-sdk-integration.md).
+Competitors and actual access boundaries: [research/protocol](research/elder-care-dialogue-comparison-2026-10-01.md).
+
+## CHANGED
+
+- Existing reducer explicitly marks a discharged not-recalled answer; canonical
+  scheduler adds a bounded meaning to an ordinary question plan. Renderer says
+  «Понимаю, не будем угадывать» without medical reassurance or an invented fact.
+- Actual custom-goal resumption explains «Вернёмся к моему вопросу»; no claim
+  that a symptom recovered. Rendering twice does not duplicate the transition.
+- Renderer prioritizes accepted bad sleep/mood over good wellness in the same
+  fact acknowledgment. Neutral wellness no longer gets exaggerated joy. Some
+  engine paths emit earlier legacy responses; no claim that all paths changed.
+- Remove extra answer requests from wellness acknowledgment tails. Replace an
+  unsupported «это серьёзно» for belly/nausea with grounded discomfort.
+- Add «разговаривать» to the existing polite DECLINE predicate; no new control
+  or consent rule. Existing exact call-level controls keep their precedence.
+- Preserve an evidenced complaint in a closing control-turn through the same
+  atomic apply owner, suppressing mission answers/dispositions and further asks.
+  Emergency handling remains earlier and unchanged.
+- Positive sleep polarity is no longer contradicted by substring «плохо» inside
+  «неплохо». No model training/vendor/provider change.
+- Freeze 16 Russian synthetic scenarios, capture actual SDK replies and accept
+  attributable real external captures. Reject changed inputs, missing evidence
+  metadata, empty captures, mixed languages/channels. No artificial warmth score.
+
+## VERIFIED
+
+All commands below used Python 3.12.14 in `/workspace/imvera-review-venv`,
+`PYTHONPATH=/workspace/imvera-feature-review` and cwd at that worktree.
+
+| Command | Result |
+| --- | --- |
+| `python -m pytest -q` (exclusive final run) | **1964 passed / 5 existing missing-model failures / 9 skipped**, 102.94 s |
+| New warmth contracts in that full run | **31/31 passed** |
+| New comparison evidence contracts in that full run | **6/6 passed** |
+| `python -m pytest tests/test_dialogue_warmth.py tests/test_dialogue_comparison.py -q` (final focused) | **37/37 passed**, 0.35 s |
+| Same 31 warmth contracts at b5adf12 | **24 failed / 7 passed**, 0.52 s; includes missing new contract fields, not 24 independent production bugs |
+| `python scripts/dialogue_corpus_gate.py` | **500/500 PASS**, 6.53 s |
+| `python scripts/hard_battery.py` | **16/16 PASS** |
+| `python scripts/agent_dialogue_gate.py` | agent/dialogue + dream gates PASS |
+| `python tools/voice_lab/policy_diff_v8_v9.py` | PASS **changed=4 / expected=4 / unexplained=0**, unchanged expected-delta manifest |
+| `python -m ruff check packages tests scripts tools/voice_lab/dialogue_comparison.py` | All checks passed |
+| `git diff --check` | PASS |
+
+Before/after text comparison uses the same current comparison tool and fixture
+against product imports in separate cwd/PYTHONPATH worktrees: baseline b5adf12
+and changed tree. **16/16 comparable cases; 7/16 response sequences changed**.
+Same-turn complaint retention changes evidence even when the closing reply stays
+the same. Baseline product code untouched; new tests copied only for comparison.
+No external competitor response is present in either artifact.
+
+Artifacts outside Git:
+`/workspace/scratch/imvera-warmth-before.json`, `imvera-warmth-after.json`,
+`imvera-warmth-comparison.md`; sources/access metadata in
+`/workspace/scratch/imvera-competitors-2026-10-01/`.
+Pre-commit new capture correctly identifies b5adf12 + dirty. After commit,
+regenerate the new capture at the exact clean published SHA.
+
+Initial concurrent full-suite/gate run had **1961 passed / 8 failed / 9 skipped**:
+five model failures plus two pipeline diagnostics and shadow p99=20.061 ms.
+Those three checks passed separately (3/3); final exclusive full-suite has only
+the five model failures. Exact cause of the initial diagnostic failures was not
+established; do not hide the observation or infer measured load capacity from
+the passing rerun. Assertions/budgets were not changed.
+Logs: `/tmp/imvera-warmth-full.log`, `/tmp/imvera-warmth-extra-failures.log`,
+`/tmp/imvera-warmth-full-exclusive.log`, and individual `imvera-warmth-*.log` gates.
+
+## NOT VERIFIED
+
+- The same five real model checks still fail: act/relation/polarity artifacts
+  and torch are unavailable. They ran; no skip/xfail or fake warming added.
+- Mac/MPS/SIP/Zoiper, TTS prosody, perceived warmth, barge-in and end-to-end
+  latency not tested. Text is the actual engine output, not a heard-audio trace.
+- Fish/Newo/inTouch/CareCall/QuikTok/ElliQ responses on the frozen suite:
+  **NOT_RUN**, no authorized test session/account/connected voice device.
+  Public docs/pages were read, not ranked as conversation results.
+- Three-rater human warmth scoring and arbitrary-language understanding remain
+  unmeasured. No superiority, clinical efficacy or open-domain claim.
+
+## REMAINING RISKS
+
+Inherited ADR-025 Core admission/status, synchronous inference/capacity and
+ADR-024 proof-monitor gaps remain. Bare exact call-level controls such as
+«не хочу разговаривать» still use their existing consent semantics; this slice
+does not redefine them. Explicit urgent phrases keep their existing detector;
+unmeasured paraphrases need model/safety evidence, not a new reassuring response.
+Timing checks were sensitive in the concurrent local run. Competitors' Russian
+support and equivalent elder-care configurations must be verified before ranking.
+
+## NEXT GATE
+
+On the actual pinned-model voice runtime, replay the frozen scenarios and have
+listeners assess audio warmth with cancellation/canonical-spoken traces. Then
+use equivalent authorized competitor sessions for the same language/channel;
+record provider/config versions and preserve their genuine captured responses.
+Rollback: revert this slice; no schema migration, runtime flag or second owner.
+
+---
+
 # Grounded Dialogue SDK — 2026-09-30 → 2026-10-01
 
 CI follow-up (2026-10-01): SDK commit `d29f239` was delivered through GitHub
