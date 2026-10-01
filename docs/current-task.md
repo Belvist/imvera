@@ -506,6 +506,12 @@ canonical == TTS == delivered speech, and a single farewell.
   Registered as zoiper@10.20.0.131, Reachable. Contact still public IP
   (STUN on) — if no audio on 7000, next step is STUN off in Zoiper.
   Home flip-back = regen script + same Zoiper procedure with .1.194.
+- Flip-back done by agent 2026-10-01 eve: regen picked en0 .1.194 (socket
+  probe hits VPN 240.0.0.2 — en0 preferred deliberately), FS rescan OK,
+  Zoiper domain flipped while stopped (it rewrites Config.xml on quit).
+  Stuck SIP state needed one more clean restart to re-register.
+  Registered as zoiper@192.168.1.194, Reachable. Same STUN-public Contact
+  as the working home setup.
 
 ---
 
@@ -538,6 +544,32 @@ canonical == TTS == delivered speech, and a single farewell.
   168KB PCM. SIP E2E still needs owner Zoiper dial; :9103 still down
   (flags 0, out of live path).
 - No code changed; no bridge version move. Docs dirty by design (journal).
+
+---
+
+# Full prod restart, all green (2026-10-01, still f4edaa9)
+
+- Restarted everything in no-call window: STT/TTS x2, bridge, FreeSWITCH,
+  PostgreSQL last. DB rows intact after restart (431 results / 2020
+  events). FS healthy, ext IPs kept 10.20.0.131, Zoiper registered.
+- Verified: bridge f4edaa9 hot, all 4 workers ready, version_watch OK.
+  No code changed; no version move.
+
+---
+
+# Sixth merge live on f4edaa9: realtime endpointing + previews (2026-10-01)
+
+- His 98e1a7c (endpointing, stop-audio-before-cancel, ADR-027) + fbff72c
+  (interrupted playout to SDK) + c896aee (STT prefix previews). Clean
+  auto-merge, no conflicts. This is the liveliness/speed area: faster
+  turn-taking, barge-in plumbing, partial STT hypotheses.
+- Gates on merged: full 2286/0, corpus 500/500, diff 4/4, agent+dream,
+  hard1000 1349/1349, battery 16/16, ruff clean. Pushed normally.
+- Restarted whose code changed: STT x2 (contract!) + bridge -> f4edaa9,
+  hot, watch OK. TTS/FS/DB untouched (no changes there). Live STT smoke
+  on grandma audio OK post-restart.
+- NOT VERIFIED: ear proof (barge-in + speed by ear on 7000), :9103, CI.
+- NEXT: owner ear 7000 -> D1 migration go/no-go.
 
 ---
 

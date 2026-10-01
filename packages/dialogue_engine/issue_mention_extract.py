@@ -617,7 +617,30 @@ def extract_issue_mentions(text: str) -> tuple[IssueMention, ...]:
             first = False
     if len(all_mentions) == 1 and all_mentions[0].role == "unknown":
         all_mentions[0] = all_mentions[0].model_copy(update={"role": "primary"})
-    return tuple(all_mentions)
+    return tuple(_dedup_same_site(all_mentions))
+
+
+def _dedup_same_site(
+    mentions: list[IssueMention],
+) -> list[IssueMention]:
+    """One mention per (site, kind): the generic fallback and a specific
+    rule firing on the same clause («Беспокоит» + «головная боль») must
+    not open two episodes for one complaint (live: double questioning).
+    Keeps the longest label (specific over generic), first role.
+    Different sites or kinds never merge.
+    """
+    best: dict[tuple[str, str], IssueMention] = {}
+    order: list[tuple[str, str]] = []
+    for m in mentions:
+        key = ((m.body_site or "").strip().lower(), (m.kind or "").strip().lower())
+        prev = best.get(key)
+        if prev is None:
+            best[key] = m
+            order.append(key)
+            continue
+        if len(m.label or "") > len(prev.label or ""):
+            best[key] = m.model_copy(update={"role": prev.role})
+    return [best[k] for k in order]
 
 
 _WELLNESS_FREE_POSITIVE = re.compile(
