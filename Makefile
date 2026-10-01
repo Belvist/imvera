@@ -31,7 +31,8 @@ test-dialogue-rich:
 	$(PYTHON) -m pytest tests/test_rich_turn_understanding.py tests/test_issue_memory.py \
 		tests/test_conversation_policy.py tests/test_dialogue_free_speech_regression.py \
 		tests/test_evidence_invariant.py tests/test_rich_controls.py \
-		tests/test_issue_episode_resume.py tests/test_topic_live_regression.py -q
+		tests/test_issue_episode_resume.py tests/test_topic_live_regression.py \
+		tests/test_dialogue_warmth.py tests/test_conversational_continuity.py -q
 
 test-dialogue-runtime:
 	@echo "GATE: CallActor rich path + LLM worker contract"

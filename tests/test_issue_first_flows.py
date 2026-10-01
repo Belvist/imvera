@@ -56,10 +56,14 @@ def test_flow_fs_f534c2e6_soft_no_closes_warm() -> None:
     assert "important_to_share" in _intents(r)
     its = [e for e in r.effects if getattr(e, "intent", "") == "important_to_share"]
     assert its
-    # Contract migrated: any member of the ITS pool counts (per-call
-    # rotation may open on «Записала. Ещё что-то беспокоит?»).
+    # A grounded positive reaction replaces the generic listener prefix;
+    # the question itself must remain an exact member of the existing pool.
     from packages.dialogue_engine import questions as _Q
-    assert its[-1].text.strip() in _Q._ITS_QUESTION_VARIANTS
+    questions_without_ack = {text.split(". ", 1)[1] for text in _Q._ITS_QUESTION_VARIANTS}
+    assert its[-1].question_text.strip() in questions_without_ack
+    assert its[-1].bridge_text == "Рада это слышать."
+    assert its[-1].text == f"{its[-1].bridge_text} {its[-1].question_text}"
+    assert its[-1].text.count("?") == 1
     result = r.run(["Да вроде бы нет, планов толком тоже нет никаких. Так вроде всё нормально."])
     intents = [e.intent for e in result.speak_effects]
     texts = " ".join(e.text.lower() for e in result.speak_effects)

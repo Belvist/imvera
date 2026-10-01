@@ -1038,11 +1038,7 @@ def _apply_rich_turn(
     if turn.dialogue_act == "repair" or _is_repair_text(user_text):
         state.processing_turn_id = None
         state.processing_effect_id = None
-        from packages.dialogue_engine.mission_flow import is_custom_mission
-
-        if is_custom_mission(state):
-            return _schedule_advance(state, turn=turn, user_text=user_text, answer_slot=answer_slot)
-        return _speak_repair(state, answer_slot or "wellness")
+        return _speak_repair(state, answer_slot or "wellness", request_text=user_text)
 
     if (
         state.delivered_question is not None
@@ -2055,7 +2051,9 @@ def _apply_semantic(
             return state, []
         state.processing_turn_id = None
         state.processing_effect_id = None
-        return _speak_repair(state, answer_slot or semantic.target_slot or "wellness")
+        return _speak_repair(
+            state, answer_slot or semantic.target_slot or "wellness", request_text=user_text,
+        )
 
     if semantic.act == SemanticAct.UNCLEAR:
         coerced = _coerce_unclear_by_content(state, user_text)
@@ -2810,6 +2808,7 @@ def _advance_after_episode_answer(
 def _speak_repair(
     state: EngineState,
     slot: str,
+    *, request_text: str = "",
 ) -> tuple[EngineState, list[Effect]]:
     from packages.dialogue_engine.question_context import question_context_from_state
 
@@ -2817,8 +2816,9 @@ def _speak_repair(
     ctx = question_context_from_state(state)
     from packages.dialogue_engine.question_context import repair_question_text
 
-    question_text = delivered.text if delivered else repair_question_text(state, slot)
-    text = questions.repair_response(question_text)
+    explanation = questions.requests_question_explanation(request_text)
+    question_text = repair_question_text(state, slot, explain=explanation)
+    text = questions.repair_response(question_text, explanation=explanation)
     repair_slot = ctx.slot if ctx and ctx.slot else slot
     # Repair re-speaks the pending probe out loud — it counts toward the
     # temporal anti-loop like any other emission (fuzz I3). On the 3rd

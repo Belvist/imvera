@@ -77,7 +77,7 @@ class Level0Match:
 
 
 def match_repair(text: str) -> Level0Match | None:
-    norm = text.strip().lower()
+    norm = text.strip().lower().rstrip(".!?…")
     if not norm:
         return None
     if re.match(r"^(что|чего|чё|ась)\??$", norm):

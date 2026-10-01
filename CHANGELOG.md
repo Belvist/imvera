@@ -2,6 +2,10 @@
 
 ## Unreleased — 2026-10-01
 
+- Compose conversational acknowledgments from grounded symptom clauses; preserve plural and unfamiliar labels.
+- Reflect accepted duration/severity before a follow-up, name the headache explicitly and explain the question on clarification.
+- Keep custom-mission repair with the delivered question; do not clear it through normal advancement.
+- Name episode handoffs, avoid duplicate positive reactions and wire conversational continuity into the rich CI gate.
 - Keep semantic status inside sentence/contrast boundaries; food/sleep assessments cannot resolve a different complaint.
 - Retain explicit spoken duration evidence, excluding pronoun references and unknown answers.
 - Clear interrupted background coverage and avoid general concern re-asks after recorded symptoms.

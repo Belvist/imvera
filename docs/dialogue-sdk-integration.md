@@ -14,6 +14,30 @@
 Протокол сравнения и загрузки настоящих чужих транскриптов:
 [elder-care comparison](research/elder-care-dialogue-comparison-2026-10-01.md).
 
+## Связный разговор: интегрировать смысл, а не приставку к TTS
+
+[Разбор и реальные текстовые ответы движка](live-calls/fs-2baf87ec-conversational.md).
+
+- `temporal_answer` получает `acknowledgement_value` только из количества,
+  которое принято в onset/duration этого эпизода. Чужие лекарства, планы и
+  «не помню» не дают права произнести «это продолжается уже две недели».
+- `strong_answer` / `tolerable_answer` отражают принятую severity, не общий
+  model vote `answer`. Сильная боль не получает позитивного поздравления.
+- Несколько активных жалоб соединяются из grounded labels. `body_site` не
+  даёт права придумать симптом: головокружение не становится головной болью.
+- На «не расслышала» сохраняется услышанный текст вопроса; на «уточните»
+  объясняется тот же смысл. Не стирай delivered question обычным advancement,
+  не заполняй clinical value/mission goal просьбой уточнить. Custom mission
+  использует тот же reducer repair owner; question identity сохраняется.
+- `bridge_text` и `question_text` — компоненты одной канонической реплики.
+  Их разделение для журналирования не даёт TTS права заменять или дописывать
+  текст. Не вставляй «понимаю» после urgent/control и не повторяй старые acks
+  при объяснении нового вопроса.
+
+`make test-dialogue-rich` включает проверки `test_dialogue_warmth.py` и
+`test_conversational_continuity.py`; полагаемся на специализированный CI job
+даже когда общий job не может собрать модельное окружение.
+
 ## Живой clarification-loop: обязательные границы
 
 Разбор и повтор звонка `fs-2baf87ec`:

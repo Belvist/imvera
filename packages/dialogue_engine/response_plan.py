@@ -39,7 +39,10 @@ class ResponsePlan:
     mandatory_question: str = ""
     tone: str = "warm"
     clarification: bool = False
-    acknowledgement_kind: Literal["not_recalled", "resume_mission"] | None = None
+    acknowledgement_kind: Literal[
+        "not_recalled", "resume_mission", "temporal_answer", "strong_answer", "tolerable_answer"
+    ] | None = None
+    acknowledgement_value: str = ""
 
 
 def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan:
@@ -66,6 +69,10 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
     ack = plan.acknowledge or _acknowledge_fills(state, facts)
     if plan.acknowledgement_kind == "not_recalled":
         ack = questions.not_recalled_ack()
+    elif plan.acknowledgement_kind == "temporal_answer" and plan.acknowledgement_value:
+        ack = questions.temporal_answer_ack(plan.acknowledgement_value)
+    elif plan.acknowledgement_kind in ("strong_answer", "tolerable_answer"):
+        ack = questions.severity_answer_ack(strong=plan.acknowledgement_kind == "strong_answer")
     elif plan.acknowledgement_kind == "resume_mission":
         resume = questions.mission_resume_ack()
         if not ack.endswith(resume):
@@ -100,6 +107,8 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
             question = questions.slot_question(plan.slot, state=state)
             plan.intent = plan.intent or f"check_{plan.slot}"
 
+    if ack and plan.intent == "important_to_share":
+        question = questions.without_listener_prefix(question)
     parts = [p for p in (ack, question) if p]
     plan.acknowledge = ack
     plan.mandatory_question = question

@@ -206,10 +206,13 @@ def test_negative_wellness_gets_empathetic_ack() -> None:
     intents = [e.intent for e in result.speak_effects]
     assert "probe_concern" in intents
     probe = next(e for e in result.speak_effects if e.intent == "probe_concern")
-    # Contract migrated: any member of the concern pool counts (per-call
-    # rotation may open on «Жалобы есть какие?» instead of a «беспокоит» form).
+    # Warm reaction and the pending question now have separate canonical
+    # components. Keep exact bank membership and verify the heard reaction.
     from packages.dialogue_engine import questions as _Q
-    assert probe.text.strip() in _Q._PROBE_QUESTION_VARIANTS["concern"]
+    assert probe.question_text.strip() in _Q._PROBE_QUESTION_VARIANTS["concern"]
+    assert probe.bridge_text.startswith("Мне жаль это слышать.")
+    assert probe.text == f"{probe.bridge_text} {probe.question_text}"
+    assert probe.text.count("?") == 1
 
 
 def test_tebe_ploho_fast_path_negative_wellness() -> None:

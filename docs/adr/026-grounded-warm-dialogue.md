@@ -16,8 +16,10 @@ memory. It must follow an accepted conversational event or grounded fact.
 ## Decision
 
 Keep one reducer/state, one scheduler and one Renderer. Add a bounded optional
-`ResponsePlan.acknowledgement_kind` (`not_recalled` / `resume_mission`), default
-None. No vendor, second planner, new service, migration or runtime flag.
+`ResponsePlan.acknowledgement_kind`, default None. Its accepted meanings are
+`not_recalled`, `resume_mission`, `temporal_answer`, `strong_answer` and
+`tolerable_answer`. `acknowledgement_value` carries an accepted duration quote,
+default empty. No vendor, second planner, new service, migration or runtime flag.
 
 The reducer marks `TurnContext.answer_not_recalled` only after discharging the
 actual pending unknown answer. The scheduler attaches the acknowledgment only
@@ -38,6 +40,18 @@ Replace in place:
 | Polite-refusal predicate lacks “разговаривать” | Existing DECLINE matcher recognizes the wording; controls retain existing precedence |
 | Rich closing control erases a same-turn grounded complaint | Existing atomic_semantic_apply stores evidence before the unchanged close; mission answers/dispositions are suppressed |
 | Positive “неплохо” contains the substring “плохо” | Positive polarity wins; fallback checks word boundaries |
+| Accepted duration/severity is followed by a bare next question | Scheduler matches the current quote to accepted episode values; Renderer acknowledges that meaning |
+| Multiple active complaints receive only a label plus “учла” | Renderer joins grounded complaint clauses; past/other-person symptoms are excluded from present-tense speaker wording |
+| Generic pain question loses its subject after a new symptom | Product copy names the headache; clarification regenerates the same semantic question only when delivered and pending ownership agree |
+| Custom mission repair clears the delivered question | Reducer uses the same repair owner as daily calls, preserving question identity and unanswered goals |
+| Episode handoff praises pain or loses an unfamiliar body label | Renderer names the next grounded topic and retains unfamiliar labels, without inferring pain from a head site alone |
+
+Conversation-continuity extension (2026-10-01, base `0895277`):
+[paired text replay and verification](../live-calls/fs-2baf87ec-conversational.md).
+Two existing whole-speech assertions now verify the reaction and exact question
+components separately, including their canonical composition. Their clinical,
+closing and state assertions remain in place. This is a declared speech change,
+not an action-policy change or live/human acceptance claim.
 
 Existing exact call-level consent controls are preserved. This slice does not
 redefine “не хочу” or introduce an inference of future consent. Explicit urgent

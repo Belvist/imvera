@@ -1,3 +1,71 @@
+# Conversation continuity: warm reaction, named question, honest repair (2026-10-01)
+
+Owner: make the dialogue feel like a real caring conversation. Earlier owner
+authorization persists: deterministic live speech, models propose meaning,
+commit/push m5 only. Base `0895277`; isolated checkout `codex/live-loop-fix`.
+No runtime/SIP/database restart here.
+
+## CHANGED
+
+- Renderer composes multiple active speaker complaints as clauses; past and
+  other-person symptoms do not acquire present-tense speaker claims.
+- Accepted duration/severity gets a bounded reaction. Only the quantity
+  found in accepted episode values may become acknowledgement_value.
+- Headache severity names the subject. Clarification explains the same
+  delivered need; hearing-repeat keeps the delivered wording.
+- Reducer uses one repair owner for daily/custom calls; custom repair no
+  longer clears the delivered question through advancement.
+- Topic handoff names known sites and retains unfamiliar grounded labels.
+  Dizziness is not renamed headache; bare/incomplete helper contracts stay.
+- Positive wellness gets one reaction. Its generic ITS listener prefix is
+  replaced, keeping the actual question. Two existing speech assertions
+  now require exact question components, grounded reaction and canonical
+  composition; their state/closing requirements were retained.
+- 28 new regression cases; warm/continuity tests wired into rich CI target.
+  [Agent guidance and paired outputs](live-calls/fs-2baf87ec-conversational.md),
+  SDK integration guide and ADR-026 updated.
+
+## VERIFIED
+
+Commands use `/workspace/imvera-review-venv/bin/python`, cwd/PYTHONPATH
+`/workspace/imvera-live-review`; no new model stubs/skips/deselections.
+
+| Command / check | Final result |
+| --- | --- |
+| Same final 28 new tests on untouched 0895277 product | 18 failed / 10 passed |
+| `make test-dialogue-rich` | 111 passed |
+| `make test-semantic-kernel` | 294 passed |
+| `python -m pytest tests -q` | 2147 passed / 8 failed / 9 skipped, 108.83s |
+| Same eight failing model cases on baseline 0895277 | Same eight failures; required real artifacts absent |
+| `python scripts/dialogue_corpus_gate.py` | 500/500 PASS |
+| `python scripts/hard1000_gate.py` | 1349/1349 PASS |
+| `python scripts/hard_battery.py` | 16/16 PASS |
+| `python scripts/agent_dialogue_gate.py` | PASS |
+| `python tools/voice_lab/policy_diff_v8_v9.py --stdout-only` | 4 changed / 4 expected / 0 unexplained |
+| `make lint`, `git diff --check` | PASS |
+
+Initial full run exposed incomplete-object compatibility and unknown-site
+handoff regressions; fixed in source. Speech-only expected changes above are
+declared. Final failures are the same missing v2/v3/polarity_v1/xenc_v3 artifacts
+as baseline. Full suite is NOT green. Frozen action-policy manifest unchanged.
+
+## NOT VERIFIED / REMAINING RISKS
+
+Heavy live models, audio, telephony, latency/barge-in and listener warmth.
+No access to the Mac/source recording. Original caller never answered headache
+severity: a warm sentence cannot turn that absence into a clinical value.
+Text replay is evidence of code behavior, not proof of human indistinguishability.
+GitHub results for the published commit are verified separately after push.
+
+## NEXT GATE
+
+Mac agent obtains published m5 SHA, checks real model readiness and repeats
+7000 with original inputs + hearing/meaning repair controls. Save source JSONL
+and audio; verify canonical == TTS == delivered speech, question ownership,
+honest unknown/partial outcome and single farewell. Review warmth by listening.
+
+---
+
 # fs-2baf87ec root fix: grounded binding, temporal ownership, no untyped clinical fills (2026-10-01)
 
 Branch: `feature/voice-zoiper-m5`; base `919dfba` (runtime code `04cf7ba`).
