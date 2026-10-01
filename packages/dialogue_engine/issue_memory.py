@@ -78,6 +78,7 @@ _TEMPORAL_ANCHOR = re.compile(
     r"утр\w*|вчерашн\w*|вчера|позавчерашн\w*|позавчера|позапозавчера|"
     r"позапрошл\w*|сегодня|сейчас|уже|назад|только\s+что|"
     r"понедельн\w*|вторник\w*|сред\w*|четверг\w*|пятниц\w*|суббот\w*|воскресен\w*|"
+    r"вечер\w*|ноч\w*|дн[её]м|"
     r"второй\s+день|третий\s+день|пару\s+дней|несколько|с\s+утра|"
     r"со?\s+вчерашн\w*|уже\s+\w+\s+дн|в\s+четыре|в\s+\d+|"
     r"с\s+десят\w*|с\s+\d+|\bч\b|\bмин\b|\b\d{1,2}:\d{2}\b|"
@@ -156,6 +157,40 @@ def _other_person_clause(clause: str) -> bool:
     return _subject_for_clause(clause, has_issue=False).value == "other_person"
 
 
+_HEDGE_PREFIX = re.compile(
+    r"^(?:я\s+)?не\s+знаю\s*[,.]?\s*"
+    r"|^(?:я\s+)?не\s+помню\s*[,.]?\s*"
+    r"|^где-то\s+|^где\s+то\s+|^наверное\s+|^наверно\s+|^точнее\s+не\s+скажу\s*[,.]?\s*",
+    re.I,
+)
+
+
+# Clock times / day parts (twin of observation_memory._TIME_OF_DAY — kept
+# local: issue_memory cannot import observation_memory at module load).
+_CLOCK_TIME = re.compile(
+    r"\b(вечер\w*|ноч\w*|утр\w*|дн[её]м|"
+    r"\d{1,2}:\d{2}|"
+    r"(в|к)\s+\d+\b|"
+    r"\b\d+\s+час\w*\s+(вечера|утра|дня|ночи)\b)",
+    re.I,
+)
+
+
+def _strip_uncertainty_hedge(text: str) -> str:
+    """Remove leading uncertainty hedges («не знаю, где-то ...»).
+
+    A hedge is not content, but it must not poison content either: «Я не
+    знаю, где-то 12 часов вечера» answers with 12 часов вечера. Bare
+    hedges («Не знаю.») strip to empty and stay unknown downstream.
+    """
+    prev = None
+    cur = (text or "").strip()
+    while prev != cur:
+        prev = cur
+        cur = _HEDGE_PREFIX.sub("", cur).strip()
+    return cur
+
+
 def extract_grounded_onset_value(
     raw_text: str,
     *,
@@ -164,7 +199,7 @@ def extract_grounded_onset_value(
     """Return onset only when a clause contains a grounded temporal anchor."""
     clauses = _original_clause_slices(raw_text) or [raw_text.strip()]
     for clause in clauses:
-        text = clause.strip()
+        text = _strip_uncertainty_hedge(clause.strip())
         if not text:
             continue
         if _clause_excluded(text, exclude_clauses) or _other_person_clause(text):
@@ -172,6 +207,12 @@ def extract_grounded_onset_value(
         n = _norm(text)
         if _UNKNOWN_ATTRIBUTE_ANSWER.search(n):
             continue
+        # Clock/time-of-day answers bypass the quantity guard below: «12
+        # часов вечера» is a time point, never a bare quantity. Any other
+        # temporal anchor («две недели» in «таблетки принимаю две недели»)
+        # keeps the guard — quantities about meds/plans must not become
+        # onset (live loop vs live misfile, both real).
+        _has_clock_time = bool(_CLOCK_TIME.search(n))
         if (
             _TEMPORAL_ANCHOR.search(n)
             or _DURATION_MARKERS.search(n)
@@ -181,13 +222,20 @@ def extract_grounded_onset_value(
             from packages.dialogue_engine.semantic_kernel.types import SpanType
 
             spans = parse_spans(text)
-            if (any(s.type == SpanType.DURATION for s in spans)
+            if (not _has_clock_time
+                    and any(s.type == SpanType.DURATION for s in spans)
                     and not any(s.type == SpanType.ISSUE for s in spans)
                     and not extract_grounded_duration_value(text)):
-                # An explicit quantity about medication/plans is not this
+                # A bare quantity about medication/plans is not this
                 # episode's onset merely because the temporal question is open.
+                # Clock times («12 часов вечера») always pass.
                 continue
             if len(clauses) == 1:
+                # Single clause: keep the raw form byte-stable (the clause
+                # splitter eats trailing periods); return the de-hedged
+                # text only when a hedge was actually removed.
+                if text != clause.strip():
+                    return text.rstrip(",;")
                 return raw_text.strip().rstrip(",;")
             return text.rstrip(",;")
     return None
@@ -204,7 +252,7 @@ def extract_grounded_severity_value(
     tolerance = tolerance_severity_spans(raw_text)
     clauses = _original_clause_slices(raw_text) or [raw_text.strip()]
     for clause in clauses:
-        text = clause.strip()
+        text = _strip_uncertainty_hedge(clause.strip())
         if not text:
             continue
         if _clause_excluded(text, exclude_clauses) or _other_person_clause(text):
@@ -222,6 +270,8 @@ def extract_grounded_severity_value(
             if _SEVERITY_NEGATED.search(n[: match.start()].rstrip(" ,—-")):
                 continue
             if len(clauses) == 1:
+                if text != clause.strip():
+                    return text.rstrip(",;")
                 return raw_text.strip().rstrip(",;")
             start, end = match.span()
             return text[start:end]
@@ -244,6 +294,9 @@ def extract_grounded_duration_value(
     complements = {"это", "оно", "так", "уже", "около", "примерно", "почти", "всего",
                    "вот", "длиться", "продолжаться", "тянуться", "боль"}
     for clause in _original_clause_slices(raw_text):
+        clause = _strip_uncertainty_hedge(clause.strip())
+        if not clause:
+            continue
         if _clause_excluded(clause, exclude_clauses) or _UNKNOWN_ATTRIBUTE_ANSWER.search(clause):
             continue
         for span in parse_spans(clause):

@@ -175,6 +175,7 @@ _SLOT_CLARIFICATIONS: dict[str, str] = {
     "probe_duration": "Как давно это длится — хотя бы примерно?",
     "probe_severity": "Насколько сильная боль — сильная или терпимая?",
     "probe_pain_night": "А ночью было больно или спокойно?",
+    "important_to_share": "Простите, не разобрала — есть ли ещё что-то важное?",
 }
 
 # Re-ask variants: index 0 is always the canonical text above (byte-stable

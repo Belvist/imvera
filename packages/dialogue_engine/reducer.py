@@ -2824,6 +2824,17 @@ def _speak_repair(
     question_text = repair_question_text(state, slot, explain=explanation)
     text = questions.repair_response(question_text, explanation=explanation)
     repair_slot = ctx.slot if ctx and ctx.slot else slot
+    # Never echo the just-spoken question byte-identically (live: ITS
+    # twice in a row after «нормально»): second identical re-ask becomes
+    # a clarification. First verbatim repeat keeps its existing contract.
+    from packages.dialogue_engine.discourse import normalize_signature
+
+    if normalize_signature(text) == (state.last_repair_text or "") and text.strip():
+        _clarify = questions._SLOT_CLARIFICATIONS.get(repair_slot or "") or (
+            f"Простите, не совсем разобрала. {question_text}".strip()
+        )
+        text = questions.repair_response(_clarify, explanation=explanation)
+    state.last_repair_text = normalize_signature(text)
     # Repair re-speaks the pending probe out loud — it counts toward the
     # temporal anti-loop like any other emission (fuzz I3). On the 3rd
     # repeat do NOT re-ask the probe: short bare repair, pending kept.

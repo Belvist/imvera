@@ -710,7 +710,7 @@ def complaint_without_negation(text: str) -> bool:
 
 
 def _probe_duration(state: EngineState, text: str) -> ProbeStep:
-    from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
+    from packages.dialogue_engine.issue_memory import extract_grounded_duration_value
     from packages.dialogue_engine.state import CheckPath
 
     if is_urgent_concern(text) or is_urgent_concern(state.wellness_concern):
@@ -724,7 +724,10 @@ def _probe_duration(state: EngineState, text: str) -> ProbeStep:
     if state.active_episode_id:
         ep = state.issue_episodes.get(state.active_episode_id)
         if ep is not None:
-            duration = extract_grounded_onset_value(text)
+            # Duration slot reads ONLY the duration extractor: a time point
+            # («12 часов вечера») is onset evidence, never a duration value
+            # (live fs-74b8f8ce filed onset as duration in family data).
+            duration = extract_grounded_duration_value(text)
             if duration:
                 ep.known_attributes["duration"] = duration
             return ProbeStep(action=ProbeAction.CONTINUE_LADDER)

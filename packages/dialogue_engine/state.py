@@ -274,6 +274,10 @@ class EngineState(BaseModel):
     # Normalized signature of what Vera just acknowledged — anti-parrot
     # for acks (questions are covered by asked_signatures).
     last_ack_signature: str = ""
+    # Last repair re-ask text (normalized): a repair must never echo the
+    # just-spoken question byte-identically — clarify instead (live: ITS
+    # asked twice in a row after «нормально»).
+    last_repair_text: str = ""
     # Speech ledger: normalized surfaces of everything Vera already said
     # this call (cap 60). Recorded at the single emit funnel for repeat
     # audits and the speech-discipline gate; repair repeats bypass nothing

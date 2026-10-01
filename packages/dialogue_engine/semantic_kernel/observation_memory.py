@@ -54,6 +54,20 @@ def _targets_for_relation(
     return out
 
 
+_TIME_OF_DAY = re.compile(
+    r"\b(вечер\w*|ноч\w*|утр\w*|дн[её]м|"
+    r"\d{1,2}:\d{2}|"
+    r"(в|к)\s+\d+\b|"
+    r"\b\d+\s+час\w*\s+(вечера|утра|дня|ночи)\b)",
+    re.I,
+)
+
+
+def _looks_time_of_day(value: str) -> bool:
+    """Clock times and day parts are onset-typed, never durations."""
+    return bool(_TIME_OF_DAY.search(value or ""))
+
+
 def _temporal_from_spans(
     issue: SemanticSpan,
     onset_spans: list[SemanticSpan],
@@ -296,7 +310,14 @@ def build_reference_observations(
             # (e.g. «там» in meta speech).
             value = extract_grounded_onset_value(raw)
             if value:
-                attr = pending
+                # A clock time / time-of-day answers WHEN, never HOW LONG:
+                # «12 часов вечера» to a duration-worded probe is onset
+                # evidence (live fs-74b8f8ce filed it as duration).
+                attr = (
+                    "onset"
+                    if _looks_time_of_day(value)
+                    else pending
+                )
                 observations.append(
                     Observation(
                         observation_id=_oid(),
@@ -1123,4 +1144,42 @@ def merge_legacy_mentions(
             continue
         merged.append(legacy)
         kernel_keys.add(key)
-    return tuple(merged)
+    return tuple(_drop_carrier_verbs(merged))
+
+
+_CARRIER_VERB_LABEL = re.compile(
+    r"^(беспоко\w*|тревож\w*|муч\w*|волну\w*|жалу\w*)$",
+    re.I,
+)
+
+
+def _drop_carrier_verbs(
+    mentions: list[IssueMention],
+) -> list[IssueMention]:
+    """Drop siteless carrier verbs when a sited same-kind mention exists.
+
+    «Беспокоит меня больше всего головная боль» yields kernel 'Беспокоит'
+    (no site, zero clinical content) + legacy 'головная боль' — one
+    complaint, but two episodes and double questions live. Carrier verbs
+    carry no symptom of their own, so folding is lossless; content verbs
+    («рвёт», «тошнит») and siteless nouns («Мокрота») always survive.
+    """
+    sited_kinds = {
+        (m.kind or "").strip().lower()
+        for m in mentions
+        if (m.body_site or "").strip()
+    }
+    if not sited_kinds:
+        return mentions
+    out: list[IssueMention] = []
+    dropped = False
+    for m in mentions:
+        if (
+            not (m.body_site or "").strip()
+            and (m.kind or "").strip().lower() in sited_kinds
+            and _CARRIER_VERB_LABEL.match((m.label or "").strip())
+        ):
+            dropped = True
+            continue
+        out.append(m)
+    return out if dropped else mentions
