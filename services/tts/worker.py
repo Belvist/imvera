@@ -258,11 +258,15 @@ def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
     MLX fallback stays removed; qwen's fallback is explicit per owner
     order, not a hidden provider."""
     try:
-        from services.tts.qwen_gguf import ping
+        from services.tts.qwen_gguf import ensure_voice_registered, ping, qwen_voice
         from services.tts.warmup import warmup_synthesis
 
         if not ping():
             print("TTS qwen server unreachable — explicit fallback to silero", flush=True)
+            _init_silero_lab(tts_cfg)
+            return
+        if not ensure_voice_registered(qwen_voice(tts_cfg)):
+            print("TTS qwen voice missing — explicit fallback to silero", flush=True)
             _init_silero_lab(tts_cfg)
             return
         state.model_revision = "qwen_gguf:qwen-talker-0.6b-customvoice-Q8_0"

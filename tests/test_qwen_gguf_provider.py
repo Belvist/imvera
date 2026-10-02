@@ -20,8 +20,36 @@ def test_sample_rate_is_24k() -> None:
     assert QWEN_SAMPLE_RATE == 24000
 
 
-def test_voice_default_serena() -> None:
-    assert qwen_gguf.qwen_voice({}) == "serena"
+def test_voice_default_vera_kseniya() -> None:
+    assert qwen_gguf.qwen_voice({}) == "vera_kseniya"
+
+
+def test_ensure_registers_from_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    d = tmp_path / "models"
+    d.mkdir()
+    (d / "vera_kseniya.spk").write_bytes(b"spk")
+    (d / "vera_kseniya.rvq").write_bytes(b"rvq")
+    (d / "vera_kseniya_ref.txt").write_text("Здравствуйте.")
+    monkeypatch.setenv("IMVERA_QWEN_GGUF_DIR", str(d))
+    monkeypatch.setattr(qwen_gguf, "list_voices", lambda *a, **k: [])
+    seen: dict = {}
+
+    class FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_open(req, timeout=None):
+        seen["url"] = req.full_url
+        return FakeResp()
+
+    monkeypatch.setattr(qwen_gguf.urllib.request, "urlopen", fake_open)
+    assert qwen_gguf.ensure_voice_registered() is True
+    assert seen["url"].endswith("/v1/audio/voices")
+
+
+def test_ensure_skips_when_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(qwen_gguf, "list_voices", lambda *a, **k: ["vera_kseniya"])
+    assert qwen_gguf.ensure_voice_registered() is True
 
 
 def test_ping_false_on_dead_port(monkeypatch: pytest.MonkeyPatch) -> None:
