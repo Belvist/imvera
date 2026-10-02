@@ -515,6 +515,17 @@ canonical == TTS == delivered speech, and a single farewell.
 
 ---
 
+# Third network + TCP transport + full restart (2026-10-02)
+
+- Mac on 10.20.4.66 (third network). UDP into Docker broken (no reply
+  even direct to container; TCP 200 OK) — Zoiper moved to TCP transport,
+  registered fresh (new Call-ID, Reachable). FS regen + rescan to .4.66.
+- Owner doubted updates: verified 0/0 sync, then restarted ALL services
+  fresh (STT/TTS x2 + bridge, PIDs seconds old). Bridge 933c52b hot,
+  all workers ready, watch OK. Zoiper reg confirmed post-restart.
+
+---
+
 # Clean restart: no stale processes, all on 04cf7ba (2026-10-01)
 
 - Process audit: no duplicates, no stale code. Bridge 04cf7ba, STT/TTS
