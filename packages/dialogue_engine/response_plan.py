@@ -44,10 +44,19 @@ class ResponsePlan:
         "current_relief",
     ] | None = None
     acknowledgement_value: str = ""
+    # Preserve the previous answer component separately from the planner's
+    # question when this mutable plan is rendered again.
+    _answer_render: tuple[str, str] | None = field(
+        default=None, init=False, repr=False, compare=False,
+    )
 
 
 def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan:
     """Fill speakable text from plan obligations — policy does not hardcode strings."""
+    question = plan.mandatory_question
+    if plan._answer_render and question == plan._answer_render[0]:
+        question = question.removeprefix(plan._answer_render[1]).lstrip()
+    plan._answer_render = None
     if plan.action == "close_urgent":
         plan.mandatory_question = questions._URGENT_CLOSE
         plan.intent = "urgent_close"
@@ -81,17 +90,19 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
         plan.intent = "summary"
         plan.marks_question = False
         return plan
-    question = plan.mandatory_question
-
-    if plan.answer_user_question and plan.mandatory_question:
-        question = f"{plan.answer_user_question.strip()} {plan.mandatory_question.strip()}"
+    if plan.answer_user_question and question:
+        answer = plan.answer_user_question.strip()
+        question = f"{answer} {question.strip()}"
+        plan._answer_render = (question, answer)
         # Keep mission ask intent so Question.goal_id binds correctly.
         if not plan.intent or plan.intent == "answer_user_question":
             plan.intent = "ask_mission_goal" if plan.slot else "answer_user_question"
         plan.marks_question = True
     elif plan.answer_user_question:
         question = plan.answer_user_question
+        plan._answer_render = (question, question)
         plan.intent = plan.intent or "answer_user_question"
+        plan.marks_question = False
     elif plan.question_needs and not question:
         need = plan.question_needs[0]
         question = _question_for_need(state, plan, need)
@@ -116,7 +127,7 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
     parts = [p for p in (ack, question) if p]
     plan.acknowledge = ack
     plan.mandatory_question = question
-    if parts and not hasattr(plan, "_composed"):
+    if parts:
         plan._composed = " ".join(parts)  # type: ignore[attr-defined]
     return plan
 

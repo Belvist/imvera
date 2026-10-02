@@ -53,17 +53,25 @@ def coverage_ladder_enabled() -> bool:
 
 @lru_cache(maxsize=1)
 def git_sha_short() -> str:
+    # Container images carry an explicit source revision and need not ship git
+    # or a .git directory. This is the deployed revision, not a host checkout.
+    configured = os.environ.get("IMVERA_GIT_SHA", "").strip()
+    if configured:
+        return configured
     root = Path(__file__).resolve().parents[2]
-    proc = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=False,
-        cwd=root,
-    )
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=root,
+        )
+    except OSError:
+        return "unknown"
     if proc.returncode == 0 and proc.stdout.strip():
         return proc.stdout.strip()
-    return os.environ.get("IMVERA_GIT_SHA", "unknown")
+    return "unknown"
 
 
 def direct_wellness_opening_enabled() -> bool:

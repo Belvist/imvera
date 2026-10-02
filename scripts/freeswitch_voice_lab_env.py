@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import httpx
+import yaml
 
 from packages.voice_runtime.audio_audit import apply_audio_audit_env
 from packages.voice_runtime.lab_half_duplex import apply_lab_half_duplex_env
@@ -77,7 +78,7 @@ def print_dialogue_engine_lab_truth() -> None:
 
 
 def ensure_silero_opening_cache(env: dict[str, str]) -> bool:
-    """Require Silero Xenia TTS and pre-render opening wellness (warm first phrase)."""
+    """Check selected TTS and prerender only when opening cache is enabled."""
     tts_url = env.get("IMVERA_TTS_URL", "http://127.0.0.1:9102").rstrip("/")
     try:
         response = httpx.get(f"{tts_url}/health/ready", timeout=3.0)
@@ -85,17 +86,25 @@ def ensure_silero_opening_cache(env: dict[str, str]) -> bool:
             print(f"BLOCKED: TTS not ready ({response.status_code})", file=__import__("sys").stderr)
             return False
         tts_rev = str(response.json().get("model_revision", ""))
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, ValueError) as exc:
         print(f"BLOCKED: TTS unreachable: {exc}", file=__import__("sys").stderr)
         return False
-    if "macos_say" in tts_rev or not tts_rev.startswith("silero_lab:silero:"):
+    selected = env.get("IMVERA_TTS_ENGINE", "").strip().lower()
+    if not selected:
+        with (ROOT / "config" / "voice-m5.yaml").open() as f:
+            selected = str(yaml.safe_load(f)["models"]["tts"]["engine"]).strip().lower()
+    prefix = "silero_lab:silero:" if selected == "silero_lab" else f"{selected}:"
+    if "macos_say" in tts_rev or not tts_rev.startswith(prefix):
         print(
-            f"BLOCKED: TTS must be silero_lab (Silero), got {tts_rev!r}",
+            f"BLOCKED: TTS must match selected engine {selected!r}, got {tts_rev!r}",
             file=__import__("sys").stderr,
         )
         return False
     env["IMVERA_TTS_MODEL_REVISION"] = tts_rev
     print(f"  TTS revision: {tts_rev}")
+    if env.get("IMVERA_OPENING_CACHE", "0").strip().lower() not in {"1", "true", "yes"}:
+        print("  Opening cache disabled — using selected live TTS")
+        return True
 
     cache_dir = ROOT / ".run" / "cache"
     if cache_dir.is_dir():

@@ -5,6 +5,8 @@ services:
     build:
       context: ../..
       dockerfile: infra/freeswitch/Dockerfile.bridge
+      args:
+        IMVERA_GIT_SHA: ${IMVERA_GIT_SHA:-unknown}
     container_name: imvera-media-bridge
     ports:
       - "127.0.0.1:9210:9210"

@@ -151,8 +151,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install CPU inference runtime
+        # The full suite exercises real neural-ranker code. Avoid downloading
+        # CUDA libraries on the CPU-only runner and use the tested version.
+        run: pip install "torch==2.14.1" --index-url https://download.pytorch.org/whl/cpu
       - name: Install dependencies
-        run: pip install -e ".[dev,test]"
+        run: pip install -e ".[dev,test,semantic-nlp]"
 
       - name: Apply migrations
         run: make migrate

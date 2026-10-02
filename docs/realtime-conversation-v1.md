@@ -47,11 +47,11 @@ bargein_detected идёт до stop, пользовательская фаза �
 
 | Файл | Before SHA256 | After SHA256 |
 | --- | --- | --- |
-| packages/voice_runtime/call_actor.py | `148eb06ecd21d33984d373ec16589a9948b58fe430fce2f72e139bde5ca6899f` | `36afda694eb70ef035b7b64fff231b80d3ee4298655f5c05f6792471aa42f64f` |
+| packages/voice_runtime/call_actor.py | `148eb06ecd21d33984d373ec16589a9948b58fe430fce2f72e139bde5ca6899f` | `d068de728b5d6df032cb7d3a765697f6c12af08c48c5bfb7a9443d7437b7b63e` |
 | packages/voice_runtime/utterance_builder.py | `005aa8068f1941fd1395a811ba3da8b7448dbf75900b64bb805acd4c6ae5d1d1` | `74a9ff8a9314fba8f14dc701d3f5edd24d01659a1967ccb97d4cfeed9f228fec` |
 | packages/voice_runtime/vad.py | `c84e1d940a2c13ca8031abb0ff2964b510c321557b7fff6970821ebf25f0feb1` | `a080743939f4675a57b968c4bb2b7d1e380a2471011d34bdaeaba28dd204e05d` |
 | packages/voice_runtime/silero_vad.py | `f3dc7a420f6e37aeed2d963da2b8862601c24aa8bec0d1377925de68e91707f8` | `36a0038f54f188579aa59e0026f3426fe2c6adf507bf1bc93b53b007e1a00164` |
-| services/stt/http_provider.py | `a2547a9c0ff10e4f680b975f2975d6d4ed3dc526809440d303e132401060e762` | `afaee571e0e43665965852dcfa44ea3c1d68ac45a13565259c5c505131eaf0b2` |
+| services/stt/http_provider.py | `a2547a9c0ff10e4f680b975f2975d6d4ed3dc526809440d303e132401060e762` | `d5c090c6ac4a45ee4957bcb0f3cfa14af043e0062e79cfe917167aefa8b9216b` |
 | tools/voice_lab/latency_histogram.py | `c39ca7875e6bda57c221b555064785f5380a0a5e6c0be05e2a36ffc9e83c8510` | `a45fc1d46a30d512536fb6d95eec304fcaa47063332afb4a60b436128bf54a14` |
 
 Повтор:

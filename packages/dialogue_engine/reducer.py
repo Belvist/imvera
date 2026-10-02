@@ -1005,6 +1005,7 @@ def _apply_rich_turn(
         state, "risk_episode_id", None
     ):
         if _is_explicit_farewell(user_text):
+            _preserve_closing_evidence(state, turn)
             state.processing_turn_id = None
             state.processing_effect_id = None
             return _emit_goodbye_final(state)
@@ -1017,6 +1018,8 @@ def _apply_rich_turn(
         semantic_bridge = _rich_to_semantic(turn)
         closing = _handle_closing_turn(state, semantic_bridge)
         if closing is not None:
+            if turn.control in {"stop_call", "defer", "revoke_consent"}:
+                _preserve_closing_evidence(closing[0], turn)
             state.processing_turn_id = None
             state.processing_effect_id = None
             return closing
@@ -1389,6 +1392,58 @@ def _rich_to_semantic(turn: RichUserTurn):
     )
 
 
+def _preserve_closing_evidence(state: EngineState, turn: RichUserTurn) -> None:
+    """Retain evidence at close, without accepting any mission answer.
+
+    Control/farewell recognition and speech remain with their existing owners.
+    A bounded addressed refusal observation describes this call only; it does
+    not revoke permission for future calls.
+    """
+    if turn.issue_mentions:
+        from packages.dialogue_engine.issue_memory import filter_rich_turn_mentions
+
+        evidence_turn = filter_rich_turn_mentions(state, turn).model_copy(update={
+            "goal_answers": (), "goal_dispositions": (), "goal_facts": (),
+        })
+        atomic_semantic_apply(state, evidence_turn)
+
+    if turn.control != "stop_call":
+        return
+    from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
+    from packages.dialogue_engine.semantic_kernel.controls import match_level0
+    from packages.dialogue_engine.semantic_kernel.types import Observation
+
+    accepted = match_level0(turn.raw_text)
+    if accepted is None or accepted.control != "stop_call":
+        return
+    # The frozen matcher also accepts ordinary farewells and command-prefix
+    # near-matches. Only a closed, speaker-addressed negative imperative is
+    # evidence of refusal, never a third-party object or reported history.
+    _, end, clause = clause_bounds(turn.raw_text)[0]
+    if re.fullmatch(
+        r"(?:больше\s+)?не\s+(?:звоните|надо\s+звонить|беспокойте|беспокоить)"
+        r"(?:\s+(?:мне|меня|больше|пожалуйста|сейчас|сегодня|впредь|никогда))*",
+        clause,
+        re.IGNORECASE,
+    ) is None:
+        return
+    if re.match(
+        r"[\s,;.—–:\-]*\b(?:так\s+)?(?:сказал\w*|говорил\w*|писал\w*|просил\w*|говорят)\b",
+        turn.raw_text[end:],
+        re.IGNORECASE,
+    ):
+        return
+    state.observations["call_refusal"] = Observation(
+        observation_id=f"call-refusal-{turn.utterance_id}",
+        attribute="call_refusal",
+        value=turn.raw_text,
+        normalized_value="stop_call",
+        source_turn_id=turn.utterance_id,
+        evidence=turn.raw_text,
+        status="confirmed",
+    )
+
+
 def _apply_rich_control(
     state: EngineState,
     turn: RichUserTurn,
@@ -1397,16 +1452,11 @@ def _apply_rich_control(
     if control in ("none", ""):
         return None
 
-    if control in {"stop_call", "defer", "revoke_consent"} and turn.issue_mentions:
+    if control in {"stop_call", "defer", "revoke_consent"}:
         # Ending the conversation does not erase a complaint in that same
         # turn. Preserve grounded observations through their existing owner,
         # without answering mission goals or asking another question.
-        from packages.dialogue_engine.issue_memory import filter_rich_turn_mentions
-
-        evidence_turn = filter_rich_turn_mentions(state, turn).model_copy(update={
-            "goal_answers": (), "goal_dispositions": (), "goal_facts": (),
-        })
-        atomic_semantic_apply(state, evidence_turn)
+        _preserve_closing_evidence(state, turn)
 
     state.processing_turn_id = None
     state.processing_effect_id = None

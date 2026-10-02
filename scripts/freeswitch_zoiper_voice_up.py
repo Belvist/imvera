@@ -88,6 +88,8 @@ def _wait_http(url: str, name: str, timeout_s: float = 120.0) -> bool:
 
 def _ensure_mlx_workers() -> int:
     """Product CallActor needs STT + TTS only — LLM worker is optional."""
+    from scripts.models_up import _tts_matches_lab_fast
+
     if is_running("stt") and is_running("tts"):
         for port in (9101, 9102):
             try:
@@ -97,8 +99,9 @@ def _ensure_mlx_workers() -> int:
             except httpx.HTTPError:
                 break
         else:
-            print("MLX workers already running (stt+tts; llm not required)")
-            return 0
+            if _tts_matches_lab_fast(9102):
+                print("Selected workers already running (stt+tts; llm not required)")
+                return 0
     print("Starting STT+TTS workers (LLM not required for product CallActor)...")
     env = os.environ.copy()
     env["IMVERA_MODELS_WORKERS"] = "stt,tts"

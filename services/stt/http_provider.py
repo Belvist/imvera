@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 import uuid
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from packages.contracts.enums import AsrQuality
 from packages.contracts.providers import (
@@ -22,8 +24,6 @@ from packages.contracts.providers import (
     ProviderUnavailable,
 )
 from packages.contracts.stt import (
-    AudioQualityHints,
-    CriticalTermMatch,
     STTCapabilities,
     STTPartial,
     STTResult,
@@ -43,6 +43,8 @@ class HttpSTTProvider:
     ) -> None:
         self._base_url = base_url
         self._pool = ReplicaPool(split_urls(base_url))
+        if not math.isfinite(timeout_s) or timeout_s <= 0:
+            raise ValueError("STT timeout_s must be finite and positive")
         self._timeout_s = timeout_s
         self._client = client
         self._prefix_previews = prefix_previews
@@ -56,15 +58,21 @@ class HttpSTTProvider:
             async with httpx.AsyncClient(timeout=2.0) as client:
                 response = await client.get(f"{url}/v1/capabilities")
         response.raise_for_status()
-        return STTCapabilities.model_validate(response.json())
+        try:
+            return STTCapabilities.model_validate(_response_object(response))
+        except ValidationError as exc:
+            raise ProviderInvalidOutput("Invalid STT capabilities") from exc
 
     async def _post_with_client(
         self, client: httpx.AsyncClient, url: str, path: str,
         body: dict[str, Any], timeout: float,
     ) -> httpx.Response:
         try:
-            return await client.post(f"{url}{path}", json=body, timeout=timeout)
-        except (asyncio.CancelledError, httpx.TimeoutException):
+            # httpx bounds individual network phases, not the complete request.
+            # A slowly trickling worker must not exceed the actor's turn budget.
+            async with asyncio.timeout(timeout):
+                return await client.post(f"{url}{path}", json=body, timeout=timeout)
+        except (asyncio.CancelledError, httpx.TimeoutException, TimeoutError) as exc:
             # Best effort only. Running PyTorch may finish, but its result is
             # invalidated on both ends; the actor never waits here to endpoint.
             try:
@@ -75,6 +83,8 @@ class HttpSTTProvider:
                 )
             except (httpx.HTTPError, TimeoutError):
                 _log.warning("STT cancel acknowledgement unavailable call_id=%s", body["call_id"])
+            if isinstance(exc, TimeoutError):
+                raise httpx.ReadTimeout("STT request budget exceeded") from exc
             raise
 
     async def _post(
@@ -114,13 +124,17 @@ class HttpSTTProvider:
             raise ProviderCancelled("STT preview cancelled")
         if response.status_code >= 400:
             raise ProviderUnavailable(f"STT preview HTTP {response.status_code}")
-        data = response.json()
+        data = _response_object(response)
         if (data.get("request_id") != body["request_id"]
                 or data.get("partial_id") != partial_id
                 or data.get("is_final") is not False
                 or data.get("partial_mode") != "prefix_batch"):
             raise ProviderInvalidOutput("STT preview identity/mode/finality mismatch")
-        return STTPartial.model_validate(data)
+        _validate_transcript_fields(data)
+        try:
+            return STTPartial.model_validate(data)
+        except ValidationError as exc:
+            raise ProviderInvalidOutput("Invalid STT preview schema") from exc
 
     async def transcribe_final(
         self,
@@ -132,6 +146,8 @@ class HttpSTTProvider:
         deadline: float,
         utterance_id: str = "",
     ) -> STTResult:
+        if not math.isfinite(deadline):
+            raise ProviderTimeout("STT deadline must be finite")
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise ProviderTimeout("STT deadline exceeded before request")
@@ -167,42 +183,80 @@ class HttpSTTProvider:
                 )
                 _log.warning("STT failover call_id=%s: %s", call_id, last_error)
                 continue
+            if response.status_code == 499:
+                raise ProviderCancelled("STT final cancelled")
             if response.status_code >= 400:
                 raise ProviderUnavailable(
                     f"STT HTTP {response.status_code}: {response.text[:200]}"
                 )
             break
         else:
+            if time.monotonic() >= deadline:
+                raise ProviderTimeout("STT deadline exceeded") from last_error
             raise last_error or ProviderUnavailable("STT: all replicas failed")
-        data: dict[str, Any] = response.json()
+        data = _response_object(response)
         if data.get("is_final", True) is not True:
             raise ProviderInvalidOutput("STT final endpoint returned a non-final result")
         if data.get("request_id", body["request_id"]) != body["request_id"]:
             raise ProviderInvalidOutput("STT final request identity mismatch")
-        quality = _map_quality(data.get("asr_quality", "GOOD"))
-        critical_raw = data.get("critical_terms") or []
-        critical_terms = [
-            CriticalTermMatch(
-                term=str(item.get("term", "")),
-                matched=bool(item.get("matched", False)),
-                logprob=item.get("logprob"),
-            )
-            for item in critical_raw
-            if isinstance(item, dict)
-        ]
-        return STTResult(
-            text=str(data.get("text", "")),
-            raw_text=str(data.get("raw_text") or data.get("text", "")),
-            duration_ms=int(data.get("duration_ms") or 0) or None,
-            model_revision=str(data.get("model_revision") or "") or None,
-            asr_quality=quality,
-            avg_logprob=data.get("avg_logprob"),
-            no_speech_prob=data.get("no_speech_prob"),
-            critical_terms=critical_terms,
-            audio_quality=AudioQualityHints(
-                rms=float(data.get("pcm_rms") or 0) or None,
-            ),
-        )
+        _validate_transcript_fields(data)
+        # Old worker responses may omit quality. Missing evidence is unusable,
+        # never an invented GOOD signal for the post-STT decision gate.
+        quality = _map_quality(data.get("asr_quality", "UNUSABLE"))
+        try:
+            return STTResult.model_validate({
+                **data,
+                "raw_text": data.get("raw_text") or data["text"],
+                "asr_quality": quality,
+                "audio_quality": {"rms": data.get("pcm_rms")},
+            })
+        except ValidationError as exc:
+            raise ProviderInvalidOutput("Invalid STT final schema") from exc
+
+
+def _response_object(response: httpx.Response) -> dict[str, Any]:
+    try:
+        data = response.json()
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ProviderInvalidOutput("STT response is not valid JSON") from exc
+    if not isinstance(data, dict):
+        raise ProviderInvalidOutput("STT response must be a JSON object")
+    return data
+
+
+def _validate_transcript_fields(data: dict[str, Any]) -> None:
+    if not isinstance(data.get("text"), str) or len(data["text"]) > 16000:
+        raise ProviderInvalidOutput("STT text must be a bounded string")
+    if data.get("raw_text") is not None and (
+        not isinstance(data["raw_text"], str) or len(data["raw_text"]) > 16000
+    ):
+        raise ProviderInvalidOutput("STT raw_text must be a bounded string")
+    for field in ("duration_ms", "pcm_rms", "avg_logprob", "no_speech_prob"):
+        value = data.get(field)
+        if value is None:
+            continue
+        if (isinstance(value, bool) or not isinstance(value, (float, int))
+                or not math.isfinite(value)):
+            raise ProviderInvalidOutput(f"STT {field} must be a finite number")
+        if field in {"duration_ms", "pcm_rms", "no_speech_prob"} and value < 0:
+            raise ProviderInvalidOutput(f"STT {field} must be nonnegative")
+        if field == "no_speech_prob" and value > 1:
+            raise ProviderInvalidOutput("STT no_speech_prob exceeds one")
+    critical_terms = data.get("critical_terms", [])
+    if isinstance(critical_terms, list):
+        for item in critical_terms:
+            value = item.get("logprob") if isinstance(item, dict) else None
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (float, int))
+                or not math.isfinite(value)
+            ):
+                raise ProviderInvalidOutput("STT critical logprob must be a finite number")
+    word_probs = data.get("word_probs", [])
+    if isinstance(word_probs, list):
+        for value in word_probs:
+            if (isinstance(value, bool) or not isinstance(value, (float, int))
+                    or not math.isfinite(value) or not 0 <= value <= 1):
+                raise ProviderInvalidOutput("STT word probability must be between zero and one")
 
 
 def _b64(data: bytes) -> str:
@@ -212,9 +266,13 @@ def _b64(data: bytes) -> str:
 
 
 def _map_quality(raw: str) -> AsrQuality:
+    if not isinstance(raw, str):
+        raise ProviderInvalidOutput("STT asr_quality must be a string")
     upper = raw.upper()
     if upper == "LOW":
         return AsrQuality.LOW
     if upper == "UNUSABLE":
         return AsrQuality.UNUSABLE
-    return AsrQuality.GOOD
+    if upper == "GOOD":
+        return AsrQuality.GOOD
+    raise ProviderInvalidOutput("Unknown STT asr_quality")

@@ -9,6 +9,7 @@ import os
 import sys
 
 import httpx
+import yaml
 
 from packages.dialogue.planner import Planner
 from packages.dialogue.state import DialogueState
@@ -40,8 +41,16 @@ def main() -> int:
     except httpx.HTTPError as exc:
         print(f"BLOCKED: TTS unreachable: {exc}", file=sys.stderr)
         return 1
-    if "macos_say" in engine or not engine.startswith("silero_lab:silero:"):
-        print(f"BLOCKED: TTS is not Silero Xenia ({engine!r})", file=sys.stderr)
+    selected = os.environ.get("IMVERA_TTS_ENGINE", "").strip().lower()
+    if not selected:
+        with open(os.path.join(ROOT, "config", "voice-m5.yaml")) as cfg_file:
+            selected = str(yaml.safe_load(cfg_file)["models"]["tts"]["engine"]).strip().lower()
+    prefix = "silero_lab:silero:" if selected == "silero_lab" else f"{selected}:"
+    if "macos_say" in engine or not engine.startswith(prefix):
+        print(
+            f"BLOCKED: TTS revision {engine!r} does not match selected engine {selected!r}",
+            file=sys.stderr,
+        )
         return 1
     os.environ["IMVERA_TTS_MODEL_REVISION"] = engine
 

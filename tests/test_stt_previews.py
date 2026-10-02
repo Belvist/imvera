@@ -20,7 +20,12 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
-from packages.contracts.providers import ProviderInvalidOutput, ProviderUnavailable
+from packages.contracts.providers import (
+    ProviderCancelled,
+    ProviderInvalidOutput,
+    ProviderTimeout,
+    ProviderUnavailable,
+)
 from packages.contracts.runtime import RuntimeEventType
 from packages.contracts.stt import STTPartial, STTResult
 from packages.core.memory_store import InMemoryCallRecordStore
@@ -60,6 +65,8 @@ def stt_worker(monkeypatch):
     monkeypatch.setattr(worker.state, "ready", True)
     monkeypatch.setattr(worker.state, "model_revision", "fixture:gigaam")
     monkeypatch.setattr(worker.state, "cancelled_requests", set())
+    monkeypatch.setattr(worker, "_active_requests", {})
+    monkeypatch.setattr(worker, "_cancelled_request_expiry", {})
     monkeypatch.setattr(worker, "_asr", backend)
     monkeypatch.setattr(worker, "_load_config", lambda: {"models": {"asr": {"engine": "gigaam"}}})
     monkeypatch.setenv("IMVERA_STT_PREVIEW", "1")
@@ -234,6 +241,129 @@ def test_stt_health_reports_real_executor_load(stt_worker):
     asyncio.run(scenario())
 
 
+def test_cancel_tombstones_are_bounded_expire_and_do_not_leak_after_early_cancel(stt_worker,
+                                                                             monkeypatch):
+    clock = [time.monotonic()]
+    monkeypatch.setattr(worker, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    for index in range(worker._MAX_CANCEL_TOMBSTONES + 17):
+        worker.cancel({"request_id": f"orphan-{index}"})
+    assert len(worker.state.cancelled_requests) == worker._MAX_CANCEL_TOMBSTONES
+    assert len(worker._cancelled_request_expiry) == worker._MAX_CANCEL_TOMBSTONES
+    assert "orphan-0" not in worker.state.cancelled_requests
+    worker.cancel({"request_id": "early"})
+
+    async def scenario():
+        with pytest.raises(HTTPException) as error:
+            await worker.transcribe(request(rid="early"))
+        assert error.value.status_code == 499
+        assert "early" not in worker.state.cancelled_requests
+        assert "early" not in worker._cancelled_request_expiry
+        assert not worker._active_requests
+        assert not stt_worker[0].inputs
+        clock[0] += worker._CANCEL_TTL_S + 1
+        # The old pre-request cancellation must no longer suppress new work.
+        await worker.transcribe(request(rid="orphan-20"))
+        assert len(stt_worker[0].inputs) == 1
+        assert not worker.state.cancelled_requests
+        assert not worker._cancelled_request_expiry
+        assert not worker._active_requests
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("request_id", [None, "", [], {}, 1, "x" * 161])
+def test_cancel_rejects_invalid_identity_without_corrupting_registry(stt_worker, request_id):
+    with pytest.raises(HTTPException) as error:
+        worker.cancel({"request_id": request_id})
+    assert error.value.status_code == 422
+    assert not worker.state.cancelled_requests
+    assert not worker._cancelled_request_expiry
+
+
+def test_duplicate_active_request_is_rejected_without_double_inference(stt_worker):
+    async def scenario():
+        gate = threading.Event()
+        stt_worker[1].submit(lambda: gate.wait(3))
+        first = asyncio.create_task(worker.transcribe(request()))
+        try:
+            await wait_until(lambda: stt_worker[1].queue_depth == 2)
+            with pytest.raises(HTTPException) as error:
+                await worker.transcribe(request())
+            assert error.value.status_code == 409
+            assert stt_worker[1].queue_depth == 2
+            gate.set()
+            await first
+            assert len(stt_worker[0].inputs) == 1
+            assert not worker._active_requests
+        finally:
+            gate.set()
+            await asyncio.gather(first, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+def test_running_model_deadline_returns_before_model_finishes_and_preserves_wav(stt_worker,
+                                                                             monkeypatch):
+    entered, release = threading.Event(), threading.Event()
+    paths = []
+
+    def slow(path):
+        paths.append(Path(path))
+        entered.set()
+        assert release.wait(3)
+        assert Path(path).exists()
+        return "не болит"
+
+    monkeypatch.setattr(stt_worker[0], "transcribe_wav", slow)
+
+    async def scenario():
+        task = asyncio.create_task(worker.transcribe(request(timeout_s=0.08)))
+        try:
+            await wait_until(entered.is_set)
+            with pytest.raises(HTTPException) as error:
+                await asyncio.wait_for(task, timeout=0.5)
+            assert error.value.status_code == 503
+            assert not release.is_set() and paths[0].exists()
+            assert stt_worker[1].queue_depth == 1
+            assert not worker._active_requests
+            release.set()
+            await wait_until(lambda: stt_worker[1].queue_depth == 0)
+            assert not paths[0].exists()
+        finally:
+            release.set()
+            await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+def test_queue_rejection_releases_request_identity_without_opening_wav(stt_worker):
+    async def scenario():
+        gate = threading.Event()
+        for _ in range(4):
+            stt_worker[1].submit(lambda: gate.wait(3))
+        try:
+            with pytest.raises(HTTPException) as error:
+                await worker.transcribe(request())
+            assert error.value.status_code == 429
+            assert not worker._active_requests
+            assert not stt_worker[0].paths
+        finally:
+            gate.set()
+
+    asyncio.run(scenario())
+
+
+def test_final_pcm_size_is_bounded_before_model_admission(stt_worker):
+    async def scenario():
+        with pytest.raises(HTTPException) as error:
+            await worker.transcribe(request(pcm=PCM_FRAME * 3001))
+        assert error.value.status_code == 413
+        assert not stt_worker[0].paths
+        assert not worker._active_requests
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("bad", ["final", "identity", "mode"])
 def test_provider_quarantines_misaddressed_or_final_preview(bad):
     async def scenario():
@@ -323,6 +453,143 @@ def test_final_provider_rejects_nonfinal_result():
             with pytest.raises(ProviderInvalidOutput, match="non-final"):
                 await provider.transcribe_final(PCM_FRAME, 16000, call_id="call",
                                                  turn_id=1, deadline=time.monotonic() + 1)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("bad", [
+    {"text": None}, {"text": {"consent": "yes"}}, {"raw_text": ["да"]},
+    {"asr_quality": "UNKNOWN"}, {"asr_quality": None}, {"pcm_rms": "loud"},
+    {"pcm_rms": float("nan")}, {"duration_ms": -1}, {"no_speech_prob": 1.1},
+    {"critical_terms": "боль"},
+    {"critical_terms": [{"term": "боль", "matched": True, "logprob": "broken"}]},
+    {"critical_terms": [{"term": "боль", "matched": True, "logprob": float("nan")}]},
+    {"word_probs": [float("nan")]}, {"word_probs": [1.1]},
+])
+def test_final_provider_quarantines_malformed_fields_without_fabricating_text_or_quality(bad):
+    async def scenario():
+        def respond(req):
+            body = json.loads(req.content)
+            data = {"text": "Да.", "asr_quality": "GOOD", "is_final": True,
+                    "request_id": body["request_id"], **bad}
+            return httpx.Response(200, content=json.dumps(data).encode())
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            with pytest.raises(ProviderInvalidOutput):
+                await HttpSTTProvider("http://stt", client=client).transcribe_final(
+                    PCM_FRAME, 16000, call_id="call", turn_id=1,
+                    deadline=time.monotonic() + 1)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("kind", ["preview", "final"])
+@pytest.mark.parametrize("content", [b"not-json", b"[]", b"null"])
+def test_provider_maps_invalid_json_response_to_contract_error(kind, content):
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+                lambda req: httpx.Response(200, content=content))) as client:
+            provider = HttpSTTProvider("http://stt", client=client, prefix_previews=True)
+            with pytest.raises(ProviderInvalidOutput):
+                if kind == "preview":
+                    await provider.transcribe_partial(PCM_FRAME * 50, 16000,
+                                                      call_id="call", partial_id="p")
+                else:
+                    await provider.transcribe_final(PCM_FRAME, 16000, call_id="call",
+                                                    turn_id=1, deadline=time.monotonic() + 1)
+
+    asyncio.run(scenario())
+
+
+def test_provider_preserves_zero_rms_and_low_quality():
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+                lambda req: httpx.Response(200, json={"text": "", "asr_quality": "LOW",
+                                                     "pcm_rms": 0, "duration_ms": 20})
+        )) as client:
+            result = await HttpSTTProvider("http://stt", client=client).transcribe_final(
+                PCM_FRAME, 16000, call_id="call", turn_id=1, deadline=time.monotonic() + 1)
+        assert result.audio_quality.rms == 0
+        assert result.asr_quality.value == "LOW"
+
+    asyncio.run(scenario())
+
+
+def test_missing_final_quality_is_unusable_instead_of_fabricated_good():
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+                lambda req: httpx.Response(200, json={"text": "Да."}))) as client:
+            result = await HttpSTTProvider("http://stt", client=client).transcribe_final(
+                PCM_FRAME, 16000, call_id="call", turn_id=1, deadline=time.monotonic() + 1)
+        assert result.asr_quality.value == "UNUSABLE"
+
+    asyncio.run(scenario())
+
+
+def test_final_cancelled_response_is_not_retried_as_unavailable():
+    async def scenario():
+        urls = []
+
+        def respond(req):
+            urls.append(str(req.url))
+            return httpx.Response(499)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            with pytest.raises(ProviderCancelled):
+                await HttpSTTProvider("http://one,http://two", client=client).transcribe_final(
+                    PCM_FRAME, 16000, call_id="call", turn_id=1,
+                    deadline=time.monotonic() + 1)
+        assert urls == ["http://one/v1/transcribe"]
+
+    asyncio.run(scenario())
+
+
+def test_provider_total_budget_cancels_slow_request_on_exact_replica_before_failover():
+    async def scenario():
+        requests = []
+
+        async def respond(req):
+            requests.append((str(req.url), json.loads(req.content)))
+            if req.url.path == "/v1/cancel":
+                return httpx.Response(200, json={"status": "accepted"})
+            # MockTransport deliberately does not enforce httpx phase timeouts.
+            # The adapter must enforce its whole-request deadline itself.
+            await asyncio.sleep(0.5)
+            return httpx.Response(200, json={"text": "Да.", "asr_quality": "GOOD"})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            started = time.monotonic()
+            with pytest.raises(ProviderTimeout):
+                await HttpSTTProvider("http://one,http://two", client=client).transcribe_final(
+                    PCM_FRAME, 16000, call_id="call", turn_id=1, deadline=started + 0.05)
+            assert time.monotonic() - started < 0.4
+        assert [url for url, _ in requests] == ["http://one/v1/transcribe", "http://one/v1/cancel"]
+        assert requests[0][1]["request_id"] == requests[1][1]["request_id"]
+
+    asyncio.run(scenario())
+
+
+def test_timeout_failover_uses_fresh_identity_and_cancels_only_failed_replica():
+    async def scenario():
+        requests = []
+
+        async def respond(req):
+            body = json.loads(req.content)
+            requests.append((str(req.url), body["request_id"]))
+            if req.url.path == "/v1/cancel":
+                return httpx.Response(200, json={"status": "accepted"})
+            if req.url.host == "one":
+                raise httpx.ReadTimeout("failed replica", request=req)
+            return httpx.Response(200, json={"text": "Нет.", "asr_quality": "GOOD",
+                                             "request_id": body["request_id"], "is_final": True})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            result = await HttpSTTProvider("http://one,http://two", client=client).transcribe_final(
+                PCM_FRAME, 16000, call_id="call", turn_id=1, deadline=time.monotonic() + 1)
+        assert result.text == "Нет."
+        assert [url for url, _ in requests] == ["http://one/v1/transcribe", "http://one/v1/cancel",
+                                               "http://two/v1/transcribe"]
+        assert requests[0][1] == requests[1][1] != requests[2][1]
 
     asyncio.run(scenario())
 

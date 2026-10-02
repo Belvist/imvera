@@ -2,6 +2,18 @@
 
 ## Unreleased — 2026-10-01
 
+- Preserve peer m5 onset/hedge/repair/dedup updates; prevent medication or plan clocks from filling symptom onset and keep clock time distinct from elapsed duration.
+- Preserve genuine elapsed duration beside clock evidence; add 17 temporal ownership cases and the peer's seven live-call regressions to the rich CI gate.
+
+- Drain call-owned tasks, enforce configured STT/TTS deadlines, reject stale generation failures and fence SDK mutations against disconnect.
+- Recover inference admission after queued cancellation/submission failure without a second blocked thread pool.
+- Bound STT cancellation IDs, PCM/request lifetime and total HTTP budget; reject malformed output instead of fabricating text or GOOD quality.
+- Retain complaints and addressed current-call refusal quotes at closing, preserving safety/consent controls and Core verdict ownership.
+- Make grounded ResponsePlan answer composition idempotent.
+- Remove failure-driven TTS engine swaps; verify configured readiness and real CallActor product path.
+- Install semantic/runtime dependencies in CI/images, carry explicit image revision and support boot without git; exclude runtime artifacts/secrets from build context.
+- Add production regression gates and M5 startup/failure/rollback handoff. Actual model artifacts, SIP audio, capacity and live acceptance remain pending.
+
 - Wire opt-in bounded STT prefix previews through the existing worker/provider/CallActor; advertise revisable prefix_batch, not native streaming.
 - Keep previews observational, discard late output, require authoritative final and skip busy checkpoints without replica retry.
 - Fix queued cancellation/deadline checks and WAV lifetime on HTTP cancellation; address provider cancellation and report real STT queue load.
