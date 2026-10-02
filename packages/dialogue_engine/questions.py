@@ -455,6 +455,22 @@ def thread_followup(hook: str) -> str:
     return f"Вы говорили: «{hook}». Я вас слушаю. Хотите рассказать чуть подробнее?"
 
 
+def thread_continuation() -> str:
+    return "Как вам сейчас, когда вы об этом рассказываете?"
+
+
+def thread_listener_ack() -> str:
+    return "Слушаю вас."
+
+
+def thread_return_ack() -> str:
+    return "Спасибо, что поделились."
+
+
+def thread_wellness_return() -> str:
+    return "А как ваше самочувствие сегодня?"
+
+
 def _complaint_clause(label: str) -> str:
     """Grammar projection of a grounded label; never infer another symptom."""
     normalized = label.strip().lower().rstrip(".!?")

@@ -150,6 +150,12 @@ def _produce_mlx_chunks(
         out_q.put(None)
 
 
+class _QwenStreamFailure(RuntimeError):
+    def __init__(self, reason: str, emitted_chunks: int) -> None:
+        super().__init__(f"Qwen stream failed after {emitted_chunks} PCM chunks: {reason}")
+        self.emitted_chunks = emitted_chunks
+
+
 def _produce_qwen_chunks(
     req: SynthesizeRequest, out_q: queue.Queue, tts_cfg: dict[str, Any]
 ) -> int:
@@ -158,24 +164,27 @@ def _produce_qwen_chunks(
     from services.tts.qwen_gguf import QWEN_SAMPLE_RATE, synthesize_stream
 
     seq = 0
-    for pcm in synthesize_stream(
-        req.text,
-        voice=req.voice,
-        lang=req.language or "Russian",
-        cfg=tts_cfg,
-    ):
-        if req.generation_id in _cancelled:
-            break
-        for chunk_pcm, sr in _chunk_pcm(pcm, QWEN_SAMPLE_RATE):
-            out_q.put(
-                {
-                    "sequence": seq,
-                    "sample_rate": sr,
-                    "pcm_b64": base64.b64encode(chunk_pcm).decode("ascii"),
-                    "is_last": False,
-                }
-            )
-            seq += 1
+    try:
+        for pcm in synthesize_stream(
+            req.text,
+            voice=req.voice,
+            lang=req.language or "Russian",
+            cfg=tts_cfg,
+        ):
+            if req.generation_id in _cancelled:
+                break
+            for chunk_pcm, sr in _chunk_pcm(pcm, QWEN_SAMPLE_RATE):
+                out_q.put(
+                    {
+                        "sequence": seq,
+                        "sample_rate": sr,
+                        "pcm_b64": base64.b64encode(chunk_pcm).decode("ascii"),
+                        "is_last": False,
+                    }
+                )
+                seq += 1
+    except Exception as exc:
+        raise _QwenStreamFailure(str(exc), seq) from exc
     return seq
 
 
@@ -186,14 +195,30 @@ def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
     if engine == "silero_lab":
         _produce_silero_chunks(req, out_q, tts_cfg)
     elif engine == "qwen_gguf":
+        reason = "no audio generated"
         try:
-            heard = _produce_qwen_chunks(req, out_q, tts_cfg)
+            produced = _produce_qwen_chunks(req, out_q, tts_cfg)
         except Exception as exc:
-            heard = 0
-            print(f"TTS qwen_gguf failed ({exc}) — falling back to silero", flush=True)
-        if heard == 0 and req.generation_id not in _cancelled:
-            # Nothing spoke: safe to fall back within the same request.
-            # Partial qwen audio stands as-is (audible, honest).
+            if isinstance(exc, _QwenStreamFailure) and exc.emitted_chunks > 0:
+                print(
+                    f"TTS actual_engine=qwen_gguf status=failed_after_pcm "
+                    f"call_id={req.call_id} generation_id={req.generation_id} "
+                    f"phrase_id={req.phrase_id}: {exc}",
+                    flush=True,
+                )
+                out_q.put({"done": True, "error": str(exc)})
+                out_q.put(None)
+                return
+            produced = 0
+            reason = str(exc)
+        if produced == 0 and req.generation_id not in _cancelled:
+            # Fallback is permitted only before any Qwen PCM was emitted.
+            print(
+                f"TTS requested_engine=qwen_gguf actual_engine=silero_lab "
+                f"call_id={req.call_id} generation_id={req.generation_id} "
+                f"phrase_id={req.phrase_id} fallback_reason={reason}",
+                flush=True,
+            )
             _produce_silero_chunks(req, out_q, tts_cfg)
         else:
             out_q.put(None)
@@ -257,6 +282,7 @@ def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
     fallback to silero (loud log — never silent). The removed generic
     MLX fallback stays removed; qwen's fallback is explicit per owner
     order, not a hidden provider."""
+    state.ready = False
     try:
         from services.tts.qwen_gguf import ping
         from services.tts.warmup import warmup_synthesis
@@ -265,13 +291,21 @@ def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
             print("TTS qwen server unreachable — explicit fallback to silero", flush=True)
             _init_silero_lab(tts_cfg)
             return
-        state.model_revision = "qwen_gguf:qwen-talker-0.6b-customvoice-Q8_0"
-        first_s = warmup_synthesis(_produce_chunks, text="А.", timeout_s=180.0)
+        def produce_selected(req: SynthesizeRequest, out_q: queue.Queue) -> None:
+            try:
+                _produce_qwen_chunks(req, out_q, tts_cfg)
+            finally:
+                out_q.put(None)
+
+        # Probe the selected provider; per-request fallback cannot prove it ready.
+        first_s = warmup_synthesis(produce_selected, text="А.", timeout_s=180.0)
         if first_s <= 0:
             print("TTS qwen warmup produced no audio — explicit fallback to silero", flush=True)
             _init_silero_lab(tts_cfg)
             return
         print(f"TTS qwen warmup first chunk in {first_s:.2f}s", flush=True)
+        state.model_revision = "qwen_gguf:qwen-talker-0.6b-customvoice-Q8_0"
+        state.warmup_error = None
         state.ready = True
     except Exception as exc:
         print(f"TTS qwen warmup failed ({exc}) — explicit fallback to silero", flush=True)
@@ -340,6 +374,9 @@ async def _ndjson_stream(req: SynthesizeRequest) -> AsyncIterator[bytes]:
                 break
             if req.generation_id in _cancelled:
                 yield (json.dumps({"done": True, "cancelled": True}) + "\n").encode()
+                return
+            if item.get("done"):
+                yield (json.dumps(item, ensure_ascii=False) + "\n").encode()
                 return
             got_audio = True
             yield (json.dumps(item, ensure_ascii=False) + "\n").encode()

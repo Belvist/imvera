@@ -89,6 +89,18 @@ banks are retained; both peer and new tests enter the rich CI target.
 
 ## Verification and comparison
 
+Listening exchange correction (2026-10-02, peer base `030e262`):
+[reproduction and integration handoff](../live-calls/listening-exchange-2026-10-02.md).
+The first invitation and one continuation use actual delivered question IDs,
+not a phantom opening-health answer. Discourse keeps the original hook through
+the exchange; the scheduler bounds prompts separately from topic decay. A
+slotless listening timer, repair, cancellation and reply dedup preserve delivery
+ownership. The existing SDK meaning owner rejects positive activity evaluations
+as wellness answers while preserving genuine self-health assessments. The same
+predicate constrains canonical fact harvesters and reducer proposals. This
+changes evidence and spoken flow explicitly; it does not change frozen
+safety/control/consent or make heard-humanity/competitor claims.
+
 New behavioral contracts include memory difficulty without medical reassurance,
 partial custom goals, exact pending-goal resumption, mixed positive/negative
 facts, neutral tone, one-question ownership, refusal, same-turn evidence,

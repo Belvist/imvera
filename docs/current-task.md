@@ -1,3 +1,56 @@
+# Listening exchange and truthful Qwen delivery (2026-10-02)
+
+Owner feedback: «по диалогам что я слушал ничего прям такого не поменялось».
+Continued authorized m5 work; preserved peer `9314168/258e2ac` by fast-forward
+to `030e262`, then integrated peer Telegram-report fix `d4f576b` before the final
+full suite (two peer tests also pass). Original comparison base remains030e262;
+the seven dialogue source fingerprints still match after integration.
+main untouched. No actual target access/recording or trained NLP
+heads here. No-generative-live-LLM constraint persists.
+
+CHANGED: existing discourse/scheduler/delivery ownership fixes the rearmed
+personal hook and the undelivered invitation; a bounded two-question listening
+exchange returns to the real unanswered health goal. SDK integration exposed
+a separate false wellness fill from `хорошо посидели`; fixed in its existing
+meaning owner. Narrow Qwen stream/warmup corrections preserve the peer's
+declared before-audio fallback while preventing mixed partial delivery and
+false readiness. Full evidence and M5-agent handoff:
+[listening exchange](live-calls/listening-exchange-2026-10-02.md).
+
+VERIFIED on frozen candidate source, Python3.12, PYTHONPATH=cwd:
+
+| Command / check | Result |
+| --- | --- |
+| pytest test_personal_story_exchange on same peer/candidate cases | 19 failed/5 passed →24 passed; first17 cases originally13 failed/4 passed |
+| pytest test_mission_positive_evaluation_ownership | 28 passed; first20 on peer5 failed/15 passed |
+| pytest test_qwen_tts_failure_integrity + existing TTS/startup/replica cases | 62 passed; original7 negative cases6 failed/1 passed→7 passed |
+| make test-dialogue-rich / test-semantic-kernel / test-dialogue-runtime | 301 /294 /235 passed,5.44 /1.58 /11.77s |
+| python -m pytest -q --tb=short | 2481 passed /8 inherited missing-model failures /9 existing skipped,112.16s on integrated d4f576b candidate; full suite NOT green |
+| dialogue_corpus_gate / hard1000_gate / hard_battery / agent_dialogue_gate | 500/500 /1349/1349 /16/16 /agent+dream PASS |
+| policy_diff_v8_v9 --stdout-only | 4 expected /0 unexplained PASS; frozen manifest untouched |
+| Repo Ruff + git diff --check | PASS |
+| replay_story_dialogues at both revisions | Same four SDK inputs/time/call IDs; actual text + goal answer proposals + wellness quote + seven source hashes; ordinary/complaint speech unchanged |
+
+Full integration first caught one new literal in reducer speech; moved it to
+questions.py, preserved the unchanged phrase-discipline assertion, reran the
+entire suite. SDK delivery test first read a timer after Session had drained it;
+corrected the test to assert the actual Session followup and scope. It then
+exposed the real false health fill; fixed the meaning and all fact harvesters,
+not the expected OPEN state. No old skips/assertions were relaxed.
+
+NOT VERIFIED: heard language/warmth/prosody/latency on actual M5, loaded target
+SHA/voice/STT/flags, native Qwen/MLX, phone audio or competitor execution.
+No deployment/image/pilot acceptance is made for this correction.
+REMAINING RISKS: bounded language coverage, genuine act/polarity/xenc artifacts
+absent; existing defer recognition and past-plan extraction gaps remain.
+Qwen before-audio fallback is still the explicit peer behavior; log its actual
+engine. Native model/HTTP calls already running cannot be forcibly interrupted;
+Qwen first-byte/prosody parameters remain outside this correction.
+NEXT GATE: actual M5 candidate audio+JSONL acceptance after authorized m5
+publication; production readiness requires the existing full handoff/model gates.
+
+---
+
 # Dialogue production reliability candidate (2026-10-02)
 
 Owner: «доведи до уровня прода», разрешены агенты, commit/push m5; затем

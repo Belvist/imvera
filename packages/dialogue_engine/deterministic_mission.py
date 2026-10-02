@@ -611,6 +611,59 @@ def _wellness_grounded(speaker_text: str) -> bool:
     return False
 
 
+def _unowned_positive_wellness_evaluation(
+    text: str, *, positive_proposed: bool = False,
+) -> bool:
+    """A valence word needs a health predicate or its own answer clause.
+
+    A delivered health question grounds a standalone «хорошо», including
+    in a mixed answer. It does not turn «хорошо посидели» into self-health.
+    Reuse the existing language predicates without listing activities.
+    """
+    from packages.dialogue_engine.check_path import (
+        _looks_like_complaint,
+        has_pain_mention,
+    )
+    from packages.dialogue_engine.fast_interpreter import (
+        _NORMAL,
+        _POSITIVE,
+        _WELLNESS_POSITIVE,
+        _detect_polarity,
+        _normalize_core,
+    )
+    from packages.dialogue_engine.issue_mention_extract import extract_goal_facts
+
+    facts = extract_goal_facts(text, answer_slot="wellness")
+    positive = positive_proposed or any(
+        f.field == "wellness" and f.value == "positive" for f in facts
+    )
+    if not positive and _detect_polarity(text) != "positive":
+        return False
+    if _looks_like_complaint(text) or has_pain_mention(text):
+        return False
+    for clause in split_mission_clauses(text):
+        if _WELLNESS_POSITIVE.search(clause.text):
+            return False
+        core = _normalize_core(clause.text)
+        # Existing health-state predicates may use an inflected noun or
+        # reverse word order («по состоянию хорошо», «здоровье нормально»).
+        if re.search(r"\b(?:здоровь\w*|самочувств\w*|состояни\w*)\b", core) and any(
+            _detect_polarity(token) == "positive" for token in _TOKEN.findall(core)
+        ):
+            return False
+        # Self-state («мне хорошо») is an assessment too; a verb
+        # after the valence remains in core and cannot pass fullmatch.
+        core = re.sub(r"^(?:я|мне|у\s+меня)\s+(?:(?:сейчас|сегодня)\s+)?", "", core)
+        core = re.sub(
+            r"\b(?:очень|совсем|довольно|вполне|вроде|сейчас|сегодня|уже|пока)\b",
+            " ", core,
+        )
+        core = " ".join(core.split())
+        if _POSITIVE.fullmatch(core) or _NORMAL.fullmatch(core):
+            return False
+    return True
+
+
 def _pick_value_for_clause(
     clause: str,
     gdef: GoalDefinition,
@@ -949,6 +1002,11 @@ class DeterministicMissionUnderstandingProvider:
                         return None
                 except Exception:  # noqa: BLE001
                     pass
+                if _unowned_positive_wellness_evaluation(speaker):
+                    # Hard ownership veto, like non-health badness above:
+                    # the optional learned boundary cannot promote an
+                    # activity rating into an unreported health fact.
+                    return None
                 if not _wellness_grounded(speaker):
                     # Tier-2 (pilot only): learned answer/skip/garbage boundary
                     # for anchor-misses. `answer` records the user's own words

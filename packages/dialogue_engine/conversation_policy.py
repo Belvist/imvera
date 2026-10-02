@@ -992,6 +992,22 @@ def _delivered_is_free(state: EngineState) -> bool:
     return (getattr(delivered, "slot", "") or "") == "wellness"
 
 
+def resume_after_user_thread(state: EngineState) -> ResponsePlan:
+    """Resume a real unanswered goal, without calling a story a health answer."""
+    state.thread_reply_finished = True
+    if state.slots.get("wellness") == SlotStatus.OPEN:
+        return ResponsePlan(
+            obligation=ConversationObligation.BACKGROUND_GOAL,
+            acknowledge=questions.thread_return_ack(),
+            mandatory_question=questions.thread_wellness_return(),
+            intent="resume_after_thread", slot="wellness", marks_question=True,
+        )
+    plan = _schedule_next_action_legacy(state, TurnContext())
+    if plan.action in ("speak", "close_summary") and not plan.acknowledge:
+        plan.acknowledge = questions.thread_return_ack()
+    return plan
+
+
 def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) -> ResponsePlan:
     """Canonical legacy scheduler — mutates EngineState; owns real ResponsePlan."""
     from packages.dialogue_engine.mission_flow import is_custom_mission, schedule_custom_mission
@@ -1026,6 +1042,24 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             obligation=ConversationObligation.CONTROL,
             action="control",
             control=turn.control,
+        )
+
+    if (
+        turn is not None and state.thread_reply_turn_id == turn.utterance_id
+        and state.check_path != CheckPath.URGENT
+        and not state.red_state_pending and not state.risk_handling
+        and state.safety_mode != "red" and not _has_open_episodes(state)
+        and not turn.issue_mentions and not turn.goal_facts and not turn.goal_answers
+        and not turn.risk_candidates and not turn.user_question and not turn.correction
+    ):
+        state.thread_consumed_reply_id = turn.utterance_id
+        if state.thread_reply_finished or state.thread_followup_count >= 2:
+            return resume_after_user_thread(state)
+        state.thread_followup_count += 1
+        return ResponsePlan(
+            obligation=ConversationObligation.FOLLOW_USER_THREAD,
+            mandatory_question=questions.thread_continuation(),
+            intent="thread_continue", marks_question=True,
         )
 
     # Reluctance: client signals they are done — warm early close with what
@@ -1085,6 +1119,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             _hook = _hook[0].lower() + _hook[1:] if len(_hook) > 1 else _hook
             _q = questions.thread_followup(_hook)
             state.open_hook_used = True
+            state.thread_followup_count += 1
             state.current_thread_turns = 0
             state.last_ack_signature = normalize_signature(_q)
             return ResponsePlan(
@@ -1093,7 +1128,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 mandatory_question=_q,
                 intent="thread_followup",
                 slot=None,
-                marks_question=False,
+                marks_question=True,
             )
     # Find-out ladder for an answer that contributed NOTHING (no fill, no
     # facts, no mentions — «Непонятно.», debris): try to find out, each time
