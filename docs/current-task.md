@@ -6,6 +6,9 @@ publication only feature/voice-zoiper-m5. Started c896aee; preserved and integra
 peer m5 933c52b (9257cd8/f4edaa9/a246bd1/933c52b) before final verification.
 main remains fe214c5. No access to the owner's M5/SIP or actual NLP heads here.
 No-generative-live-LLM order persists. No deployment or production acceptance.
+Published code candidate: **8f7e2960fb27fa41fae66265c6ffea9611e037b5** on m5;
+remote tree exactly matches the tested local tree, force=false. Image and CI
+receipt: [production-reliability-2026-10-02.json](live-calls/production-reliability-2026-10-02.json).
 
 ## CHANGED
 
@@ -55,7 +58,8 @@ Full final source is frozen after merge and correction of two detected regressio
 | policy_diff_v8_v9 --stdout-only | 4 expected / 0 unexplained PASS |
 | Isolated PostgreSQL16 migrations + test_pg_persistence/test_pg_pool | 5 passed, 5.45s; no user's DB touched |
 | Real SDK → PG → independent store read | DECLINED/UNSET, exact refusal quote, 1 CALL_ENDED, other-family denied, public Core status None |
-| Candidate bridge/API Docker builds and HTTP boot | PASS; bridge503 with explicit cold-model/worker blockers, API /health200, runtime/API imports PASS |
+| Exact 8f7e296 bridge/API images and HTTP boot | PASS; 12 changed runtime file hashes/image label/runtime version match code; bridge503 with cold-model blockers, API /health200; no git or build CA file in image |
+| GitHub CI run36980547552 on 8f7e296 | 9 specialized jobs PASS; full2418 passed/8 missing-model failures/3 skipped,150.16s; CI remains red |
 | Eight identical synthetic PCM inputs | One segment/content retained; endpoint640/800ms, no regression; not phone latency |
 | Repo Ruff + git diff --check; both Compose config --quiet | PASS |
 
@@ -88,9 +92,8 @@ Candidate HTTP boot with missing artifacts does not prove a working voice call.
 
 ## NEXT GATE
 
-Publish verified candidate to m5, build/check exact revision image, inspect CI
-(publication SHA and image receipt in final release report).
-Actual production acceptance then requires real model artifacts from the working
+Code publication, exact revision image checks and CI inspection are complete.
+Actual production acceptance requires real model artifacts from the working
 M5 plus configured target access and audio+JSONL from a complete 7000 call; use
 the handoff's failure/latency/consent/Core/rollback gates. No permission request
 for already authorized work; no release/pilot tag or production-ready claim.
