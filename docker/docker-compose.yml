@@ -55,6 +55,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      args:
+        IMVERA_GIT_SHA: ${IMVERA_GIT_SHA:-unknown}
     image: imvera/api:dev
     container_name: imvera-api
     environment:

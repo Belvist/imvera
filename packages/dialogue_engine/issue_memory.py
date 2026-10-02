@@ -175,6 +175,46 @@ _CLOCK_TIME = re.compile(
     re.I,
 )
 
+_TEMPORAL_COMPLEMENTS = frozenset({
+    "это", "оно", "так", "уже", "около", "примерно", "почти", "всего", "вот",
+    "длиться", "продолжаться", "тянуться", "боль",
+})
+_CLOCK_COMPLEMENTS = _TEMPORAL_COMPLEMENTS | frozenset({
+    "в", "во", "к", "с", "со", "у", "я", "час", "быть", "начаться", "начинаться",
+    "появиться", "начало", "один", "два", "три", "четыре", "пять", "шесть", "семь",
+    "восемь", "девять", "десять", "одиннадцать", "двенадцать",
+})
+
+
+def _clock_answer_has_episode_owner(text: str, spans) -> bool:
+    """A bare/deictic clock answers this episode; another predicate owns its time.
+
+    Use the quantity guard's normalized-complement rule after removing the
+    actual temporal spans. A medication or plan predicate must not borrow the
+    pending clinical question merely because it contains a clock/day part.
+    """
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_token
+    from packages.dialogue_engine.semantic_kernel.types import SpanType
+
+    ranges = [(m.start(), m.end()) for m in _CLOCK_TIME.finditer(text)]
+    ranges.extend((s.start, s.end) for s in spans
+                  if s.type in (SpanType.TIME, SpanType.DURATION))
+    rest = "".join(char if not any(start <= i < end for start, end in ranges) else " "
+                   for i, char in enumerate(text))
+    return all(normalize_token(token) in _CLOCK_COMPLEMENTS
+               for token in re.findall(r"[а-яёa-z]+", rest, flags=re.I))
+
+
+def _duration_span_is_clock_time(text: str, span) -> bool:
+    """A quantity is part of the named clock, not a separate elapsed duration."""
+    if any(span.start < match.end() and match.start() < span.end
+           for match in _CLOCK_TIME.finditer(text)):
+        return True
+    # The parser types word-number clock hours («двенадцать часов вечера»)
+    # as DURATION too. The immediately following genitive day part dates
+    # that quantity; another quantity later in the clause remains independent.
+    return bool(re.match(r"\s+(?:вечера|утра|дня|ночи)\b", text[span.end:], re.I))
+
 
 def _strip_uncertainty_hedge(text: str) -> str:
     """Remove leading uncertainty hedges («не знаю, где-то ...»).
@@ -207,11 +247,7 @@ def extract_grounded_onset_value(
         n = _norm(text)
         if _UNKNOWN_ATTRIBUTE_ANSWER.search(n):
             continue
-        # Clock/time-of-day answers bypass the quantity guard below: «12
-        # часов вечера» is a time point, never a bare quantity. Any other
-        # temporal anchor («две недели» in «таблетки принимаю две недели»)
-        # keeps the guard — quantities about meds/plans must not become
-        # onset (live loop vs live misfile, both real).
+        # A clock is a time point, but still needs this episode as its owner.
         _has_clock_time = bool(_CLOCK_TIME.search(n))
         if (
             _TEMPORAL_ANCHOR.search(n)
@@ -222,13 +258,17 @@ def extract_grounded_onset_value(
             from packages.dialogue_engine.semantic_kernel.types import SpanType
 
             spans = parse_spans(text)
+            has_issue = any(s.type == SpanType.ISSUE for s in spans)
+            if (_has_clock_time and not has_issue and not _AFTER_EVENT_ANCHOR.search(n)
+                    and not _clock_answer_has_episode_owner(text, spans)):
+                continue
             if (not _has_clock_time
                     and any(s.type == SpanType.DURATION for s in spans)
-                    and not any(s.type == SpanType.ISSUE for s in spans)
+                    and not has_issue
                     and not extract_grounded_duration_value(text)):
                 # A bare quantity about medication/plans is not this
                 # episode's onset merely because the temporal question is open.
-                # Clock times («12 часов вечера») always pass.
+                # Clock answers passed their predicate ownership guard above.
                 continue
             if len(clauses) == 1:
                 # Single clause: keep the raw form byte-stable (the clause
@@ -291,8 +331,6 @@ def extract_grounded_duration_value(
     from packages.dialogue_engine.semantic_kernel.span_parser import parse_spans
     from packages.dialogue_engine.semantic_kernel.types import SpanType
 
-    complements = {"это", "оно", "так", "уже", "около", "примерно", "почти", "всего",
-                   "вот", "длиться", "продолжаться", "тянуться", "боль"}
     for clause in _original_clause_slices(raw_text):
         clause = _strip_uncertainty_hedge(clause.strip())
         if not clause:
@@ -304,7 +342,7 @@ def extract_grounded_duration_value(
                 continue
             rest = clause[:span.start] + " " + clause[span.end:]
             tokens = re.findall(r"[а-яёa-z]+", rest, flags=re.I)
-            if all(normalize_token(token) in complements for token in tokens):
+            if all(normalize_token(token) in _TEMPORAL_COMPLEMENTS for token in tokens):
                 return span.text
     return None
 
@@ -998,7 +1036,13 @@ def _fill_pending_attribute_for_episode(
     if attribute == "duration":
         value = extract_grounded_onset_value(turn.raw_text, exclude_clauses=exclude)
         if value:
-            ep.known_attributes["duration"] = value
+            # «С 10 утра» names the interval's start and remains a literal
+            # duration answer. «12 часов вечера» only names a clock point.
+            clock_point = bool(_CLOCK_TIME.search(value)) and not re.match(
+                r"^со?\s+", value, re.I,
+            )
+            target_attribute = "onset" if clock_point else "duration"
+            ep.known_attributes[target_attribute] = value
             state.slot_unclear_counts.pop(f"episode_{attribute}_ungrounded", None)
             _maybe_clear_pending_attribute(state, episode_id, attribute)
             finalize_episode_if_complete(ep)

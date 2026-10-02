@@ -304,7 +304,10 @@ def build_reference_observations(
                             temporal=TemporalFrame(duration=span.text, raw_evidence=span.text),
                         ))
         if pending in ("onset", "duration"):
-            from packages.dialogue_engine.issue_memory import extract_grounded_onset_value
+            from packages.dialogue_engine.issue_memory import (
+                _duration_span_is_clock_time,
+                extract_grounded_onset_value,
+            )
 
             # Only grounded temporal anchors — never fall back to arbitrary TIME spans
             # (e.g. «там» in meta speech).
@@ -340,7 +343,10 @@ def build_reference_observations(
                 for span in time_spans:
                     if span.type != SpanType.DURATION or span.text not in value:
                         continue
-                    if attr == "duration":
+                    if attr == "duration" or _duration_span_is_clock_time(raw, span):
+                        # «12 часов вечера» contains a syntactic quantity,
+                        # but names a clock point. A separate elapsed quantity
+                        # («с 12 часов вечера уже три часа») remains duration.
                         continue
                     observations.append(Observation(
                         observation_id=_oid(), episode_id=ep_id, attribute="duration",

@@ -111,6 +111,20 @@ def _grounded_evidence_quotes(state: EngineState, goal) -> list[str]:
     return quotes
 
 
+def _grounded_call_refusal(state: EngineState) -> str:
+    observation = state.observations.get("call_refusal")
+    if (
+        getattr(observation, "attribute", None) == "call_refusal"
+        and getattr(observation, "status", None) == "confirmed"
+        and getattr(observation, "normalized_value", None) == "stop_call"
+        and bool(getattr(observation, "source_turn_id", ""))
+        and bool(getattr(observation, "evidence", ""))
+        and getattr(observation, "value", None) == observation.evidence
+    ):
+        return observation.evidence
+    return ""
+
+
 def build_mission_result(state: EngineState) -> MissionResultSnapshot:
     mission = mission_from_state(state)
     goals: list[GoalResultSnapshot] = []
@@ -132,8 +146,14 @@ def build_mission_result(state: EngineState) -> MissionResultSnapshot:
     obs_notes = [
         f"{o.attribute}:{o.value}"
         for o in (state.observations.values() if state.observations else [])
-        if getattr(o, "attribute", None) and getattr(o, "value", None)
+        if getattr(o, "attribute", None)
+        and getattr(o, "attribute", None) != "call_refusal"
+        and getattr(o, "value", None)
     ][:40]
+    call_refusal = _grounded_call_refusal(state)
+    if call_refusal:
+        # Essential closing evidence must survive a busy observation budget.
+        obs_notes.append(f"call_refusal:{call_refusal}")
     wellness_unknown = state.observations.get("wellness_unknown")
     if isinstance(wellness_unknown, str):
         obs_notes.append(f"wellness_unknown:{wellness_unknown}")
@@ -236,7 +256,11 @@ def build_call_outcomes(
     # Re-engagement = mission COMPLETED or a live open complaint — then
     # the normal path computes (YELLOW floors care), never forced DECLINED.
     _reengaged = mr.status == "COMPLETED" or _has_open_complaints(state)
-    if state.elder_asked_to_stop and not _reengaged:
+    if _grounded_call_refusal(state):
+        # Accepted call-control evidence survives a completed earlier check-in.
+        # It does not imply withdrawal of consent to future calls.
+        call_out = "DECLINED"
+    elif state.elder_asked_to_stop and not _reengaged:
         # A final goodbye must not erase the earlier refusal. This is a
         # call outcome, not evidence of revoking consent to future calls.
         call_out = "DECLINED"

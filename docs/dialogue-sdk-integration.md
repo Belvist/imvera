@@ -1,6 +1,8 @@
 # Интеграция Dialogue SDK — руководство следующему агенту
 
 Дата: 2026-10-01. Рабочая ветка: `feature/voice-zoiper-m5`.
+Надёжность, startup и приёмка M5:
+[production-dialogue-handoff.md](production-dialogue-handoff.md).
 Контракт: [ADR-025](adr/025-grounded-dialogue-sdk.md), границы обучения:
 [ADR-024](adr/024-bounded-neuro-learning.md).
 

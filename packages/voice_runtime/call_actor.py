@@ -216,6 +216,7 @@ class CallActor:
     _last_applied_utterance_seq: int = 0
     _utterance_outcomes: dict[int, _UtteranceOutcome] = field(default_factory=dict)
     _utterance_budgets: dict[int, _TurnBudget] = field(default_factory=dict)
+    _owned_tasks: set[asyncio.Task] = field(default_factory=set)
     _active_stage_budget: _TurnBudget | None = None
     _playback_turn_generation: str | None = None
     _transport_closed: bool = False
@@ -409,7 +410,90 @@ class CallActor:
         if not rid:
             return
         self._active_llm_request_id = None
-        await self.llm.cancel_request(rid)
+        await self._bounded_cleanup(self.llm.cancel_request(rid), "llm.cancel")
+
+    async def _bounded_cleanup(self, operation: Awaitable[object], stage: str) -> None:
+        """A failed provider cleanup must not hold the call's input/lifecycle."""
+        task = self._spawn_owned_task(operation)
+        await self._watch_cleanup(task, stage)
+
+    def _schedule_bounded_cleanup(self, operation: Awaitable[object], stage: str) -> None:
+        # Schedule the operation itself now. Nesting task creation inside a
+        # watcher adds an event-loop turn before physical/provider cancellation.
+        task = self._spawn_owned_task(operation)
+        self._spawn_owned_task(self._watch_cleanup(task, stage))
+
+    async def _watch_cleanup(self, task: asyncio.Task, stage: str) -> None:
+        try:
+            done, _ = await asyncio.wait({task}, timeout=0.25)
+            if not done:
+                task.cancel()
+                raise TimeoutError("Provider cleanup budget exceeded")
+            await task
+        except asyncio.CancelledError:
+            task.cancel()
+            raise
+        except Exception as exc:
+            log.warning("Cleanup unavailable call_id=%s stage=%s error=%s",
+                        self.call_id, stage, type(exc).__name__)
+
+    async def _session_thread_call(self, method: Callable, *args, **kwargs):
+        """Keep the caller's policy lock until an uncancellable SDK write settles."""
+        apply_task = asyncio.create_task(asyncio.to_thread(method, *args, **kwargs))
+        try:
+            return await asyncio.shield(apply_task)
+        except asyncio.CancelledError:
+            while not apply_task.done():
+                try:
+                    await asyncio.shield(apply_task)
+                except asyncio.CancelledError:
+                    continue
+            apply_task.result()
+            raise
+
+    def _spawn_owned_task(self, operation: Awaitable[object]) -> asyncio.Task:
+        task = asyncio.create_task(operation)
+        self._owned_tasks.add(task)
+
+        def completed(done: asyncio.Task) -> None:
+            self._owned_tasks.discard(done)
+            if not done.cancelled() and done.exception() is not None:
+                log.error("Background task failed call_id=%s", self.call_id,
+                          exc_info=done.exception())
+
+        task.add_done_callback(completed)
+        return task
+
+    async def _shutdown_runtime_tasks(self) -> None:
+        """Invalidate delivery first, then settle every task owned by this call."""
+        if self._playback and self._active_generation:
+            self._playback.cancel_generation(self._active_generation)
+        preview = self._stt_preview_task
+        self._invalidate_stt_preview()
+        self._clear_pending_fragment()
+        current = asyncio.current_task()
+        tasks = {
+            task for task in (
+                *self._owned_tasks, preview, self._tts_task, self._playback_task,
+                self._wait_task, self._engine_timer_task, self._tts_slow_watch,
+            ) if task is not None and task is not current and not task.done()
+        }
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            _, pending = await asyncio.wait(tasks, timeout=1.0)
+            if pending:
+                log.error("Runtime cleanup exceeded budget call_id=%s pending=%s",
+                          self.call_id, len(pending))
+        self._wait_task = None
+        self._wait_state = None
+        self._engine_timer_task = None
+        self._engine_timer_id = None
+        self._engine_timer_revision = None
+        self._engine_timer_effect_id = None
+        self._inflight_utterances.clear()
+        self._utterance_outcomes.clear()
+        self._utterance_budgets.clear()
 
     @staticmethod
     def _split_complete_phrases(text: str) -> tuple[list[str], str]:
@@ -426,6 +510,8 @@ class CallActor:
         return phrases, rest
 
     def start(self) -> None:
+        if self._task is not None or self._stopped or self._transport_closed:
+            return
         self._task = asyncio.create_task(self._run_wrapper())
 
     async def _run_wrapper(self) -> None:
@@ -434,13 +520,22 @@ class CallActor:
         except Exception:
             log.exception("CallActor crashed call_id=%s", self.call_id)
             raise
+        finally:
+            self._stopped = True
+            self._transport_closed = True
+            await self._shutdown_runtime_tasks()
+            await self._finalize_disconnect()
 
     async def stop(self) -> None:
         self._stopped = True
-        self._invalidate_stt_preview()
+        self._transport_closed = True
+        await self._shutdown_runtime_tasks()
         await self._queue.put(ActorEvent(ActorEventType.STOP))
         if self._task:
             await self._task
+        else:
+            await self._interrupt_playback(flush=False)
+            await self._finalize_disconnect()
         from packages.voice_runtime.trace import flush_traces
 
         await asyncio.to_thread(flush_traces, 3.0)
@@ -452,6 +547,8 @@ class CallActor:
         *,
         input_sample_rate: int | None = None,
     ) -> None:
+        if self._stopped or self._transport_closed:
+            return
         if input_sample_rate is not None:
             await self._ensure_input_chain(input_sample_rate)
         await self._ensure_output_chain(output_sample_rate, output_frame_size)
@@ -480,6 +577,7 @@ class CallActor:
             RuntimeEvent(self.call_id, RuntimeEventType.CAPTURE_LOST, {})
         )
         self._transport_closed = True
+        await self._shutdown_runtime_tasks()
         await self._interrupt_playback(flush=False)
         await self._finalize_disconnect()
         await self.media.hangup()
@@ -521,7 +619,8 @@ class CallActor:
             await self._emit_stage("timeline", **self._tl().to_payload())
         except Exception:  # noqa: BLE001 — observability never breaks teardown
             pass
-        await asyncio.to_thread(self.session.finalize_disconnect)
+        async with self._policy_lock:
+            await self._session_thread_call(self.session.finalize_disconnect)
         try:
             from packages.voice_runtime.recordings import note_call_finalized
 
@@ -635,7 +734,7 @@ class CallActor:
             self._utterance_seq = utterance_seq
         self._inflight_utterances.add(utterance_seq)
         self._turn_manager.on_stt_submitted()
-        asyncio.create_task(self._handle_utterance(pcm_bytes, utterance_seq))
+        self._spawn_owned_task(self._handle_utterance(pcm_bytes, utterance_seq))
         await self._emit_stage(
             "vad.reset_on_listen",
             had_active_speech=True,
@@ -692,7 +791,7 @@ class CallActor:
                                    segment_seq=builder.segment_seq, duration_ms=checkpoint)
             return
         epoch = self._stt_preview_epoch
-        self._stt_preview_task = asyncio.create_task(self._run_stt_preview(
+        self._stt_preview_task = self._spawn_owned_task(self._run_stt_preview(
             pcm, builder, builder.segment_seq, epoch, checkpoint,
         ))
 
@@ -1130,7 +1229,7 @@ class CallActor:
                 self._utterance_seq = utterance_seq
             self._inflight_utterances.add(utterance_seq)
             self._turn_manager.on_stt_submitted()
-            asyncio.create_task(self._handle_utterance(pcm_out, utterance_seq))
+            self._spawn_owned_task(self._handle_utterance(pcm_out, utterance_seq))
         else:
             await self._maybe_schedule_stt_preview(builder)
 
@@ -1329,6 +1428,11 @@ class CallActor:
         )
 
     async def _submit_utterance_outcome(self, outcome: _UtteranceOutcome) -> None:
+        if self._stopped or self._transport_closed:
+            self._inflight_utterances.discard(outcome.utterance_seq)
+            return
+        if outcome.utterance_seq <= self._last_applied_utterance_seq:
+            return
         self._utterance_outcomes[outcome.utterance_seq] = outcome
         await self._drain_utterance_outcomes()
 
@@ -1361,7 +1465,7 @@ class CallActor:
                     continue
                 if not outcome.text or outcome.interp is None or outcome.legacy_contract is None:
                     continue
-                result = await asyncio.to_thread(
+                result = await self._session_thread_call(
                     self.session.handle_user_text,
                     outcome.text,
                     interp=outcome.interp,
@@ -1419,7 +1523,7 @@ class CallActor:
                 return
             await self._on_engine_timer_expired(timer_id, revision)
 
-        self._engine_timer_task = asyncio.create_task(_sleep_then_fire())
+        self._engine_timer_task = self._spawn_owned_task(_sleep_then_fire())
 
     async def _on_engine_timer_expired(self, timer_id: str, revision: int) -> None:
         self._engine_timer_task = None
@@ -1431,11 +1535,15 @@ class CallActor:
             return
         if not self.session.uses_dialogue_engine():
             return
-        expired = await asyncio.to_thread(
-            self.session.handle_wait_expired,
-            timer_id,
-            uplink_frames=self._uplink_frames_received,
-        )
+        async with self._policy_lock:
+            if (self._stopped or self._transport_closed or self._inflight_utterances
+                    or revision != self._engine_timer_revision):
+                return
+            expired = await self._session_thread_call(
+                self.session.handle_wait_expired,
+                timer_id,
+                uplink_frames=self._uplink_frames_received,
+            )
         await self._post_apply_turn(expired)
 
     async def _cancel_wait_timer(self) -> None:
@@ -1489,7 +1597,7 @@ class CallActor:
         epoch = self._wait_state.control_epoch
         remaining_ms = self._wait_state.remaining_ms(self._monotonic())
         if remaining_ms <= 0:
-            self._wait_task = asyncio.create_task(self._on_wait_deadline(wait_id, epoch))
+            self._wait_task = self._spawn_owned_task(self._on_wait_deadline(wait_id, epoch))
             return
 
         async def _sleep_then_fire() -> None:
@@ -1499,7 +1607,7 @@ class CallActor:
                 return
             await self._on_wait_deadline(wait_id, epoch)
 
-        self._wait_task = asyncio.create_task(_sleep_then_fire())
+        self._wait_task = self._spawn_owned_task(_sleep_then_fire())
 
     async def _on_wait_deadline(self, wait_id: str, control_epoch: int) -> None:
         self._wait_task = None
@@ -1530,11 +1638,15 @@ class CallActor:
             return
         self._media_health.set_waiting_for_answer(False, now=self._monotonic())
         await self._emit_uplink_summary("answer_wait_timeout")
-        expired = await asyncio.to_thread(
-            self.session.handle_wait_expired,
-            wait_id,
-            uplink_frames=self._uplink_frames_received,
-        )
+        async with self._policy_lock:
+            if (self._stopped or self._transport_closed or self._inflight_utterances
+                    or control_epoch != self._control_epoch):
+                return
+            expired = await self._session_thread_call(
+                self.session.handle_wait_expired,
+                wait_id,
+                uplink_frames=self._uplink_frames_received,
+            )
         await self._post_apply_turn(expired)
     def _engine_pending_slot(self) -> str | None:
         """Pending slot from EngineState on the engine path, else legacy mirror.
@@ -1622,8 +1734,9 @@ class CallActor:
         *,
         sent_samples: int,
         outcome: str,
+        action_id: str | None = None,
     ) -> None:
-        action_id = self._outbox_action_id
+        action_id = action_id or self._outbox_action_id
         if not action_id:
             return
         record = await asyncio.to_thread(
@@ -1704,7 +1817,8 @@ class CallActor:
                     self.session.state,
                     action_id,
                 )
-        self._outbox_action_id = None
+        if self._outbox_action_id == action_id:
+            self._outbox_action_id = None
 
     async def _post_apply_turn(self, result: SessionTurnResult) -> None:
         if self._stopped or self._transport_closed:
@@ -1835,6 +1949,18 @@ class CallActor:
     async def _handle_utterance(self, pcm: bytes, utterance_seq: int) -> None:
         try:
             await self._handle_utterance_inner(pcm, utterance_seq)
+        except asyncio.CancelledError:
+            if not self._stopped and not self._transport_closed:
+                await self._submit_utterance_outcome(_UtteranceOutcome(
+                    utterance_seq=utterance_seq, utterance_id=f"u-{utterance_seq}", ok=False,
+                ))
+            raise
+        except Exception as exc:
+            log.exception("Utterance failed call_id=%s seq=%s", self.call_id, utterance_seq)
+            await self._submit_utterance_outcome(_UtteranceOutcome(
+                utterance_seq=utterance_seq, utterance_id=f"u-{utterance_seq}", ok=False,
+                error_stage="runtime", error=str(exc)[:200],
+            ))
         finally:
             await self._flush_deferred_engine_turn()
 
@@ -1887,14 +2013,27 @@ class CallActor:
         try:
             try:
                 stt_started = time.monotonic()
-                stt_result = await self.stt.transcribe_final(
+                stt_deadline = min(budget.deadline, stt_started + self.config.stt_deadline_s)
+                stt_task = self._spawn_owned_task(self.stt.transcribe_final(
                     pcm,
                     self.config.target_sample_rate,
                     call_id=self.call_id,
                     turn_id=turn_id,
-                    deadline=budget.deadline,
+                    deadline=stt_deadline,
                     utterance_id=utterance_id,
-                )
+                ))
+                try:
+                    done, _ = await asyncio.wait(
+                        {stt_task}, timeout=max(0.0, stt_deadline - time.monotonic()))
+                    if not done:
+                        stt_task.cancel()
+                        raise TimeoutError("STT final budget exceeded")
+                    stt_result = await stt_task
+                except asyncio.CancelledError:
+                    stt_task.cancel()
+                    raise
+                if time.monotonic() > stt_deadline:
+                    raise TimeoutError("STT final budget exceeded")
                 if getattr(stt_result, "is_final", True) is not True:
                     raise ValueError("STT final adapter returned an unconfirmed result")
                 stt_elapsed_ms = int((time.monotonic() - stt_started) * 1000)
@@ -2200,7 +2339,7 @@ class CallActor:
                 # turn): all-goal scores vs deterministic outcome feed the
                 # next data batch.
                 if self.session._engine is not None:
-                    asyncio.create_task(
+                    self._spawn_owned_task(
                         self._relation_shadow_task(
                             utterance_id=utterance_id, text=text
                         )
@@ -2651,6 +2790,7 @@ class CallActor:
             await self._finalize_turn_playback()
 
     async def _interrupt_playback(self, *, flush: bool) -> None:
+        interrupted_action_id = self._outbox_action_id
         if flush:
             self._bump_control_epoch()
         self._hold_turn_finalize = False
@@ -2663,8 +2803,9 @@ class CallActor:
             interrupted_text = self._playback._ledger.canonical_text or ""
         if not self._playback or not self._active_generation:
             await self._cancel_active_llm()
-            if self._outbox_action_id:
-                await self._finalize_outbox_action(sent_samples=sent_samples, outcome="cancelled")
+            if interrupted_action_id:
+                await self._finalize_outbox_action(sent_samples=sent_samples, outcome="cancelled",
+                                                   action_id=interrupted_action_id)
             return
         gen = self._active_generation
         cancel_started = self._monotonic()
@@ -2676,7 +2817,7 @@ class CallActor:
         # generation as active while provider cancellation or storage is slow.
         self._active_generation = None
         self._force_listen_enabled()
-        asyncio.create_task(self.tts.cancel(gen))
+        self._schedule_bounded_cleanup(self.tts.cancel(gen), "tts.cancel")
         if self._tts_task and not self._tts_task.done():
             self._tts_task.cancel()
         # P0-B/C: addressable transport cancel (never global flush) with a
@@ -2689,7 +2830,7 @@ class CallActor:
             except Exception as exc:
                 local_ack = {"generation_id": gen, "error": str(exc)[:200]}
         else:
-            asyncio.create_task(self.media.flush())
+            self._schedule_bounded_cleanup(self.media.flush(), "transport.flush")
         local_cancel_ms = round((self._monotonic() - cancel_started) * 1000, 1)
         downstream: dict[str, Any] = {}
         if self.media.request_downstream_stop is not None:
@@ -2734,8 +2875,9 @@ class CallActor:
         # Non-audio work follows the stop request. Its duration may never delay
         # generation invalidation, PCM purge, or the downstream break command.
         await self._cancel_active_llm()
-        if self._outbox_action_id:
-            await self._finalize_outbox_action(sent_samples=sent_samples, outcome="cancelled")
+        if interrupted_action_id:
+            await self._finalize_outbox_action(sent_samples=sent_samples, outcome="cancelled",
+                                               action_id=interrupted_action_id)
 
     async def _speak_cached_pcm(
         self,
@@ -2804,6 +2946,8 @@ class CallActor:
                 await self._playback.enqueue_wait(env)
         if self._playback and generation_id == self._active_generation:
             self._playback.mark_generation_done("success")
+        if self._render_generation != render_generation:
+            return
         await self._wait_phrase_playback_drained()
 
     def _clear_pending_delivery(self, render_generation: str) -> None:
@@ -2850,6 +2994,8 @@ class CallActor:
         while time.monotonic() < deadline:
             if self._stopped or self._transport_closed:
                 return
+            if self._render_generation != render_generation:
+                return
             ledger = self._playback._ledger
             if ledger and ledger.generation_done and ledger.generation_outcome not in (
                 None,
@@ -2892,6 +3038,7 @@ class CallActor:
         )
         self._playback_turn_generation = render_generation
         deadline = time.monotonic() + self.config.tts_deadline_s
+        speak_effect_id = self._pending_speak_effect_id
         seq = 0
 
         async def _run_tts() -> None:
@@ -2943,10 +3090,13 @@ class CallActor:
                     phrase_id,
                     exc,
                 )
-                if self._pending_speak_effect_id and self.session.uses_dialogue_engine():
+                if (speak_effect_id and self.session.uses_dialogue_engine()
+                        and generation_id == self._active_generation
+                        and self._render_generation == render_generation
+                        and self._pending_speak_effect_id == speak_effect_id):
                     await asyncio.to_thread(
                         self.session.handle_effect_failed,
-                        self._pending_speak_effect_id,
+                        speak_effect_id,
                         stage="TTS",
                         error=str(exc)[:200],
                     )
@@ -2986,7 +3136,7 @@ class CallActor:
                         outcome = "cancelled"
                     self._playback.mark_generation_done(outcome)
 
-        self._tts_task = asyncio.create_task(_run_tts())
+        self._tts_task = self._spawn_owned_task(_run_tts())
         if self._tts_slow_watch and not self._tts_slow_watch.done():
             self._tts_slow_watch.cancel()
         self._tts_slow_watch = asyncio.create_task(
@@ -3001,8 +3151,24 @@ class CallActor:
             )
         )
         try:
-            await self._tts_task
+            tts_task = self._tts_task
+            done, _ = await asyncio.wait({tts_task},
+                                         timeout=max(0.0, deadline - time.monotonic()))
+            if not done:
+                tts_task.cancel()
+                raise TimeoutError("TTS budget exceeded")
+            await tts_task
+        except TimeoutError:
+            if (self._active_generation == generation_id
+                    and self._render_generation == render_generation):
+                await self._fail_pending_speak_playout("tts_deadline_exceeded")
+                await self._emit_stage("tts.failed", generation_id=generation_id,
+                                       phrase_id=phrase_id, error="tts_deadline_exceeded")
+                await self._interrupt_playback(flush=True)
+            return
         except asyncio.CancelledError:
+            return
+        if self._render_generation != render_generation:
             return
         await self._wait_phrase_playback_drained()
 
@@ -3060,6 +3226,14 @@ class CallActor:
                 else:
                     await self.media.send_pcm(chunk.pcm_s16le)
             except Exception as exc:
+                ledger = self._playback._ledger
+                if (self._playback.is_cancelled(chunk.generation_id) or ledger is None
+                        or ledger.generation_id != chunk.generation_id
+                        or self._active_generation != chunk.generation_id):
+                    await self._emit_stage("playout.stale_failure",
+                                           generation_id=chunk.generation_id,
+                                           error=str(exc)[:200])
+                    continue
                 if self._playback._ledger:
                     self._playback._ledger.generation_outcome = "failed"
                     self._playback.mark_generation_done("failed")
@@ -3379,6 +3553,9 @@ def build_call_actor(
         media=media,
         config=CallActorConfig(
             target_sample_rate=profile_audio["internal_sample_rate"],
+            stt_deadline_s=float(profile_limits.get("stt_deadline_s", 12.0)),
+            llm_deadline_s=float(profile_limits.get("llm_deadline_s", 15.0)),
+            tts_deadline_s=float(profile_limits.get("tts_deadline_s", 20.0)),
             frame_ms=profile_audio["frame_ms"],
             playback_buffer_ms=playback_buffer_ms,
             telephony_stream=os.environ.get("IMVERA_TELEPHONY_STREAM", "1") == "1",

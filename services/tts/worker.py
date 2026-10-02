@@ -29,11 +29,9 @@ from services.inference.common import (
     new_request_id,
 )
 from services.tts.gen_params import build_mlx_gen_kwargs, resolve_model_id, tts_engine
-from services.tts.lab_fast import lab_fast_tts_enabled
 from services.tts.silero_lab import (
     SILERO_WARNING,
     lab_backend_name,
-    silero_lab_acknowledged,
     synthesize_silero,
 )
 
@@ -255,40 +253,29 @@ def _load_mlx_model(model_id: str, timeout_s: float) -> tuple[Any | None, str | 
 
 
 def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
-    """Ping resident qwen server + warmup phrase; fall back to silero."""
+    """Ping resident qwen server + warmup phrase; explicit owner-blessed
+    fallback to silero (loud log — never silent). The removed generic
+    MLX fallback stays removed; qwen's fallback is explicit per owner
+    order, not a hidden provider."""
     try:
         from services.tts.qwen_gguf import ping
         from services.tts.warmup import warmup_synthesis
 
         if not ping():
-            if _maybe_fallback_silero(tts_cfg, "qwen server unreachable"):
-                return
-            state.warmup_error = "qwen server unreachable"
-            state.ready = False
+            print("TTS qwen server unreachable — explicit fallback to silero", flush=True)
+            _init_silero_lab(tts_cfg)
             return
         state.model_revision = "qwen_gguf:qwen-talker-0.6b-customvoice-Q8_0"
         first_s = warmup_synthesis(_produce_chunks, text="А.", timeout_s=180.0)
         if first_s <= 0:
-            if _maybe_fallback_silero(tts_cfg, "qwen warmup produced no audio"):
-                return
-            state.warmup_error = "qwen warmup produced no audio"
-            state.ready = False
+            print("TTS qwen warmup produced no audio — explicit fallback to silero", flush=True)
+            _init_silero_lab(tts_cfg)
             return
         print(f"TTS qwen warmup first chunk in {first_s:.2f}s", flush=True)
         state.ready = True
     except Exception as exc:
-        if _maybe_fallback_silero(tts_cfg, str(exc)):
-            return
-        state.warmup_error = str(exc)
-        state.ready = False
-        print(f"TTS qwen warmup failed: {exc}", flush=True)
-
-
-def _maybe_fallback_silero(tts_cfg: dict[str, Any], reason: str) -> bool:
-    if not lab_fast_tts_enabled() or not silero_lab_acknowledged():
-        return False
-    print(f"TTS MLX unavailable ({reason}) — falling back to silero_lab", flush=True)
-    return _init_silero_lab(tts_cfg)
+        print(f"TTS qwen warmup failed ({exc}) — explicit fallback to silero", flush=True)
+        _init_silero_lab(tts_cfg)
 
 
 @app.on_event("startup")
@@ -309,8 +296,6 @@ def _load_and_warmup_mlx(tts_cfg: dict[str, Any], engine: str) -> None:
         print(f"TTS loading {model_id} (timeout {MLX_LOAD_TIMEOUT_S:.0f}s)...", flush=True)
         loaded, err = _load_mlx_model(model_id, MLX_LOAD_TIMEOUT_S)
         if loaded is None:
-            if _maybe_fallback_silero(tts_cfg, err or "load failed"):
-                return
             state.warmup_error = err or "load failed"
             state.ready = False
             return
@@ -318,16 +303,12 @@ def _load_and_warmup_mlx(tts_cfg: dict[str, Any], engine: str) -> None:
         state.model_revision = f"{engine}:{model_id}"
         first_s = warmup_synthesis(_produce_chunks, text="А.", timeout_s=180.0)
         if first_s <= 0:
-            if _maybe_fallback_silero(tts_cfg, "warmup synthesis produced no audio"):
-                return
             state.warmup_error = "warmup synthesis produced no audio"
             state.ready = False
             return
         print(f"TTS warmup first chunk in {first_s:.2f}s", flush=True)
         state.ready = True
     except Exception as exc:
-        if _maybe_fallback_silero(tts_cfg, str(exc)):
-            return
         state.warmup_error = str(exc)
         state.ready = False
         print(f"TTS load/warmup failed: {exc}", flush=True)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import os
@@ -44,15 +45,16 @@ def _load_config() -> dict[str, Any]:
 
 
 class TranscribeRequest(BaseModel):
-    request_id: str = Field(default_factory=new_request_id)
+    request_id: str = Field(default_factory=new_request_id, min_length=1, max_length=160)
     call_id: str
     turn_id: int = 0
     utterance_id: str = ""
     sample_rate: int = Field(default=16000, gt=0, le=48000)
-    pcm_b64: str
-    deadline: float | None = None
+    # Bound memory before decoding, including callers outside the bridge.
+    pcm_b64: str = Field(max_length=60 * 48000 * 2 * 4 // 3)
+    deadline: float | None = Field(default=None, allow_inf_nan=False)
     # Relative budget: monotonic clocks on different worker hosts differ.
-    timeout_s: float | None = Field(default=None, gt=0, le=60)
+    timeout_s: float | None = Field(default=None, gt=0, le=60, allow_inf_nan=False)
 
 
 class PreviewRequest(TranscribeRequest):
@@ -70,6 +72,39 @@ executor = InferenceExecutor(max_queue=4)
 _asr: Any = None
 _asr_engine = "gigaam"
 _model_id = ""
+# Cancellation is scoped to this worker. Active requests carry an Event; early
+# or late cancel messages retain only bounded, expiring tombstones so retries
+# and disconnected callers cannot grow WorkerState forever.
+_active_requests: dict[str, threading.Event] = {}
+_cancelled_request_expiry: dict[str, float] = {}
+_CANCEL_TTL_S = 60.0
+_MAX_CANCEL_TOMBSTONES = 1024
+
+
+def _prune_cancelled_requests(now: float) -> None:
+    """Called only while holding state.lock."""
+    for rid, expiry in tuple(_cancelled_request_expiry.items()):
+        if expiry <= now:
+            _cancelled_request_expiry.pop(rid, None)
+            state.cancelled_requests.discard(rid)
+
+
+def _register_request(request_id: str, cancelled: threading.Event) -> None:
+    with state.lock:
+        _prune_cancelled_requests(time.monotonic())
+        if request_id in _active_requests:
+            raise HTTPException(409, detail="request_id already active")
+        if request_id in state.cancelled_requests:
+            cancelled.set()
+            state.cancelled_requests.discard(request_id)
+            _cancelled_request_expiry.pop(request_id, None)
+        _active_requests[request_id] = cancelled
+
+
+def _release_request(request_id: str, cancelled: threading.Event) -> None:
+    with state.lock:
+        if _active_requests.get(request_id) is cancelled:
+            _active_requests.pop(request_id, None)
 
 
 def _pcm_to_wav(pcm: bytes, sample_rate: int, path: Path) -> None:
@@ -191,15 +226,29 @@ async def _run_transcription(
     if not state.ready or _asr is None:
         raise HTTPException(503, detail=state.warmup_error or "not ready")
     abandoned = threading.Event()
-    deadline = time.monotonic() + req.timeout_s if req.timeout_s is not None else None
+    cancelled = threading.Event()
+    _register_request(req.request_id, cancelled)
+    try:
+        return await _run_registered_transcription(
+            req, preview=preview, abandoned=abandoned, cancelled=cancelled,
+        )
+    finally:
+        abandoned.set()
+        _release_request(req.request_id, cancelled)
+
+
+async def _run_registered_transcription(
+    req: TranscribeRequest, *, preview: bool,
+    abandoned: threading.Event, cancelled: threading.Event,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + (req.timeout_s if req.timeout_s is not None else 60.0)
+    if req.deadline is not None:
+        deadline = min(deadline, req.deadline)
 
     def check_request() -> None:
-        with state.lock:
-            cancelled = req.request_id in state.cancelled_requests
-        if abandoned.is_set() or cancelled:
+        if abandoned.is_set() or cancelled.is_set():
             raise _CancelledSTT("cancelled")
         check_deadline(deadline)
-        check_deadline(req.deadline)
 
     try:
         check_request()
@@ -213,6 +262,8 @@ async def _run_transcription(
         raise HTTPException(400, detail=f"invalid pcm_b64: {exc}") from exc
     if len(pcm) % 2:
         raise HTTPException(400, detail="pcm_s16le must contain complete 16-bit samples")
+    if len(pcm) > 60 * req.sample_rate * 2:
+        raise HTTPException(413, detail="transcription exceeds 60 second PCM limit")
     duration_ms = int(len(pcm) / 2 / req.sample_rate * 1000)
     if preview and len(pcm) not in {
         req.sample_rate * 2 * ms // 1000 for ms in STT_PREVIEW_CHECKPOINTS_MS
@@ -233,35 +284,32 @@ async def _run_transcription(
     def infer() -> dict[str, Any]:
         # The synchronous job owns the WAV even if HTTP is cancelled while
         # queued/running. Never unlink a file another thread still needs.
-        try:
+        check_request()
+        with tempfile.TemporaryDirectory(prefix="imvera-stt-") as directory:
+            wav_path = Path(directory) / "input.wav"
+            _pcm_to_wav(pcm, req.sample_rate, wav_path)
             check_request()
-            with tempfile.TemporaryDirectory(prefix="imvera-stt-") as directory:
-                wav_path = Path(directory) / "input.wav"
-                _pcm_to_wav(pcm, req.sample_rate, wav_path)
-                check_request()
-                result = _transcribe_sync(
-                    wav_path, pcm=pcm, sample_rate=req.sample_rate,
-                    duration_ms=duration_ms, asr_cfg=cfg["models"]["asr"],
-                )
-                # In-flight model computation cannot be preempted; discard its
-                # output rather than claim cancellation stopped CPU inference.
-                check_request()
-                return result
-        finally:
-            with state.lock:
-                state.cancelled_requests.discard(req.request_id)
+            result = _transcribe_sync(
+                wav_path, pcm=pcm, sample_rate=req.sample_rate,
+                duration_ms=duration_ms, asr_cfg=cfg["models"]["asr"],
+            )
+            # In-flight model computation cannot be preempted; discard its
+            # output rather than claim cancellation stopped CPU inference.
+            check_request()
+            return result
 
     try:
-        if preview:
-            result = await executor.run(infer, idle_only=True)
-        else:
-            result = await executor.run(infer)
+        check_request()
+        # HTTP completion has its own wall-clock bound. A running model may
+        # finish later; infer owns its WAV and abandoned discards that result.
+        result = await asyncio.wait_for(
+            executor.run(infer, idle_only=preview),
+            timeout=max(0.0, deadline - time.monotonic()),
+        )
     except _CancelledSTT as exc:
         raise HTTPException(499, detail="cancelled") from exc
     except (TimeoutError, QueueFullError) as exc:
         raise executor_http_error(exc) from exc
-    finally:
-        abandoned.set()
     pcm_rms = round(pcm_rms_s16le(pcm), 1)
     logger.info(
         "stt preview=%s call_id=%s utterance_id=%s duration_ms=%d pcm_rms=%.1f "
@@ -289,9 +337,22 @@ async def _run_transcription(
 @app.post("/v1/cancel")
 def cancel(body: dict[str, Any]) -> dict[str, str]:
     rid = body.get("request_id")
-    if rid:
-        with state.lock:
+    if not isinstance(rid, str) or not rid or len(rid) > 160:
+        raise HTTPException(422, detail="request_id must be a nonempty bounded string")
+    with state.lock:
+        now = time.monotonic()
+        _prune_cancelled_requests(now)
+        active = _active_requests.get(rid)
+        if active is not None:
+            active.set()
+        else:
+            if rid not in _cancelled_request_expiry:
+                while len(_cancelled_request_expiry) >= _MAX_CANCEL_TOMBSTONES:
+                    oldest = next(iter(_cancelled_request_expiry))
+                    _cancelled_request_expiry.pop(oldest)
+                    state.cancelled_requests.discard(oldest)
             state.cancelled_requests.add(rid)
+            _cancelled_request_expiry[rid] = now + _CANCEL_TTL_S
     return {"status": "accepted"}
 
 

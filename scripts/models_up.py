@@ -56,17 +56,29 @@ def _worker_ready(port: int) -> bool:
         return False
 
 
-def _tts_matches_lab_fast(port: int) -> bool:
-    from services.tts.lab_fast import lab_fast_tts_enabled
+def _selected_tts_engine(env: dict[str, str]) -> str:
+    selected = env.get("IMVERA_TTS_ENGINE", "").strip().lower()
+    if not selected:
+        with CFG.open() as f:
+            selected = str(yaml.safe_load(f)["models"]["tts"]["engine"]).strip().lower()
+    return selected
 
-    if not lab_fast_tts_enabled():
-        return True
+
+def _tts_matches_lab_fast(port: int, env: dict[str, str] | None = None) -> bool:
+    """The ready worker must match the selected engine, including explicit MLX."""
+    from services.tts.lab_fast import apply_lab_fast_env
+
+    env = env if env is not None else apply_lab_fast_env(os.environ.copy())
+    selected = _selected_tts_engine(env)
     try:
         r = httpx.get(f"http://127.0.0.1:{port}/health/ready", timeout=2.0)
         if r.status_code != 200:
             return False
-        return str(r.json().get("model_revision", "")).startswith("silero_lab:")
-    except httpx.HTTPError:
+        revision = str(r.json().get("model_revision", ""))
+        if selected == "silero_lab":
+            return revision.startswith("silero_lab:silero:")
+        return revision.startswith(f"{selected}:")
+    except (httpx.HTTPError, ValueError):
         return False
 
 
@@ -80,11 +92,16 @@ def _all_ready(ports: dict[str, int]) -> bool:
 
 
 def _ensure_worker(name: str, port: int, env: dict[str, str]) -> bool:
-    if is_running(name) and _worker_ready(port):
+    running = is_running(name)
+    if (
+        running
+        and _worker_ready(port)
+        and (name != "tts" or _tts_matches_lab_fast(port, env))
+    ):
         print(f"  {name}: already ready — keeping warm")
         return True
-    if is_running(name) and not _worker_ready(port):
-        print(f"  {name}: running but not ready — restarting")
+    if running:
+        print(f"  {name}: running but not ready for selected configuration — restarting")
     stop(name)
     print(f"Starting {name} on {port}...")
     worker_env = {**env, f"IMVERA_{name.upper()}_PORT": str(port)}
@@ -93,25 +110,19 @@ def _ensure_worker(name: str, port: int, env: dict[str, str]) -> bool:
         [sys.executable, str(ROOT / "services" / name / "worker.py")],
         env=worker_env,
     )
-    tts_timeout = 120.0 if name == "tts" else 600.0
-    if _wait_ready(f"http://127.0.0.1:{port}", name, timeout_s=tts_timeout):
-        return True
-    if name != "tts" or worker_env.get("IMVERA_TTS_ENGINE") == "silero_lab":
-        return False
-    print("  tts: MLX not ready — restarting with silero_lab (lab fast path)", file=sys.stderr)
-    stop(name)
-    fallback_env = {
-        **worker_env,
-        "IMVERA_TTS_ENGINE": "silero_lab",
-        "IMVERA_SILERO_LAB_ACK": "1",
-        "IMVERA_LAB_FAST_TTS": "1",
-    }
-    start(
-        name,
-        [sys.executable, str(ROOT / "services" / name / "worker.py")],
-        env=fallback_env,
-    )
-    return _wait_ready(f"http://127.0.0.1:{port}", name, timeout_s=90.0)
+    startup_timeout = 600.0
+    if name == "tts":
+        startup_timeout = 120.0
+        if _selected_tts_engine(worker_env) != "silero_lab":
+            # worker.py loads with this configurable limit, then warms for 180s
+            # before binding HTTP. This does not change live synthesis deadlines.
+            load_timeout = float(worker_env.get("IMVERA_TTS_MLX_LOAD_TIMEOUT_S", "120"))
+            startup_timeout = load_timeout + 180.0 + 10.0
+    if _wait_ready(f"http://127.0.0.1:{port}", name, timeout_s=startup_timeout):
+        if name != "tts" or _tts_matches_lab_fast(port, env):
+            return True
+        print("BLOCKED: TTS revision does not match selected engine", file=sys.stderr)
+    return False
 
 
 def main() -> int:

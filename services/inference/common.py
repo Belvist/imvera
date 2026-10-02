@@ -60,19 +60,36 @@ class InferenceExecutor:
                 raise QueueFullError("inference queue full")
             self._pending += 1
 
-        def wrapped() -> T:
-            try:
-                return fn()
-            finally:
-                with self._lock:
-                    self._pending -= 1
+        def finished(_future: concurrent.futures.Future[T]) -> None:
+            with self._lock:
+                self._pending -= 1
 
-        return self._executor.submit(wrapped)
+        try:
+            future = self._executor.submit(fn)
+        except BaseException:
+            with self._lock:
+                self._pending -= 1
+            raise
+        # Counts cancelled queued work too: its function never runs, so a
+        # decrement inside fn/finally would permanently consume queue capacity.
+        future.add_done_callback(finished)
+        return future
 
     async def run(self, fn: Callable[[], T], *, idle_only: bool = False) -> T:
-        loop = asyncio.get_running_loop()
         fut = self.submit(fn, idle_only=idle_only)
-        return await loop.run_in_executor(None, fut.result)
+        wrapped = asyncio.wrap_future(fut)
+        try:
+            # The job owns its input/resources. Caller cancellation marks it
+            # abandoned in the worker; do not cancel queued resource cleanup.
+            # Await the Future directly, without a second blocked pool thread.
+            return await asyncio.shield(wrapped)
+        except asyncio.CancelledError:
+            def consume_result(done: asyncio.Future) -> None:
+                if not done.cancelled():
+                    done.exception()
+
+            wrapped.add_done_callback(consume_result)
+            raise
 
 
 def mount_health(

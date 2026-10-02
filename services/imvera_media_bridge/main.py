@@ -330,6 +330,12 @@ def _write_session_artifacts(session: FreeSwitchBridgeSession) -> None:
 
 
 def main() -> None:
+    # uvicorn configures its own loggers, not this module's logger. Configure
+    # the process before emitting the required engine/model startup truth.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     GATE_ROOT.mkdir(parents=True, exist_ok=True)
     from packages.dialogue_engine.runtime import log_runtime_truth
 

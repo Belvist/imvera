@@ -32,16 +32,21 @@ test-dialogue-rich:
 		tests/test_conversation_policy.py tests/test_dialogue_free_speech_regression.py \
 		tests/test_evidence_invariant.py tests/test_rich_controls.py \
 		tests/test_issue_episode_resume.py tests/test_topic_live_regression.py \
-		tests/test_dialogue_warmth.py tests/test_conversational_continuity.py tests/test_responsive_dialogue.py tests/test_speech_warmth_live.py -q
+		tests/test_dialogue_warmth.py tests/test_conversational_continuity.py tests/test_responsive_dialogue.py \
+		tests/test_speech_warmth_live.py tests/test_response_plan_idempotence.py \
+		tests/test_sdk_closing_evidence.py tests/test_live_onset_and_repair.py \
+		tests/test_clock_onset_ownership.py -q
 
 test-dialogue-runtime:
 	@echo "GATE: CallActor rich path + LLM worker contract"
 	$(PYTHON) -m pytest tests/test_call_actor_rich_path.py tests/test_llm_worker_contract.py \
 		tests/test_call_actor_deferred_delivery.py tests/test_call_actor_llm_fallback.py \
 		tests/test_realtime_conversation.py tests/test_realtime_engine_cancel.py \
+		tests/test_runtime_production_lifecycle.py tests/test_inference_executor_lifecycle.py \
+		tests/test_runtime_revision.py tests/test_production_startup.py \
 		tests/test_stt_previews.py tests/test_stt_preview_probe.py tests/test_turn_pipeline.py \
 		tests/test_voice_perception.py tests/test_uplink_preroll.py \
-		tests/test_transport_cancel.py tests/test_inference_stop_epoch.py \
+		tests/test_transport_cancel.py tests/test_downstream_cancel_gap.py tests/test_inference_stop_epoch.py \
 		tests/test_call_actor_audible_playout.py tests/test_call_actor_multi_phrase_playback.py -q
 
 test-action-policy-shadow:

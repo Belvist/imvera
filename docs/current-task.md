@@ -1,3 +1,105 @@
+# Dialogue production reliability candidate (2026-10-02)
+
+Owner: «доведи до уровня прода», разрешены агенты, commit/push m5; затем
+«там обновили чуть-чуть, продолжи». Local branch codex/live-loop-fix; final
+publication only feature/voice-zoiper-m5. Started c896aee; preserved and integrated
+peer m5 933c52b (9257cd8/f4edaa9/a246bd1/933c52b) before final verification.
+main remains fe214c5. No access to the owner's M5/SIP or actual NLP heads here.
+No-generative-live-LLM order persists. No deployment or production acceptance.
+Published code candidate: **8f7e2960fb27fa41fae66265c6ffea9611e037b5** on m5;
+remote tree exactly matches the tested local tree, force=false. Image and CI
+receipt: [production-reliability-2026-10-02.json](live-calls/production-reliability-2026-10-02.json).
+
+## CHANGED
+
+- Existing CallActor owns/drains utterance, preview, TTS, shadow and cleanup
+  tasks; enforces independent declared STT/TTS deadlines even for adapters
+  suppressing cancellation. Late errors/results cannot mutate a new generation.
+  Unexpected utterance errors release ordering gaps; stopped media cannot restart.
+- SDK user/timer mutations retain the policy fence across repeated cancellation
+  until the synchronous thread finishes, before disconnect finalization. Existing
+  generation/outbox identity preserved. No second state/decision owner.
+- Inference queue admission recovers after queued cancel/submit failure; await
+  the actual Future without another blocked pool thread. STT has bounded TTL
+  cancellation registry, PCM and HTTP lifetime; running inference owns its WAV.
+  Bad JSON/text/numbers/quality cannot fabricate speech or GOOD quality.
+- Closing preserves grounded complaints; addressed current-call refusal keeps
+  its quote and DECLINED/UNSET result without inferring future consent withdrawal
+  or faking Core ACK. Ordinary goodbye, re-engagement and urgent priority remain.
+- Renderer re-render cannot duplicate the answer; answer-only remains no-question.
+  Preserve peer hedge/repair/dedup; medication/plan clocks do not fill clinical
+  onset. Clock points do not become elapsed hours; genuine duration and literal
+  since anchors survive. Safety/control/action-policy manifest unchanged.
+- Explicit TTS load/warmup failure cannot replace its engine. Startup budget
+  covers load + warmup; ready shortcut matches selected provider. Product smoke
+  checks real CallActor/single writer/actual replica pools, not unused gateway/LLM.
+- CI/images install semantic/runtime dependencies; image revision and runtime
+  truth work without git. Build context excludes .run/models/secrets; optional
+  build-only CA secret preserves TLS. Compose passes the explicit revision.
+- Extend existing runtime/rich CI gates without weakening old tests or skips.
+  [Integration/startup/failure/rollback handoff](production-dialogue-handoff.md).
+
+## VERIFIED
+
+Python 3.12, PYTHONPATH=cwd, /workspace/imvera-review-venv/bin/python.
+Full final source is frozen after merge and correction of two detected regressions.
+
+| Check / command | Result |
+| --- | --- |
+| Paired old-compatible provider output/budget cases | c896aee 24 failed/1 passed → 25 passed |
+| Paired executor/revision cases | c896aee 5 failed → 5 passed |
+| Paired runtime lifecycle cases | c896aee 7 failed → 7 passed |
+| Closing evidence 19 cases | c896aee 11 failed/8 passed → 19 passed |
+| Renderer retries 9 cases | 9 failed → 9 passed |
+| First 15 clock cases on peer base | 12 failed/3 passed; final 20 + unchanged issue-memory21 =41 passed |
+| make test-dialogue-runtime / test-dialogue-rich / test-semantic-kernel | 218 / 240 / 294 passed, 12.69 / 4.92 / 1.54s |
+| python -m pytest -q --tb=short | 2412 passed / 8 inherited failed / 9 skipped, 111.84s; missing trained heads, full suite NOT green |
+| dialogue_corpus_gate / hard1000_gate / hard_battery / agent_dialogue_gate | 500/500 / 1349/1349 / 16/16 / agent+dream PASS |
+| policy_diff_v8_v9 --stdout-only | 4 expected / 0 unexplained PASS |
+| Isolated PostgreSQL16 migrations + test_pg_persistence/test_pg_pool | 5 passed, 5.45s; no user's DB touched |
+| Real SDK → PG → independent store read | DECLINED/UNSET, exact refusal quote, 1 CALL_ENDED, other-family denied, public Core status None |
+| Exact 8f7e296 bridge/API images and HTTP boot | PASS; 12 changed runtime file hashes/image label/runtime version match code; bridge503 with cold-model blockers, API /health200; no git or build CA file in image |
+| GitHub CI run36980547552 on 8f7e296 | 9 specialized jobs PASS; full2418 passed/8 missing-model failures/3 skipped,150.16s; CI remains red |
+| Eight identical synthetic PCM inputs | One segment/content retained; endpoint640/800ms, no regression; not phone latency |
+| Repo Ruff + git diff --check; both Compose config --quiet | PASS |
+
+Full integration first caught a new extra cleanup scheduling turn breaking the
+unchanged legacy flush contract; fixed scheduling, not its assertion. Temporal
+change first broke six since-anchor cases; restored literal intervals, not tests.
+These intermediate runs are not reported as final green. Frozen control strings,
+goodbye speech, policy manifest and inherited model tests are not rewritten.
+
+## NOT VERIFIED
+
+Actual M5/model throughput and model readiness; real 7000 SIP/audio/physical stop,
+per-turn latency, warmth/prosody/competitor execution; target deployment/image,
+Core external ACK/notification and concurrent capacity/100 consecutive calls.
+Candidate HTTP boot with missing artifacts does not prove a working voice call.
+
+## REMAINING RISKS
+
+- Eight inherited full-suite checks require genuine act v2/v3, polarity_v1 and
+  xenc_v3 artifacts. GitHub artifacts/releases/tags/LFS/history do not contain
+  them. Installing torch/transformers fixes collection, not absent trained heads.
+- In-flight Python inference/store threads cannot be safely preempted. Results
+  are invalidated and fenced, but a hung model holds capacity and a hung store
+  can delay finalization; target DB/worker bounds must be verified.
+- Existing linguistic coverage is bounded; refusal evidence is addressed current
+  call only. Some frozen control near-matches still close, without inventing
+  refusal evidence. No consent remapping or new language model is introduced.
+- STT prefix preview and barge-in remain existing opt-ins; preview default OFF,
+  native_streaming=false. Silero LAB_FAST default is lab-only, not accepted prod.
+
+## NEXT GATE
+
+Code publication, exact revision image checks and CI inspection are complete.
+Actual production acceptance requires real model artifacts from the working
+M5 plus configured target access and audio+JSONL from a complete 7000 call; use
+the handoff's failure/latency/consent/Core/rollback gates. No permission request
+for already authorized work; no release/pilot tag or production-ready claim.
+
+---
+
 # Realtime Conversation v1: bounded STT previews and cancellation (2026-10-01)
 
 Owner: «продолжи доделывать», Newo-like live dialogue. Continuation on published
