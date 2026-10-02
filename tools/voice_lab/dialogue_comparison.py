@@ -13,7 +13,9 @@ import os
 import platform
 import subprocess
 import time
+from collections import Counter
 from datetime import UTC, datetime
+from math import ceil, isfinite
 from pathlib import Path
 
 DEFAULT_SUITE = Path(__file__).parent / "fixtures/dialogue_comparison_v1.json"
@@ -62,7 +64,58 @@ def validate_capture(capture: dict, suite: dict, suite_sha: str) -> None:
         raise ValueError("An empty capture is NOT_RUN, not a measured competitor")
 
 
-def run_imvera(suite: dict, suite_sha: str, label: str) -> dict:
+def _decision_state(engine) -> dict:
+    """Read-only projection; never invoke a scheduler/renderer to inspect state."""
+    state = engine.state
+    return {
+        "revision": state.revision,
+        "active_playout_generation": state.active_playout_generation,
+        "slots": {key: str(value) for key, value in state.slots.items()},
+        "slot_values": dict(state.slot_values),
+        "active_episode_id": state.active_episode_id,
+        "pending_episode_attribute": state.pending_episode_attribute,
+        "episodes": {
+            key: {
+                "label": ep.primary_label,
+                "known_attributes": dict(ep.known_attributes),
+                "status": ep.status,
+            }
+            for key, ep in state.issue_episodes.items()
+        },
+        "planned_question": (
+            state.planned_question.model_dump(mode="json") if state.planned_question else None
+        ),
+        "delivered_question": (
+            state.delivered_question.model_dump(mode="json") if state.delivered_question else None
+        ),
+        "important_to_share_asked": state.important_to_share_asked,
+        "important_to_share_resolved": state.important_to_share_resolved,
+        "thread": {
+            "label": state.current_thread_label,
+            "hook": state.open_hook,
+            "followup_count": state.thread_followup_count,
+            "reply_finished": state.thread_reply_finished,
+        },
+        "router_stats": dict(state.action_policy_router_stats),
+    }
+
+
+def _source_fingerprints() -> dict[str, str]:
+    root = Path(__file__).resolve().parents[2]
+    paths = sorted((root / "packages/dialogue_engine").rglob("*.py"))
+    paths.extend(root / name for name in (
+        "packages/dialogue/session.py", "packages/voice_runtime/call_actor.py",
+        "tools/voice_lab/dialogue_comparison.py",
+    ))
+    return {
+        str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in paths
+    }
+
+
+def run_imvera(
+    suite: dict, suite_sha: str, label: str, *, decision_metadata: bool = False,
+) -> dict:
     from packages.dialogue_engine.engine import DialogueEngine
     from packages.dialogue_engine.mission import CallMission
     from packages.dialogue_engine.mission_result import build_call_outcomes, build_mission_result
@@ -72,13 +125,22 @@ def run_imvera(suite: dict, suite_sha: str, label: str) -> dict:
     sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], text=True).strip())
 
-    def drain(engine: DialogueEngine) -> tuple[list[str], list[str]]:
-        texts, intents = [], []
+    def drain(engine: DialogueEngine) -> tuple[list[str], list[str], list[dict]]:
+        texts, intents, decisions = [], [], []
         while (effect := engine.pop_speak_effect()) is not None:
             texts.append(effect.text)
             intents.append(effect.intent)
+            if decision_metadata:
+                decision = {
+                    "effect": effect.model_dump(mode="json"),
+                    "before_delivery": _decision_state(engine),
+                }
             engine.on_playout_completed(effect.generation, effect.question_id)
-        return texts, intents
+            if decision_metadata:
+                decision["after_delivery"] = _decision_state(engine)
+                decision["delivery"] = "SIMULATED_COMPLETED"
+                decisions.append(decision)
+        return texts, intents, decisions
 
     cases = []
     for case in suite["cases"]:
@@ -89,17 +151,27 @@ def run_imvera(suite: dict, suite_sha: str, label: str) -> dict:
             mission=mission,
             elder_display_name=suite["elder_display_name"],
         )
-        engine.state.mandatory_background_goals = mission is None
+        engine.state.mandatory_background_goals = case.get(
+            "mandatory_background_goals", mission is None
+        )
+        replay_configuration = {
+            "mandatory_background_goals": engine.state.mandatory_background_goals,
+            "required_background_goals": sorted(engine.state.required_background_goals),
+            "mission_preset": engine.state.mission_preset,
+        }
         engine.start()
-        texts, intents = drain(engine)
+        texts, intents, decisions = drain(engine)
         turns = [{"user": None, "assistant": texts, "intents": intents}]
+        if decision_metadata:
+            turns[0].update(decisions=decisions, state_after=_decision_state(engine))
         for index, text in enumerate(case["inputs"]):
             uid = f"u{index + 1}"
+            before = _decision_state(engine) if decision_metadata else None
             started = time.perf_counter()
             rich = engine.build_rich_turn(text, utterance_id=uid)
             engine.on_user_turn(uid, text, rich_turn=rich)
             elapsed = (time.perf_counter() - started) * 1000
-            texts, intents = drain(engine)
+            texts, intents, decisions = drain(engine)
             turns.append(
                 {
                     "user": text,
@@ -108,6 +180,19 @@ def run_imvera(suite: dict, suite_sha: str, label: str) -> dict:
                     "text_processing_ms": round(elapsed, 3),
                 }
             )
+            if decision_metadata:
+                turns[-1].update(
+                    utterance_id=uid, state_before=before,
+                    understanding={
+                        key: value for key, value in rich.model_dump(mode="json").items()
+                        if key in {
+                            "dialogue_act", "answers_pending_question", "user_question",
+                            "goal_facts", "goal_answers", "issue_mentions", "not_recalled",
+                            "control", "kernel_route", "kernel_ambiguities",
+                        }
+                    },
+                    decisions=decisions, state_after=_decision_state(engine),
+                )
         cases.append(
             {
                 "id": case["id"],
@@ -117,6 +202,7 @@ def run_imvera(suite: dict, suite_sha: str, label: str) -> dict:
                 "episodes": [
                     ep.model_dump(mode="json") for ep in engine.state.issue_episodes.values()
                 ],
+                **({"replay_configuration": replay_configuration} if decision_metadata else {}),
             }
         )
     result = {
@@ -141,8 +227,172 @@ def run_imvera(suite: dict, suite_sha: str, label: str) -> dict:
         },
         "cases": cases,
     }
+    if decision_metadata:
+        from packages.dialogue_engine.action_policy_shadow_config import action_policy_runtime_truth
+        from packages.dialogue_engine.runtime import coverage_ladder_enabled
+
+        result["runtime"].update(
+            understanding_path="SDK TurnUnderstandingV2.resolve; CallActor producer NOT_RUN",
+            delivery="SIMULATED_COMPLETED; transport/audible delivery NOT_RUN",
+            router=action_policy_runtime_truth(),
+            coverage_ladder_enabled=coverage_ladder_enabled(),
+            speech_day=os.environ.get("IMVERA_SPEECH_DAY"),
+            speech_hour=os.environ.get("IMVERA_SPEECH_HOUR"),
+            act_head_requested=os.environ.get("IMVERA_ACT_HEAD_VERSION", "v2"),
+            source_sha256=_source_fingerprints(),
+        )
+        for row, case in zip(result["cases"], suite["cases"], strict=True):
+            row["required_modalities"] = case.get("required_modalities", ["text"])
     validate_capture(result, suite, suite_sha)
     return result
+
+
+def _percentiles(samples: list[float]) -> dict | str:
+    if not samples:
+        return "NOT_RUN"
+    ordered = sorted(samples)
+    return {
+        "n": len(ordered),
+        "p50": ordered[max(0, ceil(0.50 * len(ordered)) - 1)],
+        "p95": ordered[max(0, ceil(0.95 * len(ordered)) - 1)],
+    }
+
+
+def measure_capture(capture: dict) -> dict:
+    """Measure captured SDK presentations, not clinical correctness or heard warmth.
+
+    Repeated presentations may be warranted repairs/unknown answers. Proxy counts
+    are diagnostics, not automatic safety/quality verdicts. IDs distinguish real
+    questions from text containing '?' and repeated delivery callbacks.
+    """
+    if capture.get("provider", {}).get("channel") != "text":
+        raise ValueError("SDK metrics require a text capture, not a telephone-delivery claim")
+    if not capture.get("runtime", {}).get("source_sha256"):
+        raise ValueError("Metrics require source fingerprints and --decision-metadata")
+    rows = []
+    for case in capture["cases"]:
+        counts: Counter = Counter()
+        seen_ids: set[str] = set()
+        needs: Counter = Counter()
+        samples = []
+        run = maximum_run = max_fills = 0
+        for turn in case["turns"]:
+            if "decisions" not in turn or "state_after" not in turn:
+                raise ValueError("Metrics require actual captured decision/state metadata")
+            effects = [d["effect"] for d in turn["decisions"]]
+            if (
+                turn.get("assistant") != [fx["text"] for fx in effects]
+                or turn.get("intents") != [fx["intent"] for fx in effects]
+            ):
+                raise ValueError("Decision effects must match captured assistant/intents")
+            if turn.get("user") is not None:
+                counts["user_turns"] += 1
+                if "text_processing_ms" in turn:
+                    elapsed = turn["text_processing_ms"]
+                    if (
+                        isinstance(elapsed, bool) or not isinstance(elapsed, (int, float))
+                        or not isfinite(elapsed) or elapsed < 0
+                    ):
+                        raise ValueError("Invalid SDK elapsed time; missing is NOT_RUN, not zero")
+                    samples.append(elapsed)
+                before = turn["state_before"]
+                after = turn["state_after"]
+                fills = sum(
+                    value == "FILLED" and before["slots"].get(key) != "FILLED"
+                    for key, value in after["slots"].items()
+                )
+                max_fills = max(max_fills, fills)
+                if turn["understanding"].get("user_question"):
+                    counts["user_question_turns"] += 1
+                    if "answer_user_question" not in turn["intents"]:
+                        counts["user_question_without_answer_intent_proxy"] += 1
+                if (
+                    before["thread"]["followup_count"] >= 2
+                    and "resume_after_thread" in turn["intents"]
+                ):
+                    counts["budget_to_wellness_return_proxy"] += 1
+            for decision in turn["decisions"]:
+                if decision.get("delivery") != "SIMULATED_COMPLETED":
+                    raise ValueError("SDK metrics do not establish real delivery")
+                fx = decision["effect"]
+                if type(fx.get("marks_question")) is not bool:
+                    raise ValueError("Question marks_question must be a boolean")
+                counts["speech_presentations"] += 1
+                question = fx["marks_question"]
+                run = run + 1 if question else 0
+                maximum_run = max(maximum_run, run)
+                if not question:
+                    counts["nonquestion_speech_presentations"] += 1
+                    continue
+                qid = fx.get("question_id")
+                if not qid:
+                    raise ValueError("Question presentation requires an actual question ID")
+                after_delivery = decision["after_delivery"]
+                delivered = after_delivery["delivered_question"]
+                if (
+                    not delivered or delivered["question_id"] != qid
+                    or delivered["phase"] != "DELIVERED"
+                    or after_delivery["active_playout_generation"] != fx["generation"]
+                ):
+                    raise ValueError("Question identity/generation must match delivered state")
+                if qid in seen_ids:
+                    counts["same_question_identity_representations"] += 1
+                    continue
+                seen_ids.add(qid)
+                counts["distinct_question_ids"] += 1
+                state = decision["before_delivery"]
+                if fx["intent"].startswith(("repair_", "clarify_")):
+                    counts["repair_or_clarification_presentations"] += 1
+                    continue
+                key = (fx["intent"], fx.get("slot"), state["active_episode_id"],
+                       state["pending_episode_attribute"])
+                needs[key] += 1
+                if needs[key] > 1:
+                    counts["repeated_question_key_presentations_proxy"] += 1
+                if (
+                    state["active_episode_id"]
+                    and fx["intent"].startswith(("episode_", "topic_"))
+                    and not after_delivery["pending_episode_attribute"]
+                ):
+                    counts["clinical_question_without_pending_attribute_proxy"] += 1
+        rows.append({
+            "id": case["id"], "counts": dict(counts),
+            "max_consecutive_vera_question_presentations": maximum_run,
+            "max_newly_filled_slots_per_user_turn": max_fills,
+            "sdk_text_processing_ms": _percentiles(samples),
+            "final_state": case["turns"][-1]["state_after"],
+            "required_modalities": case.get("required_modalities", ["text"]),
+            "replay_configuration": case.get("replay_configuration"),
+            "phone_acceptance": "NOT_RUN",
+        })
+    return {
+        "format": "imvera.dialogue-measurements.v1",
+        "provider": capture["provider"], "suite_sha256": capture["suite_sha256"],
+        "runtime": capture["runtime"],
+        "boundary": "SDK-only simulated presentations; not CallActor or heard delivery",
+        "definitions": {
+            "repeated_question_key_presentations_proxy":
+                "same intent/slot/active episode/pending attribute, excluding repair IDs; "
+                "not proof of unnecessary repetition",
+            "clinical_question_without_pending_attribute_proxy":
+                "episode/topic question with active episode but no delivered pending attribute; "
+                "diagnostic requires obligation review",
+            "budget_to_wellness_return_proxy":
+                "resume_after_thread after followup_count>=2; not proof transition was appropriate",
+            "user_question_without_answer_intent_proxy":
+                "understanding has user_question but no answer_user_question intent; "
+                "not semantic answer correctness",
+            "sdk_text_processing_ms":
+                "local understand+reduce elapsed; excludes STT/TTS/delivery/audio; not M5",
+        },
+        "not_measured": dict.fromkeys((
+            "topic_jump_rate", "questions_per_minute", "grounded_fact_recall",
+            "safety_error_rate", "human_questionnaire_feel", "listener_warmth",
+            "end_of_speech_to_first_pcm_ms", "model_invocation_counts",
+            "model_ram", "concurrent_call_capacity", "barge_in", "slow_speech",
+        ), "NOT_RUN"),
+        "cases": rows,
+    }
 
 
 def compare_captures(left: dict, right: dict, suite: dict, suite_sha: str) -> str:
@@ -209,6 +459,10 @@ def main() -> None:
     run = sub.add_parser("run")
     run.add_argument("--label", default="IMVERA")
     run.add_argument("--output", type=Path, required=True)
+    run.add_argument("--decision-metadata", action="store_true")
+    metrics = sub.add_parser("metrics")
+    metrics.add_argument("--capture", type=Path, required=True)
+    metrics.add_argument("--output", type=Path, required=True)
     load = sub.add_parser("import")
     load.add_argument("--capture", type=Path, required=True)
     load.add_argument("--output", type=Path, required=True)
@@ -219,12 +473,18 @@ def main() -> None:
     args = parser.parse_args()
     suite, suite_sha = read_suite(args.suite)
     if args.command == "run":
-        result = run_imvera(suite, suite_sha, args.label)
+        result = run_imvera(suite, suite_sha, args.label, decision_metadata=args.decision_metadata)
         args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
         print(
             f"Captured {len(result['cases'])} SDK cases; "
             f"audio/models/human warmth NOT_RUN: {args.output}"
         )
+    elif args.command == "metrics":
+        capture = json.loads(args.capture.read_text())
+        validate_capture(capture, suite, suite_sha)
+        result = measure_capture(capture)
+        args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+        print(f"Captured decision metrics; phone/human/model acceptance NOT_RUN: {args.output}")
     elif args.command == "import":
         result = json.loads(args.capture.read_text())
         validate_capture(result, suite, suite_sha)
