@@ -152,12 +152,53 @@ def _produce_mlx_chunks(
         out_q.put(None)
 
 
+def _produce_qwen_chunks(
+    req: SynthesizeRequest, out_q: queue.Queue, tts_cfg: dict[str, Any]
+) -> int:
+    """Qwen GGUF primary via resident server. Returns chunk count, raises
+    on failure, sends NO sentinel (caller owns it for fallback control)."""
+    from services.tts.qwen_gguf import QWEN_SAMPLE_RATE, synthesize_stream
+
+    seq = 0
+    for pcm in synthesize_stream(
+        req.text,
+        voice=req.voice,
+        lang=req.language or "Russian",
+        cfg=tts_cfg,
+    ):
+        if req.generation_id in _cancelled:
+            break
+        for chunk_pcm, sr in _chunk_pcm(pcm, QWEN_SAMPLE_RATE):
+            out_q.put(
+                {
+                    "sequence": seq,
+                    "sample_rate": sr,
+                    "pcm_b64": base64.b64encode(chunk_pcm).decode("ascii"),
+                    "is_last": False,
+                }
+            )
+            seq += 1
+    return seq
+
+
 def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
     cfg = _load_config()
     tts_cfg = cfg["models"]["tts"]
     engine = tts_engine(tts_cfg)
     if engine == "silero_lab":
         _produce_silero_chunks(req, out_q, tts_cfg)
+    elif engine == "qwen_gguf":
+        try:
+            heard = _produce_qwen_chunks(req, out_q, tts_cfg)
+        except Exception as exc:
+            heard = 0
+            print(f"TTS qwen_gguf failed ({exc}) — falling back to silero", flush=True)
+        if heard == 0 and req.generation_id not in _cancelled:
+            # Nothing spoke: safe to fall back within the same request.
+            # Partial qwen audio stands as-is (audible, honest).
+            _produce_silero_chunks(req, out_q, tts_cfg)
+        else:
+            out_q.put(None)
     else:
         _produce_mlx_chunks(req, out_q, tts_cfg)
 
@@ -211,6 +252,36 @@ def _load_mlx_model(model_id: str, timeout_s: float) -> tuple[Any | None, str | 
     if box["model"] is None:
         return None, f"load_model returned None for {model_id}"
     return box["model"], None
+
+
+def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
+    """Ping resident qwen server + warmup phrase; fall back to silero."""
+    try:
+        from services.tts.qwen_gguf import ping
+        from services.tts.warmup import warmup_synthesis
+
+        if not ping():
+            if _maybe_fallback_silero(tts_cfg, "qwen server unreachable"):
+                return
+            state.warmup_error = "qwen server unreachable"
+            state.ready = False
+            return
+        state.model_revision = "qwen_gguf:qwen-talker-0.6b-customvoice-Q8_0"
+        first_s = warmup_synthesis(_produce_chunks, text="А.", timeout_s=180.0)
+        if first_s <= 0:
+            if _maybe_fallback_silero(tts_cfg, "qwen warmup produced no audio"):
+                return
+            state.warmup_error = "qwen warmup produced no audio"
+            state.ready = False
+            return
+        print(f"TTS qwen warmup first chunk in {first_s:.2f}s", flush=True)
+        state.ready = True
+    except Exception as exc:
+        if _maybe_fallback_silero(tts_cfg, str(exc)):
+            return
+        state.warmup_error = str(exc)
+        state.ready = False
+        print(f"TTS qwen warmup failed: {exc}", flush=True)
 
 
 def _maybe_fallback_silero(tts_cfg: dict[str, Any], reason: str) -> bool:
@@ -306,8 +377,12 @@ async def _ndjson_stream(req: SynthesizeRequest) -> AsyncIterator[bytes]:
 async def synthesize(req: SynthesizeRequest) -> StreamingResponse:
     cfg = _load_config()
     engine = tts_engine(cfg["models"]["tts"])
-    if engine != "silero_lab" and (not state.ready or _tts is None):
+    # qwen_gguf carries no in-process model (_tts stays None by design —
+    # the resident server is the model, proven at warmup).
+    if engine != "silero_lab" and engine != "qwen_gguf" and (not state.ready or _tts is None):
         raise HTTPException(503, detail=state.warmup_error or "not ready")
+    if engine == "qwen_gguf" and not state.ready:
+        raise HTTPException(503, detail=state.warmup_error or "qwen not ready")
     if engine == "silero_lab" and not state.ready:
         raise HTTPException(503, detail=state.warmup_error or "silero lab not ready")
     if executor.queue_depth >= 4:
@@ -331,7 +406,9 @@ def main() -> None:
     port = int(os.environ.get("IMVERA_TTS_PORT", cfg["ports"]["tts"]))
     tts_cfg = cfg["models"]["tts"]
     engine = tts_engine(tts_cfg)
-    if engine != "silero_lab":
+    if engine == "qwen_gguf":
+        _ping_and_warmup_qwen(tts_cfg)
+    elif engine != "silero_lab":
         _load_and_warmup_mlx(tts_cfg, engine)
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import queue
+import threading
 import time
 import uuid
 from collections.abc import Callable
@@ -16,7 +17,13 @@ def warmup_synthesis(
     text: str = "Здравствуйте.",
     timeout_s: float = 120.0,
 ) -> float:
-    """Run one short synthesis on the caller thread; return seconds until first PCM."""
+    """Run one short synthesis; return seconds until first PCM.
+
+    The producer runs on a thread while the caller drains: a bounded
+    queue with a synchronous producer deadlocks once it fills (live:
+    qwen warmup parked forever on put #9). Same shape as the live
+    ndjson streamer.
+    """
     out_q: queue.Queue = queue.Queue(maxsize=8)
     req = SynthesizeRequest(
         call_id="warmup",
@@ -26,7 +33,10 @@ def warmup_synthesis(
     )
     started = time.monotonic()
     first_s: float | None = None
-    produce_fn(req, out_q)
+    producer = threading.Thread(
+        target=produce_fn, args=(req, out_q), daemon=True
+    )
+    producer.start()
     deadline = started + timeout_s
     while True:
         remaining = deadline - time.monotonic()
@@ -40,4 +50,5 @@ def warmup_synthesis(
             break
         if first_s is None and item.get("pcm_b64"):
             first_s = time.monotonic() - started
+    producer.join(timeout=5.0)
     return first_s if first_s is not None else 0.0

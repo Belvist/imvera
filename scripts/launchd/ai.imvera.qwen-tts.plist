@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.imvera.qwen-tts</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/earflow/Downloads/voiseup/models/qwentts.cpp/build/tts-server</string>
+        <string>--model</string>
+        <string>/Users/earflow/Downloads/voiseup/models/qwen3_tts_gguf/qwen-talker-0.6b-customvoice-Q8_0.gguf</string>
+        <string>--codec</string>
+        <string>/Users/earflow/Downloads/voiseup/models/qwen3_tts_gguf/qwen-tokenizer-12hz-Q8_0.gguf</string>
+        <string>--port</string>
+        <string>8899</string>
+        <string>--lang</string>
+        <string>Russian</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/earflow/Downloads/voiseup</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/earflow</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/voiseup-qwen-tts.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/voiseup-qwen-tts.log</string>
+</dict>
+</plist>
