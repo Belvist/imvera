@@ -784,6 +784,30 @@ canonical == TTS == delivered speech, and a single farewell.
 
 ---
 
+# Full prod restart verified (2026-10-02, still 09cff20)
+
+- Restarted everything in no-call window: STT/TTS x2, bridge, FS, DB.
+  DB intact (444/2107) + write probe OK. Spool empty, traces live.
+- Verified: 4 sofia profiles RUNNING, Zoiper re-registered (TCP,
+  Reachable), STT transcribes, TTS (clone) synthesizes, bridge hot,
+  version_watch OK. No code changed; no version move.
+
+---
+
+# Voice proof + ninth merge live on 09cff20 (2026-10-02)
+
+- Owner doubt answered with measurement, not words: live worker speech
+  spectral-matches vera_kseniya (dist 0.050). File 8-что-сейчас-в-трубке
+  in Downloads for ear check. base server has no preset speakers (serena
+  400s are expected there, not a bug).
+- His f0b00a4 (revision only after proven audio) merged clean — strictly
+  better than our early label. Gates: 2492/2(origin-reds, fail on his
+  tree too), corpus 500/500, diff 4/4, agent+dream, hard1000, battery.
+  Pushed normally. TTS x2 + bridge -> 09cff20, qwen base revision on
+  both workers, watch OK.
+
+---
+
 # Eighth merge live on d4be4f4: story-exchange + warmup fixup (2026-10-02)
 
 - His 5abc236 (story replies preserved, truthful delivery, replay
