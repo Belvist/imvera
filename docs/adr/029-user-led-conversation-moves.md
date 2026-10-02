@@ -1,7 +1,7 @@
 # ADR-029: User-led moves inside the existing conversation owner
 
 Date: 2026-10-02
-Status: implementation candidate; live audio/human acceptance NOT VERIFIED
+Status: implemented; exact-code CI verified; live audio/human acceptance NOT VERIFIED
 Branch: feature/voice-zoiper-m5
 
 ## Context

@@ -73,7 +73,8 @@ evidence, a source turn and quote; `active` by itself is not that proof.
    `make test-dialogue-rich`, `make test-dialogue-runtime`,
    `make test-semantic-kernel`, `make test-action-policy-shadow`,
    `make dialogue-corpus-gate`, full tests and lint. `all_hot` must be real.
-3. Check exact source/model/endpoint/runtime flags. Restart only code services
+3. Check exact source/model/endpoint/runtime flags. Drain active calls before
+   a controlled restart and preserve their records. Restart only code services
    whose source changed through the established M5 runbook; confirm loaded SHA.
    FreeSWITCH and the database are not dialogue code rebuild targets.
 4. Make an end-to-end call through CallActor/FreeSWITCH. Save original audio,

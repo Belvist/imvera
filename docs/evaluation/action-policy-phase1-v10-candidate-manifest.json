@@ -1,7 +1,7 @@
 {
-  "status": "candidate",
+  "status": "frozen",
   "policy_version": "action-policy-phase1-v10",
-  "tested_sha": null,
+  "tested_sha": "6705f7651b3f0be1194344bf1e777da8a9a195a2",
   "historical_baseline_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
   "historical_baseline_manifest": "docs/evaluation/action-policy-phase1-v9-freeze-manifest.json",
   "source_parent_sha": "75280deaa0ab2b3e3ff070fba378edd1ef66d542",
@@ -19,7 +19,7 @@
   },
   "policy_tree_sha256": "5b6cee8680240e144348fd98865c0b973d3adf19de7701b687728a4dbd691d13",
   "hash_construction": {
-    "per_file": "sha256 of current candidate core bytes; after pin, identical git blob bytes at tested_sha",
+    "per_file": "sha256 of core git blob bytes at tested_sha; current metadata cut preserves identical ten core files",
     "policy_tree_sha256": "sha256 of concatenated core file bytes, filenames sorted ascending",
     "weights_sha256": "observed optional companion file bytes during lab measurement, not a policy-integrity input"
   },
@@ -51,16 +51,31 @@
     },
     "corpus": "500/500 passed in 5.62s (root-reported actual corpus gate)",
     "remote_ci": {
-      "status": "PENDING",
-      "tested_sha": null,
-      "run_url": null,
-      "note": "No remote success or frozen code SHA claimed before candidate commit and observed CI result"
+      "status": "SUCCESS",
+      "tested_sha": "6705f7651b3f0be1194344bf1e777da8a9a195a2",
+      "run_id": 37078095709,
+      "run_url": "https://github.com/Belvist/imvera/actions/runs/37078095709",
+      "jobs_succeeded": 10,
+      "full_pytest": {
+        "passed": 3006,
+        "failed": 0,
+        "skipped": 3,
+        "warnings": 10,
+        "duration_seconds": 177.89,
+        "log_source": "/tmp/imvera-cut1b-candidate-ci-test.log:640",
+        "scope": "full runnable suite with actual LFS checkout"
+      }
+    },
+    "metadata_freeze_validation": {
+      "shadow_m1": "50 passed in 0.67s, including actual shallow-clone parent fetch, missing/invalid commit fail-closed, and active pin enforced before ten-core diff",
+      "diff_and_transport_provenance": "14 passed in 4.65s",
+      "lint": "ruff check and format passed; git diff --check passed",
+      "scope": "metadata/test-only changes after green candidate CI; separate metadata commit CI remains pending"
     }
   },
   "not_verified": [
     "actual M5 latency and capacity",
-    "CallActor/FreeSWITCH audio/live-human acceptance",
-    "remote CI"
+    "CallActor/FreeSWITCH audio/live-human acceptance"
   ],
   "replacement": "v9 Git objects/manifest preserved as historical evidence; v10 replaces active core in place (same choose API)",
   "pin_workflow": "Commit candidate first; verify exact commit; then set tested_sha/FROZEN_POLICY_SHA to that commit and status frozen in a separate metadata commit. Never use an invented future SHA.",
@@ -72,12 +87,14 @@
   "weights_role": "observed optional untracked slot-answer classifier companion; tests/conftest can build it under platform-specific sklearn; historical bundle readiness NOT VERIFIED; not a pure-policy guard input",
   "weights_present_in_measurement_workspace": true,
   "notes": {
-    "background_dispositions": "Pure snapshot reads terminal slot/goal truth before stale coverage; BLOCKED remains nonterminal with existing ownership."
+    "background_dispositions": "Pure snapshot reads terminal slot/goal truth before stale coverage; BLOCKED remains nonterminal with existing ownership.",
+    "freeze": "Pinned after observed published candidate CI success; candidate-era isolated/challenge artifacts retain their original candidate provenance. Metadata guard changes receive separate focused validation."
   },
   "evaluation_artifacts": [
     "docs/evaluation/action-policy-historical-v8-v9-isolated.json",
     "docs/evaluation/action-policy-v9-v10-candidate-diff.json",
     "docs/evaluation/action-policy-v10-candidate-challenge.json",
     "docs/evaluation/user-led-conversation-cut1b-2026-10-02/required-background-return-before-after.json"
-  ]
+  ],
+  "tested_tree": "f38c33c8c11f05a053abe4e8ef8ce1164369401c"
 }

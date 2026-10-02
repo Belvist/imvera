@@ -51,6 +51,23 @@ scheduler after a successful selection.
 
 ## VERIFIED
 
+Published code: [`6705f76`](https://github.com/Belvist/imvera/commit/6705f7651b3f0be1194344bf1e777da8a9a195a2).
+Remote Git tree `f38c33c8c11f05a053abe4e8ef8ce1164369401c` exactly matches local.
+[GitHub CI](https://github.com/Belvist/imvera/actions/runs/37078095709) completed on that exact commit: **10/10 jobs PASS**, full
+suite **3006 passed / 0 failed / 3 skipped**,177.89s, with real LFS checkout.
+Both after captures'105 source fingerprints were checked against this commit's
+Git blobs. The freeze pins this actual tested code; all ten core Git blobs match.
+Capture-time candidate provenance is retained as historical truth. Its guarded
+history helper validates historical and active pins, including an actual shallow
+clone and failed/missing fetches:50 shadow tests +14 diff/transport tests PASS.
+Metadata has a separate commit check; source publication is not deployment.
+
+Local full run: **2998 passed / 2 inherited LFS warmup failures / 9 skipped**,
+153.32s. Existing full corpus **500/500 PASS**,5.62s; gate tests8 PASS; existing
+agent DialogueEngine+CallSession gate PASS; contracts OK; Ruff/diff-check PASS.
+Pure selector benchmark10000 iterations on Linux: p50=.85067ms,p95=1.012951ms,
+p99=1.176964ms. This excludes M5, STT/TTS/audio, model service and concurrency.
+
 Exact commands, aggregate counts and source fingerprints are in
 [summary.json](summary.json). [Paired transcripts](before-after.md) show all
 15 frozen conversational inputs, including the unchanged medical cases.

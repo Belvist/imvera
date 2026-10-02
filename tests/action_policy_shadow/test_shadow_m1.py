@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -306,19 +307,22 @@ def _git(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _ensure_frozen_sha_available() -> None:
-    """Shallow CI clones often omit the frozen SHA — fetch it or fail closed."""
-    probe = _git("cat-file", "-e", f"{FROZEN_SHA}^{{commit}}")
+def _ensure_frozen_sha_available(sha: str | None = FROZEN_SHA) -> None:
+    """Fetch an exact historical/active commit omitted by shallow clones, or fail."""
+    assert isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{40}", sha), (
+        f"invalid frozen SHA: {sha!r}"
+    )
+    probe = _git("cat-file", "-e", f"{sha}^{{commit}}")
     if probe.returncode == 0:
         return
-    fetched = _git("fetch", "--depth=1", "origin", FROZEN_SHA)
+    fetched = _git("fetch", "--depth=1", "origin", sha)
     assert fetched.returncode == 0, (
-        f"frozen SHA {FROZEN_SHA} missing and fetch failed: "
+        f"frozen SHA {sha} missing and fetch failed: "
         f"rc={fetched.returncode} stderr={fetched.stderr!r}"
     )
-    probe2 = _git("cat-file", "-e", f"{FROZEN_SHA}^{{commit}}")
+    probe2 = _git("cat-file", "-e", f"{sha}^{{commit}}")
     assert probe2.returncode == 0, (
-        f"frozen SHA {FROZEN_SHA} still missing after fetch: stderr={probe2.stderr!r}"
+        f"frozen SHA {sha} still missing after fetch: stderr={probe2.stderr!r}"
     )
 
 
@@ -334,6 +338,8 @@ def test_h_frozen_policy_unchanged() -> None:
     from packages.dialogue_engine import action_policy_shadow_config as cfg
 
     _ensure_frozen_sha_available()
+    if cfg.POLICY_STATUS == "frozen":
+        _ensure_frozen_sha_available(cfg.FROZEN_POLICY_SHA)
     historical_path = ROOT / "docs/evaluation/action-policy-phase1-v9-freeze-manifest.json"
     historical = json.loads(historical_path.read_text())
     assert historical["tested_sha"] == cfg.HISTORICAL_BASELINE_SHA == FROZEN_SHA
@@ -393,6 +399,97 @@ def test_h_frozen_guard_fails_when_git_object_missing(
             f"frozen guard failed for policy.py: rc={proc.returncode}\n"
             f"stdout={proc.stdout!r}\nstderr={proc.stderr!r}"
         )
+
+
+@pytest.mark.parametrize("sha", [None, "", "development-not-a-commit", "a" * 39, "g" * 40])
+def test_freeze_history_helper_rejects_invalid_pin_before_git(monkeypatch, sha):
+    def unexpected_git(*_args):
+        raise AssertionError("invalid pin must not reach git")
+
+    monkeypatch.setitem(globals(), "_git", unexpected_git)
+    with pytest.raises(AssertionError, match="invalid frozen SHA"):
+        _ensure_frozen_sha_available(sha)
+
+
+@pytest.mark.parametrize("sha", [FROZEN_SHA, "6705f7651b3f0be1194344bf1e777da8a9a195a2"])
+def test_freeze_history_helper_missing_pin_fails_closed(monkeypatch, sha):
+    calls = []
+
+    def failed_git(*args):
+        calls.append(args)
+        return SimpleNamespace(returncode=128, stdout="", stderr="missing object or remote")
+
+    monkeypatch.setitem(globals(), "_git", failed_git)
+    with pytest.raises(AssertionError, match="missing and fetch failed"):
+        _ensure_frozen_sha_available(sha)
+    assert calls == [("cat-file", "-e", f"{sha}^{{commit}}"), ("fetch", "--depth=1", "origin", sha)]
+
+
+def test_freeze_history_helper_requires_object_after_successful_fetch(monkeypatch):
+    sha = "6705f7651b3f0be1194344bf1e777da8a9a195a2"
+    calls = []
+
+    def incomplete_fetch(*args):
+        calls.append(args)
+        return SimpleNamespace(
+            returncode=0 if args[0] == "fetch" else 128, stdout="", stderr="missing"
+        )
+
+    monkeypatch.setitem(globals(), "_git", incomplete_fetch)
+    with pytest.raises(AssertionError, match="still missing after fetch"):
+        _ensure_frozen_sha_available(sha)
+    assert calls == [
+        ("cat-file", "-e", f"{sha}^{{commit}}"),
+        ("fetch", "--depth=1", "origin", sha),
+        ("cat-file", "-e", f"{sha}^{{commit}}"),
+    ]
+
+
+def test_freeze_history_helper_fetches_actual_parent_from_shallow_metadata_clone(
+    tmp_path, monkeypatch
+):
+    """A depth-one metadata HEAD omits its active code pin; exact fetch restores it."""
+    origin = tmp_path / "origin"
+    origin.mkdir()
+
+    def git_at(path, *args):
+        return subprocess.run(["git", *args], cwd=path, capture_output=True, text=True, check=True)
+
+    git_at(origin, "init", "-b", "main")
+    git_at(origin, "config", "user.name", "freeze-test")
+    git_at(origin, "config", "user.email", "freeze-test@example.invalid")
+    (origin / "core.txt").write_text("immutable core\n")
+    git_at(origin, "add", "core.txt")
+    git_at(origin, "commit", "-m", "candidate core")
+    active_sha = git_at(origin, "rev-parse", "HEAD").stdout.strip()
+    (origin / "metadata.txt").write_text(active_sha + "\n")
+    git_at(origin, "add", "metadata.txt")
+    git_at(origin, "commit", "-m", "freeze metadata")
+    clone = tmp_path / "shallow"
+    git_at(tmp_path, "clone", "--depth=1", origin.as_uri(), str(clone))
+    assert git_at(clone, "rev-parse", "--is-shallow-repository").stdout.strip() == "true"
+    missing = subprocess.run(["git", "cat-file", "-e", f"{active_sha}^{{commit}}"], cwd=clone)
+    assert missing.returncode != 0
+    monkeypatch.setitem(globals(), "ROOT", clone)
+    _ensure_frozen_sha_available(active_sha)
+    git_at(clone, "cat-file", "-e", f"{active_sha}^{{commit}}")
+    assert git_at(clone, "show", f"{active_sha}:core.txt").stdout == "immutable core\n"
+
+
+def test_frozen_core_guard_ensures_active_pin_before_core_diff(monkeypatch):
+    from packages.dialogue_engine import action_policy_shadow_config as cfg
+
+    assert cfg.POLICY_STATUS == "frozen"
+    ensured = []
+    real_ensure = _ensure_frozen_sha_available
+
+    def ensure(sha=FROZEN_SHA):
+        ensured.append(sha)
+        real_ensure(sha)
+
+    monkeypatch.setitem(globals(), "_ensure_frozen_sha_available", ensure)
+    test_h_frozen_policy_unchanged()
+    assert ensured == [FROZEN_SHA, cfg.FROZEN_POLICY_SHA]
 
 
 def test_i_no_raw_text_in_payload(monkeypatch: pytest.MonkeyPatch) -> None:

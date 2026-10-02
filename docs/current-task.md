@@ -1,6 +1,6 @@
 # Cut1b: user-led conversation inside the existing engine (2026-10-02)
 
-Base/remote m5: **75280deaa0ab2b3e3ff070fba378edd1ef66d542**. Main and loaded
+Base m5: **75280deaa0ab2b3e3ff070fba378edd1ef66d542**. Published code: **6705f7651b3f0be1194344bf1e777da8a9a195a2**. Main and loaded
 services unchanged. [ADR029](adr/029-user-led-conversation-moves.md) was written
 before production edits; [evidence](evaluation/user-led-conversation-cut1b-2026-10-02/README.md)
 and [SDK/M5 integration](user-led-conversation-integration.md) describe actual
@@ -21,6 +21,7 @@ VERIFIED:
 
 | Boundary | Actual result |
 |---|---|
+| [Exact code CI](https://github.com/Belvist/imvera/actions/runs/37078095709) | 10/10 jobs PASS;3006 passed/0 failed/3 skipped,177.89s; genuine LFS checkout |
 | Final full local pytest | 2998 passed / 2 inherited LFS warmup failures / 9 skipped,153.32s; NOT locally green |
 | Existing full daily corpus | 500/500 PASS,5.62s; gate tests8 PASS |
 | Existing agent DialogueEngine+CallSession gate / contracts | PASS / OK; text Layer A |
@@ -34,16 +35,15 @@ VERIFIED:
 Initial full failures were fixed, not skipped. Intended thread assertion changes
 are explained in ADR/evidence; strict old source/control/medical assertions
 remain. Local real xenc encoder still an LFS pointer; two readiness failures
-are preserved. Previous75280de genuine-LFS CI was green; new source CI pending.
-Active v10 provenance is candidate/unpinned until a real tested commit exists;
-no invented future SHA or waiver of frozen integrity.
+are preserved. New6705f76 genuine-LFS CI is green; no local failure was waived.
+Active v10 provenance now pins the actual CI-tested code6705f7651b3f0be1194344bf1e777da8a9a195a2; all10 core Git blobs match. Historical v9 is immutable. The metadata guard verifies/fetches both actual pins and fails closed on invalid or missing objects;50 shadow tests +14 diff/transport tests PASS. No invented future SHA or waived integrity.
 
-NOT VERIFIED: new published-source CI, loaded M5, real phone/audio, acoustic
+NOT VERIFIED: loaded M5, real phone/audio, acoustic
 warmth/latency/slow speech/interruption, full-turn model counts/RAM, concurrent
 capacity/competitor superiority. No claim of unrestricted human conversation.
 REMAINING RISKS: bounded surface wording; consent-scope compatibility debt;
 optional untracked classifier differs from historical model-bundle manifest.
-NEXT GATE: exact source CI, then genuine CallActor/FreeSWITCH recording+trace
+NEXT GATE: genuine CallActor/FreeSWITCH recording+trace
 through the existing M5 handoff. Source push is not deployment.
 
 ---

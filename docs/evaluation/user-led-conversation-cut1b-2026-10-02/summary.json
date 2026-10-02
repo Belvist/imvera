@@ -1,6 +1,6 @@
 {
   "source_parent_sha": "75280deaa0ab2b3e3ff070fba378edd1ef66d542",
-  "status": "candidate_source_verification_pending",
+  "status": "code_verified_in_CI; actual_tested_v10_core_frozen",
   "channel": "SDK text; SIMULATED_COMPLETED delivery; not phone/audio",
   "suites": {
     "conversational-moves-v1": {
@@ -95,7 +95,20 @@
     "independent_review": "APPROVE source publication after gates; final no-comma and reactive complaint answerfloor replay PASS; no remaining reviewed code blocker",
     "lint": "ruff packages/services/tests/scripts + observer/differential tool PASS",
     "diff_check": "PASS",
-    "remote_ci": "NOT_RUN for unpublished candidate",
+    "remote_ci": {
+      "run_id": 37078095709,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37078095709",
+      "head_sha": "6705f7651b3f0be1194344bf1e777da8a9a195a2",
+      "conclusion": "success",
+      "jobs": "10/10 success",
+      "full": {
+        "passed": 3006,
+        "failed": 0,
+        "skipped": 3,
+        "seconds": 177.89
+      },
+      "real_lfs_checkout": "success; inherited model-warmup/readiness failures close in CI"
+    },
     "live_phone": "NOT_RUN",
     "required_text_gates": {
       "command": "make dialogue-corpus-gate agent-dialogue-gate contracts-check",
@@ -114,5 +127,28 @@
       "new_live_generative_calls": 0,
       "whole_turn_model_invocations": "NOT_RUN"
     }
+  },
+  "publication": {
+    "code_commit": "6705f7651b3f0be1194344bf1e777da8a9a195a2",
+    "code_tree": "f38c33c8c11f05a053abe4e8ef8ce1164369401c",
+    "branch": "feature/voice-zoiper-m5",
+    "remote_exact_commit_and_tree_verified": true,
+    "after_capture_source_matching_git_commit": {
+      "after.json": 105,
+      "regression-after.json": 105
+    },
+    "loaded_M5": "NOT_RUN",
+    "source_publication_is_deployment": false
+  },
+  "policy_freeze": {
+    "tested_code_commit": "6705f7651b3f0be1194344bf1e777da8a9a195a2",
+    "policy_version": "action-policy-phase1-v10",
+    "policy_status": "frozen",
+    "core_files": 10,
+    "core_sha256": "5b6cee8680240e144348fd98865c0b973d3adf19de7701b687728a4dbd691d13",
+    "historical_v9_immutable": true,
+    "metadata_focused_validation": "50 shadowM1 +14 isolateddiff/transport tests PASS; lint/diff PASS",
+    "capture_provenance": "candidate-era source/provenance retained; all105 source fingerprints match tested code commit",
+    "metadata_full_ci_at_publication": "PENDING; observe exact metadata commit check separately"
   }
 }
