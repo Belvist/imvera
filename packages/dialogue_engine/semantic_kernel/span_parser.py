@@ -233,7 +233,16 @@ def _issue_from_token(token: str) -> bool:
             continue
         stem = verb[:4]
         if len(stem) >= 4 and (raw.startswith(stem) or lemma.startswith(stem)):
-            return True
+            # A shared prefix proposes a verb, it cannot establish that role.
+            # Temporal adverbs and nouns remain their own semantic types even
+            # when their spelling resembles a clinical verb's stem.
+            from packages.dialogue_engine.semantic_kernel.morphology import _load_morph
+
+            morph = _load_morph()
+            if morph is None:
+                return False
+            parsed = morph.parse(raw)
+            return bool(parsed and parsed[0].tag.POS in {"VERB", "INFN", "PRTF", "PRTS", "GRND"})
     return False
 
 

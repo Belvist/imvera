@@ -1,5 +1,10 @@
 # M5 dialogue reliability: запуск и приёмка
 
+Текущий dialogue cut (2026-10-02): [user-led conversation handoff](user-led-conversation-integration.md).
+Общий SDK/Actor producer, ActionPolicy personal-thread moves и реальное ожидание
+после ACK; точный опубликованный SHA и ворота — в `current-task.md`.
+
+
 2026-10-02. Ветка `feature/voice-zoiper-m5`, база `933c52b` после обновлений
 агента (`a246bd1`, `933c52b`); reliability slice начат на `c896aee`. Это исправления
 существующего SDK/CallActor/STT/startup, без второго движка и без генеративного

@@ -1,0 +1,1415 @@
+{
+  "format": "imvera.dialogue-measurements.v1",
+  "provider": {
+    "name": "after-cut1b-v10-regression",
+    "version": "75280deaa0ab2b3e3ff070fba378edd1ef66d542",
+    "channel": "text",
+    "language": "ru",
+    "captured_at": "2026-10-02T23:25:11.855978+00:00",
+    "evidence_ref": "canonical SDK replay"
+  },
+  "suite_sha256": "7ba6c3a051fd29c760fca86e5ef75dc049da6e176eb7ae77be850e4ed733d4e2",
+  "runtime": {
+    "git_dirty": true,
+    "python": "3.12.14",
+    "platform": "Linux",
+    "audio": "NOT_RUN",
+    "live_act_inference": "NOT_RUN",
+    "human_warmth_rating": "NOT_RUN",
+    "understanding_path": "SDK TurnUnderstandingV2.resolve; CallActor producer NOT_RUN",
+    "delivery": "SIMULATED_COMPLETED; transport/audible delivery NOT_RUN",
+    "router": {
+      "action_policy.mode": "legacy",
+      "action_policy.mode_raw": "off",
+      "action_policy.cutover_enabled": false,
+      "action_policy.soft_percent": 0,
+      "action_policy.policy_version": "action-policy-phase1-v10",
+      "action_policy.frozen_policy_sha": null,
+      "action_policy.decision_scope": "conversation_scheduler",
+      "action_policy.personal_thread_authority": "action_policy_v10",
+      "action_policy.personal_thread_scope": "grounded_nonurgent_daily",
+      "action_policy.historical_baseline_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
+      "action_policy.policy_status": "candidate",
+      "action_policy.active_policy_manifest": "docs/evaluation/action-policy-phase1-v10-candidate-manifest.json",
+      "IMVERA_ACTION_POLICY_MODE": "off",
+      "IMVERA_ACTION_POLICY_CUTOVER_ENABLED": "",
+      "IMVERA_ACTION_POLICY_SOFT_PERCENT": "0"
+    },
+    "coverage_ladder_enabled": false,
+    "speech_day": "0",
+    "speech_hour": "12",
+    "act_head_requested": "v2",
+    "source_sha256": {
+      "packages/dialogue_engine/__init__.py": "33797ccc6c5df4ebefa56a272b621503353f0b1e698f9e21f208f5ffd83911ed",
+      "packages/dialogue_engine/action_policy/__init__.py": "8be0a5dc7dabeaf87d7ef576e5ec0727ff95b3dd7050b8d6e30129506c6018c3",
+      "packages/dialogue_engine/action_policy/actions.py": "5bad9619a12de738cd5c1413e41f8261c0b8e9298ffde1cbca069663cbac282a",
+      "packages/dialogue_engine/action_policy/bridge.py": "96761a0972d52cacb362c56e5b689bb6cade186af752c1c968f7a45ca1f6ceb2",
+      "packages/dialogue_engine/action_policy/constraints.py": "3346520941f8002a6f59a52818a1039340f521c4ca42f2b46c4a3b07c7b31964",
+      "packages/dialogue_engine/action_policy/features.py": "5bd1204c8f7473b06318ffefa4c7aade53e9e319cc25b62640af62eaa606f832",
+      "packages/dialogue_engine/action_policy/mandatory.py": "5570d1c275e58945739bf6b4ff50d1891dbc48d887b1c69e8c97fdaa2da10d73",
+      "packages/dialogue_engine/action_policy/need_value.py": "3cd09ea178c59a1a4e8aa6df74f75092dcf12aa3d743ee22d2a5aa77aae51940",
+      "packages/dialogue_engine/action_policy/needs.py": "bde922a3f330fbb8a5610430993f1789492f9b3eb0984e60d3f7f29ad9484e7e",
+      "packages/dialogue_engine/action_policy/policy.py": "9e9d4540f15a7085f7a06d23aedc35bfe5d836ccc5f28249bb10d88d12e780dd",
+      "packages/dialogue_engine/action_policy/scorer.py": "2792a46bd04756c4b8bfd63d61d964d1a214cde8de7da3f0faa91c178d2aa0be",
+      "packages/dialogue_engine/action_policy/semantic_signals.py": "ba1e77a90e8f06ffce9bc1b579c7cffa9eeaa27fce55d53cea074c15c9ab06fc",
+      "packages/dialogue_engine/action_policy/snapshot.py": "88d4102545bd3e2cb486ad648611353a263a7f7f343c71845876126099bd9061",
+      "packages/dialogue_engine/action_policy_shadow.py": "f4742c2d0bc1f2ab5d0b174c0a8a84b339d31752957927d2c29d2ceabfea35ac",
+      "packages/dialogue_engine/action_policy_shadow_buffer.py": "f782e16ebc13e4bfc10390f43bf932787281a17dae349eee93355b18eb816bd3",
+      "packages/dialogue_engine/action_policy_shadow_config.py": "20ba51a98ee8d5257e20f918b20bf617462e125025bd4dca7f99759bf710d3c7",
+      "packages/dialogue_engine/caller_memory.py": "338b2a29f7bd58d76a9f5af818b61e67538e03ed508476f7f52f427ff0f58f15",
+      "packages/dialogue_engine/check_path.py": "3583294d9d5ef676f614ab9d32c21abe9adb8f642db1b0abaf3824612eab4740",
+      "packages/dialogue_engine/context.py": "a0d75e74e534c3c7161a912e7030dcaf4af6a4034714f2693e3bfd29b5e1f3f7",
+      "packages/dialogue_engine/contextual_interpreter.py": "7ed5609d8a28186396a39bdbe1efeafefdb93c26a1463170e6c878f1221be892",
+      "packages/dialogue_engine/conversation_policy.py": "abe464192ea034710d0db794876965cb505cdfe497c64d1530418d61d238b229",
+      "packages/dialogue_engine/corpus/__init__.py": "413398f2bf2945f7ce5b71a2503d36491af44dc65935d8e7c61dcfa9d26733a1",
+      "packages/dialogue_engine/corpus/families.py": "a380af8d991eec5e5196b7d71d36fc3b531604a98e3e88ee18589b8673214c12",
+      "packages/dialogue_engine/corpus/generator.py": "80dbf8e0722ea19dad9331e68e657a25cbb707f9de7f348e06354610e310e379",
+      "packages/dialogue_engine/corpus/lexicon.py": "0aa4cd2de685ae31c0b37794858ea78873b670c612f1183bc365de39e55a172d",
+      "packages/dialogue_engine/corpus/report.py": "cb93dba860bd3693859f6d630c0f992f2e06e197061b0f4f92d81e8067246c56",
+      "packages/dialogue_engine/corpus/runner.py": "316850afc3ae75bfc3eea7c6f3700b6c655df46d34468c9d3e95efb9fbb8d17a",
+      "packages/dialogue_engine/corpus/schema.py": "4517491f72bd830351c848ff6b90fcc60f3b58096fa425c2ca3ca7d90045e12c",
+      "packages/dialogue_engine/coverage.py": "05db5f96e9a56278e3c52f4aacee486b8162a034cc97120b31a07a8adc2cc34e",
+      "packages/dialogue_engine/decision_router.py": "8f76abccf04dc4a1ffbfd8bec3b91c7f190410d78271be6646db8808dc73df27",
+      "packages/dialogue_engine/delivery/__init__.py": "bf3bd2d7d99b9a9664f9ed8ef036bccc91612faabf71f55869be3192f828d7b8",
+      "packages/dialogue_engine/delivery/decision.py": "e2b799fa94779b82eba8c311974e951f45a326e5b928ce84f00ce915f74cf61c",
+      "packages/dialogue_engine/delivery/dispatcher.py": "e684cc012e42931edd941a76a2fc9c7e075d91840b1117b60c3f1024f216bc76",
+      "packages/dialogue_engine/delivery/outbox.py": "e85201af8ad49d5cb173d509a245c5ec44935b77bb2055b0ada36873a0bc53c9",
+      "packages/dialogue_engine/delivery/scope.py": "f6b2f14b4e73df48ee7ea19f56c06b16bdd625649c048d4159e651c2841fac1d",
+      "packages/dialogue_engine/deterministic_mission.py": "10cf13aef7f0f8c414b80bb4123583e654d3c355c18069c729c96267411b4bc6",
+      "packages/dialogue_engine/discourse.py": "facdbd0dd6aa02345c181d0d38651205b8d28b0e4c3233fd2d901a4657c2a84d",
+      "packages/dialogue_engine/effects.py": "5eb5a6777fae40d05c8f6ad71c3260cf3b94a10b157df990bdb9be93d5700f7a",
+      "packages/dialogue_engine/engine.py": "42e3abadd22e20174c661c0e530ba447999f2e1d54e50c348c46793bb9ace3e2",
+      "packages/dialogue_engine/events.py": "cad284bc132904f62c0469eb4e36688a08b4a5c96ff1b2bbd58cbb8720588f05",
+      "packages/dialogue_engine/evidence_invariant.py": "888b151de82dbb71498d16e0e4b4f7f1b16b354df48cb5687799df7349f27537",
+      "packages/dialogue_engine/fast_interpreter.py": "c7a0e64979d78734bdace0bcdffaee6c066405dfc37eb47198daacf3d3d93619",
+      "packages/dialogue_engine/invariants.py": "736a1d8920c8eee00bca3f239f625b09c9e3975473b850bcd8cdc04173611a97",
+      "packages/dialogue_engine/issue_memory.py": "82259e1256a0016d7d96b9fbd31882dd84def704f3b90e8dbd00a52b8491a373",
+      "packages/dialogue_engine/issue_mention_extract.py": "949a26bd9249713097581e5eba39eba503fa068bbd461e4a5ae35587e12d957d",
+      "packages/dialogue_engine/mission.py": "f2d6be3b6f3eb33a213d9c2d3a1d6ce95d574b53b58e83ae1af688abf16f554d",
+      "packages/dialogue_engine/mission_context.py": "8ddca87c0cf653d355261499edbb0405331e98e59b8f195ef5c8949553c0a91b",
+      "packages/dialogue_engine/mission_flow.py": "64833edaa7670cf65ff06cf0816c300f634460b59c4ea0298c63e9cf84043e46",
+      "packages/dialogue_engine/mission_grounding.py": "9e8b6f6087fe35acb591d52cc02b526c7f3f8b1b7cd6c39eb0f384d20f07c725",
+      "packages/dialogue_engine/mission_result.py": "f4c86324eb1c4b67d5b6b97dc2236982b3d05928a27bffd3111201ee8ba11f31",
+      "packages/dialogue_engine/mission_seed.py": "6f8eb078d0f767ea23698b19cb1aec5e74fbea253e42cdc781ab23769e31292c",
+      "packages/dialogue_engine/mission_understanding.py": "481f09c6fb4b293d3750ccf8763ffb20d2b21aa723c834ae35caccf1ad2376fc",
+      "packages/dialogue_engine/neuro/__init__.py": "b0b66d5034bb53d918a6d150eef033c12430a190cc86ea1e77c6a9c9e2e6b56e",
+      "packages/dialogue_engine/neuro/interfaces.py": "275bfb267a98968c89e80369305ec738a904d53af16f7ab9d7d6da0a1fd04ad6",
+      "packages/dialogue_engine/neuro/paraphrase.py": "fded910c68aa52454f612dd8ea45bc0903b519d0868483fa2c0e5ec93e47b450",
+      "packages/dialogue_engine/neuro/ranker.py": "446cbe11d5a7f5a8410c321739e065e9669c38efef95c6c6c55d66315278f51d",
+      "packages/dialogue_engine/neuro/shadow.py": "d1fc57de57bc95fa25691290fbcb338599e9eaba40f5064a66099e6b7526064b",
+      "packages/dialogue_engine/persistence_projection.py": "6ad196234fc56fd445ef98eaaec5da76d4c479f7a2a725aa9b086602083ac00c",
+      "packages/dialogue_engine/policy.py": "5165f4d21d2d3d826042c481754a5bd922e82e353528f42ec8eb2a6c61e88043",
+      "packages/dialogue_engine/product/__init__.py": "3a2c9067ce9496340c0ebcc15d486a919ceb3ab879c259968967c887b41bf8b6",
+      "packages/dialogue_engine/product/issue_plans.py": "43b5ece7d559dbdad0b3fb67eefcba080d02f8ab4a619c124767fa1ac1d0aeae",
+      "packages/dialogue_engine/product/known.py": "2e5aa8e79782602ba830910e13b875ace5c61031e1f08aaf2d554c4b86f763e3",
+      "packages/dialogue_engine/product/planner.py": "30f845462f47242411f9f33bc6edbae8aea2315c902d4c7dd09d934b39d0a001",
+      "packages/dialogue_engine/product/spoken.py": "58e8f94285d34ae19948d0e8af5153e5f0c3e795a13af72c387ad53538911aae",
+      "packages/dialogue_engine/proof_bundle.py": "e5333fb2d26a3e870416c0f0e2c64900156736268c48c3e5bb5a8d6fa8f0ccff",
+      "packages/dialogue_engine/protocol/__init__.py": "31807ba233e4dc133afcc53ee2866bd6240878c7952aa273131ef41358861c80",
+      "packages/dialogue_engine/protocol/acts.py": "30b52cdb1eabc6e0fbee9263c28de97f3e820c3150f1e6589a03b1cf68701b72",
+      "packages/dialogue_engine/question_context.py": "9a528a0c5192528b91c490e61a4188ce521953a08bb61d8d03ff45cf2aec8327",
+      "packages/dialogue_engine/questions.py": "83dae7bbd33e0539e66b61ecad444f5dd26ad595bc82bd9ea324f7c598925e7e",
+      "packages/dialogue_engine/reducer.py": "494462e8c5744a91887d4cc2334b7e8d116cf2d179532ae06ccd9f02a8faa971",
+      "packages/dialogue_engine/reluctance.py": "f9d88c73c193ae79e15ea2c76765ad38720f26a6c377022a9e2bea950f3d3114",
+      "packages/dialogue_engine/response_plan.py": "eabaed55d4d0c83bbfb58c92fbf7e9dc1a4973afe64ce8216527fc712495236b",
+      "packages/dialogue_engine/runtime.py": "1d842c9f598e262f84341614cbf24e8dfff9b7ad4ec24aed78d50b17ae19fcc0",
+      "packages/dialogue_engine/scenario_runner.py": "e36521a8ee7ac70e93fe1f16d3d65fafffa1a2f3bde17ffc76485b8270924325",
+      "packages/dialogue_engine/semantic.py": "e21faf6ce61ec865834f13afd331ab46ee289dcb99a42799c8465471793026e2",
+      "packages/dialogue_engine/semantic_kernel/__init__.py": "705be4d34b27a6b4949fcf64e609a59beaac77881688c2e56f025d011280d0b5",
+      "packages/dialogue_engine/semantic_kernel/clauses.py": "9758fef7b99c4493818718f8e28d831ca04c11bb2073816cb3c1143db8b7e770",
+      "packages/dialogue_engine/semantic_kernel/controls.py": "e0417f7a6836dc994998830fde9724725ae53dec3b77963b20e005136a56d6ad",
+      "packages/dialogue_engine/semantic_kernel/information_gain.py": "a738198d871a21a619a59742169d590e1ff41ce80686e47598184f806b6cbf38",
+      "packages/dialogue_engine/semantic_kernel/kernel.py": "a77f74538db638cec117989590e22d6c80fc2b38275f93c442108ac8887b893c",
+      "packages/dialogue_engine/semantic_kernel/lexicon.py": "bc2b30061490fababc96756aadc09f0a494b85184458ad0f7c4cbe43324a5314",
+      "packages/dialogue_engine/semantic_kernel/ml_fallback.py": "c44bb02b80cd894b7ca34ca3517f45287d72e6a931ca5849093fc665ca93b3bb",
+      "packages/dialogue_engine/semantic_kernel/morphology.py": "cf764319baee32e8cea65b4f29c5bdbdaf648de1002923e1abe65304f1bd514b",
+      "packages/dialogue_engine/semantic_kernel/observation_memory.py": "842a4d7ec8160ddb3e73655dd5254c728ea8792c63a9fbf6433f3f63d88112d8",
+      "packages/dialogue_engine/semantic_kernel/reference_resolver.py": "06866c12f221513743a907230465a29562bd02f1c274d1b768cf4259e09f67c8",
+      "packages/dialogue_engine/semantic_kernel/relation_parser.py": "b1a940937d592c6d8f17dd9e882b599f5b0548322e177521608b56248e052def",
+      "packages/dialogue_engine/semantic_kernel/span_parser.py": "8881015ecc29da504f6b6cd078785cbbdd6e1d0a58d0e8d59f427a88eb144392",
+      "packages/dialogue_engine/semantic_kernel/subject_resolver.py": "f9d39c8fa31433693598172f3365e6bc2b7968b6ee8428ba1d78731ccf347d18",
+      "packages/dialogue_engine/semantic_kernel/types.py": "8ceab353583ea4fb0e7f9b4b9f47a0d0309333069148e9b3fb7e791142753b4a",
+      "packages/dialogue_engine/semantic_nlp/candidate.py": "6bf92e451450b236f672e23714b539efe994582d6e87f958d37ec317425f28a8",
+      "packages/dialogue_engine/semantic_nlp/goals.py": "2c5da8f563eb3fc1e2366c605b4dda6d0abbaff966c258803b5e808b9442ce0d",
+      "packages/dialogue_engine/semantic_nlp/labels.py": "16992765fc5f1d33c3ed3c4c7014b64c73c374c1db7c41f05155c6d017956873",
+      "packages/dialogue_engine/semantic_nlp/model.py": "59d1508e34c1ef097e5176548d0ddcc4166e455fbab7a7e9a394cbf175340403",
+      "packages/dialogue_engine/semantic_nlp/polarity.py": "279c1bc67a89ff6e8f7d1b0687b330a5755f8646e52ab6ebcd486ee8ab8ebfeb",
+      "packages/dialogue_engine/semantic_nlp/relation.py": "82cc1a87758411f2a69e86df018db8e577933b37bd80cb471ed34814293c939c",
+      "packages/dialogue_engine/semantic_nlp/warmup.py": "ea0d5619fe0e9fff1a8d593b621648fa32337a1d0c0b9f6247718bee4cab90cf",
+      "packages/dialogue_engine/slotclf.py": "c33fc998659c4c30b646a4b5cd80bd7d7761b340dc6308833f5d907f0503a42d",
+      "packages/dialogue_engine/speech_ledger.py": "173b4aa14d5f63969160e6fa75bc607227eaebd5bf7fac17e20247b15249cd32",
+      "packages/dialogue_engine/state.py": "9d4c31097d7d373af508dded3e0ef31972e6ea5aca8b52297c0e3f5ba97bd800",
+      "packages/dialogue_engine/tinyllm.py": "b5de105ac7319ed583d7bdc7145203b001bf42b3a171592cf402b2fbfb1c507c",
+      "packages/dialogue_engine/topic_tracker.py": "f2d9ff0bdd56f35a0b39720ac9bd923057636b12d800ca6b76f09742d4215c6e",
+      "packages/dialogue_engine/turn_understanding.py": "ef957bd245898722afd7d188b9e4f78b23be2e59419003b0d69f076dbf09d985",
+      "packages/dialogue/session.py": "2e6e4029ff5f01c553ccb86b8ff7d3228acebcf178107e8560e0fea8453152cc",
+      "packages/voice_runtime/call_actor.py": "8682b1d4f8c71c528ef5c603f504118d425b390fafec9466467eacdb2a47da29",
+      "tools/voice_lab/dialogue_comparison.py": "5927cd754047f2787f7291e4dd3dd86f2e700e4be3c9d8e44e8bbaf06c2eda44"
+    }
+  },
+  "boundary": "SDK-only simulated presentations; not CallActor or heard delivery",
+  "definitions": {
+    "repeated_question_key_presentations_proxy": "same intent/slot/active episode/pending attribute, excluding repair IDs; not proof of unnecessary repetition",
+    "clinical_question_without_pending_attribute_proxy": "episode/topic question with active episode but no delivered pending attribute; diagnostic requires obligation review",
+    "budget_to_wellness_return_proxy": "resume_after_thread after followup_count>=2; not proof transition was appropriate",
+    "user_question_without_answer_intent_proxy": "understanding has user_question but no answer_user_question intent; not semantic answer correctness",
+    "sdk_text_processing_ms": "local understand+reduce elapsed; excludes STT/TTS/delivery/audio; not M5"
+  },
+  "not_measured": {
+    "topic_jump_rate": "NOT_RUN",
+    "questions_per_minute": "NOT_RUN",
+    "grounded_fact_recall": "NOT_RUN",
+    "safety_error_rate": "NOT_RUN",
+    "human_questionnaire_feel": "NOT_RUN",
+    "listener_warmth": "NOT_RUN",
+    "end_of_speech_to_first_pcm_ms": "NOT_RUN",
+    "model_invocation_counts": "NOT_RUN",
+    "model_ram": "NOT_RUN",
+    "concurrent_call_capacity": "NOT_RUN",
+    "barge_in": "NOT_RUN",
+    "slow_speech": "NOT_RUN"
+  },
+  "cases": [
+    {
+      "id": "neutral_daily",
+      "counts": {
+        "speech_presentations": 6,
+        "distinct_question_ids": 4,
+        "user_turns": 6,
+        "nonquestion_speech_presentations": 2
+      },
+      "max_consecutive_vera_question_presentations": 4,
+      "max_newly_filled_slots_per_user_turn": 2,
+      "sdk_text_processing_ms": {
+        "n": 6,
+        "p50": 7.337,
+        "p95": 287.274
+      },
+      "final_state": {
+        "revision": 21,
+        "active_playout_generation": 6,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "FILLED",
+          "sleep": "FILLED",
+          "plans": "FILLED"
+        },
+        "slot_values": {
+          "wellness": "Нормально.",
+          "mood": "positive",
+          "sleep": "Спал хорошо.",
+          "plans": "Сегодня буду дома."
+        },
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {},
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-4",
+          "slot": "plans",
+          "text": "Какие у вас планы на сегодня?",
+          "phase": "DELIVERED",
+          "intent": "check_plans",
+          "goal_id": "plans",
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": true,
+        "important_to_share_resolved": true,
+        "thread": {
+          "label": "планы",
+          "hook": "Настроение хорошее.",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 5,
+          "legacy_invocations": 5
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "mixed_good_and_bad",
+      "counts": {
+        "speech_presentations": 4,
+        "distinct_question_ids": 4,
+        "user_turns": 3
+      },
+      "max_consecutive_vera_question_presentations": 4,
+      "max_newly_filled_slots_per_user_turn": 3,
+      "sdk_text_processing_ms": {
+        "n": 3,
+        "p50": 8.319,
+        "p95": 43.634
+      },
+      "final_state": {
+        "revision": 13,
+        "active_playout_generation": 4,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "FILLED",
+          "sleep": "FILLED",
+          "plans": "OPEN"
+        },
+        "slot_values": {
+          "wellness": "Чувствую себя хорошо. Настроение плохое. Спал плохо.",
+          "mood": "negative",
+          "sleep": "Чувствую себя хорошо. Настроение плохое. Спал плохо."
+        },
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {},
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-4",
+          "slot": "important_to_share",
+          "text": "Хорошо. Что-то ещё хотите сказать?",
+          "phase": "DELIVERED",
+          "intent": "important_to_share",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": true,
+        "important_to_share_resolved": false,
+        "thread": {
+          "label": "самочувствие",
+          "hook": "Чувствую себя хорошо. Настроение плохое. Спал плохо.",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 3,
+          "legacy_invocations": 3
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "volunteered_facts",
+      "counts": {
+        "speech_presentations": 4,
+        "distinct_question_ids": 2,
+        "user_turns": 3,
+        "nonquestion_speech_presentations": 2
+      },
+      "max_consecutive_vera_question_presentations": 2,
+      "max_newly_filled_slots_per_user_turn": 4,
+      "sdk_text_processing_ms": {
+        "n": 3,
+        "p50": 5.348,
+        "p95": 17.061
+      },
+      "final_state": {
+        "revision": 14,
+        "active_playout_generation": 4,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "FILLED",
+          "sleep": "FILLED",
+          "plans": "FILLED"
+        },
+        "slot_values": {
+          "wellness": "Чувствую себя хорошо. Настроение хорошее. Спал хорошо. Сегодня буду дома.",
+          "mood": "positive",
+          "sleep": "Чувствую себя хорошо. Настроение хорошее. Спал хорошо. Сегодня буду дома.",
+          "plans": "Сегодня буду дома"
+        },
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {},
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-2",
+          "slot": "important_to_share",
+          "text": "Хорошо, поняла. Что-то ещё важное есть?",
+          "phase": "DELIVERED",
+          "intent": "important_to_share",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": true,
+        "important_to_share_resolved": true,
+        "thread": {
+          "label": "самочувствие",
+          "hook": "Чувствую себя хорошо. Настроение хорошее. Спал хорошо. Сегодня буду до",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 2,
+          "legacy_invocations": 2
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "unknown_onset",
+      "counts": {
+        "speech_presentations": 4,
+        "distinct_question_ids": 4,
+        "user_turns": 3
+      },
+      "max_consecutive_vera_question_presentations": 4,
+      "max_newly_filled_slots_per_user_turn": 1,
+      "sdk_text_processing_ms": {
+        "n": 3,
+        "p50": 6.185,
+        "p95": 7.517
+      },
+      "final_state": {
+        "revision": 12,
+        "active_playout_generation": 4,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN",
+          "episode_headache_duration": "UNRESOLVED"
+        },
+        "slot_values": {
+          "wellness": "Голова болит."
+        },
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {
+          "ep-8f27403a": {
+            "label": "головная боль",
+            "known_attributes": {
+              "current": "active",
+              "_product_family": "headache",
+              "_product_asked:duration": "1",
+              "_product_asked:onset": "1",
+              "_temporal_skipped": "1",
+              "_product_asked:severity": "1",
+              "severity": "Терпимая"
+            },
+            "status": "resolved"
+          }
+        },
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-4",
+          "slot": "important_to_share",
+          "text": "Поняла, сейчас терпимо. Ещё что-то беспокоит?",
+          "phase": "DELIVERED",
+          "intent": "important_to_share",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": true,
+        "important_to_share_resolved": false,
+        "thread": {
+          "label": "голова",
+          "hook": "",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 3,
+          "legacy_invocations": 3
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "unknown_custom",
+      "counts": {
+        "speech_presentations": 5,
+        "distinct_question_ids": 3,
+        "user_turns": 4,
+        "nonquestion_speech_presentations": 2
+      },
+      "max_consecutive_vera_question_presentations": 3,
+      "max_newly_filled_slots_per_user_turn": 0,
+      "sdk_text_processing_ms": {
+        "n": 4,
+        "p50": 0.908,
+        "p95": 5.904
+      },
+      "final_state": {
+        "revision": 15,
+        "active_playout_generation": 5,
+        "slots": {
+          "wellness": "OPEN",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN",
+          "items": "UNRESOLVED"
+        },
+        "slot_values": {},
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {},
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-3",
+          "slot": "mission_final_open",
+          "text": "Хотите ещё что-то добавить?",
+          "phase": "DELIVERED",
+          "intent": "mission_final_open",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": true,
+        "important_to_share_resolved": true,
+        "thread": {
+          "label": "",
+          "hook": "",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 3,
+          "custom_mission_bypass_v8": 3,
+          "legacy_invocations": 3
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": false,
+        "required_background_goals": [],
+        "mission_preset": null
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "interrupted_shopping",
+      "counts": {
+        "speech_presentations": 7,
+        "distinct_question_ids": 5,
+        "user_turns": 6,
+        "nonquestion_speech_presentations": 2
+      },
+      "max_consecutive_vera_question_presentations": 5,
+      "max_newly_filled_slots_per_user_turn": 1,
+      "sdk_text_processing_ms": {
+        "n": 6,
+        "p50": 1.963,
+        "p95": 32.977
+      },
+      "final_state": {
+        "revision": 25,
+        "active_playout_generation": 7,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "slot_values": {
+          "wellness": "negative"
+        },
+        "active_episode_id": "ep-c5e3ce19",
+        "pending_episode_attribute": null,
+        "episodes": {
+          "ep-c5e3ce19": {
+            "label": "головная боль",
+            "known_attributes": {
+              "current": "active",
+              "_product_family": "headache",
+              "_product_asked:duration": "1",
+              "duration": "Сегодня.",
+              "_product_asked:severity": "1",
+              "severity": "Терпимая."
+            },
+            "status": "resolved"
+          }
+        },
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-5",
+          "slot": "mission_final_open",
+          "text": "Хотите ещё что-то добавить?",
+          "phase": "DELIVERED",
+          "intent": "mission_final_open",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": true,
+        "important_to_share_resolved": true,
+        "thread": {
+          "label": "рассказ",
+          "hook": "Молока и хлеба.",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "Молока и хлеба.",
+          "source_utterance_id": "u4",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 5,
+          "custom_mission_bypass_v8": 5,
+          "legacy_invocations": 5
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": false,
+        "required_background_goals": [],
+        "mission_preset": null
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "mixed_shopping",
+      "counts": {
+        "speech_presentations": 3,
+        "distinct_question_ids": 2,
+        "user_turns": 2,
+        "nonquestion_speech_presentations": 1
+      },
+      "max_consecutive_vera_question_presentations": 2,
+      "max_newly_filled_slots_per_user_turn": 1,
+      "sdk_text_processing_ms": {
+        "n": 2,
+        "p50": 1.736,
+        "p95": 12.826
+      },
+      "final_state": {
+        "revision": 11,
+        "active_playout_generation": 3,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "slot_values": {
+          "wellness": "negative"
+        },
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {
+          "ep-2fdce761": {
+            "label": "головная боль",
+            "known_attributes": {
+              "onset": "Сегодня",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "status": "resolved"
+          }
+        },
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-2",
+          "slot": "mission_final_open",
+          "text": "Головная боль — понимаю, терпеть такое трудно. Хотите ещё что-то добавить?",
+          "phase": "DELIVERED",
+          "intent": "mission_final_open",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": true,
+        "important_to_share_resolved": true,
+        "thread": {
+          "label": "голова",
+          "hook": "",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 2,
+          "custom_mission_bypass_v8": 2,
+          "legacy_invocations": 2
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": false,
+        "required_background_goals": [],
+        "mission_preset": null
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "polite_refusal",
+      "counts": {
+        "speech_presentations": 3,
+        "distinct_question_ids": 1,
+        "user_turns": 2,
+        "nonquestion_speech_presentations": 2
+      },
+      "max_consecutive_vera_question_presentations": 1,
+      "max_newly_filled_slots_per_user_turn": 0,
+      "sdk_text_processing_ms": {
+        "n": 2,
+        "p50": 0.713,
+        "p95": 6.579
+      },
+      "final_state": {
+        "revision": 9,
+        "active_playout_generation": 3,
+        "slots": {
+          "wellness": "OPEN",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "slot_values": {},
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {},
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-1",
+          "slot": "wellness",
+          "text": "Здравствуйте. Это сервис Амвера. Тамара Юрьевна, как вы себя чувствуете?",
+          "phase": "DELIVERED",
+          "intent": "opening_wellness",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": false,
+        "important_to_share_resolved": false,
+        "thread": {
+          "label": "",
+          "hook": "",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {}
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "control_with_complaint",
+      "counts": {
+        "speech_presentations": 2,
+        "distinct_question_ids": 1,
+        "user_turns": 1,
+        "nonquestion_speech_presentations": 1
+      },
+      "max_consecutive_vera_question_presentations": 1,
+      "max_newly_filled_slots_per_user_turn": 0,
+      "sdk_text_processing_ms": {
+        "n": 1,
+        "p50": 5.877,
+        "p95": 5.877
+      },
+      "final_state": {
+        "revision": 5,
+        "active_playout_generation": 2,
+        "slots": {
+          "wellness": "OPEN",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "slot_values": {},
+        "active_episode_id": "ep-5f871da6",
+        "pending_episode_attribute": null,
+        "episodes": {
+          "ep-5f871da6": {
+            "label": "головная боль",
+            "known_attributes": {
+              "severity": "сильно",
+              "current": "active"
+            },
+            "status": "open"
+          }
+        },
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-1",
+          "slot": "wellness",
+          "text": "Здравствуйте. Это сервис Амвера. Тамара Юрьевна, как вы себя чувствуете?",
+          "phase": "DELIVERED",
+          "intent": "opening_wellness",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": false,
+        "important_to_share_resolved": false,
+        "thread": {
+          "label": "",
+          "hook": "",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {}
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "hearing_repair",
+      "counts": {
+        "speech_presentations": 3,
+        "distinct_question_ids": 2,
+        "user_turns": 2,
+        "nonquestion_speech_presentations": 1
+      },
+      "max_consecutive_vera_question_presentations": 1,
+      "max_newly_filled_slots_per_user_turn": 1,
+      "sdk_text_processing_ms": {
+        "n": 2,
+        "p50": 2.724,
+        "p95": 7.116
+      },
+      "final_state": {
+        "revision": 8,
+        "active_playout_generation": 3,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "slot_values": {
+          "wellness": "Чувствую себя хорошо."
+        },
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {},
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-3",
+          "slot": "important_to_share",
+          "text": "Записала. Подскажите, есть ли ещё что-то важное по здоровью или дома?",
+          "phase": "DELIVERED",
+          "intent": "important_to_share",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": true,
+        "important_to_share_resolved": false,
+        "thread": {
+          "label": "самочувствие",
+          "hook": "Чувствую себя хорошо.",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 1,
+          "legacy_invocations": 1
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "purpose_question",
+      "counts": {
+        "speech_presentations": 5,
+        "distinct_question_ids": 3,
+        "user_turns": 4,
+        "user_question_turns": 1,
+        "user_question_without_answer_intent_proxy": 1,
+        "repeated_question_key_presentations_proxy": 1,
+        "nonquestion_speech_presentations": 2
+      },
+      "max_consecutive_vera_question_presentations": 3,
+      "max_newly_filled_slots_per_user_turn": 0,
+      "sdk_text_processing_ms": {
+        "n": 4,
+        "p50": 1.096,
+        "p95": 37.221
+      },
+      "final_state": {
+        "revision": 15,
+        "active_playout_generation": 5,
+        "slots": {
+          "wellness": "OPEN",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "slot_values": {},
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {},
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-3",
+          "slot": "mission_final_open",
+          "text": "Хотите ещё что-то добавить?",
+          "phase": "DELIVERED",
+          "intent": "mission_final_open",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": true,
+        "important_to_share_resolved": true,
+        "thread": {
+          "label": "вопрос",
+          "hook": "",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "А зачем вы спрашиваете?",
+          "source_utterance_id": "u1",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 3,
+          "custom_mission_bypass_v8": 3,
+          "legacy_invocations": 3
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": false,
+        "required_background_goals": [],
+        "mission_preset": null
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "emergency_over_refusal",
+      "counts": {
+        "speech_presentations": 2,
+        "distinct_question_ids": 1,
+        "user_turns": 1,
+        "nonquestion_speech_presentations": 1
+      },
+      "max_consecutive_vera_question_presentations": 1,
+      "max_newly_filled_slots_per_user_turn": 0,
+      "sdk_text_processing_ms": {
+        "n": 1,
+        "p50": 1.35,
+        "p95": 1.35
+      },
+      "final_state": {
+        "revision": 5,
+        "active_playout_generation": 2,
+        "slots": {
+          "wellness": "OPEN",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "slot_values": {},
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {},
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-1",
+          "slot": "wellness",
+          "text": "Здравствуйте. Это сервис Амвера. Тамара Юрьевна, как вы себя чувствуете?",
+          "phase": "DELIVERED",
+          "intent": "opening_wellness",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": false,
+        "important_to_share_resolved": false,
+        "thread": {
+          "label": "",
+          "hook": "",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {}
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "multiple_complaints",
+      "counts": {
+        "speech_presentations": 3,
+        "distinct_question_ids": 3,
+        "user_turns": 2
+      },
+      "max_consecutive_vera_question_presentations": 3,
+      "max_newly_filled_slots_per_user_turn": 1,
+      "sdk_text_processing_ms": {
+        "n": 2,
+        "p50": 2.166,
+        "p95": 8.428
+      },
+      "final_state": {
+        "revision": 9,
+        "active_playout_generation": 3,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "slot_values": {
+          "wellness": "Живот болит и тошнит."
+        },
+        "active_episode_id": "ep-8c757cff",
+        "pending_episode_attribute": "current",
+        "episodes": {
+          "ep-8c757cff": {
+            "label": "живот болит",
+            "known_attributes": {
+              "current": "active",
+              "_product_family": "abdominal",
+              "_product_asked:onset": "1",
+              "onset": "Сегодня.",
+              "_product_asked:current": "1"
+            },
+            "status": "open"
+          }
+        },
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-3",
+          "slot": "episode_ep-8c757cff_current",
+          "text": "А живот сейчас ещё беспокоит или уже стало лучше?",
+          "phase": "DELIVERED",
+          "intent": "episode_ep-8c757cff_current",
+          "goal_id": null,
+          "episode_id": "ep-8c757cff",
+          "semantic_need": {
+            "attributes": [
+              "current"
+            ],
+            "accepted_semantics": [
+              "current",
+              "status"
+            ]
+          },
+          "thread_mode": null
+        },
+        "important_to_share_asked": false,
+        "important_to_share_resolved": false,
+        "thread": {
+          "label": "живот",
+          "hook": "",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 2,
+          "legacy_invocations": 2
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "false_world",
+      "counts": {
+        "speech_presentations": 2,
+        "distinct_question_ids": 2,
+        "user_turns": 1
+      },
+      "max_consecutive_vera_question_presentations": 2,
+      "max_newly_filled_slots_per_user_turn": 1,
+      "sdk_text_processing_ms": {
+        "n": 1,
+        "p50": 10.709,
+        "p95": 10.709
+      },
+      "final_state": {
+        "revision": 6,
+        "active_playout_generation": 2,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "slot_values": {
+          "wellness": "Мне приснилось, что болит голова. Сейчас чувствую себя хорошо."
+        },
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {},
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-2",
+          "slot": "wellness",
+          "text": "Что вас беспокоит сильнее всего?",
+          "phase": "DELIVERED",
+          "intent": "probe_concern",
+          "goal_id": "wellness",
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": false,
+        "important_to_share_resolved": false,
+        "thread": {
+          "label": "самочувствие",
+          "hook": "Мне приснилось, что болит голова. Сейчас чувствую себя хорошо.",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 1,
+          "legacy_invocations": 1
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "correction",
+      "counts": {
+        "speech_presentations": 3,
+        "distinct_question_ids": 2,
+        "user_turns": 2,
+        "nonquestion_speech_presentations": 1
+      },
+      "max_consecutive_vera_question_presentations": 2,
+      "max_newly_filled_slots_per_user_turn": 3,
+      "sdk_text_processing_ms": {
+        "n": 2,
+        "p50": 7.821,
+        "p95": 13.077
+      },
+      "final_state": {
+        "revision": 11,
+        "active_playout_generation": 3,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "FILLED",
+          "sleep": "FILLED",
+          "plans": "OPEN"
+        },
+        "slot_values": {
+          "wellness": "negative",
+          "mood": "positive",
+          "sleep": "Чувствую себя хорошо. Настроение хорошее. Спал хорошо."
+        },
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {},
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-2",
+          "slot": "important_to_share",
+          "text": "Поняла вас. А кроме этого — по самочувствию ничего не тревожит?",
+          "phase": "DELIVERED",
+          "intent": "important_to_share",
+          "goal_id": null,
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": true,
+        "important_to_share_resolved": true,
+        "thread": {
+          "label": "самочувствие",
+          "hook": "Чувствую себя хорошо. Настроение хорошее. Спал хорошо.",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 2,
+          "legacy_invocations": 2
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": true,
+        "required_background_goals": [],
+        "mission_preset": "daily_check"
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "unknown_with_fact",
+      "counts": {
+        "speech_presentations": 2,
+        "distinct_question_ids": 2,
+        "user_turns": 1,
+        "repeated_question_key_presentations_proxy": 1
+      },
+      "max_consecutive_vera_question_presentations": 2,
+      "max_newly_filled_slots_per_user_turn": 1,
+      "sdk_text_processing_ms": {
+        "n": 1,
+        "p50": 8.807,
+        "p95": 8.807
+      },
+      "final_state": {
+        "revision": 7,
+        "active_playout_generation": 2,
+        "slots": {
+          "wellness": "FILLED",
+          "mood": "OPEN",
+          "sleep": "OPEN",
+          "plans": "OPEN"
+        },
+        "slot_values": {
+          "wellness": "negative"
+        },
+        "active_episode_id": null,
+        "pending_episode_attribute": null,
+        "episodes": {
+          "ep-d7f449e6": {
+            "label": "головная боль",
+            "known_attributes": {
+              "onset": "сегодня",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "status": "resolved"
+          }
+        },
+        "planned_question": null,
+        "delivered_question": {
+          "question_id": "g-2",
+          "slot": "items",
+          "text": "Головная боль — понимаю, терпеть такое трудно. Вернёмся к моему вопросу. Какие продукты вам купить?",
+          "phase": "DELIVERED",
+          "intent": "ask_mission_goal",
+          "goal_id": "items",
+          "episode_id": null,
+          "semantic_need": null,
+          "thread_mode": null
+        },
+        "important_to_share_asked": false,
+        "important_to_share_resolved": false,
+        "thread": {
+          "label": "",
+          "hook": "",
+          "followup_count": 0,
+          "reply_finished": false,
+          "last_statement": "",
+          "source_utterance_id": "",
+          "listening_id": "",
+          "listening_generation": 0,
+          "listening_delivered": false,
+          "heard_listening_id": "",
+          "heard_listening_generation": 0,
+          "last_move": ""
+        },
+        "router_stats": {
+          "mode_legacy": 1,
+          "custom_mission_bypass_v8": 1,
+          "legacy_invocations": 1
+        }
+      },
+      "required_modalities": [
+        "text"
+      ],
+      "replay_configuration": {
+        "mandatory_background_goals": false,
+        "required_background_goals": [],
+        "mission_preset": null
+      },
+      "phone_acceptance": "NOT_RUN"
+    }
+  ]
+}

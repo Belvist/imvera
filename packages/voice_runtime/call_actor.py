@@ -2137,17 +2137,12 @@ class CallActor:
             )
             kernel_result = None
             if self.session.uses_dialogue_engine():
-                from packages.dialogue_engine.semantic_kernel.kernel import (
-                    interpret as kernel_interpret,
-                )
-                from packages.dialogue_engine.semantic_kernel.kernel import (
-                    kernel_to_rich_turn,
-                )
+                from packages.dialogue_engine.turn_understanding import TurnUnderstandingV2
 
                 engine_state = (
                     self.session._engine.state if self.session._engine else None
                 )
-                kernel_result = kernel_interpret(
+                kernel_result = TurnUnderstandingV2().prepare_kernel(
                     text,
                     utterance_id=utterance_id,
                     engine_state=engine_state,
@@ -2227,16 +2222,19 @@ class CallActor:
                         )
                     )
                     return
-                rich_turn = kernel_to_rich_turn(
-                    kernel_result,
-                    answer_slot=answer_slot,
+                from packages.dialogue_engine.turn_understanding import TurnUnderstandingV2
+
+                rich_turn = TurnUnderstandingV2().resolve(
+                    text,
+                    utterance_id=utterance_id,
                     engine_state=engine_state,
                     mission_provider=(
                         self.session._engine.mission_understanding_provider
                         if self.session._engine
                         else None
                     ),
-                )
+                    precomputed_kernel_result=kernel_result,
+                ).turn
                 kernel_path = f"semantic_kernel_{kernel_result.route}"
                 interpret_path = kernel_path
                 span_preview = [

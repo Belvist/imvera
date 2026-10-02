@@ -1,0 +1,83 @@
+{
+  "status": "candidate",
+  "policy_version": "action-policy-phase1-v10",
+  "tested_sha": null,
+  "historical_baseline_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
+  "historical_baseline_manifest": "docs/evaluation/action-policy-phase1-v9-freeze-manifest.json",
+  "source_parent_sha": "75280deaa0ab2b3e3ff070fba378edd1ef66d542",
+  "core_file_sha256": {
+    "actions.py": "5bad9619a12de738cd5c1413e41f8261c0b8e9298ffde1cbca069663cbac282a",
+    "constraints.py": "3346520941f8002a6f59a52818a1039340f521c4ca42f2b46c4a3b07c7b31964",
+    "features.py": "5bd1204c8f7473b06318ffefa4c7aade53e9e319cc25b62640af62eaa606f832",
+    "mandatory.py": "5570d1c275e58945739bf6b4ff50d1891dbc48d887b1c69e8c97fdaa2da10d73",
+    "need_value.py": "3cd09ea178c59a1a4e8aa6df74f75092dcf12aa3d743ee22d2a5aa77aae51940",
+    "needs.py": "bde922a3f330fbb8a5610430993f1789492f9b3eb0984e60d3f7f29ad9484e7e",
+    "policy.py": "9e9d4540f15a7085f7a06d23aedc35bfe5d836ccc5f28249bb10d88d12e780dd",
+    "scorer.py": "2792a46bd04756c4b8bfd63d61d964d1a214cde8de7da3f0faa91c178d2aa0be",
+    "semantic_signals.py": "ba1e77a90e8f06ffce9bc1b579c7cffa9eeaa27fce55d53cea074c15c9ab06fc",
+    "snapshot.py": "88d4102545bd3e2cb486ad648611353a263a7f7f343c71845876126099bd9061"
+  },
+  "policy_tree_sha256": "5b6cee8680240e144348fd98865c0b973d3adf19de7701b687728a4dbd691d13",
+  "hash_construction": {
+    "per_file": "sha256 of current candidate core bytes; after pin, identical git blob bytes at tested_sha",
+    "policy_tree_sha256": "sha256 of concatenated core file bytes, filenames sorted ascending",
+    "weights_sha256": "observed optional companion file bytes during lab measurement, not a policy-integrity input"
+  },
+  "weights_sha256": "24e8d422a74c233ab87ed8963633bc1148a9f51ee8e221cf84968cacccdd6a38",
+  "authority_scope": "validated grounded personal conversation only via existing DecisionRouter/choose; medical full cutover remains gated",
+  "model_invocations_for_thread_selection": 0,
+  "gates": {
+    "historical_v8_v9": "92 compared, 4 expected, 0 unexplained; all10 isolated subprocesses",
+    "candidate_v9_v10": "126 compared, 12 expected thread deltas, 0 unexplained; all10 isolated subprocesses",
+    "medical_core_suite": "71 passed before added thread tests",
+    "thread_core_suite": "78 passed, including terminal-background dispositions and real SDK mandatory-goal replay in off/shadow/policy",
+    "focused_core_shadow_diff": "224 passed in 5.46s after authoritative background-disposition snapshot fix",
+    "lint_owned_files": "passed",
+    "historical_challenge_corpus_on_v10": "20/20, forbidden0, constraint0; actual imported version v10, active frozen sha null",
+    "final_frozen_source_isolated_reports": "Final source-publish envelope incl no-comma clinical/source and common answered-question floor guards:92/4expected historical;126/12expected current;0unexplained; all10 isolated; support_tree b6df35bb609c7374256d92b08f1c7836f13f743f0d0517f4ebb1ebea761ac5b0",
+    "final_frozen_source_challenge": "Final source-publish envelope:20/20, forbidden0, constraint0",
+    "full_pytest": "2998 passed, 2 inherited LFS encoder warmup failures, 9 skipped in 153.32s; local suite is NOT all green",
+    "full_local": {
+      "passed": 2998,
+      "failed": 2,
+      "skipped": 9,
+      "duration_seconds": 153.32,
+      "status": "blocked_external_model_readiness",
+      "failures": [
+        "tests/test_deterministic_mission_understanding.py::test_media_bridge_readiness_green_without_llm",
+        "tests/test_nlp_warmup.py::test_warmup_all_hot"
+      ],
+      "failure_attribution": "Inherited local LFS encoder artifact inaccessible; no new code failures; full log /tmp/imvera-cut1b-full-publish.log"
+    },
+    "corpus": "500/500 passed in 5.62s (root-reported actual corpus gate)",
+    "remote_ci": {
+      "status": "PENDING",
+      "tested_sha": null,
+      "run_url": null,
+      "note": "No remote success or frozen code SHA claimed before candidate commit and observed CI result"
+    }
+  },
+  "not_verified": [
+    "actual M5 latency and capacity",
+    "CallActor/FreeSWITCH audio/live-human acceptance",
+    "remote CI"
+  ],
+  "replacement": "v9 Git objects/manifest preserved as historical evidence; v10 replaces active core in place (same choose API)",
+  "pin_workflow": "Commit candidate first; verify exact commit; then set tested_sha/FROZEN_POLICY_SHA to that commit and status frozen in a separate metadata commit. Never use an invented future SHA.",
+  "historical_weights_sha256": "47e36b51c3d9f2fd9eb716ab178975f3e4e84bc27b5a8ffa651dcb0064a48b1f",
+  "weights_match_historical_manifest": false,
+  "known_limitations": [
+    "Untracked slot_answer_clf.pkl differs from historical M5 v9 manifest; no claim of identical model bundle. Policy thread selector itself makes zero model calls."
+  ],
+  "weights_role": "observed optional untracked slot-answer classifier companion; tests/conftest can build it under platform-specific sklearn; historical bundle readiness NOT VERIFIED; not a pure-policy guard input",
+  "weights_present_in_measurement_workspace": true,
+  "notes": {
+    "background_dispositions": "Pure snapshot reads terminal slot/goal truth before stale coverage; BLOCKED remains nonterminal with existing ownership."
+  },
+  "evaluation_artifacts": [
+    "docs/evaluation/action-policy-historical-v8-v9-isolated.json",
+    "docs/evaluation/action-policy-v9-v10-candidate-diff.json",
+    "docs/evaluation/action-policy-v10-candidate-challenge.json",
+    "docs/evaluation/user-led-conversation-cut1b-2026-10-02/required-background-return-before-after.json"
+  ]
+}

@@ -465,6 +465,13 @@ def _is_generic_refusal(text: str) -> bool:
         return False
     if _bare_polarity(raw) == "no":
         return False
+    from packages.dialogue_engine.semantic_kernel.controls import (
+        is_local_question_refusal,
+        is_negated_call_ending,
+    )
+
+    if is_negated_call_ending(raw) and not is_local_question_refusal(raw):
+        return False
     return bool(_GENERIC_REFUSAL.search(raw))
 
 

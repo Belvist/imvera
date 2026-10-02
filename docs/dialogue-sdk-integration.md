@@ -26,7 +26,10 @@ CallActor. Контекст нужен и для ответа во время о
 Плановые `_product_asked` не означают, что вопрос услышан: actual delivery —
 Question.phase, подтверждение playout и delivered_attempts. Не вызывай completion
 за отменённую озвучку, передавай правильные generation/question IDs.
-Default policy не включён: producer parity и расширение legal set ещё предстоят.
+Cut 1b заменяет владельца personal-thread выбора на существующий ActionPolicy v10;
+общий producer SDK/Actor и non-question listening lifecycle реализованы.
+Медицинский полный policy cutover по-прежнему отдельно управляется существующими
+флагами. [Актуальные правила встраивания и M5 gate](user-led-conversation-integration.md).
 
 ## Связный разговор: интегрировать смысл, а не приставку к TTS
 

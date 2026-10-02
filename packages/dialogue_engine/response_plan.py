@@ -31,6 +31,7 @@ class ResponsePlan:
     slot: str | None = None
     control: str | None = None
     suspend: object | None = None
+    thread_mode: Literal["invite", "listen", "resume"] | None = None
 
     # Legacy compatibility for gradual migration
     acknowledge: str = ""
@@ -53,6 +54,28 @@ class ResponsePlan:
 
 def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan:
     """Fill speakable text from plan obligations — policy does not hardcode strings."""
+    if (
+        plan.thread_mode in ("invite", "listen") and not plan.answer_user_question
+        and plan.action == "speak" and not plan.control and not plan.safety_class
+    ):
+        # The move is semantic; the renderer owns its delivery wording. An
+        # invitation yields the floor without pretending to ask a health fact.
+        plan.marks_question = False
+        plan.slot = None
+        if plan.thread_mode == "invite":
+            plan.mandatory_question = "Расскажите, я слушаю."
+            plan.intent = "thread_invite"
+        else:
+            previous = state.thread_last_move
+            last_text = state.thread_listening_text
+            plan.mandatory_question = (
+                "Понимаю." if previous == "invite" or last_text == "Я вас слушаю."
+                else "Я вас слушаю."
+            )
+            plan.intent = "thread_listening_ack"
+        return plan
+    if plan.thread_mode == "resume":
+        plan.acknowledge = questions.thread_return_ack()
     question = plan.mandatory_question
     if plan._answer_render and question == plan._answer_render[0]:
         question = question.removeprefix(plan._answer_render[1]).lstrip()

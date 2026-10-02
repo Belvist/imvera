@@ -32,8 +32,6 @@ _REPAIR_PREFIXES: tuple[str, ...] = (
     "слышишь",
     "ты меня",
     "вы меня",
-    "что?",
-    "что",
 )
 
 _LEVEL0_EXACT: dict[str, tuple[str, str]] = {
@@ -74,6 +72,105 @@ _LEVEL0_EXACT: dict[str, tuple[str, str]] = {
 class Level0Match:
     dialogue_act: str
     control: str
+
+
+def _addressed_clauses(text: str):
+    """Current speaker clauses outside quotations and reported history."""
+    from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
+    from packages.safety.patterns import is_past_without_present, is_third_party_only
+
+    unquoted = re.sub(r'«[^»]*»|“[^”]*”|"[^"]*"', " ", text or "")
+    clauses = clause_bounds(unquoted)
+    for index, (_, _, clause) in enumerate(clauses):
+        if not clause.strip():
+            continue
+        if is_third_party_only(clause) or is_past_without_present(clause):
+            continue
+        if re.search(r"\b(?:сказал\w*|говорил\w*|попросил\w*)\b", clause, re.I):
+            continue
+        if index + 1 < len(clauses) and re.match(
+            r"^(?:так\s+)?(?:сказал\w*|говорил\w*|попросил\w*)\b",
+            clauses[index + 1][2], re.I,
+        ):
+            continue
+        yield clause
+
+
+def is_local_question_refusal(text: str) -> bool:
+    """An answering/topic object declines that question, never future calls."""
+    return any(re.search(
+        r"\bне\s+(?:хоч[уы]|буд[уы])\s+(?:больше\s+)?(?:"
+        r"(?:отвеча\w*|ответить|обсужда\w*)\b|"
+        r"(?:про|таблет\w*|лекар\w*)\b|"
+        r"(?:говорить|разговаривать|рассказывать)\s+(?:про|об|о)\s+"
+        r"(?:этот\s+вопрос|эту\s+тему|таблет\w*|лекар\w*|сон|сне|настроен\w*))",
+        clause, re.I,
+    ) for clause in _addressed_clauses(text))
+
+
+def wants_to_continue_talking(text: str) -> bool:
+    """Positive speaker volition to talk; never a health answer or consent."""
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_token
+    from packages.safety.patterns import is_negated_at
+
+    talk_verbs = {"поговорить", "говорить", "разговаривать", "общаться", "пообщаться",
+                  "беседовать", "побеседовать", "поболтать"}
+    for clause in _addressed_clauses(text):
+        tokens = list(re.finditer(r"[а-яё]+", clause, re.I))
+        for index, token in enumerate(tokens):
+            raw = token.group().lower()
+            invitation = raw in {"давай", "давайте"}
+            if not invitation and raw not in {"хочу", "хочется", "хотел", "хотела"}:
+                continue
+            if raw in {"хотел", "хотела"} and not re.search(r"\bбы\b", clause, re.I):
+                continue
+            if is_negated_at(clause, token.start()):
+                continue
+            for other_index in range(max(0, index - 4), min(len(tokens), index + 5)):
+                other = tokens[other_index]
+                if normalize_token(other.group()) not in talk_verbs:
+                    continue
+                if invitation and (
+                    other_index <= index
+                    or re.search(r"(?:им|ем)(?:ся)?$|ть(?:ся)?$", other.group(), re.I) is None
+                ):
+                    # Addressed invitation + infinitive / first-person plural,
+                    # never a proposal that another person should speak.
+                    continue
+                if is_negated_at(clause, other.start()) or re.search(
+                    r"\bне\s+(?:будем|надо|нужно)(?:\s+\w+){0,2}\s*$",
+                    clause[:other.start()], re.I,
+                ):
+                    continue
+                return True
+    return False
+
+
+def is_negated_call_ending(text: str) -> bool:
+    """A negated finish with a call object does not refuse a goal answer."""
+    return any(re.search(
+        r"\bне\s+(?:хочу|буду|надо|нужно|собираюсь)(?:\s+\w+){0,2}\s+"
+        r"(?:заканчива\w*|закончить|заверша\w*|завершить|прерыва\w*|прервать)"
+        r"\s+(?:(?:этот|наш)\s+)?(?:разговор|звонок)\b",
+        clause, re.I,
+    ) for clause in _addressed_clauses(text))
+
+
+def has_addressed_finish(pattern: re.Pattern[str], text: str) -> bool:
+    """A finish verb must be asserted by the speaker, outside modal negation."""
+    from packages.safety.patterns import is_negated_at
+
+    for clause in _addressed_clauses(text):
+        for match in pattern.finditer(clause):
+            if is_negated_at(clause, match.start()):
+                continue
+            if re.search(
+                r"\bне\s+(?:хочу|буду|надо|нужно|собираюсь)(?:\s+\w+){0,2}\s*$",
+                clause[:match.start()], re.I,
+            ):
+                continue
+            return True
+    return False
 
 
 def match_repair(text: str) -> Level0Match | None:
@@ -117,25 +214,32 @@ def match_level0(text: str) -> Level0Match | None:
     repair = match_repair(text)
     if repair is not None:
         return repair
+    for clause in _addressed_clauses(text):
+        norm = re.sub(r"^(?:(?:спасибо|пожалуйста|ну|ладно)[\s,]*|я\s+)+", "",
+                      clause.strip().lower()).rstrip(".!?…")
+        if not norm or is_local_question_refusal(norm):
+            continue
+        if re.match(r"не\s+(?:хочу|буду)\s+больше\s+(?:разговаривать|говорить|общаться)\b",
+                    norm):
+            # Ending this conversation is not withdrawal of future consent.
+            # The existing exact legacy mappings below stay compatible.
+            return Level0Match(dialogue_act="answer", control="stop_call")
+        if re.match(r"(?:давайте\s+)?закончим\b", norm):
+            return Level0Match(dialogue_act="answer", control="stop_call")
+    # Retain the old exact/prefix contract for existing refusal/consent paths.
+    # In particular, polite composite refusals still reach their DECLINE owner.
     norm = text.strip().lower().rstrip(".!?…")
-    if not norm:
-        return None
-    # Topic-level refusal («(я) не хочу про таблетки говорить», slurred or
-    # not) is NOT consent revoke — the dialogue drops the topic (spec 9).
-    # Only call-level refusal reaches control. Unanchored: STT inserts
-    # leading words («я») and slurs vowels, anchors miss them.
-    if re.search(
-        r"не\s+(хоч[уы]|буд[уы])\b.{0,12}\b(про|об|это|таблет|лекар|говорить|обсуждать|рассказ)",
-        norm,
-    ):
-        return None
-    if re.match(r"^не хочу\s+(про|об)\b", norm) or re.match(
-        r"^не\s+(буду|хочу)\s+(это\s+)?обсуждать\b", norm
-    ):
+    if is_local_question_refusal(text) or not any(_addressed_clauses(text)):
         return None
     for phrase, (act, control) in sorted(_LEVEL0_EXACT.items(), key=lambda x: -len(x[0])):
-        if norm == phrase or norm.startswith(phrase + " "):
-            return Level0Match(dialogue_act=act, control=control)
+        if not (norm == phrase or norm.startswith(phrase + " ")):
+            continue
+        if phrase == "не хочу" and norm != phrase and not re.match(
+            r"не хочу\s+(?:разговаривать|общаться)\b", norm,
+        ):
+            # Wanting no food or no answer is not a call subscription act.
+            continue
+        return Level0Match(dialogue_act=act, control=control)
     return None
 
 

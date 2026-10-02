@@ -412,6 +412,14 @@ def _clause_mentions(
                 # or unknown words raw — morphology maps «Пах» → «пахнуть» and
                 # «Зук» must stay the elder's own word.
                 _norm = _normalize_site_token(site)
+                if not _site_in_lexicon(_norm):
+                    from packages.dialogue_engine.semantic_kernel.morphology import _load_morph
+
+                    morph = _load_morph()
+                    # Unknown elder/ASR nouns still survive. A grammatical
+                    # adverb modifying the predicate cannot be its body site.
+                    if morph is not None and morph.parse(site)[0].tag.POS == "ADVB":
+                        continue
                 _body = (
                     _norm
                     if len(site) >= 4 and _site_in_lexicon(_norm)
@@ -711,6 +719,117 @@ def _denied_pain_with_positive(text: str) -> bool:
     return bool(_TRAILING_POSITIVE.search(lowered))
 
 
+def _plans_fact(raw: str, *, answer_slot: str | None) -> FactCandidate | None:
+    """Bind a plans candidate to its own predicate/time/subject clause."""
+    from packages.dialogue_engine.fast_interpreter import _PLANS_ANSWER
+    from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
+    from packages.dialogue_engine.semantic_kernel.morphology import _load_morph
+    from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
+    from packages.dialogue_engine.semantic_kernel.types import SubjectKind
+
+    raw_lower = raw.lower().replace("ё", "е")
+    if not _PLANS_ANSWER.search(raw_lower) and not re.search(r"\bплан\w*\b", raw_lower):
+        return None
+    morph = _load_morph()
+
+    def parses(clause: str):
+        if morph is None:
+            return []
+        return [morph.parse(token)[0] for token in re.findall(r"[а-яё]+", clause.lower())]
+
+    # Shared segmentation preserves original offsets. Coordinated independent
+    # predicates have separate owners; coordinated infinitives keep one plan.
+    clauses: list[tuple[int, int, str]] = []
+    for start, end, clause in clause_bounds(raw):
+        boundaries: list[tuple[int, int]] = []
+        for conjunction in re.finditer(r"\s+и\s+", clause, re.I):
+            if any(p.tag.POS == "VERB" for p in parses(clause[conjunction.end():])):
+                boundaries.append((conjunction.start(), conjunction.end()))
+        # STT may omit punctuation between a completed event and a future
+        # time pivot. Keep the future clause's literal evidence in that case.
+        for pivot in re.finditer(r"\b(?:сегодня|завтра|вечером|позже|потом)\b", clause, re.I):
+            if (
+                any(p.tag.POS == "VERB" for p in parses(clause[:pivot.start()]))
+                and any(p.tag.POS == "VERB" for p in parses(clause[pivot.start():]))
+            ):
+                boundaries.append((pivot.start(), pivot.start()))
+        previous = 0
+        for left, right in sorted(set(boundaries)):
+            if left < previous:
+                continue
+            head = clause[previous:left]
+            if head.strip():
+                clauses.append((start + previous, start + left, head))
+            previous = right
+        clauses.append((start + previous, end, clause[previous:]))
+
+    for start, end, clause in clauses:
+        start += len(clause) - len(clause.lstrip())
+        end -= len(clause) - len(clause.rstrip())
+        clause = clause.strip()
+        connector = re.match(r"^(?:а|но|однако)\s+", clause, re.I)
+        if connector:
+            start += connector.end()
+            clause = clause[connector.end():]
+        lower = clause.lower().replace("ё", "е")
+        parsed = parses(clause)
+        no_plans = (
+            any(p.normal_form == "план" and p.tag.POS == "NOUN" for p in parsed)
+            and any(p.normal_form in {"никакой", "нет", "нету"} for p in parsed)
+        )
+        if not _PLANS_ANSWER.search(lower) and not no_plans:
+            continue
+        verbs = [p for p in parsed if p.tag.POS == "VERB"]
+        own = [p for p in verbs if p.tag.person == "1per"]
+        future = any(
+            p.tag.tense == "futr"
+            and p.normal_form not in {"сказать", "рассказать", "вспомнить", "подумать"}
+            for p in own
+        )
+        intent = any(
+            p.tag.tense == "pres"
+            and p.normal_form in {"планировать", "собираться", "намереваться", "хотеть"}
+            for p in own
+        )
+        current_activity = any(
+            p.tag.tense == "pres"
+            and (
+                _PLANS_ANSWER.search(p.normal_form)
+                or p.normal_form in {"сидеть", "идти", "ехать", "смотреть", "убирать", "готовить"}
+            )
+            for p in own
+        )
+        # A sole «Дома.» is a current location predicate, not a future
+        # inference from a topic noun. History/other-person clauses stay gated.
+        at_home = len(clauses) == 1 and lower == "дома"
+        # A day marker does not make completed activity a future plan.
+        if any(p.tag.tense == "past" for p in verbs):
+            continue
+        if re.search(r"\b(?:вчера|позавчера|раньше|тогда)\b", lower) and not future:
+            continue
+        if not (future or intent or current_activity):
+            if any(p.tag.person == "3per" for p in parsed):
+                continue
+            if _subject_for_clause(clause, has_issue=False) == SubjectKind.OTHER_PERSON:
+                continue
+            if not (
+                answer_slot == "plans"
+                or at_home
+                or (not verbs and any(p.normal_form == "план" for p in parsed))
+                or (not verbs and re.search(r"\b(?:сегодня|завтра|вечером|позже)\b", lower))
+            ):
+                continue
+        if len(clauses) == 1:
+            # A sole plan is the complete source turn, including punctuation;
+            # mixed narratives still use only the accepted clause's span.
+            start, end, clause = 0, len(raw), raw
+        return FactCandidate(
+            field="plans", value=clause, subject="speaker", temporal_scope="now", negated=False,
+            evidence=_evidence(raw, start, end),
+        )
+    return None
+
+
 def extract_goal_facts(
     text: str,
     *,
@@ -723,6 +842,7 @@ def extract_goal_facts(
     raw = text.strip()
     if not raw:
         return ()
+    plans_fact = _plans_fact(raw, answer_slot=answer_slot)
     n = raw.lower().replace("ё", "е")
     # Subject guard: someone else's complaint («у мужа голова болит») yields
     # NO speaker facts — not wellness, mood, or sleep (reviewer item 2).
@@ -737,7 +857,7 @@ def extract_goal_facts(
         re.search(r"\b(я|мне|меня|мной|у\s+меня|мною|сам|сама)\b", _low)
     )
     if _has_other and not _has_speaker:
-        return ()
+        return (plans_fact,) if plans_fact is not None else ()
     if _has_other and _has_speaker:
         # Mixed subjects («у мужа плохо, а у меня более-менее»): evaluate
         # speaker clauses only — husband's «плохо» must not become speaker
@@ -771,7 +891,6 @@ def extract_goal_facts(
         _MOOD_POSITIVE,
         _NEGATIVE,
         _NORMAL,
-        _PLANS_ANSWER,
         _POSITIVE,
         _SLEEP_ANSWER,
         _SO_SO,
@@ -877,8 +996,8 @@ def extract_goal_facts(
     if _SLEEP_ANSWER.search(n):
         _add("sleep", raw)
 
-    if _PLANS_ANSWER.search(n):
-        _add("plans", raw)
+    if plans_fact is not None:
+        facts.append(plans_fact)
 
     # Opening «как себя чувствуете?» answered with mood/sleep still covers wellness entry.
     if (

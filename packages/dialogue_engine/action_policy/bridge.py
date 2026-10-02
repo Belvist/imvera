@@ -19,10 +19,20 @@ _IDENTITY_ANSWER = (
 )
 
 
-def to_response_plan(decision, snapshot: PolicySnapshot) -> ResponsePlan:
+def to_response_plan(
+    decision, snapshot: PolicySnapshot, *, user_question_answer: str | None = None,
+) -> ResponsePlan:
     """Map chosen action to existing renderer contract; never writes snapshot/state."""
     action: CandidateAction = decision.chosen
     kind = action.kind
+    if action.thread_mode in ("invite", "listen") and kind in (
+        ActionKind.FOLLOW_USER_THREAD, ActionKind.ACK_ONLY,
+    ):
+        return ResponsePlan(
+            obligation="follow_user_thread", thread_mode=action.thread_mode,
+            intent="thread_invite" if action.thread_mode == "invite" else "thread_listening_ack",
+            marks_question=False,
+        )
     if kind == ActionKind.SAFETY:
         return ResponsePlan(obligation="safety", action="close_urgent")
     if kind == ActionKind.GOODBYE_FINAL:
@@ -47,7 +57,7 @@ def to_response_plan(decision, snapshot: PolicySnapshot) -> ResponsePlan:
         return ResponsePlan(
             obligation="answer_user_question",
             action="speak",
-            answer_user_question=_IDENTITY_ANSWER,
+            answer_user_question=user_question_answer or _IDENTITY_ANSWER,
             intent="answer_user_question",
             marks_question=False,
         )
@@ -84,6 +94,7 @@ def to_response_plan(decision, snapshot: PolicySnapshot) -> ResponsePlan:
             obligation="background_goal",
             action="speak",
             next_slot=action.target_goal,
+            thread_mode=action.thread_mode,
             intent=f"check_{action.target_goal}",
             slot=action.target_goal,
             marks_question=True,
@@ -132,6 +143,14 @@ def legacy_plan_to_action_key(plan: ResponsePlan) -> ActionKey:
         return ActionKey(ActionKind.REPAIR)
     if intent == "answer_user_question" or obligation == "answer_user_question":
         return ActionKey(ActionKind.ANSWER_USER)
+    if plan.thread_mode in ("invite", "listen"):
+        kind = (
+            ActionKind.FOLLOW_USER_THREAD if plan.thread_mode == "invite" else ActionKind.ACK_ONLY
+        )
+        return ActionKey(kind, thread_mode=plan.thread_mode)
+    if plan.thread_mode == "resume":
+        return ActionKey(ActionKind.BACKGROUND_GOAL, target_goal=plan.next_slot or plan.slot,
+                         thread_mode="resume")
     if intent in {"important_to_share_listen", "listen_meta"}:
         return ActionKey(ActionKind.LISTEN_META)
     if intent == "important_to_share" or obligation == "important_to_share":

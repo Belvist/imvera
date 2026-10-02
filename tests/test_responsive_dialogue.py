@@ -2,6 +2,7 @@
 
 import pytest
 
+from packages.contracts.enums import SlotStatus
 from packages.dialogue_engine.events import CallStarted
 from packages.dialogue_engine.response_plan import ResponsePlan, compose_speech
 from packages.dialogue_engine.scenario_runner import ScenarioRunner
@@ -57,7 +58,10 @@ def test_report_before_summary_is_heard_without_adding_a_question():
     runner = started("Руки болят уже две недели.")
     result = runner.run(["Руки трясутся со вчера сильно."])
     text = speech(result).lower()
-    assert "слышу" in text and "руки трясутся" in text
+    # Accepted present+severity now selects the existing strong reaction,
+    # rather than the generic hearing prefix. Assert meaning, not its variant.
+    assert any(word in text for word in ("слышу", "слушаю", "сочувствую", "понимаю"))
+    assert "руки трясутся" in text
     assert "давайте уточним" not in text and "давайте по порядку" not in text
     assert text.count("?") == 0
     effect = result.speak_effects[-1]
@@ -142,16 +146,18 @@ def test_no_relief_claim_from_topic_choice_other_person_unknown_or_past(answer):
     "Мне одиноко, скучаю по дочери.",
     "Внучка приезжала, хорошо посидели.",
 ])
-def test_personal_thread_invites_a_story_and_consumes_its_hook_once(story):
+def test_personal_thread_invites_without_inventing_a_question_or_health_fact(story):
     runner = started()
     result = runner.run([story])
     text = speech(result).lower()
-    assert "хотите рассказать" in text
+    assert "слушаю" in text
     assert "самое главное" not in text
-    assert runner.state.open_hook.lower().rstrip(".!?…") in text
-    assert runner.state.open_hook_used
-    assert text.count("?") == 1
-    assert result.speak_effects[-1].intent == "thread_followup"
+    assert runner.state.thread_last_statement == story
+    assert runner.state.thread_last_utterance_id
+    assert text.count("?") == 0
+    assert not result.speak_effects[-1].marks_question
+    assert result.speak_effects[-1].intent == "thread_invite"
+    assert runner.state.slots["wellness"] == SlotStatus.OPEN
     again = runner.run(["Нет."])
     assert "хотите рассказать" not in speech(again).lower()
 

@@ -1,6 +1,6 @@
 """Lightweight ActionPolicy shadow config — no frozen policy imports.
 
-MODE=off must work even if action_policy_shadow / action_policy fail to import.
+MODE=off excludes broad medical cutover; personal-thread authority is reported separately.
 """
 
 from __future__ import annotations
@@ -8,9 +8,26 @@ from __future__ import annotations
 import os
 from typing import Any
 
-# Frozen v9 provenance — must match freeze manifest tested_sha.
-FROZEN_POLICY_SHA = "254f0baed11ba7913d276c50ca7bd574778f19a5"
-POLICY_VERSION = "action-policy-phase1-v9"
+# Historical baseline remains immutable. The active v10 tree is a candidate;
+# an actual tested commit is pinned separately after committing the candidate.
+HISTORICAL_BASELINE_SHA = "254f0baed11ba7913d276c50ca7bd574778f19a5"
+FROZEN_POLICY_SHA: str | None = None
+POLICY_STATUS = "candidate"
+POLICY_VERSION = "action-policy-phase1-v10"
+ACTIVE_POLICY_MANIFEST = "docs/evaluation/action-policy-phase1-v10-candidate-manifest.json"
+
+
+def policy_provenance() -> dict[str, Any]:
+    """Truthful lightweight provenance; no filesystem/model work on the hot path."""
+    return {
+        "frozen_policy_sha": FROZEN_POLICY_SHA,
+        "historical_baseline_sha": HISTORICAL_BASELINE_SHA,
+        "policy_status": POLICY_STATUS,
+        "policy_version": POLICY_VERSION,
+        "active_policy_manifest": ACTIVE_POLICY_MANIFEST,
+    }
+
+
 SHADOW_SCHEMA_VERSION = 1
 SHADOW_BUFFER_MAX = 64
 DECISION_SCOPE = "conversation_scheduler"
@@ -69,6 +86,11 @@ def action_policy_runtime_truth() -> dict[str, Any]:
         "action_policy.policy_version": POLICY_VERSION,
         "action_policy.frozen_policy_sha": FROZEN_POLICY_SHA,
         "action_policy.decision_scope": DECISION_SCOPE,
+        "action_policy.personal_thread_authority": "action_policy_v10",
+        "action_policy.personal_thread_scope": "grounded_nonurgent_daily",
+        "action_policy.historical_baseline_sha": HISTORICAL_BASELINE_SHA,
+        "action_policy.policy_status": POLICY_STATUS,
+        "action_policy.active_policy_manifest": ACTIVE_POLICY_MANIFEST,
         "IMVERA_ACTION_POLICY_MODE": os.environ.get("IMVERA_ACTION_POLICY_MODE", "off"),
         "IMVERA_ACTION_POLICY_CUTOVER_ENABLED": os.environ.get(
             "IMVERA_ACTION_POLICY_CUTOVER_ENABLED", ""
@@ -144,8 +166,7 @@ def make_error_record(
         "engine_revision_before_legacy": revision,
         "engine_turn_seq": turn_seq,
         "deployment_sha": git_sha_short(),
-        "frozen_policy_sha": FROZEN_POLICY_SHA,
-        "policy_version": POLICY_VERSION,
+        **policy_provenance(),
         "input_kind": input_kind,
         "shadow_status": "error",
         "shadow_action": None,

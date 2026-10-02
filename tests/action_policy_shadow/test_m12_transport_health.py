@@ -219,7 +219,8 @@ def test_shadow_health_event_on_finalize(monkeypatch: pytest.MonkeyPatch) -> Non
     assert len(health_events) == 1
     payload = health_events[0].payload
     assert payload["schema_version"] == 1
-    assert payload["frozen_policy_sha"]
+    from packages.dialogue_engine.action_policy_shadow_config import FROZEN_POLICY_SHA
+    assert payload["frozen_policy_sha"] == FROZEN_POLICY_SHA
     assert payload["policy_version"]
     assert "records_produced" in payload
     assert "records_persisted" in payload

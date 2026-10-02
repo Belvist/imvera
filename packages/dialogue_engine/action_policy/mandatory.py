@@ -32,8 +32,38 @@ def _urgent_risk(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
 def _unresolved_concern(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
     if ctx.has_new_speaker_issue or snapshot.interrogatable_episodes:
         return False
-    return ctx.unresolved_concern or (
-        ctx.needs_clarification and not ctx.has_grounded_information
+    return ctx.unresolved_concern or (ctx.needs_clarification and not ctx.has_grounded_information)
+
+
+def thread_context_eligible(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
+    """Only a grounded personal concern may defer nonurgent background collection.
+
+    This does not reopen deferred optional clinical work, consume an obligation,
+    or assign facts. Safety/control/clinical pending needs keep their owners.
+    """
+    return bool(
+        snapshot.thread_active
+        and snapshot.thread_statement.strip()
+        and snapshot.thread_utterance_id
+        and (ctx.utterance_id or not ctx.raw_text.strip())
+        and (not ctx.utterance_id or ctx.utterance_id == snapshot.thread_utterance_id)
+        and (snapshot.thread_willing or snapshot.thread_finished)
+        and not snapshot.call_closed
+        and not _urgent_risk(snapshot, ctx)
+        and ctx.control in {"", "none"}
+        and not ctx.repair
+        and not ctx.user_question
+        and not ctx.meta
+        and not ctx.needs_clarification
+        and not ctx.clarify_target
+        and not ctx.unresolved_concern
+        and not ctx.vague_negative_wellness
+        and not ctx.has_new_speaker_issue
+        and not snapshot.pending_episode_attribute
+        and not snapshot.its_pending
+        and not snapshot.probe_phase
+        and not snapshot.outstanding_pending_obligation()
+        and not snapshot.has_askable_open_issues(ctx)
     )
 
 
@@ -75,9 +105,8 @@ def compute_mandatory_class(snapshot: PolicySnapshot, ctx: TurnContextView) -> M
         return MandatoryClass.REPAIR
     if ctx.user_question:
         return MandatoryClass.ANSWER_USER
-    if (
-        (ctx.meta and not ctx.has_grounded_information)
-        or (snapshot.its_pending and ctx.unclear_without_grounding)
+    if (ctx.meta and not ctx.has_grounded_information) or (
+        snapshot.its_pending and ctx.unclear_without_grounding
     ):
         return MandatoryClass.ITS_META
     if _unresolved_concern(snapshot, ctx):
@@ -88,6 +117,9 @@ def compute_mandatory_class(snapshot: PolicySnapshot, ctx: TurnContextView) -> M
         and not snapshot.interrogatable_episodes
     ):
         return MandatoryClass.CLARIFY
+    if thread_context_eligible(snapshot, ctx):
+        if not snapshot.thread_finished or snapshot.thread_resume_slot:
+            return MandatoryClass.CONVERSATION
     if _background_eligible(snapshot, ctx):
         return MandatoryClass.BACKGROUND_GOAL
     if _summary_close_eligible(snapshot, ctx):
@@ -119,6 +151,16 @@ def action_matches_mandatory_class(
     if mandatory_class == MandatoryClass.CLARIFY:
         return kind == ActionKind.CLARIFY
     if mandatory_class == MandatoryClass.CONVERSATION:
+        if thread_context_eligible(snapshot, ctx) and (
+            not snapshot.thread_finished or snapshot.thread_resume_slot
+        ):
+            # The existing legal set owns the personal move; medical candidates
+            # cannot steal this scoped concern via their unrelated scores.
+            return action.thread_mode is not None and kind in {
+                ActionKind.ACK_ONLY,
+                ActionKind.FOLLOW_USER_THREAD,
+                ActionKind.BACKGROUND_GOAL,
+            }
         return kind in {
             ActionKind.ASK_EPISODE,
             ActionKind.IMPORTANT_TO_SHARE,

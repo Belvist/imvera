@@ -11,7 +11,10 @@ from packages.dialogue_engine.action_policy.actions import (
     PolicyDecision,
 )
 from packages.dialogue_engine.action_policy.constraints import reject_candidate
-from packages.dialogue_engine.action_policy.mandatory import compute_mandatory_class
+from packages.dialogue_engine.action_policy.mandatory import (
+    compute_mandatory_class,
+    thread_context_eligible,
+)
 from packages.dialogue_engine.action_policy.need_value import need_is_currently_askable
 from packages.dialogue_engine.action_policy.needs import episode_unknown_needs, normalize_attribute
 from packages.dialogue_engine.action_policy.scorer import (
@@ -39,6 +42,19 @@ def generate_candidates(
         CandidateAction(ActionKind.SUMMARY_CLOSE),
         CandidateAction(ActionKind.ACK_ONLY),
     ]
+
+    if thread_context_eligible(snapshot, ctx):
+        _append_unique(out, CandidateAction(ActionKind.ACK_ONLY, thread_mode="listen"))
+        _append_unique(out, CandidateAction(ActionKind.FOLLOW_USER_THREAD, thread_mode="invite"))
+        if snapshot.thread_resume_slot:
+            _append_unique(
+                out,
+                CandidateAction(
+                    ActionKind.BACKGROUND_GOAL,
+                    target_goal=snapshot.thread_resume_slot,
+                    thread_mode="resume",
+                ),
+            )
 
     if ctx.explicit_farewell:
         _append_unique(out, CandidateAction(ActionKind.GOODBYE_FINAL))

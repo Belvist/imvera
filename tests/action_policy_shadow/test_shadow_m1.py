@@ -264,9 +264,9 @@ def test_f_pre_legacy_snapshot_before_mutation(monkeypatch: pytest.MonkeyPatch) 
         fromlist=["build_policy_snapshot"],
     ).build_policy_snapshot
 
-    def spy_build(st):
+    def spy_build(st, ctx=None):
         seen["wellness_before"] = st.background_goal_status.get("wellness")
-        return real_build(st)
+        return real_build(st, ctx)
 
     monkeypatch.setattr(
         "packages.dialogue_engine.action_policy_shadow.build_policy_snapshot",
@@ -323,32 +323,51 @@ def _ensure_frozen_sha_available() -> None:
 
 
 def test_h_frozen_policy_unchanged() -> None:
-    from packages.dialogue_engine.action_policy_shadow_config import FROZEN_POLICY_SHA as cfg_sha
+    """Historical proof stays immutable; the active candidate has its own hashes.
 
-    if not (len(cfg_sha) == 40 and all(c in "0123456789abcdef" for c in cfg_sha)):
-        # Active candidate under development — freeze commit will pin SHA.
-        pytest.skip(f"policy not frozen yet: {cfg_sha}")
+    A missing/invalid pin no longer skips protection. Candidate status verifies
+    bytes against a checked-in manifest; frozen status additionally verifies Git.
+    """
+    import hashlib
+    import json
+
+    from packages.dialogue_engine import action_policy_shadow_config as cfg
+
     _ensure_frozen_sha_available()
-    core = [
-        "policy.py",
-        "scorer.py",
-        "features.py",
-        "constraints.py",
-        "mandatory.py",
-        "need_value.py",
-        "needs.py",
-        "snapshot.py",
-        "semantic_signals.py",
-        "actions.py",
-    ]
-    for name in core:
-        path = f"packages/dialogue_engine/action_policy/{name}"
-        proc = _git("diff", "--exit-code", f"{FROZEN_SHA}", "HEAD", "--", path)
-        assert proc.returncode == 0, (
-            f"frozen guard failed for {name}: rc={proc.returncode}\n"
-            f"stdout={proc.stdout!r}\nstderr={proc.stderr!r}"
+    historical_path = ROOT / "docs/evaluation/action-policy-phase1-v9-freeze-manifest.json"
+    historical = json.loads(historical_path.read_text())
+    assert historical["tested_sha"] == cfg.HISTORICAL_BASELINE_SHA == FROZEN_SHA
+    all_historical = []
+    all_active = []
+    active = json.loads((ROOT / cfg.ACTIVE_POLICY_MANIFEST).read_text())
+    assert active["policy_version"] == cfg.POLICY_VERSION
+    assert active["status"] == cfg.POLICY_STATUS
+    assert active["tested_sha"] == cfg.FROZEN_POLICY_SHA
+    assert len(active["core_file_sha256"]) == 10
+    assert set(active["core_file_sha256"]) == set(historical["core_file_sha256"])
+    for name in sorted(historical["core_file_sha256"]):
+        rel = f"packages/dialogue_engine/action_policy/{name}"
+        proc = subprocess.run(
+            ["git", "show", f"{FROZEN_SHA}:{rel}"], cwd=ROOT, capture_output=True, check=False
         )
-        assert proc.stdout == "", f"frozen file changed: {name}\n{proc.stdout}"
+        assert proc.returncode == 0, f"historical proof missing: {rel}"
+        assert hashlib.sha256(proc.stdout).hexdigest() == historical["core_file_sha256"][name]
+        all_historical.append(proc.stdout)
+        current = (ROOT / rel).read_bytes()
+        assert hashlib.sha256(current).hexdigest() == active["core_file_sha256"][name], name
+        all_active.append(current)
+        if cfg.POLICY_STATUS == "frozen":
+            assert cfg.FROZEN_POLICY_SHA and len(cfg.FROZEN_POLICY_SHA) == 40
+            proc2 = _git("diff", "--exit-code", cfg.FROZEN_POLICY_SHA, "--", rel)
+            assert proc2.returncode == 0 and not proc2.stdout, rel
+    assert hashlib.sha256(b"".join(all_historical)).hexdigest() == historical["policy_tree_sha256"]
+    assert hashlib.sha256(b"".join(all_active)).hexdigest() == active["policy_tree_sha256"]
+    # Companion pickle provenance is measured separately. It is untracked and
+    # tests/conftest may build it under a different sklearn/platform; it is not
+    # a pure-policy input. This guard protects the ten code/weight core files.
+    assert cfg.POLICY_STATUS in {"candidate", "frozen"}
+    if cfg.POLICY_STATUS == "candidate":
+        assert cfg.FROZEN_POLICY_SHA is None
 
 
 def test_h_frozen_guard_fails_when_git_object_missing(
@@ -635,7 +654,7 @@ def test_runtime_truth_exposes_shadow_fields(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("IMVERA_ACTION_POLICY_MODE", "shadow")
     truth = runtime_truth()
     assert truth["action_policy.mode"] == "shadow"
-    assert truth["action_policy.policy_version"] == "action-policy-phase1-v9"
+    assert truth["action_policy.policy_version"] == "action-policy-phase1-v10"
     assert truth["action_policy.frozen_policy_sha"] == FROZEN_POLICY_SHA
     assert truth["action_policy.decision_scope"] == "conversation_scheduler"
 
@@ -673,3 +692,35 @@ def test_allocate_decision_id_uses_utterance_when_processing_cleared() -> None:
     assert utt == "from-turn"
     assert "utt:from-turn" in did
     assert rev == 3
+
+
+def test_candidate_guard_does_not_skip_with_an_invalid_freeze_pin(monkeypatch):
+    from packages.dialogue_engine import action_policy_shadow_config as cfg
+
+    monkeypatch.setattr(cfg, "FROZEN_POLICY_SHA", "development-not-a-commit")
+    with pytest.raises(AssertionError):
+        test_h_frozen_policy_unchanged()
+
+
+def test_candidate_core_guard_runs_without_untracked_model(monkeypatch):
+    from pathlib import Path
+
+    real_exists = Path.exists
+    monkeypatch.setattr(
+        Path,
+        "exists",
+        lambda path: False if path.name == "slot_answer_clf.pkl" else real_exists(path),
+    )
+    test_h_frozen_policy_unchanged()
+
+
+def test_pure_core_guard_does_not_claim_to_validate_untracked_models(monkeypatch):
+    from pathlib import Path
+
+    real_read = Path.read_bytes
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda path: b"wrong-model" if path.name == "slot_answer_clf.pkl" else real_read(path),
+    )
+    test_h_frozen_policy_unchanged()

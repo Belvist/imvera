@@ -158,29 +158,104 @@ def final_open_plan(*, acknowledge: str = "") -> ResponsePlan:
     )
 
 
-def answer_user_question_text(question: str) -> str:
-    """Deterministic meta answers — no freeform promises."""
-    low = (question or "").lower()
-    if any(w in low for w in ("кто ты", "кто вы", "ты кто", "вы кто")):
+def _grounded_answer_recall(question_words: frozenset[str], state: EngineState) -> str | None:
+    """Quote accepted current-call evidence; never use unproven prior metadata."""
+    from packages.contracts.enums import SlotStatus
+    from packages.dialogue_engine.discourse import _FACT_THREAD_LABELS
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+
+    neutral = {"как", "какой", "что", "вы", "ты", "я", "мой", "у", "в", "про",
+               "об", "о", "на", "сегодня", "сейчас", "человек", "себя", "дело"}
+    quotes = []
+    for definition in state.mission_catalog:
+        gid = definition.goal_id
+        label = _FACT_THREAD_LABELS.get(gid, "")
+        anchors = frozenset(normalize_text(" ".join((
+            label, definition.prompt_hint, definition.description,
+            *definition.aliases, *definition.semantic_hints,
+        ))).split()) - neutral
+        if not anchors.intersection(question_words):
+            continue
+        record = state.slot_records.get(gid)
+        if (
+            state.slots.get(gid) == SlotStatus.FILLED and record is not None
+            and record.source_turn_id and record.source_text.strip()
+        ):
+            quotes.append(record.source_text.strip())
+        for observation in state.observations.values():
+            if (
+                getattr(observation, "goal_id", None) == gid
+                and getattr(observation, "status", None) == "confirmed"
+                and str(getattr(observation, "subject", "")) == "speaker"
+                and getattr(observation, "source_turn_id", "")
+                and getattr(observation, "evidence", "")
+            ):
+                quotes.append(observation.evidence.strip())
+    unique = list(dict.fromkeys(quote for quote in quotes if len(quote) <= 300))
+    if len(unique) != 1:
+        return None
+    return f"В этом разговоре вы сказали: «{unique[0]}»."
+
+
+def answer_user_question_text(question: str, *, state: EngineState | None = None) -> str:
+    """Bounded service answers or evidenced recall, with explicit abstention.
+
+    This existing answer owner is shared by daily, custom and policy paths.
+    Morphological roles scope the answer: 'когда' alone cannot become a call
+    schedule, and 'почему' alone cannot become a statement of service purpose.
+    No model, fact write, personal preference or medical advice is produced.
+    """
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+
+    words = frozenset(normalize_text(question or "").split())
+    addressee = bool(words & {"ты", "вы", "вера", "помощник"})
+    identity_request = "кто" in words and not words & {"знать", "помнить", "я"}
+    if addressee and (identity_request or words & {"робот", "человек"}):
         return _IDENTITY
-    if any(w in low for w in ("зачем", "почему спраш", "для чего")):
-        return (
-            "Я помогаю близким быть в курсе того, как у вас дела. "
-            "Ответы из этого разговора сохраняются в сервисе Амвера для семьи."
-        )
-    if any(w in low for w in ("что будет", "информац", "увидит", "переда")):
-        return (
-            "Ответы из этого разговора сохраняются в сервисе Амвера для семьи. "
-            "Дальнейшие действия решают близкие."
-        )
-    if any(w in low for w in ("когда", "ещё позвон", "еще позвон")):
-        return "О следующих звонках решает семья в приложении Амвера."
-    if any(w in low for w in ("что именно", "что вы спраш", "какой вопрос")):
-        return "Я возвращаюсь к вопросу, который ещё не закрыт."
-    return (
-        "Я Вера, голосовой помощник сервиса Амвера. "
-        "Могу ответить только в рамках этого звонка."
+    if addressee and words & {"любить", "нравиться", "предпочитать"}:
+        return "У меня нет личных предпочтений. Но я могу выслушать ваш рассказ."
+    recall = bool(words & {"говорить", "рассказывать", "сказать", "сообщать", "помнить"})
+    if recall and words & {"что", "помнить"} and "я" in words:
+        # Current-call evidence cannot answer a request about another day/call.
+        earlier_context = bool(words & {"вчера", "раньше", "прошлый", "предыдущий"})
+        answer = (_grounded_answer_recall(words, state)
+                  if state is not None and not earlier_context else None)
+        return answer or "В этом разговоре у меня нет подтверждённого ответа об этом."
+    service_question = not words & {"знать", "помнить"} and (
+        addressee or words & {"сервис", "амвера", "звонок", "опрос"}
     )
+    if service_question and words & {"когда", "ещё", "еще", "снова", "следующий"} and (
+        words & {"позвонить", "звонить", "звонок"}
+    ):
+        return "О следующих звонках решает семья в приложении Амвера. Точного времени у меня нет."
+    if words & {"ответ", "информация", "данные", "разговор", "запись"} and (
+        words & {
+            "увидеть", "видеть", "передать", "сохранять", "записать",
+            "получить", "слушать", "доступ",
+        }
+    ):
+        return (
+            "Ответы используются в сервисе Амвера для информирования близких. "
+            "Доступ зависит от настроек и согласия."
+        )
+    purpose = "зачем" in words or "почему" in words or {"для", "что"} <= words
+    if purpose and service_question and words & {"звонить", "позвонить", "спрашивать", "опрос"}:
+        if state is not None and is_custom_mission(state):
+            return "Это звонок по поручению в сервисе Амвера. Вы можете не отвечать на вопросы."
+        return (
+            "Звоню из сервиса Амвера, чтобы узнать, как у вас дела. "
+            "Вы можете не отвечать на вопросы."
+        )
+    if addressee and "спрашивать" in words and words & {"что", "какой"}:
+        delivered = state.delivered_question if state is not None else None
+        if delivered is not None and delivered.text.strip():
+            return f"Я спрашивала: «{delivered.text.strip()}»."
+    if words & {"мочь", "уметь"} and (
+        (addressee and "что" in words)
+        or words & {"разговаривать", "поговорить", "слушать", "общаться"}
+    ):
+        return "Могу выслушать вас, уточнить важное и записать то, что вы сообщите."
+    return "На этот вопрос у меня нет надёжного ответа."
 
 
 def identity_answer() -> str:
@@ -280,7 +355,7 @@ def schedule_custom_mission(state: EngineState, turn_context) -> ResponsePlan | 
 
     ans_user = ""
     if turn and turn.user_question:
-        ans_user = answer_user_question_text(turn.user_question)
+        ans_user = answer_user_question_text(turn.user_question, state=state)
 
     # 3) user question without pending answer → answer + resume/next
     if turn and turn.user_question and not turn.answers_pending_question:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from pydantic import BaseModel
@@ -24,8 +25,10 @@ from packages.dialogue_engine.mission import GoalAnswerCandidate
 from packages.dialogue_engine.semantic import SemanticTurn
 from packages.dialogue_engine.semantic_kernel.types import (
     Observation,
+    SemanticKernelResult,
     SemanticRelation,
     SemanticSpan,
+    SpanType,
 )
 
 
@@ -92,8 +95,196 @@ class ResolvedTurn:
     total_elapsed_ms: float
 
 
+def _asserted_question_ranges(text: str) -> tuple[tuple[int, int], ...]:
+    """Literal assertion ranges, excluding generic questions/conditionals/quotes.
+
+    Declarative symptoms can imply the speaker; an interrogative clause needs
+    explicit speaker evidence to make the same assertion. This is grammar and
+    subject ownership, independent of any symptom or question phrase catalog.
+    """
+    from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+    from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
+    from packages.dialogue_engine.semantic_kernel.types import SubjectKind
+
+    quotes = [(match.start(), match.end()) for match in re.finditer(
+        r'«[^»]*»|“[^”]*”|"[^"]*"', text,
+    )]
+    interrogatives = {"почему", "зачем", "как", "когда", "какой", "что", "кто",
+                     "сколько", "где", "куда", "откуда"}
+    ranges = []
+    conditional = False
+    previous_end = 0
+    clauses = clause_bounds(text)
+    for index, (start, end, _) in enumerate(clauses):
+        if any(mark in text[previous_end:start] for mark in ".!?…"):
+            conditional = False
+        previous_end = end
+        visible = list(text[start:end])
+        for left, right in quotes:
+            for pos in range(max(left, start), min(right, end)):
+                visible[pos - start] = " "
+        visible_text = "".join(visible)
+        words = normalize_text(visible_text).split()
+        if not words:
+            continue
+        conditional = conditional or "если" in words or "бы" in words
+        head = next((word for word in words if word not in {"а", "но", "ну", "ой"}), "")
+        following = clauses[index + 1][0] if index + 1 < len(clauses) else len(text)
+        question_clause = head in interrogatives or "?" in text[end:following]
+        explicit_speaker = _subject_for_clause(visible_text, has_issue=False) == SubjectKind.SPEAKER
+        if conditional or (question_clause and not explicit_speaker):
+            continue
+        # Keep exact offsets: quoted speaker words cannot make the surrounding
+        # clause a personal report, and quoted symptom words are never facts.
+        cursor = start
+        for left, right in quotes:
+            if right <= cursor or left >= end:
+                continue
+            if cursor < left:
+                ranges.append((cursor, left))
+            cursor = max(cursor, right)
+        if cursor < end:
+            ranges.append((cursor, end))
+    return tuple(ranges)
+
+
+def _ground_question_assertions(turn: RichUserTurn, *, answer_slot: str | None) -> RichUserTurn:
+    """Adjudicate all harvesters once; models/candidate spans never assert a question."""
+    from packages.dialogue_engine.deterministic_mission import _is_user_question
+
+    if turn.risk_candidates or not (turn.user_question or _is_user_question(turn.raw_text)):
+        return turn
+    ranges = _asserted_question_ranges(turn.raw_text)
+
+    def accepted(quote: str) -> bool:
+        return bool(quote.strip()) and any(
+            quote.strip() in turn.raw_text[start:end] for start, end in ranges
+        )
+
+    def accepted_span(span) -> bool:
+        return any(start <= span.start and span.end <= end for start, end in ranges)
+
+    asserted_issues = [span for span in turn.semantic_spans
+                       if span.type == SpanType.ISSUE and accepted_span(span)]
+    asserted_sites = {span.normalized for span in turn.semantic_spans
+                      if span.type == SpanType.BODY_SITE and accepted_span(span)}
+    all_sites = {span.normalized for span in turn.semantic_spans if span.type == SpanType.BODY_SITE}
+    asserted_issue_keys = {span.normalized for span in asserted_issues}
+
+    facts = {}
+    proposed_fields = {fact.field for fact in turn.goal_facts}
+    proposed_values = {fact.field: fact.value for fact in turn.goal_facts}
+    for start, end in ranges:
+        clause = turn.raw_text[start:end]
+        for fact in extract_goal_facts(clause, answer_slot=answer_slot):
+            if fact.field not in proposed_fields:
+                continue
+            if fact.value in {"positive", "negative", "neutral", "uncertain"} and (
+                fact.value != proposed_values[fact.field]
+            ):
+                continue
+            evidence = fact.evidence
+            if evidence is not None:
+                fact = fact.model_copy(update={"evidence": evidence.model_copy(update={
+                    "start": start + evidence.start, "end": start + evidence.end,
+                })})
+            facts.setdefault(fact.field, fact)
+    # Grounded custom/model facts outside the classic harvester also survive.
+    for fact in turn.goal_facts:
+        if fact.evidence is not None and accepted(fact.evidence.quote):
+            facts.setdefault(fact.field, fact)
+    mentions = []
+    for mention in turn.issue_mentions:
+        evidence = mention.evidence
+        if evidence is None or not accepted(evidence.quote):
+            continue
+        if mention.body_site in all_sites and mention.body_site not in asserted_sites:
+            continue
+        if not any(start <= evidence.start and evidence.end <= end for start, end in ranges):
+            # Old mention conversion used the first global occurrence of the
+            # predicate. Rebind only to an existing asserted literal span in
+            # the same clause as this mention's body anchor.
+            body_spans = [span for span in turn.semantic_spans
+                          if span.type == SpanType.BODY_SITE
+                          and span.normalized == mention.body_site and accepted_span(span)]
+            matching = [span for span in asserted_issues if span.text == evidence.quote
+                        and any(start <= span.start < end and any(
+                            start <= body.start < end for body in body_spans
+                        ) for start, end in ranges)]
+            if len(matching) != 1:
+                continue
+            evidence = evidence.model_copy(update={
+                "start": matching[0].start, "end": matching[0].end,
+            })
+            mention = mention.model_copy(update={"evidence": evidence})
+        mentions.append(mention)
+    observations = tuple(observation for observation in turn.observations
+                         if accepted(observation.evidence)
+                         and (not observation.body_site or observation.body_site in asserted_sites)
+                         and (not observation.issue_normalized
+                              or observation.issue_normalized in asserted_issue_keys))
+    answers = tuple(answer for answer in turn.goal_answers if accepted(answer.evidence))
+    dispositions = tuple(disposition for disposition in turn.goal_dispositions
+                         if accepted(getattr(disposition, "evidence", "")))
+    return turn.model_copy(update={
+        "goal_facts": tuple(facts.values()), "issue_mentions": tuple(mentions),
+        "observations": observations, "goal_answers": answers,
+        "goal_dispositions": dispositions,
+        "episode_attributes": turn.episode_attributes if mentions else (),
+        "needs_clarification": turn.needs_clarification if mentions else False,
+    })
+
+
 class TurnUnderstandingV2:
     """Single resolution facade: grounded producers and bounded act votes."""
+
+    def prepare_kernel(
+        self,
+        text: str,
+        *,
+        utterance_id: str,
+        engine_state: object | None = None,
+        answer_slot: str | None = None,
+    ) -> SemanticKernelResult:
+        """Read-only meaning for admission; final mission attachment comes later.
+
+        Reuse the existing mission question recognizer before the fragment
+        gate. Otherwise a complete open question beginning with ``А`` can be
+        held as a fragment before the final producer has a chance to see it.
+        Deterministic repairs and controls retain their kernel precedence.
+        """
+        from packages.dialogue_engine.deterministic_mission import _is_user_question
+        from packages.dialogue_engine.semantic_kernel.kernel import interpret
+
+        if engine_state is not None and hasattr(engine_state, "answer_context_slot"):
+            answer_slot = engine_state.answer_context_slot()
+        result = interpret(
+            text, utterance_id=utterance_id, engine_state=engine_state,
+            answer_slot=answer_slot,
+        )
+        if (
+            result.level != 0 and not result.user_question and result.control in ("", "none")
+            and result.dialogue_act != "repair" and _is_user_question(text)
+        ):
+            updates = {"user_question": result.raw_text}
+            asserted = _asserted_question_ranges(result.raw_text)
+            if not any(
+                span.type == SpanType.ISSUE
+                and any(start <= span.start < end for start, end in asserted)
+                for span in result.spans
+            ) and not any(
+                observation.evidence.strip()
+                and any(observation.evidence.strip() in result.raw_text[start:end]
+                        for start, end in asserted)
+                for observation in result.observations
+            ):
+                updates["dialogue_act"] = "question"
+            # A reported symptom remains a report even if a neighbouring
+            # question contains '?'. Its grounded clinical need must preempt
+            # the side question and release interrupted background ownership.
+            result = result.model_copy(update=updates)
+        return result
 
     def apply_act_candidate(
         self,
@@ -193,6 +384,7 @@ class TurnUnderstandingV2:
         mission_provider: object | None = None,
         act_candidate: SemanticTurn | None = None,
         candidate_confident: bool = False,
+        precomputed_kernel_result: SemanticKernelResult | None = None,
     ) -> ResolvedTurn:
         import time
 
@@ -204,13 +396,15 @@ class TurnUnderstandingV2:
             utterance_id=utterance_id,
             engine_state=engine_state,
             mission_provider=mission_provider,
+            precomputed_kernel_result=precomputed_kernel_result,
         )
         votes.append(
             StrategyVote(
                 strategy="build_rich_turn_from_text",
                 elapsed_ms=round((time.monotonic() - step) * 1000.0, 2),
                 confident=True,
-                detail="legacy canonical path, delegated verbatim",
+                detail=("admitted kernel reused" if precomputed_kernel_result is not None
+                        else "canonical kernel and grounded harvesters"),
             )
         )
         if act_candidate is not None:
@@ -430,6 +624,7 @@ def build_rich_turn_from_text(
     utterance_id: str,
     engine_state: object | None = None,
     mission_provider: object | None = None,
+    precomputed_kernel_result: SemanticKernelResult | None = None,
 ) -> RichUserTurn:
     """Adjudicate all harvesters into one canonical, context-owned turn."""
     from packages.dialogue_engine.deterministic_mission import (
@@ -439,14 +634,31 @@ def build_rich_turn_from_text(
     turn = _build_rich_turn_from_text(
         text, utterance_id=utterance_id,
         engine_state=engine_state, mission_provider=mission_provider,
+        precomputed_kernel_result=precomputed_kernel_result,
     )
+    answer_slot = (engine_state.answer_context_slot()
+                   if engine_state is not None and hasattr(engine_state, "answer_context_slot")
+                   else None)
+    turn = _ground_question_assertions(turn, answer_slot=answer_slot)
     if any(f.field == "wellness" for f in turn.goal_facts) and (
         _unowned_positive_wellness_evaluation(text, positive_proposed=any(
             f.field == "wellness" and f.value == "positive" for f in turn.goal_facts
         ))
     ):
-        return turn.model_copy(update={
+        turn = turn.model_copy(update={
             "goal_facts": tuple(f for f in turn.goal_facts if f.field != "wellness"),
+        })
+    if (
+        turn.user_question and turn.control in ("", "none")
+        and not turn.goal_answers and not turn.goal_facts and not turn.issue_mentions
+        and not turn.risk_candidates and not turn.correction
+    ):
+        # Mission understanding may recognize an open question beyond the
+        # kernel's controls/identity grammar. Recognizing that question does
+        # not answer the delivered medical question. Mixed grounded answers
+        # retain their evidence and binding instead of being discarded.
+        turn = turn.model_copy(update={
+            "dialogue_act": "question", "answers_pending_question": False,
         })
     return turn
 
@@ -457,14 +669,23 @@ def _build_rich_turn_from_text(
     utterance_id: str,
     engine_state: object | None = None,
     mission_provider: object | None = None,
+    precomputed_kernel_result: SemanticKernelResult | None = None,
 ) -> RichUserTurn:
     """Semantic Kernel → RichUserTurn (canonical NLU path)."""
-    from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
+    from packages.dialogue_engine.semantic_kernel.kernel import kernel_to_rich_turn
 
-    result = interpret(text, utterance_id=utterance_id, engine_state=engine_state)
     answer_slot = None
     if engine_state is not None and hasattr(engine_state, "answer_context_slot"):
         answer_slot = engine_state.answer_context_slot()
+    if precomputed_kernel_result is None:
+        result = TurnUnderstandingV2().prepare_kernel(
+            text, utterance_id=utterance_id, engine_state=engine_state,
+            answer_slot=answer_slot,
+        )
+    else:
+        result = precomputed_kernel_result
+        if result.raw_text != text.strip() or result.utterance_id != utterance_id:
+            raise ValueError("precomputed kernel result does not belong to this utterance")
     turn = kernel_to_rich_turn(
         result,
         answer_slot=answer_slot,
@@ -478,10 +699,15 @@ def _build_rich_turn_from_text(
     from packages.dialogue_engine.discourse import is_listening_evaluation
 
     if is_listening_evaluation(engine_state, text):
-        # A response to the actual listening question is an evaluation of
-        # the story, not an answer to an unasked medical question.
+        # Bare valence evaluates the heard story. It has no predicate
+        # proving a health fact, even if an earlier question supplied context.
+        standard = {"wellness", "mood", "sleep", "plans"}
         return turn.model_copy(update={
-            "goal_facts": tuple(f for f in turn.goal_facts if f.field != "wellness"),
+            "goal_facts": tuple(f for f in turn.goal_facts if f.field not in standard),
+            "goal_answers": tuple(a for a in turn.goal_answers if a.goal_id not in standard),
+            "goal_dispositions": tuple(
+                d for d in turn.goal_dispositions if d.goal_id not in standard
+            ),
         })
     if engine_state is not None and hasattr(engine_state, "answer_context_slot"):
         from packages.dialogue_engine.context import InterpretContext
@@ -516,6 +742,12 @@ def _build_rich_turn_from_text(
             multi_slot = len(sem.slots) >= 2
             for slot_name, cand in sem.slots.items():
                 if slot_name not in ("wellness", "mood", "sleep", "plans"):
+                    continue
+                if slot_name == "plans":
+                    # Plans' existing fact owner checks tense/subject and
+                    # binds the actual plan clause. A contextual candidate
+                    # cannot resurrect a rejected past/other-person activity,
+                    # or broaden accepted narrow evidence to the whole turn.
                     continue
                 if not multi_slot and answer_slot and slot_name != answer_slot:
                     continue
@@ -555,6 +787,11 @@ def _build_rich_turn_from_text(
         if harvested:
             turn = turn.model_copy(update={"goal_facts": harvested})
         return turn
+    harvested = {f.field: f for f in extract_goal_facts(text.strip(), answer_slot=answer_slot)}
+    if sem.target_slot == "plans":
+        if harvested:
+            turn = turn.model_copy(update={"goal_facts": tuple(harvested.values())})
+        return turn
     value = sem.value or text.strip()
     fact = FactCandidate(
         field=sem.target_slot,
@@ -564,7 +801,6 @@ def _build_rich_turn_from_text(
         negated=False,
         evidence=Evidence(start=0, end=len(text.strip()), quote=text.strip()),
     )
-    harvested = {f.field: f for f in extract_goal_facts(text.strip(), answer_slot=answer_slot)}
     harvested.setdefault(fact.field, fact)
     turn = turn.model_copy(update={"goal_facts": tuple(harvested.values())})
     return turn

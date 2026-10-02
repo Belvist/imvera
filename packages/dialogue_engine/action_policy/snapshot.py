@@ -120,6 +120,16 @@ class PolicySnapshot:
     user_burden: float = 0.0
     call_closed: bool = False
     fsm_state: str = ""
+    # Personal discourse evidence; defaults preserve all historical medical fixtures.
+    thread_active: bool = False
+    thread_statement: str = ""
+    thread_utterance_id: str = ""
+    thread_finished: bool = False
+    thread_reply: bool = False
+    thread_willing: bool = False
+    thread_question_count: int = 0
+    thread_resume_slot: str | None = None
+
     @property
     def its_pending(self) -> bool:
         return self.important_to_share_asked and not self.important_to_share_resolved
@@ -277,12 +287,21 @@ class PolicySnapshot:
             user_burden=float(raw.get("user_burden", 0.0)),
             call_closed=bool(raw.get("call_closed", False)),
             fsm_state=str(raw.get("fsm_state", "")),
+            thread_active=bool(raw.get("thread_active", False)),
+            thread_statement=str(raw.get("thread_statement", "")),
+            thread_utterance_id=str(raw.get("thread_utterance_id", "")),
+            thread_finished=bool(raw.get("thread_finished", False)),
+            thread_reply=bool(raw.get("thread_reply", False)),
+            thread_willing=bool(raw.get("thread_willing", False)),
+            thread_question_count=int(raw.get("thread_question_count", 0)),
+            thread_resume_slot=raw.get("thread_resume_slot"),
         )
 
 
 @dataclass(frozen=True)
 class TurnContextView:
     raw_text: str = ""
+    utterance_id: str = ""
     dialogue_act: str = "answer"
     control: str = "none"
     user_question: bool = False
@@ -351,10 +370,7 @@ class TurnContextView:
             observations=observations,
         )
         grounded = bool(
-            speaker_issue
-            or other_issue
-            or goal_facts
-            or getattr(turn, "correction", False)
+            speaker_issue or other_issue or goal_facts or getattr(turn, "correction", False)
         )
         ambiguities = tuple(getattr(turn, "kernel_ambiguities", ()) or ())
         needs_clarification = bool(getattr(turn, "needs_clarification", False))
@@ -369,6 +385,7 @@ class TurnContextView:
         )
         return cls(
             raw_text=raw_text,
+            utterance_id=str(getattr(turn, "utterance_id", "") or ""),
             dialogue_act=dialogue_act,
             control=str(getattr(turn, "control", "none")),
             user_question=user_q,
@@ -400,6 +417,7 @@ class TurnContextView:
             turn_risk = "urgent"
         return cls(
             raw_text=str(raw.get("raw_text", "")),
+            utterance_id=str(raw.get("utterance_id", "")),
             dialogue_act=str(raw.get("dialogue_act", "answer")),
             control=str(raw.get("control", "none")),
             user_question=bool(raw.get("user_question", False)),
@@ -457,24 +475,51 @@ def _speaker_owned_episode(state: EngineState, episode_id: str) -> bool:
     return any(subject.endswith("speaker") or subject == "speaker" for subject in seen)
 
 
-def _wellness_covered(state: EngineState) -> bool:
+def _project_background_coverage(state: EngineState) -> dict[str, str]:
+    """Read actual goal/slot dispositions before stale scheduler coverage.
+
+    Personal selection bypasses the legacy coverage-sync side effect. A snapshot
+    must therefore project terminal truth itself, without writing coverage or
+    pretending that a decline/unknown outcome is a supplied health fact.
+    """
+    coverage = {str(key): _value(value) for key, value in state.background_goal_status.items()}
+    terminal_lifecycles = {"DECLINED", "SKIPPED", "NOT_APPLICABLE", "UNCLEAR"}
+    for slot in ("wellness", "mood", "sleep", "plans"):
+        coverage.setdefault(slot, BackgroundGoalCoverage.UNSEEN.value)
+        slot_status = _value(state.slots.get(slot, "")).upper()
+        goals = tuple(goal for goal in state.goals.values() if goal.slot == slot)
+        goal_statuses = {_value(goal.status).upper() for goal in goals}
+        lifecycles = {_value(goal.lifecycle).upper() for goal in goals}
+        if slot_status == "FILLED" or "FILLED" in goal_statuses or "SATISFIED" in lifecycles:
+            coverage[slot] = BackgroundGoalCoverage.ANSWERED.value
+        elif (
+            slot_status != "OPEN"
+            or any(status != "OPEN" for status in goal_statuses)
+            or bool(lifecycles & terminal_lifecycles)
+        ):
+            coverage[slot] = BackgroundGoalCoverage.SKIPPED.value
+    return coverage
+
+
+def _wellness_covered(state: EngineState, coverage: Mapping[str, str] | None = None) -> bool:
+    coverage = coverage if coverage is not None else _project_background_coverage(state)
     if state.slots.get("wellness") != SlotStatus.OPEN:
         return True
+    if coverage.get("wellness") == BackgroundGoalCoverage.SKIPPED.value:
+        return True  # terminal disposition, not an invented wellness value
     for slot in ("wellness", "mood", "sleep"):
-        status = _value(
-            state.background_goal_status.get(slot, BackgroundGoalCoverage.UNSEEN)
-        )
-        if status in {
+        if coverage.get(slot) in {
             BackgroundGoalCoverage.ANSWERED.value,
             BackgroundGoalCoverage.COVERED_FROM_SPEECH.value,
         }:
             return True
-        if state.slots.get(slot) == SlotStatus.FILLED:
-            return True
     return False
 
 
-def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
+def build_policy_snapshot(
+    state: EngineState,
+    ctx: TurnContextView | None = None,
+) -> PolicySnapshot:
     """Read EngineState only; never calls mutating helpers."""
     episodes = tuple(
         EpisodeSnapshot(
@@ -500,6 +545,32 @@ def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
             if str(goal.slot).startswith(prefix):
                 q_count += int(goal.delivered_attempts)
     burden = min(1.0, (q_count / 4.0) + max(0, state.turn_seq - 6) * 0.05)
+    background_coverage = _project_background_coverage(state)
+    wellness_covered = _wellness_covered(state, background_coverage)
+    thread_active = state.current_thread_label == "рассказ"
+    thread_statement = str(getattr(state, "thread_last_statement", "") or "")[:240]
+    thread_id = str(getattr(state, "thread_last_utterance_id", "") or "")
+    thread_finished = bool(state.thread_reply_finished)
+    current_id = ctx.utterance_id if ctx and ctx.utterance_id else thread_id
+    resume_slot = next(
+        (
+            goal
+            for goal in ("wellness", "mood", "sleep", "plans")
+            if (state.mandatory_background_goals or goal in state.required_background_goals)
+            and background_coverage.get(goal, BackgroundGoalCoverage.UNSEEN.value)
+            in {"unseen", "asked"}
+        ),
+        None,
+    )
+    if (
+        thread_active
+        and state.slots.get("wellness") == SlotStatus.OPEN
+        and background_coverage.get("wellness") in {"unseen", "asked"}
+        and not wellness_covered
+    ):
+        # Wellness entry is an existing protocol obligation even in the short
+        # preset. Deferring it for a story does not silently make it optional.
+        resume_slot = "wellness"
     return PolicySnapshot(
         turn_number=state.turn_seq,
         episodes=episodes,
@@ -509,12 +580,10 @@ def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
         risk_level="none",
         important_to_share_asked=state.important_to_share_asked,
         important_to_share_resolved=state.important_to_share_resolved,
-        background_goal_status=tuple(
-            sorted((str(k), _value(v)) for k, v in state.background_goal_status.items())
-        ),
+        background_goal_status=tuple(sorted(background_coverage.items())),
         required_background_goals=tuple(sorted(state.required_background_goals)),
         mandatory_background_goals=state.mandatory_background_goals,
-        wellness_entry_covered=_wellness_covered(state),
+        wellness_entry_covered=wellness_covered,
         probe_phase=state.probe_phase,
         suspended_kind=state.suspended_obligation.kind if state.suspended_obligation else None,
         last_question_id=q.question_id if q else None,
@@ -527,4 +596,12 @@ def build_policy_snapshot(state: EngineState) -> PolicySnapshot:
         user_burden=burden,
         call_closed=state.call_closed,
         fsm_state=_value(state.fsm_state),
+        thread_active=thread_active,
+        thread_statement=thread_statement,
+        thread_utterance_id=thread_id,
+        thread_finished=thread_finished,
+        thread_reply=bool(current_id and state.thread_reply_turn_id == current_id),
+        thread_willing=bool(thread_active and thread_statement.strip() and not thread_finished),
+        thread_question_count=state.thread_followup_count,
+        thread_resume_slot=resume_slot,
     )

@@ -1,7 +1,8 @@
 """Single DecisionRouter for conversation-scheduler ownership.
 
-Modes (effective, after kill switches):
-  legacy — only legacy scheduler (authoritative)
+Grounded nonurgent personal threads use the existing ActionPolicy in all modes.
+The modes below continue to control the broader medical scheduler cutover:
+  legacy — legacy medical scheduler (authoritative)
   shadow — immutable ActionPolicy evaluate + legacy authoritative
   soft   — cohort % ActionPolicy authoritative; else legacy; fail → legacy
   policy — ActionPolicy authoritative; fail → legacy
@@ -140,21 +141,23 @@ def _choose_policy_plan(state: Any, turn_context: Any) -> tuple[ResponsePlan, di
     )
     from packages.dialogue_engine.action_policy_shadow_config import (
         DECISION_SCOPE,
-        FROZEN_POLICY_SHA,
-        POLICY_VERSION,
         SHADOW_SCHEMA_VERSION,
+        policy_provenance,
     )
     from packages.dialogue_engine.runtime import git_sha_short
 
     total_started = time.perf_counter()
     decision_id, utterance_id, revision = allocate_decision_id(state, turn_context)
     ctx, input_kind, decision_origin = turn_context_view_from_scheduler(turn_context)
-    snapshot = build_policy_snapshot(state)
+    snapshot = build_policy_snapshot(state, ctx)
 
     choose_started = time.perf_counter()
     decision = choose(snapshot, ctx)
     choose_ms = (time.perf_counter() - choose_started) * 1000.0
-    plan = to_response_plan(decision, snapshot)
+    from packages.dialogue_engine.mission_flow import answer_user_question_text
+
+    answer = answer_user_question_text(ctx.raw_text, state=state) if ctx.user_question else None
+    plan = to_response_plan(decision, snapshot, user_question_answer=answer)
     if plan is None or not getattr(plan, "action", None):
         raise RuntimeError("invalid_policy_plan")
 
@@ -189,8 +192,7 @@ def _choose_policy_plan(state: Any, turn_context: Any) -> tuple[ResponsePlan, di
         "engine_revision_before_legacy": revision,
         "engine_turn_seq": turn_seq,
         "deployment_sha": git_sha_short(),
-        "frozen_policy_sha": FROZEN_POLICY_SHA,
-        "policy_version": POLICY_VERSION,
+        **policy_provenance(),
         "input_kind": input_kind,
         "shadow_status": "ok",
         "shadow_action": shadow_label,
@@ -243,33 +245,46 @@ def _choose_policy_plan(state: Any, turn_context: Any) -> tuple[ResponsePlan, di
     return plan, record
 
 
-def _run_authoritative_policy(
-    state: Any,
-    turn_context: Any,
-    *,
-    legacy: LegacyScheduler,
+def _policy_failure_to_legacy(
+    state: Any, turn_context: Any, *, legacy: LegacyScheduler,
+    error: Exception, scope: str,
 ) -> ResponsePlan:
-    """ActionPolicy owns scheduler decision; any failure → single legacy fallback."""
+    """Explicit degraded execution uses the existing obligations scheduler once."""
+    _bump(state, "policy_fallback_legacy")
+    try:
+        err = make_error_record(
+            state, error_stage="authoritative_fallback", error_type=type(error).__name__,
+            extra_flags=["authoritative_fallback_legacy"],
+        )
+        err["decision_scope"] = scope
+        buffer_shadow_record(state, err)
+    except Exception:
+        _bump(state, "policy_record_buffer_error")
+    plan = legacy(state, turn_context)
+    _bump(state, "legacy_invocations")
+    return plan
+
+
+def _run_authoritative_policy(
+    state: Any, turn_context: Any, *, legacy: LegacyScheduler,
+    scope: str = "conversation_scheduler", counter: str = "policy_authoritative",
+) -> ResponsePlan:
+    """One choose; selection failure is logged before one legacy invocation."""
     try:
         plan, record = _choose_policy_plan(state, turn_context)
-        buffer_shadow_record(state, record)
-        _bump(state, "policy_authoritative")
-        return plan
     except Exception as exc:
-        _bump(state, "policy_fallback_legacy")
-        try:
-            err = make_error_record(
-                state,
-                error_stage="authoritative_fallback",
-                error_type=type(exc).__name__,
-                extra_flags=["authoritative_fallback_legacy"],
-            )
-            buffer_shadow_record(state, err)
-        except Exception:
-            pass
-        plan = legacy(state, turn_context)
-        _bump(state, "legacy_invocations")
-        return plan
+        return _policy_failure_to_legacy(
+            state, turn_context, legacy=legacy, error=exc, scope=scope,
+        )
+    record["decision_scope"] = scope
+    record["divergence_class"] = counter
+    # Failure to buffer telemetry cannot undo a successfully selected move.
+    try:
+        buffer_shadow_record(state, record)
+    except Exception:
+        _bump(state, "policy_record_buffer_error")
+    _bump(state, counter)
+    return plan
 
 
 def route_schedule_next_action(
@@ -279,6 +294,7 @@ def route_schedule_next_action(
     legacy: LegacyScheduler,
 ) -> ResponsePlan:
     """Single routing entry for conversation scheduler decisions."""
+    from packages.dialogue_engine.conversation_policy import _turn_is_unprobed_negative_wellness
     from packages.dialogue_engine.mission_flow import is_custom_mission
 
     # Custom CallMission must never enter frozen ActionPolicy soft/policy path.
@@ -288,6 +304,50 @@ def route_schedule_next_action(
         plan = legacy(state, turn_context)
         _bump(state, "legacy_invocations")
         return plan
+
+    # This concern has one owner in all routing modes. The broader medical
+    # cutover remains separately gated; there is no legacy personal-thread FSM.
+    personal_state_safe = (
+        str(getattr(state, "fsm_state", "")) == "DAILY_CHECK"
+        and str(getattr(state, "check_path", "")) != "urgent"
+        and not getattr(state, "call_closed", False)
+        and not getattr(state, "risk_handling", False)
+        and not getattr(state, "red_state_pending", False)
+        and getattr(state, "safety_mode", "") != "red"
+        and not getattr(state, "awaiting_goodbye_confirm", False)
+        and not getattr(state, "elder_asked_to_stop", False)
+        # Canonical state also contains assessments admitted by contextual
+        # understanding. A thread must not swallow their concern probe merely
+        # because the current RichUserTurn carries no duplicate fact.
+        and not _turn_is_unprobed_negative_wellness(state)
+    )
+    if personal_state_safe and getattr(state, "current_thread_label", "") == "рассказ" and getattr(
+        state, "thread_last_statement", ""
+    ):
+        try:
+            from packages.dialogue_engine.action_policy.mandatory import thread_context_eligible
+            from packages.dialogue_engine.action_policy.snapshot import build_policy_snapshot
+            from packages.dialogue_engine.action_policy_shadow import (
+                turn_context_view_from_scheduler,
+            )
+
+            view, _, _ = turn_context_view_from_scheduler(turn_context)
+            snapshot = build_policy_snapshot(state, view)
+            delivered = getattr(state, "delivered_question", None)
+            specific_question = bool(
+                delivered and delivered.slot not in ("", "wellness")
+                and delivered.intent not in ("thread_followup", "thread_continue")
+            )
+            eligible = thread_context_eligible(snapshot, view) and not specific_question
+        except Exception as exc:
+            return _policy_failure_to_legacy(
+                state, turn_context, legacy=legacy, error=exc, scope="personal_thread",
+            )
+        if eligible and (not snapshot.thread_finished or snapshot.thread_resume_slot):
+            return _run_authoritative_policy(
+                state, turn_context, legacy=legacy, scope="personal_thread",
+                counter="conversation_policy_authoritative",
+            )
 
     mode = action_policy_mode()
     _bump(state, f"mode_{mode}")

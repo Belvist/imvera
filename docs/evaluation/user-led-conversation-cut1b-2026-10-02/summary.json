@@ -1,0 +1,118 @@
+{
+  "source_parent_sha": "75280deaa0ab2b3e3ff070fba378edd1ef66d542",
+  "status": "candidate_source_verification_pending",
+  "channel": "SDK text; SIMULATED_COMPLETED delivery; not phone/audio",
+  "suites": {
+    "conversational-moves-v1": {
+      "suite_sha256": "0b79c38ca190e5a2d0de9bcc2d7a3535138296d122e6e2218b82af58d222808d",
+      "cases": 15,
+      "inputs_equal": true,
+      "replay_configuration_equal": true,
+      "changed_cases": [
+        "daughter_story",
+        "yesterday_story",
+        "open_user_question",
+        "topic_switch",
+        "return_to_topic",
+        "barge_in",
+        "symptom_inside_story",
+        "refuse_one_question",
+        "finish_entire_call",
+        "just_conversation"
+      ],
+      "counts": {
+        "before": {
+          "speech_presentations": 57,
+          "distinct_question_ids": 49,
+          "user_turns": 42,
+          "nonquestion_speech_presentations": 8,
+          "budget_to_wellness_return_proxy": 4,
+          "user_question_turns": 1,
+          "user_question_without_answer_intent_proxy": 1
+        },
+        "after": {
+          "speech_presentations": 56,
+          "distinct_question_ids": 26,
+          "user_turns": 42,
+          "nonquestion_speech_presentations": 30,
+          "user_question_turns": 1
+        }
+      },
+      "phone_acceptance": "NOT_RUN"
+    },
+    "elder-checkin-v1": {
+      "suite_sha256": "7ba6c3a051fd29c760fca86e5ef75dc049da6e176eb7ae77be850e4ed733d4e2",
+      "cases": 16,
+      "inputs_equal": true,
+      "replay_configuration_equal": true,
+      "changed_cases": [
+        "purpose_question"
+      ],
+      "counts": {
+        "before": {
+          "speech_presentations": 58,
+          "distinct_question_ids": 41,
+          "user_turns": 43,
+          "nonquestion_speech_presentations": 17,
+          "user_question_turns": 1,
+          "user_question_without_answer_intent_proxy": 1,
+          "repeated_question_key_presentations_proxy": 2
+        },
+        "after": {
+          "speech_presentations": 58,
+          "distinct_question_ids": 41,
+          "user_turns": 43,
+          "nonquestion_speech_presentations": 17,
+          "user_question_turns": 1,
+          "user_question_without_answer_intent_proxy": 1,
+          "repeated_question_key_presentations_proxy": 2
+        }
+      },
+      "phone_acceptance": "NOT_RUN"
+    }
+  },
+  "not_verified": [
+    "M5 loaded source/model flags",
+    "phone/audio/human warmth",
+    "whole-turn model calls and RAM",
+    "100 concurrent calls",
+    "competitor superiority"
+  ],
+  "verification": {
+    "full_local": {
+      "command": "PYTHONPATH=. /workspace/imvera-review-venv/bin/python -m pytest -q --tb=short",
+      "passed": 2998,
+      "failed": 2,
+      "skipped": 9,
+      "seconds": 153.32,
+      "green": false,
+      "failure_cause": "same inherited xenc_v3 LFS-pointer warmup/readiness failures, not waived",
+      "failures": [
+        "tests/test_deterministic_mission_understanding.py::test_media_bridge_readiness_green_without_llm",
+        "tests/test_nlp_warmup.py::test_warmup_all_hot"
+      ]
+    },
+    "independent_review": "APPROVE source publication after gates; final no-comma and reactive complaint answerfloor replay PASS; no remaining reviewed code blocker",
+    "lint": "ruff packages/services/tests/scripts + observer/differential tool PASS",
+    "diff_check": "PASS",
+    "remote_ci": "NOT_RUN for unpublished candidate",
+    "live_phone": "NOT_RUN",
+    "required_text_gates": {
+      "command": "make dialogue-corpus-gate agent-dialogue-gate contracts-check",
+      "corpus": "500/500 PASS in 5.62s; additional8testsPASS",
+      "agent_gate": "PASS; LayerA only, not SIP/STT/TTS",
+      "contracts": "OK"
+    },
+    "selector_benchmark": {
+      "command": "PYTHONPATH=. python scripts/benchmark_action_policy.py --iterations 10000 --json",
+      "iterations": 10000,
+      "policy_version": "action-policy-phase1-v10",
+      "p50_ms": 0.85067,
+      "p95_ms": 1.012951,
+      "p99_ms": 1.176964,
+      "scope": "Linux choose() only; not M5/end-to-end/phone/concurrent capacity",
+      "new_live_generative_calls": 0,
+      "whole_turn_model_invocations": "NOT_RUN"
+    }
+  }
+}

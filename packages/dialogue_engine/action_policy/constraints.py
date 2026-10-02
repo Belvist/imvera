@@ -12,6 +12,7 @@ from packages.dialogue_engine.action_policy.mandatory import (
     MandatoryClass,
     action_matches_mandatory_class,
     compute_mandatory_class,
+    thread_context_eligible,
 )
 from packages.dialogue_engine.action_policy.need_value import need_is_currently_askable
 from packages.dialogue_engine.action_policy.snapshot import PolicySnapshot, TurnContextView
@@ -40,6 +41,34 @@ def reject_candidate(
             "mandatory_class_mismatch",
             f"mandatory class {mandatory} does not allow {kind.value}",
         )
+
+    if action.thread_mode is not None or kind == ActionKind.FOLLOW_USER_THREAD:
+        if not thread_context_eligible(snapshot, ctx):
+            return _reject(
+                action, "thread_not_eligible", "personal discourse is not safely grounded"
+            )
+        modes = {
+            ActionKind.ACK_ONLY: "listen",
+            ActionKind.FOLLOW_USER_THREAD: "invite",
+            ActionKind.BACKGROUND_GOAL: "resume",
+        }
+        if modes.get(kind) != action.thread_mode:
+            return _reject(action, "thread_mode_mismatch", "move does not match thread mode")
+        if action.thread_mode == "resume":
+            if not snapshot.thread_finished or action.target_goal != snapshot.thread_resume_slot:
+                return _reject(
+                    action,
+                    "thread_resume_not_due",
+                    "resume requires finished intent and return point",
+                )
+        elif snapshot.thread_finished:
+            return _reject(action, "thread_finished", "finished thread must not be prolonged")
+        elif action.thread_mode == "listen" and not snapshot.thread_reply:
+            return _reject(action, "thread_not_continuation", "initial story needs invitation")
+        elif action.thread_mode == "invite" and snapshot.thread_reply:
+            return _reject(
+                action, "thread_already_continuing", "substantive continuation needs listening"
+            )
 
     has_nonterminal_control = ctx.control not in {"", "none", "stop_call"}
     unresolved = ctx.unresolved_concern
@@ -104,9 +133,7 @@ def reject_candidate(
 
             pending_need = normalize_attribute(snapshot.pending_episode_attribute)
             if not (
-                snapshot.outstanding_pending_obligation()
-                and pending_need
-                and need == pending_need
+                snapshot.outstanding_pending_obligation() and pending_need and need == pending_need
             ):
                 return _reject(
                     action,
@@ -125,7 +152,15 @@ def reject_candidate(
         if snapshot.has_askable_open_issues(ctx):
             return _reject(action, "active_issue_blocks_background", "issue has higher priority")
         goal = action.target_goal or ""
-        required = snapshot.mandatory_background_goals or goal in snapshot.required_background_goals
+        required = (
+            snapshot.mandatory_background_goals
+            or goal in snapshot.required_background_goals
+            or (
+                action.thread_mode == "resume"
+                and goal == "wellness"
+                and not snapshot.wellness_entry_covered
+            )
+        )
         if not required:
             return _reject(action, "background_optional", "UNSEEN background goal is not mandatory")
         if snapshot.background_status(goal) not in {"unseen", "asked"}:
@@ -185,14 +220,17 @@ def reject_candidate(
                 "meta/unclear text cannot close conversation",
             )
 
-    if kind == ActionKind.ACK_ONLY and mandatory == MandatoryClass.CONVERSATION:
+    if (
+        kind == ActionKind.ACK_ONLY
+        and action.thread_mode is None
+        and mandatory == MandatoryClass.CONVERSATION
+    ):
         if (
             snapshot.wellness_entry_covered
             and not snapshot.important_to_share_asked
             and snapshot.user_burden >= 0.75
             and (
-                snapshot.has_askable_open_issues(ctx)
-                or snapshot.questions_asked_this_episode >= 2
+                snapshot.has_askable_open_issues(ctx) or snapshot.questions_asked_this_episode >= 2
             )
         ):
             return _reject(

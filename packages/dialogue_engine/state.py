@@ -76,6 +76,7 @@ class Question(BaseModel):
     # side effects or an intent-name heuristic. Delivery phase stays separate.
     episode_id: str | None = None
     semantic_need: QuestionNeed | None = None
+    thread_mode: str | None = None
 
     model_config = {"frozen": True}
 
@@ -283,6 +284,20 @@ class EngineState(BaseModel):
     thread_reply_turn_id: str = ""
     thread_reply_finished: bool = False
     thread_consumed_reply_id: str = ""
+    # Bounded, verbatim discourse evidence; never a clinical/family fact.
+    thread_last_statement: str = ""
+    thread_last_utterance_id: str = ""
+    # Non-question listening is activated only by matching audible completion.
+    thread_listening_id: str = ""
+    thread_listening_text: str = ""
+    # Last audible listening context survives planning/cancelling a replacement.
+    # It does not activate that replacement's timer or assert it was heard.
+    thread_heard_listening_id: str = ""
+    thread_heard_listening_generation: int = 0
+    thread_heard_listening_text: str = ""
+    thread_listening_generation: int = 0
+    thread_listening_delivered: bool = False
+    thread_last_move: str = ""
     # Normalized signature of what Vera just acknowledged — anti-parrot
     # for acks (questions are covered by asked_signatures).
     last_ack_signature: str = ""
@@ -412,6 +427,10 @@ class EngineState(BaseModel):
         """Slot/goal used to interpret the next user answer — delivered, not planned."""
         if self.probe_phase:
             return f"probe_{self.probe_phase}"
+        if self.thread_heard_listening_id or (
+            self.thread_listening_delivered and self.thread_listening_id
+        ):
+            return None
         if self.delivered_question is not None:
             return self.delivered_question.goal_id or self.delivered_question.slot
         if self.playing_question is not None:

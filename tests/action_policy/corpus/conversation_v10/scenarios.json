@@ -1,0 +1,466 @@
+[
+  {
+    "id": "initial_invitation",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood"
+    },
+    "context": {
+      "utterance_id": "u1"
+    },
+    "expected_v10_action": "FOLLOW_USER_THREAD:invite",
+    "expected_delta": true
+  },
+  {
+    "id": "substantive_continuation",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood",
+      "thread_reply": true
+    },
+    "context": {
+      "utterance_id": "u1"
+    },
+    "expected_v10_action": "ACK_ONLY:listen",
+    "expected_delta": true
+  },
+  {
+    "id": "long_topic_no_counter_cutoff",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood",
+      "thread_reply": true,
+      "thread_question_count": 99,
+      "user_burden": 1.0,
+      "questions_asked_this_episode": 7
+    },
+    "context": {
+      "utterance_id": "u1"
+    },
+    "expected_v10_action": "ACK_ONLY:listen",
+    "expected_delta": true
+  },
+  {
+    "id": "completed_topic_actual_return",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": false,
+      "thread_resume_slot": "mood",
+      "thread_finished": true,
+      "thread_reply": true
+    },
+    "context": {
+      "utterance_id": "u1"
+    },
+    "expected_v10_action": "BACKGROUND_GOAL:mood:resume",
+    "expected_delta": true
+  },
+  {
+    "id": "other_person_story",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood",
+      "thread_reply": true,
+      "episodes": [
+        {
+          "episode_id": "other",
+          "kind": "symptom",
+          "speaker_owned": false,
+          "known": {}
+        }
+      ]
+    },
+    "context": {
+      "utterance_id": "u1",
+      "has_new_other_person_issue": true
+    },
+    "expected_v10_action": "ACK_ONLY:listen",
+    "expected_delta": true
+  },
+  {
+    "id": "optional_clinical_work_already_deferred",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood",
+      "thread_reply": true,
+      "important_to_share_asked": true,
+      "episodes": [
+        {
+          "episode_id": "ep",
+          "kind": "symptom",
+          "known": {
+            "onset": "yesterday",
+            "current": "active"
+          }
+        }
+      ],
+      "active_episode_id": "ep"
+    },
+    "context": {
+      "utterance_id": "u1"
+    },
+    "expected_v10_action": "ACK_ONLY:listen",
+    "expected_delta": true
+  },
+  {
+    "id": "safety",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood"
+    },
+    "context": {
+      "utterance_id": "u1",
+      "turn_risk_level": "urgent"
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  },
+  {
+    "id": "stop",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood"
+    },
+    "context": {
+      "utterance_id": "u1",
+      "control": "stop_call"
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  },
+  {
+    "id": "repair",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood"
+    },
+    "context": {
+      "utterance_id": "u1",
+      "dialogue_act": "repair"
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  },
+  {
+    "id": "user_question",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood"
+    },
+    "context": {
+      "utterance_id": "u1",
+      "user_question": true
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  },
+  {
+    "id": "new_clinical",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood",
+      "episodes": [
+        {
+          "episode_id": "ep",
+          "known": {}
+        }
+      ],
+      "active_episode_id": "ep"
+    },
+    "context": {
+      "utterance_id": "u1",
+      "has_new_speaker_issue": true
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  },
+  {
+    "id": "pending_clinical",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood",
+      "episodes": [
+        {
+          "episode_id": "ep",
+          "known": {
+            "onset": "yesterday"
+          }
+        }
+      ],
+      "active_episode_id": "ep",
+      "pending_episode_attribute": "current"
+    },
+    "context": {
+      "utterance_id": "u1"
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  },
+  {
+    "id": "probe_pending",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood",
+      "probe_phase": "current"
+    },
+    "context": {
+      "utterance_id": "u1"
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  },
+  {
+    "id": "new_negative",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood"
+    },
+    "context": {
+      "utterance_id": "u1",
+      "vague_negative_wellness": true,
+      "unresolved_concern": true,
+      "needs_clarification": true,
+      "clarify_target": "concern"
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  },
+  {
+    "id": "missing_source",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "",
+      "thread_willing": true,
+      "thread_resume_slot": "mood"
+    },
+    "context": {
+      "utterance_id": "u1"
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  },
+  {
+    "id": "stale_source",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [
+        "mood"
+      ],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": true,
+      "thread_resume_slot": "mood"
+    },
+    "context": {
+      "utterance_id": "u2"
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  },
+  {
+    "id": "exhausted_without_return",
+    "snapshot": {
+      "wellness_entry_covered": true,
+      "important_to_share_resolved": true,
+      "background_goal_status": {
+        "wellness": "answered",
+        "mood": "unseen"
+      },
+      "required_background_goals": [],
+      "thread_active": true,
+      "thread_statement": "Дочь вчера приезжала, мы вместе пили чай и смотрели фотографии.",
+      "thread_utterance_id": "u1",
+      "thread_willing": false,
+      "thread_resume_slot": null,
+      "thread_finished": true
+    },
+    "context": {
+      "utterance_id": "u1"
+    },
+    "expected_v10_action": null,
+    "expected_delta": false
+  }
+]

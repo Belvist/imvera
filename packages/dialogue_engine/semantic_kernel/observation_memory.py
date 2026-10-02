@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import re
 import uuid
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from packages.contracts.semantic import Evidence, IssueMention
 from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds, clause_for_position
-from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+from packages.dialogue_engine.semantic_kernel.morphology import _load_morph, normalize_text
 from packages.dialogue_engine.semantic_kernel.subject_resolver import (
     _subject_for_clause,
     subject_for_issue,
@@ -68,22 +69,40 @@ def _looks_time_of_day(value: str) -> bool:
     return bool(_TIME_OF_DAY.search(value or ""))
 
 
+@lru_cache(maxsize=4096)
+def _predicate_tense(text: str) -> str | None:
+    """Use existing morphology; an onset alone says nothing about improvement."""
+    morph = _load_morph()
+    if morph is None:
+        return None
+    tenses = set()
+    for token in re.findall(r"[а-яё-]+", text.lower()):
+        parsed = morph.parse(token)
+        if parsed and parsed[0].tag.POS == "VERB" and parsed[0].tag.tense:
+            tenses.add(parsed[0].tag.tense)
+    return next(iter(tenses)) if len(tenses) == 1 else None
+
+
 def _temporal_from_spans(
     issue: SemanticSpan,
     onset_spans: list[SemanticSpan],
     duration_spans: list[SemanticSpan],
     status_spans: list[SemanticSpan],
     negated: bool,
+    current_continuation: bool = False,
 ) -> TemporalFrame:
     temporal_kwargs: dict = {"raw_evidence": issue.text}
     if onset_spans:
         temporal_kwargs["onset"] = onset_spans[0].text
         temporal_kwargs["raw_evidence"] = onset_spans[0].text
         lower = onset_spans[0].text.lower()
-        if "сейчас" in lower:
+        if "сейчас" in lower or current_continuation:
             temporal_kwargs["current"] = True
-        if "вчера" in lower or "утром" in lower:
-            temporal_kwargs["current"] = False
+        elif "вчера" in lower or "утром" in lower:
+            if _predicate_tense(issue.text) == "pres":
+                temporal_kwargs["current"] = True
+            # Past tense reports past pain. Its current state remains unknown;
+            # yesterday is neither evidence of relief nor a negative today.
     if duration_spans:
         temporal_kwargs["duration"] = duration_spans[0].text
     for sspan in status_spans:
@@ -92,6 +111,7 @@ def _temporal_from_spans(
             for w in ("прошл", "лучше", "получше", "не болит", "нормально")
         ):
             temporal_kwargs["current"] = False
+            temporal_kwargs["raw_evidence"] = sspan.text
     if negated:
         temporal_kwargs["current"] = False
     return TemporalFrame(**temporal_kwargs)
@@ -99,6 +119,10 @@ def _temporal_from_spans(
 
 def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
     from packages.dialogue_engine.check_path import (
+        is_joke_hyperbole_frame,
+        is_other_person_health_frame,
+        is_past_noncurrent_frame,
+        suppress_health_issues_for_narrative_frame,
         suppress_health_issues_for_non_complaint_frame,
     )
 
@@ -106,7 +130,32 @@ def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
     # (dream/film, other-person, joke, past-resolved). Mentions stay empty
     # via extract_issue_mentions; this blocks the kernel observation path.
     if suppress_health_issues_for_non_complaint_frame(result.raw_text):
-        return ()
+        # A relative in an earlier social clause is not the patient of an
+        # independent present complaint: «с дочерью чай пили, а голова болит».
+        # Keep global fictional/joking/resolved frames authoritative, and only
+        # lift the coarse third-party guard for a grounded contrastive pivot.
+        clauses = clause_bounds(result.raw_text)
+        speaker_pivot = any(
+            (
+                clause.lower().startswith("а ")
+                or (index > 0 and result.raw_text[clauses[index - 1][1]:start]
+                    .strip().lower() == "а")
+            )
+            and _subject_for_clause(clause, has_issue=True) == SubjectKind.SPEAKER
+            and not suppress_health_issues_for_non_complaint_frame(clause)
+            and any(s.type == SpanType.BODY_SITE and start <= s.start < end
+                    for s in result.spans)
+            and any(s.type == SpanType.ISSUE and start <= s.start < end
+                    and _predicate_tense(s.text) == "pres" for s in result.spans)
+            for index, (start, end, clause) in enumerate(clauses)
+        )
+        if not (
+            speaker_pivot and is_other_person_health_frame(result.raw_text)
+            and not suppress_health_issues_for_narrative_frame(result.raw_text)
+            and not is_joke_hyperbole_frame(result.raw_text)
+            and not is_past_noncurrent_frame(result.raw_text)
+        ):
+            return ()
 
     spans = result.spans
     relations = result.relations
@@ -121,6 +170,14 @@ def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
     clauses = clause_bounds(result.raw_text)
     for issue in issues:
         body_spans = body_of.get(issue.span_id, [])
+        if issue.normalized == "боль" and any(
+            start <= issue.start < end and body.start < start
+            for start, end, _clause in clauses for body in body_spans
+        ):
+            # relation_parser resolved this nominal continuation to the sole
+            # preceding pain. Its attributes already target that antecedent;
+            # do not create a second, unsited clinical episode for «боль».
+            continue
         body_site = body_spans[0].normalized if body_spans else None
         issue_norm = issue.normalized or issue.text.lower()
         issue_surface = issue.text.strip().lower() or issue_norm
@@ -137,6 +194,11 @@ def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
         )
 
         onset_spans = onset_of.get(issue.span_id, [])
+        current_continuation = any(
+            when.text.lower() == "сейчас" and not (start <= when.start < end)
+            for start, end, _clause in clauses if start <= issue.start < end
+            for when in onset_spans
+        )
         duration_spans = duration_of.get(issue.span_id, [])
         status_spans = status_of.get(issue.span_id, [])
         negated = any(
@@ -144,7 +206,7 @@ def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
             for rel in relations
         )
         temporal = _temporal_from_spans(
-            issue, onset_spans, duration_spans, status_spans, negated
+            issue, onset_spans, duration_spans, status_spans, negated, current_continuation
         )
 
         observations.append(
@@ -181,6 +243,17 @@ def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
                 )
             )
         for sspan in onset_of.get(issue.span_id, []):
+            if sspan.text.lower() == "сейчас" and current_continuation:
+                if temporal.current is True:
+                    observations.append(Observation(
+                        observation_id=_oid(), attribute="current", value=sspan.text,
+                        normalized_value=sspan.normalized, body_site=body_site,
+                        issue_normalized=issue_norm, subject=subject,
+                        temporal=TemporalFrame(current=True, raw_evidence=sspan.text),
+                        source_turn_id=result.utterance_id, evidence=sspan.text,
+                        status="confirmed",
+                    ))
+                continue
             observations.append(
                 Observation(
                     observation_id=_oid(),
@@ -1005,7 +1078,9 @@ def observations_to_issue_mentions(
             # Past marker («утром») without explicit resolution («прошло»,
             # «лучше», «не болит») is improving — earns ONE current check,
             # never silent burial (spec scenario 12).
-            _ev = clause_for_position(clause_bounds(raw_text), start).lower()
+            _ev = " ".join((
+                clause_for_position(clause_bounds(raw_text), start), obs.temporal.raw_evidence,
+            )).lower()
             if any(
                 w in _ev
                 for w in ("прошл", "лучше", "получше", "не болит", "нормально")
@@ -1017,6 +1092,10 @@ def observations_to_issue_mentions(
                 temporal = "past"
         elif obs.temporal.onset:
             temporal = "past" if "вчера" in obs.temporal.onset.lower() else "now"
+            if obs.temporal.current is None and (
+                temporal == "past" or _predicate_tense(obs.value) == "past"
+            ):
+                status = "unknown"
         label = obs.value
         if body_site and body_site not in label.lower() and not any(
             normalize_text(token) == body_site for token in label.split()

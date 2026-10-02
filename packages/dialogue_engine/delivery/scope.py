@@ -24,6 +24,8 @@ def speak_scope_for(
 
 
 def timer_scope_for(*, timer_id: str, question_id: str = "") -> str:
+    if timer_id.startswith("listen-"):
+        return f"listen:{timer_id.removeprefix('listen-')}"
     key = question_id or timer_id.removeprefix("wait-")
     return f"wait:{key}"
 
@@ -65,6 +67,13 @@ def timer_scope_active(effect: TimerEffect, state: EngineState) -> bool:
     if not scope:
         slot = effect.timer_id.removeprefix("wait-")
         return state.waiting_on_slot == slot or state.answer_context_slot() == slot
+    if scope.startswith("listen:"):
+        key = scope.removeprefix("listen:")
+        return bool(
+            key and state.thread_listening_id == key and state.thread_listening_delivered
+            and state.thread_listening_generation == state.active_playout_generation
+            and not state.call_closed
+        )
     if scope.startswith("wait:"):
         key = scope.removeprefix("wait:")
         if state.waiting_on_slot == key:

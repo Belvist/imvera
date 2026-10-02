@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -21,6 +22,10 @@ from packages.dialogue_engine.action_policy.snapshot import (
     PolicySnapshot,
     TurnContextView,
     build_policy_snapshot,
+)
+from packages.dialogue_engine.action_policy_shadow_config import (
+    FROZEN_POLICY_SHA,
+    policy_provenance,
 )
 from packages.dialogue_engine.state import EngineState, IssueEpisode, Question
 
@@ -148,6 +153,10 @@ def run_challenge(
     frozen_policy_sha: str | None = None,
     freeze_manifest_commit: str | None = None,
 ) -> dict[str, Any]:
+    if frozen_policy_sha is not None and frozen_policy_sha != FROZEN_POLICY_SHA:
+        raise ValueError("cannot attribute the imported active policy to a historical frozen SHA")
+    if freeze_manifest_commit and FROZEN_POLICY_SHA is None:
+        raise ValueError("candidate has no active freeze manifest commit")
     cases = _load_cases(challenge_path)
     rows: list[dict[str, Any]] = []
     passed = 0
@@ -229,7 +238,25 @@ def run_challenge(
 
     total = len(cases)
     return {
-        "frozen_policy_sha": frozen_policy_sha,
+        **policy_provenance(),
+        "core_file_sha256": {
+            name: hashlib.sha256(
+                (ROOT / "packages/dialogue_engine/action_policy" / name).read_bytes()
+            ).hexdigest()
+            for name in (
+                "actions.py",
+                "constraints.py",
+                "features.py",
+                "mandatory.py",
+                "need_value.py",
+                "needs.py",
+                "policy.py",
+                "scorer.py",
+                "semantic_signals.py",
+                "snapshot.py",
+            )
+        },
+        "corpus_sha256": hashlib.sha256(challenge_path.read_bytes()).hexdigest(),
         "freeze_manifest_commit": freeze_manifest_commit,
         "challenge_corpus_commit": None,
         "policy_version": POLICY_VERSION,
@@ -287,18 +314,11 @@ def main() -> int:
         "challenge_v8_live": "docs/evaluation/action-policy-phase1-v8-challenge.json",
     }
     output = args.output or str(ROOT / default_outputs[args.corpus])
-    frozen_defaults = {
-        "challenge_frozen": FROZEN_POLICY_SHA_V5,
-        "challenge_v7_frozen": FROZEN_POLICY_SHA_V7,
-        "challenge_v8_live": FROZEN_POLICY_SHA_V8,
-    }
-    manifest_defaults = {
-        "challenge_frozen": FREEZE_MANIFEST_SHA_V5,
-        "challenge_v7_frozen": FREEZE_MANIFEST_SHA_V7,
-        "challenge_v8_live": FREEZE_MANIFEST_SHA_V8,
-    }
-    frozen_sha = args.frozen_policy_sha or frozen_defaults.get(args.corpus, "")
-    manifest_sha = args.freeze_manifest_sha or manifest_defaults.get(args.corpus, "")
+    frozen_sha = args.frozen_policy_sha or None
+    manifest_sha = args.freeze_manifest_sha or None
+    if not args.output:
+        # Historical reports must not be overwritten by today's imported policy.
+        output = str(ROOT / ".run" / f"{POLICY_VERSION}-{args.corpus}-challenge.json")
 
     report = run_challenge(
         challenge_path=challenge_path,
@@ -324,7 +344,7 @@ def main() -> int:
                 "frozen_policy_sha": report["frozen_policy_sha"],
                 "freeze_manifest_commit": report["freeze_manifest_commit"],
                 "challenge_corpus_commit": report["challenge_corpus_commit"],
-                "output": str(out.relative_to(ROOT)),
+                "output": str(out.relative_to(ROOT)) if out.is_relative_to(ROOT) else str(out),
             },
             ensure_ascii=False,
             indent=2,

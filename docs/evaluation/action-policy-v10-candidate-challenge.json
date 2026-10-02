@@ -1,0 +1,2720 @@
+{
+  "frozen_policy_sha": null,
+  "historical_baseline_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
+  "policy_status": "candidate",
+  "policy_version": "action-policy-phase1-v10",
+  "active_policy_manifest": "docs/evaluation/action-policy-phase1-v10-candidate-manifest.json",
+  "core_file_sha256": {
+    "actions.py": "5bad9619a12de738cd5c1413e41f8261c0b8e9298ffde1cbca069663cbac282a",
+    "constraints.py": "3346520941f8002a6f59a52818a1039340f521c4ca42f2b46c4a3b07c7b31964",
+    "features.py": "5bd1204c8f7473b06318ffefa4c7aade53e9e319cc25b62640af62eaa606f832",
+    "mandatory.py": "5570d1c275e58945739bf6b4ff50d1891dbc48d887b1c69e8c97fdaa2da10d73",
+    "need_value.py": "3cd09ea178c59a1a4e8aa6df74f75092dcf12aa3d743ee22d2a5aa77aae51940",
+    "needs.py": "bde922a3f330fbb8a5610430993f1789492f9b3eb0984e60d3f7f29ad9484e7e",
+    "policy.py": "9e9d4540f15a7085f7a06d23aedc35bfe5d836ccc5f28249bb10d88d12e780dd",
+    "scorer.py": "2792a46bd04756c4b8bfd63d61d964d1a214cde8de7da3f0faa91c178d2aa0be",
+    "semantic_signals.py": "ba1e77a90e8f06ffce9bc1b579c7cffa9eeaa27fce55d53cea074c15c9ab06fc",
+    "snapshot.py": "88d4102545bd3e2cb486ad648611353a263a7f7f343c71845876126099bd9061"
+  },
+  "corpus_sha256": "50e72286677480c101d9620fc7688b3d3eada48393fe200942fdf4aeb1e23687",
+  "freeze_manifest_commit": null,
+  "challenge_corpus_commit": null,
+  "corpus_path": "tests/action_policy/corpus/challenge_v8_live/scenarios.json",
+  "total": 20,
+  "passed": 20,
+  "failed": 0,
+  "pass_rate": 1.0,
+  "forbidden_count": 0,
+  "constraint_violation_count": 0,
+  "p0_like_total": 12,
+  "p0_like_passed": 12,
+  "p0_like_pass_rate": 1.0,
+  "pass_criteria": {
+    "forbidden_count": 0,
+    "constraint_violation_count": 0,
+    "p0_like_pass_rate": 1.0,
+    "overall_pass_rate_min": 0.95
+  },
+  "passed_gate": true,
+  "cases": [
+    {
+      "id": "v8ch_no_pending_current_killed_by_repeat",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:current",
+      "acceptable": [
+        "ASK_EPISODE:current"
+      ],
+      "forbidden": [
+        "ACK_ONLY",
+        "ASK_EPISODE:severity",
+        "IMPORTANT_TO_SHARE",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "pending_obligation_blocks_its",
+          "reason": "unsettled pending question need blocks transition"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:current",
+          "score": 76.2,
+          "contributions": {
+            "information_value": 8.8,
+            "need_ask_utility": 50.400000000000006,
+            "pending_obligation": 35.0,
+            "repeat_penalty": -32.0,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.88,
+            "need_ask_utility": 1.8000000000000003,
+            "pending_obligation": 1.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 1.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 39.4,
+          "contributions": {
+            "information_value": 5.8,
+            "need_ask_utility": 19.599999999999998,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.58,
+            "need_ask_utility": 0.7,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 37.120000000000005,
+          "contributions": {
+            "information_value": 5.2,
+            "need_ask_utility": 17.92,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.52,
+            "need_ask_utility": 0.64,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.0,
+          "contributions": {
+            "fit:ack": 1.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_no_pending_severity_survives",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:severity",
+      "acceptable": [
+        "ASK_EPISODE:severity"
+      ],
+      "forbidden": [
+        "ACK_ONLY",
+        "IMPORTANT_TO_SHARE",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "pending_obligation_blocks_its",
+          "reason": "unsettled pending question need blocks transition"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 96.474,
+          "contributions": {
+            "information_value": 2.03,
+            "need_ask_utility": 45.444,
+            "pending_obligation": 35.0,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.20299999999999999,
+            "need_ask_utility": 1.6230000000000002,
+            "pending_obligation": 1.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 24.276,
+          "contributions": {
+            "information_value": 1.8199999999999998,
+            "need_ask_utility": 8.456,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.182,
+            "need_ask_utility": 0.302,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.0,
+          "contributions": {
+            "fit:ack": 1.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_no_pending_temporal_survives",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:temporal",
+      "acceptable": [
+        "ASK_EPISODE:temporal"
+      ],
+      "forbidden": [
+        "IMPORTANT_TO_SHARE",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "pending_obligation_blocks_its",
+          "reason": "unsettled pending question need blocks transition"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:temporal",
+          "score": 123.96,
+          "contributions": {
+            "information_value": 7.199999999999999,
+            "need_ask_utility": 67.75999999999999,
+            "pending_obligation": 35.0,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.72,
+            "need_ask_utility": 2.42,
+            "pending_obligation": 1.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:current",
+          "score": 39.712,
+          "contributions": {
+            "information_value": 8.8,
+            "need_ask_utility": 16.912000000000003,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.88,
+            "need_ask_utility": 0.6040000000000001,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 32.092,
+          "contributions": {
+            "information_value": 5.8,
+            "need_ask_utility": 12.292,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.58,
+            "need_ask_utility": 0.439,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 30.568,
+          "contributions": {
+            "information_value": 5.2,
+            "need_ask_utility": 11.368,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.52,
+            "need_ask_utility": 0.406,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.0,
+          "contributions": {
+            "fit:ack": 1.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_no_pending_fi_survives",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:functional_impact",
+      "acceptable": [
+        "ASK_EPISODE:functional_impact"
+      ],
+      "forbidden": [
+        "ACK_ONLY",
+        "IMPORTANT_TO_SHARE",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "pending_obligation_blocks_its",
+          "reason": "unsettled pending question need blocks transition"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 95.67599999999999,
+          "contributions": {
+            "information_value": 1.8199999999999998,
+            "need_ask_utility": 44.855999999999995,
+            "pending_obligation": 35.0,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.182,
+            "need_ask_utility": 1.6019999999999999,
+            "pending_obligation": 1.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.0,
+          "contributions": {
+            "fit:ack": 1.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_no_its_over_pending",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:current",
+      "acceptable": [
+        "ASK_EPISODE:current"
+      ],
+      "forbidden": [
+        "IMPORTANT_TO_SHARE",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "pending_obligation_blocks_its",
+          "reason": "unsettled pending question need blocks transition"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:current",
+          "score": 122.2,
+          "contributions": {
+            "information_value": 8.8,
+            "need_ask_utility": 64.4,
+            "pending_obligation": 35.0,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.88,
+            "need_ask_utility": 2.3000000000000003,
+            "pending_obligation": 1.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 39.4,
+          "contributions": {
+            "information_value": 5.8,
+            "need_ask_utility": 19.599999999999998,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.58,
+            "need_ask_utility": 0.7,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 37.120000000000005,
+          "contributions": {
+            "information_value": 5.2,
+            "need_ask_utility": 17.92,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.52,
+            "need_ask_utility": 0.64,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.0,
+          "contributions": {
+            "fit:ack": 1.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_no_summary_over_pending",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:current",
+      "acceptable": [
+        "ASK_EPISODE:current"
+      ],
+      "forbidden": [
+        "ACK_ONLY",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "pending_obligation_blocks_its",
+          "reason": "unsettled pending question need blocks transition"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:current",
+          "score": 122.2,
+          "contributions": {
+            "information_value": 8.8,
+            "need_ask_utility": 64.4,
+            "pending_obligation": 35.0,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.88,
+            "need_ask_utility": 2.3000000000000003,
+            "pending_obligation": 1.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 39.4,
+          "contributions": {
+            "information_value": 5.8,
+            "need_ask_utility": 19.599999999999998,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.58,
+            "need_ask_utility": 0.7,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 37.120000000000005,
+          "contributions": {
+            "information_value": 5.2,
+            "need_ask_utility": 17.92,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.52,
+            "need_ask_utility": 0.64,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.0,
+          "contributions": {
+            "fit:ack": 1.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_safety_over_pending",
+      "build_path": "engine_state",
+      "chosen": "SAFETY",
+      "acceptable": [
+        "SAFETY"
+      ],
+      "forbidden": [
+        "ASK_EPISODE:current",
+        "IMPORTANT_TO_SHARE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class SAFETY does not allow IMPORTANT_TO_SHARE"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class SAFETY does not allow SUMMARY_CLOSE"
+        },
+        {
+          "action": "ACK_ONLY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class SAFETY does not allow ACK_ONLY"
+        },
+        {
+          "action": "ASK_EPISODE:current",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class SAFETY does not allow ASK_EPISODE"
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class SAFETY does not allow ASK_EPISODE"
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class SAFETY does not allow ASK_EPISODE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "SAFETY",
+          "score": 100.0,
+          "contributions": {
+            "fit:safety": 100.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:SAFETY": 1.0,
+            "fit:safety": 1.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_repair_preempts",
+      "build_path": "engine_state",
+      "chosen": "REPAIR",
+      "acceptable": [
+        "REPAIR"
+      ],
+      "forbidden": [
+        "ASK_EPISODE:severity",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class REPAIR does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class REPAIR does not allow IMPORTANT_TO_SHARE"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class REPAIR does not allow SUMMARY_CLOSE"
+        },
+        {
+          "action": "ACK_ONLY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class REPAIR does not allow ACK_ONLY"
+        },
+        {
+          "action": "ASK_EPISODE:current",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class REPAIR does not allow ASK_EPISODE"
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class REPAIR does not allow ASK_EPISODE"
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class REPAIR does not allow ASK_EPISODE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "REPAIR",
+          "score": 85.0,
+          "contributions": {
+            "fit:repair": 85.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:REPAIR": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 1.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_control_defer",
+      "build_path": "engine_state",
+      "chosen": "CONTROL:defer",
+      "acceptable": [
+        "CONTROL:defer"
+      ],
+      "forbidden": [
+        "ASK_EPISODE:current",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow IMPORTANT_TO_SHARE"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow SUMMARY_CLOSE"
+        },
+        {
+          "action": "ACK_ONLY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow ACK_ONLY"
+        },
+        {
+          "action": "ASK_EPISODE:current",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow ASK_EPISODE"
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow ASK_EPISODE"
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow ASK_EPISODE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "CONTROL:defer",
+          "score": 90.0,
+          "contributions": {
+            "fit:control": 90.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:CONTROL": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 1.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_repeat_blocks_when_not_pending",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:severity",
+      "acceptable": [
+        "ASK_EPISODE:functional_impact",
+        "ASK_EPISODE:severity",
+        "IMPORTANT_TO_SHARE"
+      ],
+      "forbidden": [
+        "ASK_EPISODE:current"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        },
+        {
+          "action": "ASK_EPISODE:current",
+          "rule_id": "repeat_question",
+          "reason": "same semantic question was just delivered and is not pending"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 39.4,
+          "contributions": {
+            "information_value": 5.8,
+            "need_ask_utility": 19.599999999999998,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.58,
+            "need_ask_utility": 0.7,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 37.120000000000005,
+          "contributions": {
+            "information_value": 5.2,
+            "need_ask_utility": 17.92,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.52,
+            "need_ask_utility": 0.64,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.0,
+          "contributions": {
+            "fit:ack": 1.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "score": 0,
+          "contributions": {},
+          "features": {
+            "bias": 1.0,
+            "action:IMPORTANT_TO_SHARE": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_multi_episode_pending_active",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:severity",
+      "acceptable": [
+        "ASK_EPISODE:severity"
+      ],
+      "forbidden": [
+        "IMPORTANT_TO_SHARE",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "pending_obligation_blocks_its",
+          "reason": "unsettled pending question need blocks transition"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 96.474,
+          "contributions": {
+            "information_value": 2.03,
+            "need_ask_utility": 45.444,
+            "pending_obligation": 35.0,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.20299999999999999,
+            "need_ask_utility": 1.6230000000000002,
+            "pending_obligation": 1.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:temporal",
+          "score": 51.44,
+          "contributions": {
+            "information_value": 7.199999999999999,
+            "need_ask_utility": 30.240000000000002,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.72,
+            "need_ask_utility": 1.08,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:current",
+          "score": 38.592,
+          "contributions": {
+            "information_value": 8.8,
+            "need_ask_utility": 15.792000000000002,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.88,
+            "need_ask_utility": 0.5640000000000001,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 30.972,
+          "contributions": {
+            "information_value": 5.8,
+            "need_ask_utility": 11.172,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.58,
+            "need_ask_utility": 0.399,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 29.448,
+          "contributions": {
+            "information_value": 5.2,
+            "need_ask_utility": 10.248000000000001,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.52,
+            "need_ask_utility": 0.36600000000000005,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 24.276,
+          "contributions": {
+            "information_value": 1.8199999999999998,
+            "need_ask_utility": 8.456,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.182,
+            "need_ask_utility": 0.302,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.0,
+          "contributions": {
+            "fit:ack": 1.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_its_leave_optional_no_restart",
+      "build_path": "engine_state",
+      "chosen": "SUMMARY_CLOSE",
+      "acceptable": [
+        "SUMMARY_CLOSE"
+      ],
+      "forbidden": [
+        "ACK_ONLY",
+        "ASK_EPISODE:functional_impact"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class SUMMARY_CLOSE does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class SUMMARY_CLOSE does not allow IMPORTANT_TO_SHARE"
+        },
+        {
+          "action": "ACK_ONLY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class SUMMARY_CLOSE does not allow ACK_ONLY"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "SUMMARY_CLOSE",
+          "score": 25.0,
+          "contributions": {
+            "fit:summary": 25.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:SUMMARY_CLOSE": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 1.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_other_person_not_interrogated",
+      "build_path": "engine_state",
+      "chosen": "IMPORTANT_TO_SHARE",
+      "acceptable": [
+        "ACK_ONLY",
+        "IMPORTANT_TO_SHARE",
+        "LISTEN_META"
+      ],
+      "forbidden": [
+        "ASK_EPISODE:current",
+        "ASK_EPISODE:temporal"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "score": 28.0,
+          "contributions": {
+            "fit:its": 28.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:IMPORTANT_TO_SHARE": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 1.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0,
+            "transition_preferred": 0.0,
+            "transition_burden_relief": 0.0,
+            "transition_utility": 0.0,
+            "best_remaining_need_penalty": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.0,
+          "contributions": {
+            "fit:ack": 1.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_new_speaker_issue_opens",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:temporal",
+      "acceptable": [
+        "ASK_EPISODE:temporal"
+      ],
+      "forbidden": [
+        "IMPORTANT_TO_SHARE",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "speaker_issue_blocks_its",
+          "reason": "new speaker issue still needs episode handling"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:temporal",
+          "score": 52.760000000000005,
+          "contributions": {
+            "information_value": 7.199999999999999,
+            "need_ask_utility": 31.360000000000003,
+            "fit:episode": 14.0,
+            "new_grounded_issue": 0.2
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.72,
+            "need_ask_utility": 1.12,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 1.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:current",
+          "score": 39.912000000000006,
+          "contributions": {
+            "information_value": 8.8,
+            "need_ask_utility": 16.912000000000003,
+            "fit:episode": 14.0,
+            "new_grounded_issue": 0.2
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.88,
+            "need_ask_utility": 0.6040000000000001,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 1.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 32.292,
+          "contributions": {
+            "information_value": 5.8,
+            "need_ask_utility": 12.292,
+            "fit:episode": 14.0,
+            "new_grounded_issue": 0.2
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.58,
+            "need_ask_utility": 0.439,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 1.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 30.768,
+          "contributions": {
+            "information_value": 5.2,
+            "need_ask_utility": 11.368,
+            "fit:episode": 14.0,
+            "new_grounded_issue": 0.2
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.52,
+            "need_ask_utility": 0.406,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 1.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.2,
+          "contributions": {
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.2
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 1.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_goodbye",
+      "build_path": "engine_state",
+      "chosen": "GOODBYE_FINAL",
+      "acceptable": [
+        "GOODBYE_FINAL"
+      ],
+      "forbidden": [
+        "IMPORTANT_TO_SHARE",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow IMPORTANT_TO_SHARE"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow SUMMARY_CLOSE"
+        },
+        {
+          "action": "ACK_ONLY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class TERMINAL_CONTROL does not allow ACK_ONLY"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "GOODBYE_FINAL",
+          "score": 95.0,
+          "contributions": {
+            "fit:goodbye": 95.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:GOODBYE_FINAL": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 1.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_high_burden_transition_without_pending",
+      "build_path": "engine_state",
+      "chosen": "IMPORTANT_TO_SHARE",
+      "acceptable": [
+        "ASK_EPISODE:current",
+        "IMPORTANT_TO_SHARE"
+      ],
+      "forbidden": [
+        "ACK_ONLY"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        },
+        {
+          "action": "ACK_ONLY",
+          "rule_id": "ack_dead_end",
+          "reason": "high burden cannot dead-end with bare ACK_ONLY"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "score": 109.5,
+          "contributions": {
+            "fit:its": 28.0,
+            "transition_preferred": 40.0,
+            "transition_burden_relief": 42.0,
+            "transition_utility": 9.9,
+            "best_remaining_need_penalty": -10.4
+          },
+          "features": {
+            "bias": 1.0,
+            "action:IMPORTANT_TO_SHARE": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 1.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0,
+            "transition_preferred": 1.0,
+            "transition_burden_relief": 1.0,
+            "transition_utility": 0.55,
+            "best_remaining_need_penalty": 0.325
+          }
+        },
+        {
+          "action": "ASK_EPISODE:current",
+          "score": -54.1,
+          "contributions": {
+            "information_value": 8.8,
+            "need_ask_utility": 9.1,
+            "ask_burden_penalty": -22.0,
+            "episode_question_cost": -14.0,
+            "transition_penalty": -50.0,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.88,
+            "need_ask_utility": 0.325,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 1.0,
+            "episode_question_cost": 2.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 1.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": -65.5,
+          "contributions": {
+            "information_value": 5.8,
+            "need_ask_utility": 0.6999999999999991,
+            "ask_burden_penalty": -22.0,
+            "episode_question_cost": -14.0,
+            "transition_penalty": -50.0,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.58,
+            "need_ask_utility": 0.024999999999999967,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 1.0,
+            "episode_question_cost": 2.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 1.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": -81.78,
+          "contributions": {
+            "information_value": 5.2,
+            "need_ask_utility": -0.9799999999999993,
+            "ask_burden_penalty": -22.0,
+            "episode_question_cost": -14.0,
+            "transition_penalty": -50.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.52,
+            "need_ask_utility": -0.034999999999999976,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 1.0,
+            "episode_question_cost": 2.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 1.0,
+            "fit:episode": 0.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_timer_internal_pending",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:current",
+      "acceptable": [
+        "ASK_EPISODE:current"
+      ],
+      "forbidden": [
+        "BACKGROUND_GOAL:mood",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "pending_obligation_blocks_its",
+          "reason": "unsettled pending question need blocks transition"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:current",
+          "score": 122.2,
+          "contributions": {
+            "information_value": 8.8,
+            "need_ask_utility": 64.4,
+            "pending_obligation": 35.0,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.88,
+            "need_ask_utility": 2.3000000000000003,
+            "pending_obligation": 1.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 39.4,
+          "contributions": {
+            "information_value": 5.8,
+            "need_ask_utility": 19.599999999999998,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.58,
+            "need_ask_utility": 0.7,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 37.120000000000005,
+          "contributions": {
+            "information_value": 5.2,
+            "need_ask_utility": 17.92,
+            "fit:episode": 14.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.52,
+            "need_ask_utility": 0.64,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.0,
+          "contributions": {
+            "fit:ack": 1.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_background_when_no_hard_work",
+      "build_path": "engine_state",
+      "chosen": "BACKGROUND_GOAL:wellness",
+      "acceptable": [
+        "BACKGROUND_GOAL:wellness"
+      ],
+      "forbidden": [
+        "IMPORTANT_TO_SHARE",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class BACKGROUND_GOAL does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class BACKGROUND_GOAL does not allow IMPORTANT_TO_SHARE"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class BACKGROUND_GOAL does not allow SUMMARY_CLOSE"
+        },
+        {
+          "action": "ACK_ONLY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class BACKGROUND_GOAL does not allow ACK_ONLY"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "BACKGROUND_GOAL:wellness",
+          "score": 20.0,
+          "contributions": {
+            "fit:background": 20.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:BACKGROUND_GOAL": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 1.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_user_question_preempts",
+      "build_path": "engine_state",
+      "chosen": "ANSWER_USER",
+      "acceptable": [
+        "ANSWER_USER"
+      ],
+      "forbidden": [
+        "ASK_EPISODE:severity",
+        "SUMMARY_CLOSE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class ANSWER_USER does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class ANSWER_USER does not allow IMPORTANT_TO_SHARE"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class ANSWER_USER does not allow SUMMARY_CLOSE"
+        },
+        {
+          "action": "ACK_ONLY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class ANSWER_USER does not allow ACK_ONLY"
+        },
+        {
+          "action": "ASK_EPISODE:current",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class ANSWER_USER does not allow ASK_EPISODE"
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class ANSWER_USER does not allow ASK_EPISODE"
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class ANSWER_USER does not allow ASK_EPISODE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ANSWER_USER",
+          "score": 80.0,
+          "contributions": {
+            "fit:answer_user": 80.0
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ANSWER_USER": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 1.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 0.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8ch_completed_episode_pending_new",
+      "build_path": "engine_state",
+      "chosen": "ASK_EPISODE:temporal",
+      "acceptable": [
+        "ASK_EPISODE:temporal"
+      ],
+      "forbidden": [
+        "IMPORTANT_TO_SHARE"
+      ],
+      "pass": true,
+      "constraint_violation": false,
+      "rejections": [
+        {
+          "action": "SAFETY",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SAFETY"
+        },
+        {
+          "action": "IMPORTANT_TO_SHARE",
+          "rule_id": "speaker_issue_blocks_its",
+          "reason": "new speaker issue still needs episode handling"
+        },
+        {
+          "action": "SUMMARY_CLOSE",
+          "rule_id": "mandatory_class_mismatch",
+          "reason": "mandatory class CONVERSATION does not allow SUMMARY_CLOSE"
+        }
+      ],
+      "candidates": [
+        {
+          "action": "ASK_EPISODE:temporal",
+          "score": 51.64,
+          "contributions": {
+            "information_value": 7.199999999999999,
+            "need_ask_utility": 30.240000000000002,
+            "fit:episode": 14.0,
+            "new_grounded_issue": 0.2
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.72,
+            "need_ask_utility": 1.08,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 1.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:current",
+          "score": 38.792,
+          "contributions": {
+            "information_value": 8.8,
+            "need_ask_utility": 15.792000000000002,
+            "fit:episode": 14.0,
+            "new_grounded_issue": 0.2
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.88,
+            "need_ask_utility": 0.5640000000000001,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 1.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:severity",
+          "score": 31.172,
+          "contributions": {
+            "information_value": 5.8,
+            "need_ask_utility": 11.172,
+            "fit:episode": 14.0,
+            "new_grounded_issue": 0.2
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.58,
+            "need_ask_utility": 0.399,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 1.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ASK_EPISODE:functional_impact",
+          "score": 29.648,
+          "contributions": {
+            "information_value": 5.2,
+            "need_ask_utility": 10.248000000000001,
+            "fit:episode": 14.0,
+            "new_grounded_issue": 0.2
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ASK_EPISODE": 1.0,
+            "active_issue": 1.0,
+            "information_value": 0.52,
+            "need_ask_utility": 0.36600000000000005,
+            "pending_obligation": 0.0,
+            "episode_resolving": 0.0,
+            "ask_burden_penalty": 0.0,
+            "episode_question_cost": 0.0,
+            "repeat_penalty": 0.0,
+            "transition_penalty": 0.0,
+            "fit:episode": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 0.0,
+            "new_grounded_issue": 1.0,
+            "its_pending": 0.0
+          }
+        },
+        {
+          "action": "ACK_ONLY",
+          "score": 1.2,
+          "contributions": {
+            "fit:ack": 1.0,
+            "new_grounded_issue": 0.2
+          },
+          "features": {
+            "bias": 1.0,
+            "action:ACK_ONLY": 1.0,
+            "fit:safety": 0.0,
+            "fit:goodbye": 0.0,
+            "fit:control": 0.0,
+            "fit:repair": 0.0,
+            "fit:answer_user": 0.0,
+            "fit:meta": 0.0,
+            "fit:clarify": 0.0,
+            "fit:its": 0.0,
+            "fit:background": 0.0,
+            "fit:summary": 0.0,
+            "fit:ack": 1.0,
+            "new_grounded_issue": 1.0,
+            "its_pending": 0.0
+          }
+        }
+      ]
+    }
+  ]
+}

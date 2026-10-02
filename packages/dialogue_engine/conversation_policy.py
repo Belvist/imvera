@@ -65,12 +65,9 @@ class PolicyDecision:
     control: str | None = None
     episode_id: str | None = None
     semantic_need: QuestionNeed | None = None
+    thread_mode: str | None = None
 
 
-_IDENTITY_ANSWER = (
-    "Я Вера, голосовой помощник сервиса Амвера. "
-    "Звоню, чтобы узнать, как вы себя чувствуете."
-)
 _IMPORTANT_TO_SHARE_QUESTION = questions._ITS_QUESTION_VARIANTS[0]
 
 
@@ -1038,92 +1035,8 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             control=turn.control,
         )
 
-    if (
-        turn is not None and state.thread_reply_turn_id == turn.utterance_id
-        and state.check_path != CheckPath.URGENT
-        and not state.red_state_pending and not state.risk_handling
-        and state.safety_mode != "red" and not _has_open_episodes(state)
-        and not turn.issue_mentions and not turn.goal_facts and not turn.goal_answers
-        and not turn.risk_candidates and not turn.user_question and not turn.correction
-    ):
-        state.thread_consumed_reply_id = turn.utterance_id
-        if state.thread_reply_finished or state.thread_followup_count >= 2:
-            return resume_after_user_thread(state)
-        state.thread_followup_count += 1
-        return ResponsePlan(
-            obligation=ConversationObligation.FOLLOW_USER_THREAD,
-            mandatory_question=questions.thread_continuation(),
-            intent="thread_continue", marks_question=True,
-        )
-
-    # Reluctance: client signals they are done — warm early close with what
-    # is recorded, instead of squeezing (never on URGENT path).
-    # ADR-014 exception, flagged: IMVERA_COVERAGE_LADDER=1.
-    # FOLLOW_USER_THREAD: the person said something substantive about
-    # their own topic (grounded facts, no new complaint/question) and an
-    # unused hook is on record — stay on their thread once instead of
-    # jumping back to the ladder. The follow-up quotes their own words,
-    # so it cannot invent. Hook consumed once; clinical episodes win
-    # (open episode blocks this branch). Easing reports («полегче») and
-    # non-health evaluations («плохо от фильма») stay owned by their
-    # paths — a thread follow-up there interrogates instead of hearing.
-    if (
-        turn is not None
-        and state.check_path != CheckPath.URGENT
-        and not state.red_state_pending
-        and not _has_open_episodes(state)
-        and state.current_thread_label
-        # Only on the turn that set the thread (turns == 0): firing later
-        # hijacks answers and closing flows («Нет.» after ITS is not an
-        # invitation to ask about an old hook).
-        and state.current_thread_turns == 0
-        and state.open_hook
-        and not state.open_hook_used
-        # A vague-negative wellness self-evaluation («ни шатко ни валко»)
-        # is owned by the concern-probe net, never by the thread.
-        and not _turn_is_unprobed_negative_wellness(state)
-        # A real answer (facts carried to the pending question) advances
-        # the ladder; a story with no facts/mentions answered nothing —
-        # the pending flag alone must not bury it (kernel sets it on any
-        # answer-act while a question is delivered).
-        and (
-            (turn.goal_facts and not turn.answers_pending_question)
-            or (
-                state.current_thread_label == "рассказ"
-                and not turn.goal_facts
-                and not turn.issue_mentions
-                # Vera follows a story only when she waits for nothing
-                # specific: ITS, episode probes, and background questions
-                # own their answers (anaphora, duration, meds).
-                and _delivered_is_free(state)
-            )
-        )
-        and not turn.issue_mentions
-        and not turn.user_question
-        and not turn.correction
-        and not _turn_has_accepted_episode_value(state, turn)
-        and turn.control in ("none", "")
-        and not _turn_is_easing(turn)
-        and not _turn_is_nonhealth_eval(turn)
-    ):
-        from packages.dialogue_engine.discourse import normalize_signature
-
-        _hook = state.open_hook.strip().rstrip(".!?")
-        if _hook:
-            _hook = _hook[0].lower() + _hook[1:] if len(_hook) > 1 else _hook
-            _q = questions.thread_followup(_hook)
-            state.open_hook_used = True
-            state.thread_followup_count += 1
-            state.current_thread_turns = 0
-            state.last_ack_signature = normalize_signature(_q)
-            return ResponsePlan(
-                obligation=ConversationObligation.FOLLOW_USER_THREAD,
-                action="speak",
-                mandatory_question=_q,
-                intent="thread_followup",
-                slot=None,
-                marks_question=True,
-            )
+    # Personal thread selection belongs exclusively to ActionPolicy v10 via
+    # DecisionRouter. There is no second bounded follow-up ladder here.
     # Find-out ladder for an answer that contributed NOTHING (no fill, no
     # facts, no mentions — «Непонятно.», debris): try to find out, each time
     # differently — hint, then concrete options — then record unknown
@@ -1236,14 +1149,25 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             return _summary_plan(state)
 
     if turn and turn.user_question and not turn.answers_pending_question:
+        from packages.dialogue_engine.mission_flow import answer_user_question_text
+
         suspend = capture_suspended_obligation(state)
+        listening = (
+            state.current_thread_label in {"рассказ", "вопрос"}
+            and not _has_open_episodes(state)
+            and not state.pending_episode_attribute
+            and not state.probe_phase
+            and not _turn_is_unprobed_negative_wellness(state)
+            and state.thread_last_statement and not state.thread_reply_finished
+        )
         return ResponsePlan(
             obligation=ConversationObligation.ANSWER_USER_QUESTION,
             action="speak",
-            answer_user_question=_IDENTITY_ANSWER,
+            answer_user_question=answer_user_question_text(turn.user_question, state=state),
             intent="answer_user_question",
             marks_question=False,
             suspend=suspend,
+            thread_mode="listen" if listening else None,
         )
 
     if turn and turn.correction:
@@ -2233,6 +2157,7 @@ def resume_episode_obligation(state: EngineState) -> PolicyDecision | None:
         marks_question=rendered.marks_question,
         episode_id=plan.episode_id,
         semantic_need=plan.question_needs[0] if plan.question_needs else None,
+        thread_mode=plan.thread_mode,
     )
 
 
@@ -2268,6 +2193,7 @@ def decide_conversation_policy(
         control=plan.control,
         episode_id=plan.episode_id,
         semantic_need=plan.question_needs[0] if plan.question_needs else None,
+        thread_mode=plan.thread_mode,
     )
 
 

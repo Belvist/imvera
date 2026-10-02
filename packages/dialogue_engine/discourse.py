@@ -1,13 +1,10 @@
 """Discourse memory — the thread of the conversation (single owner).
 
-Writes `current_thread_*`, `open_hook`, `open_hook_used` on EngineState
-from verified semantics only: issue mentions, grounded goal facts, the
-person's own question. Never from free text, garbage, or silence.
-
-Readers: FOLLOW_USER_THREAD branch in conversation_policy (stay on the
-person's topic instead of jumping back to the ladder), hook follow-up
-speech built from the person's own words. Decay: 3 uncontinued turns
-clear the thread; a hook is consumed once.
+Stores bounded, verbatim statements with their accepted utterance identity.
+These are discourse context, not verified medical or family facts. Clinical
+mentions, facts and control retain their own owners. ActionPolicy reads this
+context; the reducer activates listening only after audible completion.
+Unrelated turns age a topic; substantive listening replies do not.
 """
 
 from __future__ import annotations
@@ -35,18 +32,32 @@ _BARE_EVALUATIONS = frozenset({"хорошо", "плохо", "нормально
 
 def listening_question_pending(state) -> bool:
     delivered = getattr(state, "delivered_question", None)
-    return getattr(delivered, "intent", "") in THREAD_QUESTION_INTENTS
+    heard = bool(getattr(state, "thread_heard_listening_id", ""))
+    current = bool(
+        getattr(state, "thread_listening_id", "")
+        and getattr(state, "thread_listening_delivered", False)
+        and not state.thread_reply_finished
+    )
+    token = heard or (getattr(state, "current_thread_label", "") == "рассказ" and current)
+    return token or getattr(delivered, "intent", "") in THREAD_QUESTION_INTENTS
 
 
 def is_listening_evaluation(state, text: str) -> bool:
-    return listening_question_pending(state) and (
-        text.lower().strip().rstrip(".!?…") in _BARE_EVALUATIONS
-    )
+    if not listening_question_pending(state):
+        return False
+    from packages.dialogue_engine.fast_interpreter import _POSITIVE
+
+    core = text.lower().strip().rstrip(".!?…")
+    # Reuse the existing bare-positive grammar, without dropping domain
+    # predicates such as "настроение" or "чувствую себя". Urgent negatives
+    # stay on their unchanged safety path.
+    return core in _BARE_EVALUATIONS or bool(_POSITIVE.fullmatch(core))
+
 
 
 def _listening_reply(state, turn, raw: str) -> bool:
     """The delivered invitation, rather than an old health slot, owns this answer."""
-    if not listening_question_pending(state):
+    if not listening_question_pending(state) or state.thread_reply_finished:
         return False
     if (
         getattr(turn, "control", "none") not in ("none", "")
@@ -63,9 +74,15 @@ def _listening_reply(state, turn, raw: str) -> bool:
         "нет", "неа", "не знаю", "не помню", "ничего", "больше нечего добавить",
     )
     if not finished and (
-        getattr(turn, "dialogue_act", "") != "answer" or not raw or len(raw) > 200
+        getattr(turn, "dialogue_act", "") != "answer" or not raw or len(raw) > 2048
     ):
         return False
+    state.thread_last_utterance_id = turn.utterance_id
+    if not finished:
+        state.thread_last_statement = raw[:200]
+    # A genuinely heard answer may also yield the floor. The next accepted
+    # continuation becomes the person's thread, without inventing a fact.
+    state.current_thread_label = "рассказ"
     state.thread_reply_turn_id = turn.utterance_id
     state.thread_reply_finished = finished
     state.current_thread_turns = 0
@@ -164,6 +181,26 @@ def update_discourse(state, turn) -> None:
         raw_lower = raw.lower()
         if _listening_reply(state, turn, raw):
             return
+        from packages.dialogue_engine.semantic_kernel.controls import (
+            is_local_question_refusal,
+            wants_to_continue_talking,
+        )
+
+        if (
+            is_local_question_refusal(raw) and wants_to_continue_talking(raw)
+            and not mentions and not facts and not user_question
+            and getattr(turn, "control", "none") in ("none", "")
+            and not getattr(turn, "risk_candidates", ())
+        ):
+            # The refusal's goal disposition keeps its existing semantic owner;
+            # a separately explicit wish to talk determines only the floor.
+            state.current_thread_label = "рассказ"
+            state.current_thread_turns = 0
+            state.thread_last_statement = raw[:200]
+            state.thread_last_utterance_id = turn.utterance_id
+            state.thread_reply_turn_id = ""
+            state.thread_reply_finished = False
+            return
         engaged = _engaged_with_pending(state, raw, raw_lower)
         if engaged:
             _age(state, raw.split())
@@ -179,11 +216,18 @@ def update_discourse(state, turn) -> None:
             return
 
         if user_question:
+            # A side question suspends, rather than erases, the person's story.
+            if state.current_thread_label == "рассказ" and state.thread_last_statement:
+                return
             if state.current_thread_label != "вопрос":
                 state.current_thread_label = "вопрос"
                 state.current_thread_turns = 0
             else:
                 state.current_thread_turns = 0
+            state.thread_last_statement = raw[:200]
+            state.thread_last_utterance_id = turn.utterance_id
+            state.thread_reply_turn_id = ""
+            state.thread_reply_finished = False
             return
 
         _easing, _nohealth = _speech_owned_elsewhere(raw)
@@ -248,13 +292,17 @@ def update_discourse(state, turn) -> None:
             and not _nohealth
             and len(words) >= 3
             and content
-            and len(raw) <= 200
+            and len(raw) <= 2048
         ):
             if _continues(words, state):
                 state.current_thread_turns = 0
             else:
                 state.current_thread_label = "рассказ"
                 state.current_thread_turns = 0
+            state.thread_last_statement = raw[:200]
+            state.thread_last_utterance_id = turn.utterance_id
+            state.thread_reply_turn_id = ""
+            state.thread_reply_finished = False
             if not state.open_hook and raw:
                 hook = raw[:_HOOK_MAX_CHARS].strip()
                 if hook:
@@ -312,6 +360,15 @@ def _age(state, words: list[str]) -> None:
             state.thread_reply_turn_id = ""
             state.thread_reply_finished = False
             state.thread_consumed_reply_id = ""
+            state.thread_last_statement = ""
+            state.thread_last_utterance_id = ""
+            state.thread_listening_id = ""
+            state.thread_listening_text = ""
+            state.thread_listening_delivered = False
+            state.thread_listening_generation = 0
+            state.thread_heard_listening_id = ""
+            state.thread_heard_listening_generation = 0
+            state.thread_heard_listening_text = ""
 
 
 def _continues(words: list[str], state) -> bool:

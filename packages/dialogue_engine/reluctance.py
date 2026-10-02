@@ -21,6 +21,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from packages.dialogue_engine.semantic_kernel.controls import has_addressed_finish
+
 if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState
     from packages.dialogue_engine.turn_understanding import RichUserTurn
@@ -79,7 +81,7 @@ def reluctance_points(raw_text: str, *, answers_pending: bool) -> int:
     text = (raw_text or "").strip()
     if not text:
         return 0
-    if _FINISH_NOW.search(text):
+    if has_addressed_finish(_FINISH_NOW, text):
         return 10
     if _TIRED_OF_TALKING.search(text):
         return 3
@@ -155,9 +157,10 @@ def note_reluctance(
     Explicit finish / tiredness / irritation always count.
     """
     text = (turn.raw_text or "").strip()
-    if _FINISH_NOW.search(text) or _TIRED_OF_TALKING.search(text):
+    finish_now = has_addressed_finish(_FINISH_NOW, text)
+    if finish_now or _TIRED_OF_TALKING.search(text):
         state.reluctance_score = min(10, state.reluctance_score + (
-            10 if _FINISH_NOW.search(text) else 3
+            10 if finish_now else 3
         ))
         return state.reluctance_score
     if cooperative_fill:

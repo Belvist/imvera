@@ -77,10 +77,22 @@ def _past_oriented_temporal(ep: IssueEpisode) -> bool:
     )
 
 
+def _has_grounded_current(state: EngineState, ep: IssueEpisode) -> bool:
+    """A bound current-positive observation, never the legacy active default."""
+    return any(
+        obs.episode_id == ep.episode_id and obs.status == "confirmed"
+        and obs.subject.value == "speaker"
+        and obs.attribute in {"issue", "current"}
+        and obs.temporal.current is True and bool(obs.evidence.strip())
+        and bool(obs.source_turn_id.strip())
+        for obs in state.observations.values()
+    )
+
+
 def _steps_for(state: EngineState, ep: IssueEpisode, family: ProductFamily) -> tuple[str, ...]:
     if family == ProductFamily.HEADACHE:
         # Past/morning «болела» → ask trend (current), then associated if still open.
-        if _past_oriented_temporal(ep):
+        if _past_oriented_temporal(ep) and not _has_grounded_current(state, ep):
             return ("duration", "current", "associated")
         # Present «болит» → when + severity + associated (nausea), MVP-like.
         return ("duration", "severity", "associated")
@@ -148,6 +160,11 @@ def _step_satisfied(state: EngineState, ep: IssueEpisode, family: ProductFamily,
         }:
             return True
         if str(val) == "active":
+            # «active» alone may be a legacy default. A current-positive
+            # semantic observation bound to this episode is actual evidence,
+            # including present pain whose onset was yesterday.
+            if _has_grounded_current(state, ep):
+                return True
             if family == ProductFamily.ABDOMINAL:
                 if f"_product_asked:{step}" not in ep.known_attributes:
                     return False

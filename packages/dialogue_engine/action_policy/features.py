@@ -22,11 +22,7 @@ def _nonterminal_control(ctx: TurnContextView) -> bool:
 
 
 def _clarify_signal(ctx: TurnContextView) -> bool:
-    return bool(
-        ctx.needs_clarification
-        or ctx.unresolved_concern
-        or ctx.clarify_target
-    )
+    return bool(ctx.needs_clarification or ctx.unresolved_concern or ctx.clarify_target)
 
 
 def _urgent_risk(snapshot: PolicySnapshot, ctx: TurnContextView) -> bool:
@@ -58,6 +54,9 @@ def extract_features(
 ) -> dict[str, float]:
     features: dict[str, float] = {"bias": 1.0}
     features[f"action:{action.kind.value}"] = 1.0
+    # Thread selection still uses this single auditable scorer. No count budget.
+    if action.thread_mode:
+        features[f"fit:thread_{action.thread_mode}"] = 1.0
     transition_preferred = snapshot.transition_preferred(ctx)
     burden = snapshot.user_burden
     best_ask = best_remaining_ask_utility(snapshot, ctx=ctx)
@@ -88,9 +87,7 @@ def extract_features(
         features["episode_resolving"] = 1.0 if ep and ep.resolving else 0.0
         features["ask_burden_penalty"] = burden
         features["episode_question_cost"] = float(snapshot.questions_asked_this_episode)
-        features["repeat_penalty"] = (
-            1.0 if need and need == snapshot.last_question_need else 0.0
-        )
+        features["repeat_penalty"] = 1.0 if need and need == snapshot.last_question_need else 0.0
         features["transition_penalty"] = 1.0 if transition_preferred else 0.0
         features["fit:episode"] = 1.0 if need_util > 0.0 else 0.0
 
@@ -112,8 +109,7 @@ def extract_features(
     )
     features["fit:meta"] = (
         1.0
-        if action.kind == ActionKind.LISTEN_META
-        and (ctx.meta or ctx.unclear_without_grounding)
+        if action.kind == ActionKind.LISTEN_META and (ctx.meta or ctx.unclear_without_grounding)
         else 0.0
     )
     features["fit:clarify"] = 1.0 if action.kind == ActionKind.CLARIFY and clarify_on else 0.0

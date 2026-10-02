@@ -70,17 +70,20 @@ def test_thread_decays_after_three_empty_turns() -> None:
     assert state.current_thread_label == ""
 
 
-def test_thread_followup_quotes_person_once() -> None:
+def test_thread_invite_keeps_source_without_parroting_or_forced_questions() -> None:
     r = ScenarioRunner(call_id="thread-follow", elder_display_name="Тест")
     result = r.run([CallStarted(), "Внучка приезжала, хорошо посидели."])
     assert r.state.current_thread_label == "рассказ"
-    assert r.state.open_hook_used
-    last = result.speak_effects[-1].text
-    assert "внучка" in last.lower()
-    assert last.rstrip().endswith("?")
-    # hook consumed: next substantive turn must not quote again
-    n_quotes = sum(1 for e in result.speak_effects if "внучка" in e.text.lower())
-    assert n_quotes == 1
+    assert r.state.thread_last_statement == "Внучка приезжала, хорошо посидели."
+    assert r.state.thread_last_utterance_id == "u-1"
+    last = result.speak_effects[-1]
+    assert last.intent == "thread_invite"
+    assert not last.marks_question and "?" not in last.text
+    assert "внучка" not in last.text.lower()
+    assert r.state.thread_listening_delivered
+    continuation = r.run(["Чай пили, разговаривали."]).speak_effects[-1]
+    assert continuation.intent == "thread_listening_ack"
+    assert "внучка" not in continuation.text.lower()
 
 
 def test_spoken_past_on_recurrence() -> None:

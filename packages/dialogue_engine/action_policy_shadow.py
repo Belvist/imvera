@@ -36,6 +36,7 @@ from packages.dialogue_engine.action_policy_shadow_config import (
     action_policy_mode,
     action_policy_runtime_truth,
     make_error_record,
+    policy_provenance,
 )
 from packages.dialogue_engine.response_plan import ResponsePlan
 from packages.dialogue_engine.runtime import git_sha_short
@@ -112,6 +113,12 @@ def _structural_fingerprint_payload(snapshot: PolicySnapshot) -> dict[str, Any]:
         "user_burden_bucket": _burden_bucket(float(snapshot.user_burden)),
         "call_closed": bool(snapshot.call_closed),
         "fsm_state": snapshot.fsm_state,
+        "thread_active": snapshot.thread_active,
+        "thread_utterance_id": snapshot.thread_utterance_id,
+        "thread_finished": snapshot.thread_finished,
+        "thread_reply": snapshot.thread_reply,
+        "thread_willing": snapshot.thread_willing,
+        "thread_resume_slot": snapshot.thread_resume_slot,
     }
 
 
@@ -312,8 +319,7 @@ def _ok_base_record(
         "engine_revision_before_legacy": revision,
         "engine_turn_seq": turn_seq,
         "deployment_sha": git_sha_short(),
-        "frozen_policy_sha": FROZEN_POLICY_SHA,
-        "policy_version": POLICY_VERSION,
+        **policy_provenance(),
         "input_kind": input_kind,
         "shadow_status": "ok",
         "shadow_action": None,
@@ -390,7 +396,7 @@ def run_shadow_pre_legacy(state: Any, turn_context: Any) -> dict[str, Any]:
         return rec
 
     try:
-        snapshot = build_policy_snapshot(state)
+        snapshot = build_policy_snapshot(state, ctx)
     except Exception as exc:
         rec = make_error_record(
             state,

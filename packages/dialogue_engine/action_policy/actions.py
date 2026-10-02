@@ -11,6 +11,7 @@ from packages.dialogue_engine.question_context import QuestionNeed
 class ActionKind(StrEnum):
     ASK_EPISODE = "ASK_EPISODE"
     ACK_ONLY = "ACK_ONLY"
+    FOLLOW_USER_THREAD = "FOLLOW_USER_THREAD"
     CLARIFY = "CLARIFY"
     ANSWER_USER = "ANSWER_USER"
     IMPORTANT_TO_SHARE = "IMPORTANT_TO_SHARE"
@@ -48,6 +49,7 @@ class ActionKey:
     target_goal: str | None = None
     control: str | None = None
     clarify_target: str | None = None
+    thread_mode: str | None = None
 
     def label(self) -> str:
         parts = [self.kind.value]
@@ -59,6 +61,8 @@ class ActionKey:
             parts.append(self.control)
         if self.clarify_target:
             parts.append(self.clarify_target)
+        if self.thread_mode:
+            parts.append(self.thread_mode)
         return ":".join(parts)
 
 
@@ -70,6 +74,7 @@ class CandidateAction:
     target_goal: str | None = None
     control: str | None = None
     clarify_target: str | None = None
+    thread_mode: str | None = None
 
     @property
     def key(self) -> ActionKey:
@@ -79,6 +84,7 @@ class CandidateAction:
             target_goal=self.target_goal,
             control=self.control,
             clarify_target=self.clarify_target,
+            thread_mode=self.thread_mode,
         )
 
 

@@ -40,8 +40,8 @@ def _episode(**known) -> IssueEpisode:
     )
 
 
-def test_policy_version_is_v9() -> None:
-    assert POLICY_VERSION == "action-policy-phase1-v9"
+def test_policy_version_is_v10() -> None:
+    assert POLICY_VERSION == "action-policy-phase1-v10"
 
 
 def test_live_pending_current_not_mirrored_into_delivered_need() -> None:

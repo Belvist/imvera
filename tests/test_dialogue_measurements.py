@@ -52,8 +52,13 @@ def test_shadow_still_preserves_sdk_output_and_reports_authority(monkeypatch, su
     for a, b in zip(capture["cases"], shadow["cases"], strict=True):
         assert [t["assistant"] for t in a["turns"]] == [t["assistant"] for t in b["turns"]]
         stats = b["turns"][-1]["state_after"]["router_stats"]
-        assert stats.get("legacy_invocations", 0) > 0
+        assert (
+            stats.get("legacy_invocations", 0) + stats.get("conversation_policy_authoritative", 0)
+        ) > 0
         assert not stats.get("policy_authoritative", 0)
+        if b["id"] == "story":
+            assert stats.get("conversation_policy_authoritative", 0) == 3
+            assert not stats.get("legacy_invocations", 0)
 
 
 def test_multi_fact_metrics_read_accepted_state_not_sentence_count(capture):
@@ -125,10 +130,13 @@ def test_missing_source_and_audio_modality_stay_explicit(capture):
         measure_capture(capture)
 
 
-def test_real_thread_return_and_replay_preset_are_observed(capture):
+def test_continued_story_does_not_invent_a_counter_return(capture):
     report = measure_capture(capture)
     story = report["cases"][1]
-    assert story["counts"]["budget_to_wellness_return_proxy"] == 1
+    assert story["counts"].get("budget_to_wellness_return_proxy", 0) == 0
+    turns = capture["cases"][1]["turns"]
+    assert turns[-1]["intents"] == ["thread_listening_ack"]
+    assert turns[-1]["state_after"]["slots"]["wellness"] == "OPEN"
     assert story["replay_configuration"]["mandatory_background_goals"] is True
     assert "coverage_ladder_enabled" in report["runtime"]
 

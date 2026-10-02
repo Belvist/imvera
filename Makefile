@@ -36,7 +36,12 @@ test-dialogue-rich:
 		tests/test_speech_warmth_live.py tests/test_response_plan_idempotence.py \
 		tests/test_sdk_closing_evidence.py tests/test_live_onset_and_repair.py \
 		tests/test_clock_onset_ownership.py tests/test_discourse_thread.py \
-		tests/test_personal_story_exchange.py tests/test_mission_positive_evaluation_ownership.py -q
+		tests/test_personal_story_exchange.py tests/test_mission_positive_evaluation_ownership.py \
+		tests/test_thread_listening_lifecycle.py tests/test_canonical_understanding_parity.py \
+		tests/test_clinical_ellipsis_grounding.py tests/test_plan_fact_temporal_grounding.py \
+		tests/test_frequency_role_grounding.py \
+		tests/test_control_meaning_grounding.py tests/test_grounded_user_question_answer.py \
+		tests/test_question_report_grounding.py -q
 
 test-dialogue-runtime:
 	@echo "GATE: CallActor rich path + LLM worker contract"

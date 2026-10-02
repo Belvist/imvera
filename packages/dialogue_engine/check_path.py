@@ -323,6 +323,10 @@ def is_politeness_refusal(text: str) -> bool:
     t = (text or "").strip()
     if not t:
         return False
+    from packages.dialogue_engine.semantic_kernel.controls import is_local_question_refusal
+
+    if is_local_question_refusal(t):
+        return False
     if complaint_without_negation(t):
         return False
     return bool(_POLITENESS_REFUSAL_RE.search(t))

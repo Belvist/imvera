@@ -192,7 +192,10 @@ class ScenarioRunner:
                 continue
             if (
                 effect.marks_question
-                or effect.intent == "opening_wellness"
+                or effect.intent in {"opening_wellness", "thread_invite", "thread_listening_ack"}
+                or (self.state.active_playout is not None
+                    and self.state.active_playout_generation == effect.generation
+                    and self.state.active_playout.thread_mode in {"invite", "listen"})
                 or effect.intent in _HANGUP_INTENTS
             ):
                 self.state, extra = reduce(

@@ -1,3 +1,53 @@
+# Cut1b: user-led conversation inside the existing engine (2026-10-02)
+
+Base/remote m5: **75280deaa0ab2b3e3ff070fba378edd1ef66d542**. Main and loaded
+services unchanged. [ADR029](adr/029-user-led-conversation-moves.md) was written
+before production edits; [evidence](evaluation/user-led-conversation-cut1b-2026-10-02/README.md)
+and [SDK/M5 integration](user-led-conversation-integration.md) describe actual
+ownership, playback and operator acceptance.
+
+CHANGED: canonical SDK/Actor understanding reuses admitted kernel; existing
+ActionPolicy v10 replaces both bounded legacy personal-thread branches; real
+non-question answer/ACK/listen/resume lifecycle in the same reducer/timers.
+Last heard origin survives unheard/cancelled/planned replacement. Grounded
+current goal dispositions control return; clinical/probe/negative concerns
+outrank stories, including user questions over a stale story label. Existing
+semantic owners corrected past/other plans, clinical compound ellipsis/social
+subject/no-comma STT, generic question grounding, frequency-adverb fake issue,
+local refusal plus affirmative talk invitation and negated current-call ending.
+No new engine/reducer/scheduler/FSM/live generator; trained model files unchanged.
+
+VERIFIED:
+
+| Boundary | Actual result |
+|---|---|
+| Final full local pytest | 2998 passed / 2 inherited LFS warmup failures / 9 skipped,153.32s; NOT locally green |
+| Existing full daily corpus | 500/500 PASS,5.62s; gate tests8 PASS |
+| Existing agent DialogueEngine+CallSession gate / contracts | PASS / OK; text Layer A |
+| Same15 conversational inputs,42 user turns | question identities49→26; non-question speech8→30; forced-counter return proxy4→0;10 changed sequences |
+| Same16 daily/custom/control regressions | one grounded purpose-answer change; question identities41→41 |
+| Pure v10 selector,10000 iterations Linux | p50=.85067ms,p95=1.012951ms,p99=1.176964ms; not M5/phone |
+| All10 isolated historical/candidate policy comparisons | refreshed reports; explained deltas only, immutable v9 history |
+| Independent read-only review | final actual reactive-clinical answer and no-comma compound PASS; no reviewed blocker |
+| Ruff/diff check | PASS/PASS |
+
+Initial full failures were fixed, not skipped. Intended thread assertion changes
+are explained in ADR/evidence; strict old source/control/medical assertions
+remain. Local real xenc encoder still an LFS pointer; two readiness failures
+are preserved. Previous75280de genuine-LFS CI was green; new source CI pending.
+Active v10 provenance is candidate/unpinned until a real tested commit exists;
+no invented future SHA or waiver of frozen integrity.
+
+NOT VERIFIED: new published-source CI, loaded M5, real phone/audio, acoustic
+warmth/latency/slow speech/interruption, full-turn model counts/RAM, concurrent
+capacity/competitor superiority. No claim of unrestricted human conversation.
+REMAINING RISKS: bounded surface wording; consent-scope compatibility debt;
+optional untracked classifier differs from historical model-bundle manifest.
+NEXT GATE: exact source CI, then genuine CallActor/FreeSWITCH recording+trace
+through the existing M5 handoff. Source push is not deployment.
+
+---
+
 # Cut 1a: common selected-question executor (2026-10-02)
 
 Fetched/fast-forwarded m5 **00b992d3901767bf678cd28ce2d7fb6461786632**,

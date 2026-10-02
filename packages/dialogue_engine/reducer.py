@@ -104,7 +104,12 @@ def reduce(
     if isinstance(event, CallStarted):
         return _on_call_started(state)
     if isinstance(event, UserTurnReceived):
-        return _on_user_turn(state, event)
+        token = state.thread_listening_id
+        accepted = _listening_turn_admitted(state, event)
+        outcome = _on_user_turn(state, event)
+        if accepted and token and outcome[0].thread_listening_id == token:
+            _clear_thread_listening(outcome[0])
+        return outcome
     if isinstance(event, InterpretationCompleted):
         return _on_interpretation_completed(state, event)
     if isinstance(event, PlayoutStarted):
@@ -257,6 +262,45 @@ def _new_effect_id() -> str:
     return f"fx-{uuid.uuid4().hex[:8]}"
 
 
+def _clear_thread_listening(state: EngineState) -> None:
+    state.thread_listening_id = ""
+    state.thread_listening_generation = 0
+    state.thread_listening_delivered = False
+    state.thread_listening_text = ""
+
+
+def _clear_thread_heard_listening(state: EngineState) -> None:
+    """Release actual answer ownership, independently of pending playout."""
+    state.thread_heard_listening_id = ""
+    state.thread_heard_listening_generation = 0
+    state.thread_heard_listening_text = ""
+
+
+def _listening_turn_admitted(state: EngineState, event: UserTurnReceived) -> bool:
+    """Keep context through discourse application, invalidate only accepted meaning."""
+    if _stale(state, event.revision) or state.call_closed:
+        return False
+    turn = event.rich_turn
+    if turn is not None:
+        if (
+            turn.utterance_id == state.thread_consumed_reply_id
+            and not turn.issue_mentions and not turn.goal_facts and not turn.goal_answers
+            and not turn.correction and not turn.user_question and not turn.risk_candidates
+            and turn.control in ("none", "")
+        ):
+            return False
+        return bool(
+            turn.dialogue_act not in ("garbage", "unclear", "no_answer")
+            or turn.control not in ("none", "") or turn.user_question
+            or turn.goal_facts or turn.goal_answers or turn.issue_mentions
+            or turn.risk_candidates or turn.correction
+        )
+    semantic = event.semantic
+    return semantic is not None and semantic.act not in (
+        SemanticAct.UNCLEAR, SemanticAct.NO_ANSWER,
+    )
+
+
 def _stale(state: EngineState, event_revision: int) -> bool:
     return event_revision > 0 and event_revision != state.revision
 
@@ -396,6 +440,7 @@ def _emit_speak(
     question_text: str = "",
     episode_id: str | None = None,
     semantic_need: QuestionNeed | None = None,
+    thread_mode: str | None = None,
 ) -> tuple[EngineState, list[Effect]]:
     from packages.dialogue_engine.speech_ledger import (
         record as _record_surface,
@@ -473,6 +518,9 @@ def _emit_speak(
                     activate_next_pending_episode(state)
                     return _schedule_advance(state)
             return _close_partial(state)
+    if thread_mode in ("invite", "listen") and not marks_question:
+        slot = None
+        goal_id = None
     resolved_goal = goal_id or (slot if intent == "ask_mission_goal" else None)
     q = Question(
         question_id=gen_id,
@@ -483,7 +531,34 @@ def _emit_speak(
         goal_id=resolved_goal,
         episode_id=episode_id,
         semantic_need=semantic_need,
+        thread_mode=thread_mode,
     )
+    if thread_mode in ("invite", "listen") and not marks_question:
+        # A personal invitation yields the floor, never reserves a health
+        # question or turns a story into a medical answer.
+        state.thread_listening_id = gen_id
+        state.thread_listening_generation = gen
+        state.thread_listening_delivered = False
+        state.thread_listening_text = text
+        state.thread_last_move = thread_mode
+        if state.thread_last_utterance_id:
+            state.thread_consumed_reply_id = state.thread_last_utterance_id
+        state.delivered_question = None
+        state.waiting_on_slot = None
+    else:
+        _clear_thread_listening(state)
+        if thread_mode:
+            state.thread_last_move = thread_mode
+    if (
+        state.call_closed
+        or state.fsm_state in (FsmState.SUMMARY, FsmState.GOODBYE, FsmState.RED_SIGNAL)
+        or state.risk_handling or state.red_state_pending or state.safety_mode == "red"
+        or episode_id or (slot and slot.startswith(("episode_", "probe_", "safety")))
+    ):
+        # Explicit clinical/control transitions can claim an early answer.
+        # A routine question merely being planned cannot replace what the
+        # caller actually heard: its completion below commits that change.
+        _clear_thread_heard_listening(state)
     state.planned_question = q if marks_question else None
     state.playing_question = q if marks_question else None
     state.active_playout = q
@@ -591,6 +666,8 @@ def _on_playout_completed(
         state.bump_revision()
         from packages.dialogue_engine.discourse import THREAD_QUESTION_INTENTS
 
+        if q.intent not in THREAD_QUESTION_INTENTS:
+            _clear_thread_heard_listening(state)
         if q.intent in THREAD_QUESTION_INTENTS:
             state.waiting_on_slot = None
             return state, [
@@ -629,7 +706,27 @@ def _on_playout_completed(
     from packages.dialogue_engine.discourse import listening_question_pending
 
     if (
+        ap.thread_mode in ("invite", "listen")
+        and state.thread_listening_id == ap.question_id
+        and state.thread_listening_generation == event.generation
+        and not state.call_closed
+    ):
+        state.thread_listening_delivered = True
+        state.thread_heard_listening_id = ap.question_id
+        state.thread_heard_listening_generation = event.generation
+        state.thread_heard_listening_text = ap.text
+        state.waiting_on_slot = None
+        return state, [
+            TimerEffect(
+                effect_id=_new_effect_id(), revision=state.revision,
+                timer_id=f"listen-{state.thread_listening_id}",
+                semantic_scope_id=f"listen:{state.thread_listening_id}",
+                wait_ms=questions._ANSWER_WAIT_MS, reason="thread_wait",
+            )
+        ]
+    if (
         listening_question_pending(state)
+        and state.delivered_question is not None
         and ap.intent in ("repair_repeat", "thread_listening_ack", "mic_check")
     ):
         q = state.delivered_question
@@ -729,6 +826,8 @@ def _on_playout_cancelled(
         state.planned_question = None
     if state.active_playout:
         state.active_playout = None
+    if event.generation == state.thread_listening_generation:
+        _clear_thread_listening(state)
     state.bump_revision()
     return state, []
 
@@ -752,6 +851,20 @@ def _on_user_turn(
             return _emit_urgent_close(state, user_text=_raw)
         return state, []
     if _stale(state, event.revision):
+        return state, []
+    if (
+        (state.thread_listening_id or state.thread_heard_listening_id)
+        and event.rich_turn is not None
+        and event.rich_turn.utterance_id == state.thread_consumed_reply_id
+        and not _listening_turn_admitted(state, event)
+    ):
+        return state, []
+    if (
+        (state.thread_listening_id or state.thread_heard_listening_id)
+        and event.rich_turn is not None
+        and event.rich_turn.dialogue_act in ("garbage", "no_answer")
+        and not _listening_turn_admitted(state, event)
+    ):
         return state, []
     state.first_user_turn_received = True
     state.turn_seq += 1
@@ -967,6 +1080,7 @@ def _apply_goal_facts(state: EngineState, turn: RichUserTurn) -> list[str]:
                     confidence=0.9,
                     correction=True,
                 )
+                _clear_thread_heard_listening(state)
             continue
         if fact.field in ("wellness", "mood", "sleep"):
             from packages.dialogue_engine.policy import _is_other_person_only
@@ -990,6 +1104,8 @@ def _apply_goal_facts(state: EngineState, turn: RichUserTurn) -> list[str]:
             confidence=0.9,
             correction=turn.correction,
         )
+        if fact.field == "wellness":
+            _clear_thread_heard_listening(state)
         state.set_background_goal_coverage(fact.field, BackgroundGoalCoverage.COVERED_FROM_SPEECH)
         filled.append(fact.field)
     return filled
@@ -1031,6 +1147,7 @@ def _emit_from_plan(
         question_text=getattr(rendered, "mandatory_question", "") or "",
         episode_id=rendered.episode_id,
         semantic_need=rendered.question_needs[0] if rendered.question_needs else None,
+        thread_mode=rendered.thread_mode,
     )
 
 
@@ -1143,8 +1260,20 @@ def _apply_rich_turn(
         # explicit volunteered health reports and other facts still apply.
         bare = user_text.lower().strip().rstrip(".!?…")
         if is_listening_evaluation(state, user_text):
+            # A canonical result may have been prepared before the heard
+            # context changed. Re-admit both fact and mission proposals at
+            # the single writer; their earlier answer binding is not truth.
             turn = turn.model_copy(update={
-                "goal_facts": tuple(f for f in turn.goal_facts if f.field != "wellness"),
+                "goal_facts": tuple(
+                    f for f in turn.goal_facts if f.field not in _STANDARD_CHECK_SLOTS
+                ),
+                "goal_answers": tuple(
+                    a for a in turn.goal_answers if a.goal_id not in _STANDARD_CHECK_SLOTS
+                ),
+                "goal_dispositions": tuple(
+                    d for d in turn.goal_dispositions
+                    if getattr(d, "goal_id", None) not in _STANDARD_CHECK_SLOTS
+                ),
             })
         if (
             turn.utterance_id == state.thread_consumed_reply_id
@@ -1177,6 +1306,9 @@ def _apply_rich_turn(
             return _emit_speak(
                 state, text=questions.thread_listener_ack(), intent="thread_listening_ack",
                 slot=None, marks_question=False,
+                thread_mode="listen" if (
+                    state.thread_listening_id or state.thread_heard_listening_id
+                ) else None,
             )
 
     if (
@@ -1265,6 +1397,7 @@ def _apply_rich_turn(
                     marks_question=decision.marks_question,
                     episode_id=decision.episode_id,
                     semantic_need=decision.semantic_need,
+                    thread_mode=decision.thread_mode,
                 )
         if turn.correction:
             decision = decide_conversation_policy(state, turn)
@@ -1280,6 +1413,7 @@ def _apply_rich_turn(
                     marks_question=decision.marks_question,
                     episode_id=decision.episode_id,
                     semantic_need=decision.semantic_need,
+                    thread_mode=decision.thread_mode,
                 )
         newly_filled = _apply_goal_facts(state, turn)
         state.processing_turn_id = None
@@ -1349,6 +1483,7 @@ def _apply_rich_turn(
                 marks_question=decision.marks_question,
                 episode_id=decision.episode_id,
                 semantic_need=decision.semantic_need,
+                thread_mode=decision.thread_mode,
                 goal_id=goal_id,
             )
 
@@ -1387,6 +1522,7 @@ def _apply_rich_turn(
                 marks_question=decision.marks_question,
                 episode_id=decision.episode_id,
                 semantic_need=decision.semantic_need,
+                thread_mode=decision.thread_mode,
             )
 
     if turn.issue_mentions and answer_slot in ("wellness", "mood", "sleep", "plans"):
@@ -1426,6 +1562,7 @@ def _apply_rich_turn(
                 marks_question=decision.marks_question,
                 episode_id=decision.episode_id,
                 semantic_need=decision.semantic_need,
+                thread_mode=decision.thread_mode,
             )
             if spoken[1]:
                 return spoken
@@ -1519,6 +1656,7 @@ def _apply_rich_turn(
                 intent=resumed.intent,
                 slot=resumed.slot or "wellness",
                 marks_question=resumed.marks_question,
+                thread_mode=resumed.thread_mode,
             )
     if state.summary_spoken and state.fsm_state in (FsmState.SUMMARY, FsmState.GOODBYE):
         state.processing_turn_id = None
@@ -3030,6 +3168,20 @@ def _speak_repair(
     from packages.dialogue_engine.question_context import question_context_from_state
 
     delivered = state.delivered_question
+    if (state.thread_listening_id or state.thread_heard_listening_id) and delivered is None:
+        from packages.dialogue_engine.response_plan import ResponsePlan
+
+        plan = render_response_plan(ResponsePlan(
+            thread_mode="invite" if (
+                not state.thread_heard_listening_id and state.thread_last_move == "invite"
+            ) else "listen",
+        ), state)
+        return _emit_speak(
+            state, text=(state.thread_heard_listening_text
+                         or state.thread_listening_text or composed_text(plan)),
+            intent="repair_repeat", slot=None,
+            marks_question=False, thread_mode=plan.thread_mode,
+        )
     ctx = question_context_from_state(state)
     from packages.dialogue_engine.question_context import repair_question_text
 
@@ -3039,7 +3191,7 @@ def _speak_repair(
     from packages.dialogue_engine.discourse import listening_question_pending
 
     repair_slot = (
-        delivered.slot if listening_question_pending(state)
+        delivered.slot if delivered is not None and listening_question_pending(state)
         else ctx.slot if ctx and ctx.slot else slot
     )
     # Never echo the just-spoken question byte-identically (live: ITS
@@ -3212,6 +3364,11 @@ def _on_speak_effect_stale(
 ) -> tuple[EngineState, list[Effect]]:
     if state.deferred_speak and state.deferred_speak.effect_id == event.effect_id:
         state.deferred_speak = None
+    if event.generation == state.thread_listening_generation:
+        _clear_thread_listening(state)
+        if state.active_playout and state.active_playout.thread_mode in ("invite", "listen"):
+            state.active_playout = None
+        state.bump_revision()
     intent = event.intent
     if (
         intent == "summary"
@@ -3256,6 +3413,27 @@ def _on_speak_effect_stale(
 def _on_timer_expired(state: EngineState, event: TimerExpired) -> tuple[EngineState, list[Effect]]:
     if _stale(state, event.revision):
         return state, []
+    if event.timer_id.startswith("listen-"):
+        if (
+            not state.thread_listening_id or not state.thread_listening_delivered
+            or event.timer_id != f"listen-{state.thread_listening_id}"
+            or state.thread_listening_generation != state.active_playout_generation
+            or state.call_closed or state.fsm_state != FsmState.DAILY_CHECK
+            or state.risk_handling or state.red_state_pending or state.safety_mode == "red"
+            or state.pending_episode_attribute or state.probe_phase or _has_open_episodes(state)
+            or state.awaiting_goodbye_confirm or state.elder_asked_to_stop
+        ):
+            return state, []
+        if event.uplink_frames == 0 and not state.mic_check_spoken:
+            state.mic_check_spoken = True
+            return _emit_speak(
+                state, text="Вас не слышно. Проверьте, пожалуйста, микрофон.",
+                intent="mic_check", slot=None, marks_question=False, thread_mode="listen",
+            )
+        _clear_thread_listening(state)
+        state.thread_reply_finished = True
+        state.bump_revision()
+        return _schedule_advance(state)
     if event.timer_id.startswith("thread-"):
         from packages.dialogue_engine.conversation_policy import resume_after_user_thread
         from packages.dialogue_engine.discourse import listening_question_pending
@@ -3411,12 +3589,16 @@ def _emit_goodbye_final(state: EngineState) -> tuple[EngineState, list[Effect]]:
 
 
 def _is_explicit_farewell(text: str) -> bool:
+    from packages.dialogue_engine.semantic_kernel.controls import has_addressed_finish
+
     low = text.lower().strip().rstrip(".!?")
     if not low:
         return False
-    if any(marker in low for marker in questions._GOODBYE_MARKERS):
+    if has_addressed_finish(re.compile("|".join(
+        re.escape(marker) for marker in questions._GOODBYE_MARKERS
+    ), re.I), text):
         return True
-    if any(marker in low for marker in ("прощайте", "прощай", "до встречи")):
+    if has_addressed_finish(re.compile(r"\b(?:прощайте|прощай|до встречи)\b", re.I), text):
         return True
     # Elderly «ладно, пока» / «ну пока» / «ну давай»: strip leading
     # fillers first. «пока всё» stays a decline — handled before this
@@ -3436,7 +3618,9 @@ def _is_explicit_farewell(text: str) -> bool:
         "стоп",
     }:
         return True
-    return bool(re.search(r"\b(закончим|закончить|заканчива\w*|хватит)\b", low))
+    return has_addressed_finish(
+        re.compile(r"\b(закончим|закончить|заканчива\w*|хватит)\b", re.I), text,
+    )
 
 
 def _is_ambiguous_end_hint(text: str) -> bool:

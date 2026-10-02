@@ -1,0 +1,406 @@
+{
+  "scope": "actual SDK text replay; not audio/live-call acceptance",
+  "config": {
+    "IMVERA_ACTION_POLICY_MODE": "off",
+    "IMVERA_COVERAGE_LADDER": "0",
+    "mandatory_background_goals": true
+  },
+  "source_parent_sha": "75280deaa0ab2b3e3ff070fba378edd1ef66d542",
+  "before_core_tree_sha256": "05ea454b7404f3481038a13e889071d84578b9dbd84d56030565f97c520bd6b9",
+  "after_core_tree_sha256": "5b6cee8680240e144348fd98865c0b973d3adf19de7701b687728a4dbd691d13",
+  "command": "PYTHONPATH=. /workspace/imvera-review-venv/bin/python /tmp/imvera-resume-coverage-repro.py",
+  "before": [
+    {
+      "input": "START",
+      "speech": [
+        {
+          "text": "Добрый вечер. Это Вера из сервиса Амвера. Анной Петровной, как ваше самочувствие сегодня?",
+          "intent": "opening_wellness",
+          "slot": "wellness",
+          "marks_question": true
+        }
+      ],
+      "slots": {
+        "wellness": "OPEN",
+        "mood": "OPEN",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "background": {
+        "wellness": "unseen",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      },
+      "snapshot_background": {
+        "mood": "unseen",
+        "plans": "unseen",
+        "sleep": "unseen",
+        "wellness": "unseen"
+      },
+      "snapshot_resume": "wellness",
+      "goals": {
+        "wellness": {
+          "status": "OPEN",
+          "lifecycle": "ANSWER_PENDING"
+        },
+        "mood": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "sleep": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "plans": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        }
+      }
+    },
+    {
+      "input": "Хорошо, дочь сегодня приезжала.",
+      "speech": [
+        {
+          "text": "Расскажите, я слушаю.",
+          "intent": "thread_invite",
+          "slot": null,
+          "marks_question": false
+        }
+      ],
+      "slots": {
+        "wellness": "FILLED",
+        "mood": "OPEN",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "background": {
+        "wellness": "unseen",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      },
+      "snapshot_background": {
+        "mood": "unseen",
+        "plans": "unseen",
+        "sleep": "unseen",
+        "wellness": "unseen"
+      },
+      "snapshot_resume": "wellness",
+      "goals": {
+        "wellness": {
+          "status": "FILLED",
+          "lifecycle": "SATISFIED"
+        },
+        "mood": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "sleep": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "plans": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        }
+      }
+    },
+    {
+      "input": "Мы пили чай и разговаривали.",
+      "speech": [
+        {
+          "text": "Понимаю.",
+          "intent": "thread_listening_ack",
+          "slot": null,
+          "marks_question": false
+        }
+      ],
+      "slots": {
+        "wellness": "FILLED",
+        "mood": "OPEN",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "background": {
+        "wellness": "unseen",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      },
+      "snapshot_background": {
+        "mood": "unseen",
+        "plans": "unseen",
+        "sleep": "unseen",
+        "wellness": "unseen"
+      },
+      "snapshot_resume": "wellness",
+      "goals": {
+        "wellness": {
+          "status": "FILLED",
+          "lifecycle": "SATISFIED"
+        },
+        "mood": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "sleep": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "plans": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        }
+      }
+    },
+    {
+      "input": "Больше нечего добавить.",
+      "speech": [
+        {
+          "text": "Спасибо, что поделились. Как себя чувствуете — всё нормально?",
+          "intent": "check_wellness",
+          "slot": "wellness",
+          "marks_question": true
+        }
+      ],
+      "slots": {
+        "wellness": "FILLED",
+        "mood": "OPEN",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "background": {
+        "wellness": "unseen",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      },
+      "snapshot_background": {
+        "mood": "unseen",
+        "plans": "unseen",
+        "sleep": "unseen",
+        "wellness": "unseen"
+      },
+      "snapshot_resume": "wellness",
+      "goals": {
+        "wellness": {
+          "status": "FILLED",
+          "lifecycle": "SATISFIED"
+        },
+        "mood": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "sleep": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "plans": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        }
+      }
+    }
+  ],
+  "after": [
+    {
+      "input": "START",
+      "speech": [
+        {
+          "text": "Добрый вечер. Это Вера из сервиса Амвера. Анной Петровной, как ваше самочувствие сегодня?",
+          "intent": "opening_wellness",
+          "slot": "wellness",
+          "marks_question": true
+        }
+      ],
+      "slots": {
+        "wellness": "OPEN",
+        "mood": "OPEN",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "background": {
+        "wellness": "unseen",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      },
+      "snapshot_background": {
+        "mood": "unseen",
+        "plans": "unseen",
+        "sleep": "unseen",
+        "wellness": "unseen"
+      },
+      "snapshot_resume": "wellness",
+      "goals": {
+        "wellness": {
+          "status": "OPEN",
+          "lifecycle": "ANSWER_PENDING"
+        },
+        "mood": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "sleep": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "plans": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        }
+      }
+    },
+    {
+      "input": "Хорошо, дочь сегодня приезжала.",
+      "speech": [
+        {
+          "text": "Расскажите, я слушаю.",
+          "intent": "thread_invite",
+          "slot": null,
+          "marks_question": false
+        }
+      ],
+      "slots": {
+        "wellness": "FILLED",
+        "mood": "OPEN",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "background": {
+        "wellness": "unseen",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      },
+      "snapshot_background": {
+        "mood": "unseen",
+        "plans": "unseen",
+        "sleep": "unseen",
+        "wellness": "answered"
+      },
+      "snapshot_resume": "mood",
+      "goals": {
+        "wellness": {
+          "status": "FILLED",
+          "lifecycle": "SATISFIED"
+        },
+        "mood": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "sleep": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "plans": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        }
+      }
+    },
+    {
+      "input": "Мы пили чай и разговаривали.",
+      "speech": [
+        {
+          "text": "Понимаю.",
+          "intent": "thread_listening_ack",
+          "slot": null,
+          "marks_question": false
+        }
+      ],
+      "slots": {
+        "wellness": "FILLED",
+        "mood": "OPEN",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "background": {
+        "wellness": "unseen",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      },
+      "snapshot_background": {
+        "mood": "unseen",
+        "plans": "unseen",
+        "sleep": "unseen",
+        "wellness": "answered"
+      },
+      "snapshot_resume": "mood",
+      "goals": {
+        "wellness": {
+          "status": "FILLED",
+          "lifecycle": "SATISFIED"
+        },
+        "mood": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "sleep": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "plans": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        }
+      }
+    },
+    {
+      "input": "Больше нечего добавить.",
+      "speech": [
+        {
+          "text": "Спасибо, что поделились. Как настроение — ничего не тревожит?",
+          "intent": "check_mood",
+          "slot": "mood",
+          "marks_question": true
+        }
+      ],
+      "slots": {
+        "wellness": "FILLED",
+        "mood": "OPEN",
+        "sleep": "OPEN",
+        "plans": "OPEN"
+      },
+      "background": {
+        "wellness": "unseen",
+        "mood": "unseen",
+        "sleep": "unseen",
+        "plans": "unseen"
+      },
+      "snapshot_background": {
+        "mood": "unseen",
+        "plans": "unseen",
+        "sleep": "unseen",
+        "wellness": "answered"
+      },
+      "snapshot_resume": "mood",
+      "goals": {
+        "wellness": {
+          "status": "FILLED",
+          "lifecycle": "SATISFIED"
+        },
+        "mood": {
+          "status": "OPEN",
+          "lifecycle": "ANSWER_PENDING"
+        },
+        "sleep": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        },
+        "plans": {
+          "status": "OPEN",
+          "lifecycle": "AVAILABLE"
+        }
+      }
+    }
+  ],
+  "source_attribution_note": "Before observed pre-fix v10 SDK replay identified by core hash; after rerun on final source-publish envelope including no-comma clinical and both-label answered-question floor guards. Text SDK with simulated delivery, not audio.",
+  "artifact_files": {
+    "reproducer": "required-background-return-repro.py"
+  },
+  "capture_command": "PYTHONPATH=. /workspace/imvera-review-venv/bin/python /tmp/imvera-resume-coverage-repro.py",
+  "replay_command": "PYTHONPATH=. python3 docs/evaluation/user-led-conversation-cut1b-2026-10-02/required-background-return-repro.py"
+}
