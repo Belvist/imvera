@@ -753,6 +753,22 @@ canonical == TTS == delivered speech, and a single farewell.
 
 ---
 
+# Eighth merge live on d4be4f4: story-exchange + warmup fixup (2026-10-02)
+
+- His 5abc236 (story replies preserved, truthful delivery, replay
+  script, listening-exchange evidence). One conflict (tts worker):
+  his warmup-deadlock hardening kept (subsumes mine), my qwen
+  ensure-voice + dynamic revision fused. Stale hardcoded revision
+  label fixed after (reported base, not customvoice).
+- Two findings: warmup deadlock fixed independently on both sides;
+  deadline test x2 still red on his clean tree (his bug, documented).
+- Gates on merged: 2490/2(origin-reds), corpus 500/500, diff 4/4,
+  agent+dream, hard1000 1349/1349, battery 16/16. Pushed normally.
+- TTS workers + bridge -> d4be4f4, qwen base revision serving, voice
+  smoke OK, watch OK.
+
+---
+
 # Seventh merge live on 030e262: lifecycle hardening + qwen kept (2026-10-02)
 
 - His 8f7e296 (lifecycle, closing evidence, no-silent-fallback) + a0b7aa0
