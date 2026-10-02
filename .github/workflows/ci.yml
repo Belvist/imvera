@@ -148,6 +148,8 @@ jobs:
         with:
           # Shadow frozen-policy guard needs history for SHA 61e17934…
           fetch-depth: 0
+          # xenc_v3 is a trained local encoder; a pointer is not model data.
+          lfs: true
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

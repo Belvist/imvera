@@ -63,6 +63,8 @@ class PolicyDecision:
     marks_question: bool = False
     suspend: SuspendedObligation | None = None
     control: str | None = None
+    episode_id: str | None = None
+    semantic_need: QuestionNeed | None = None
 
 
 _IDENTITY_ANSWER = (
@@ -395,19 +397,12 @@ def _episode_plan(
     *,
     bridge: str = "",
 ) -> ResponsePlan | None:
-    from packages.dialogue_engine.product import bump_product_ask, classify_episode_family
-
-    state.pending_episode_attribute = need.attribute
     text, intent = episode_question_for_attribute_with_state(state, ep, need.attribute)
     if question_references_forbidden_site(state, text):
         return None
     # Lowercase only when bridge is a mid-sentence lead-in ("… —"), not a full sentence.
     if bridge.rstrip().endswith("—") and text and text[0].isupper():
         text = text[0].lower() + text[1:]
-    ask_mark = f"_product_asked:{need.attribute}"
-    if ask_mark not in ep.known_attributes:
-        ep.known_attributes[ask_mark] = "1"
-        bump_product_ask(state, classify_episode_family(ep))
     return ResponsePlan(
         obligation=ConversationObligation.CONTINUE_ACTIVE_EPISODE,
         action="speak",
@@ -587,7 +582,6 @@ def _important_to_share_plan(
         return None
     if not _wellness_entry_covered(state):
         return None
-    state.important_to_share_asked = True
     return ResponsePlan(
         obligation=ConversationObligation.IMPORTANT_TO_SHARE,
         action="speak",
@@ -1831,7 +1825,6 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         if _next_background_goal(state) is None:
             if not state.important_to_share_resolved:
                 if state.first_user_turn_received:
-                    state.important_to_share_asked = True
                     return ResponsePlan(
                         obligation=ConversationObligation.IMPORTANT_TO_SHARE,
                         action="speak",
@@ -2238,6 +2231,8 @@ def resume_episode_obligation(state: EngineState) -> PolicyDecision | None:
         intent=rendered.intent,
         slot=rendered.slot,
         marks_question=rendered.marks_question,
+        episode_id=plan.episode_id,
+        semantic_need=plan.question_needs[0] if plan.question_needs else None,
     )
 
 
@@ -2271,6 +2266,8 @@ def decide_conversation_policy(
         marks_question=rendered.marks_question,
         suspend=plan.suspend if isinstance(plan.suspend, SuspendedObligation) else None,
         control=plan.control,
+        episode_id=plan.episode_id,
+        semantic_need=plan.question_needs[0] if plan.question_needs else None,
     )
 
 

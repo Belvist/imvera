@@ -11,6 +11,7 @@ from packages.contracts.enums import FsmState, SlotStatus
 from packages.contracts.semantic import IssueMention
 from packages.dialogue_engine.context import SlotValue
 from packages.dialogue_engine.effects import SpeakEffect
+from packages.dialogue_engine.question_context import QuestionNeed
 
 
 class CheckPath(StrEnum):
@@ -71,6 +72,10 @@ class Question(BaseModel):
     phase: QuestionPhase = QuestionPhase.PLANNED
     intent: str = ""
     goal_id: str | None = None
+    # Meaning travels with the actual question identity, not a scheduler's
+    # side effects or an intent-name heuristic. Delivery phase stays separate.
+    episode_id: str | None = None
+    semantic_need: QuestionNeed | None = None
 
     model_config = {"frozen": True}
 

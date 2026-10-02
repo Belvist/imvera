@@ -16,6 +16,18 @@
 Протокол сравнения и загрузки настоящих чужих транскриптов:
 [elder-care comparison](research/elder-care-dialogue-comparison-2026-10-01.md).
 
+## Общий исполнитель выбранного вопроса (Cut 1a, 2026-10-02)
+
+[Проверки, реальные SDK-сравнения и передача на M5](evaluation/plan-lifecycle-cut1a-2026-10-02/README.md).
+ResponsePlan и compatibility adapter сохраняют episode_id + QuestionNeed в
+Question. Pending/budget выбранного вопроса записывает общий Reducer после
+успешного резервирования; не дублируй записи в ActionPolicy, scheduler или
+CallActor. Контекст нужен и для ответа во время озвучки/после её прерывания.
+Плановые `_product_asked` не означают, что вопрос услышан: actual delivery —
+Question.phase, подтверждение playout и delivered_attempts. Не вызывай completion
+за отменённую озвучку, передавай правильные generation/question IDs.
+Default policy не включён: producer parity и расширение legal set ещё предстоят.
+
 ## Связный разговор: интегрировать смысл, а не приставку к TTS
 
 [Разбор и реальные текстовые ответы движка](live-calls/fs-2baf87ec-conversational.md).

@@ -36,7 +36,7 @@ Record irreversible technical decisions here.
 | [026](026-grounded-warm-dialogue.md) | Grounded warmth through existing dialogue owners | accepted for implementation; live/human warmth NOT VERIFIED |
 
 | [027](027-realtime-conversation-v1.md) | Realtime Conversation v1: endpointing, cancellation and measured delivery | runtime slice implemented; live voice NOT VERIFIED |
-| [028](028-conversational-move-evolution.md) | Conversational move authority, measurement and constrained surface realization | proposed; audit/Cut 0 implemented; authority/live voice NOT VERIFIED |
+| [028](028-conversational-move-evolution.md) | Conversational move authority, measurement and constrained surface realization | proposed; Cut 0/Cut 1a implemented; authority/live voice NOT VERIFIED |
 
 ADR-012 is **lab/spike only** for production telephony (see ADR-013).  
 ADR-014 **does not** stamp `ARCHITECTURE = FROZEN` until gates 1–7 are VERIFIED.

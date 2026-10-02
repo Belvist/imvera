@@ -1,3 +1,53 @@
+# Cut 1a: common selected-question executor (2026-10-02)
+
+Fetched/fast-forwarded m5 **00b992d3901767bf678cd28ce2d7fb6461786632**,
+preserving the agent's four trained artifact sets and LFS configuration.
+Main and loaded services untouched. [Evidence/handoff](evaluation/plan-lifecycle-cut1a-2026-10-02/README.md)
+and [paired SDK replies](evaluation/plan-lifecycle-cut1a-2026-10-02/policy-before-after.md).
+
+CHANGED: episode_id/QuestionNeed survive ResponsePlan and compatibility adapter
+into Question. Existing reducer emit executor owns pending/pack planning budget
+and ITS asked for both selectors; displaced legacy commits removed. Common
+terminal ITS consumption preserves completed/early/interrupted replies; matching
+question ID required for cancellation. Actual delivery/attempts stay separate.
+Full CI checkout now hydrates LFS. No new scheduler/state/FSM/generator, no banks
+or model changes, frozen v9 core/default authority flags unchanged.
+
+VERIFIED:
+
+| Command / scope | Result |
+|---|---|
+| base full pytest with published heads | 2508 passed / 2 LFS-encoder warmup failures / 9 skipped, 137.42 s |
+| final `python -m pytest -q --tb=short` | 2534 passed / same 2 failures / 9 skipped, 134.25 s; NOT green |
+| focused lifecycle/policy/SDK/product/delivery | 237 passed, 1.90 s; 26 new lifecycle cases |
+| independent read-only review | APPROVE narrow cut, 55 passed, 0.49 s; early clinical/ITS all modes |
+| existing corpus gate tests | PASS during broader focused run; no old assertion/skip edited |
+| policy diff v8/v9 | PASS: 4 expected / 0 unexplained; files restored, frozen core untouched |
+| `make lint` / `git diff --check` | PASS / PASS |
+| same 15 inputs + configs, before/after | legacy 0 changed sequences; diagnostic policy 4 changed cases |
+| saved captures | actual source fingerprints/state/effects; raw/projected metric equality |
+
+The first delivery-only draft regressed early onset reply and was discarded
+before publication. Final executor preserves old emission timing of pending
+meaning, while CANCELLED is not DELIVERED and delivered_attempts remains 0.
+Planning `_product_asked` is not evidence of heard speech. Replay wall timing
+is in summary; phone latency/model invocation count remain NOT_RUN.
+
+Model availability: genuine v2/v3/polarity and xenc heads are present. Six
+previous failures closed. Large xenc encoder SHA256 560fb3342f1d837ef68383982d963c4a8853594427dbdaf7260f0935abba62c7
+(596070136 bytes) remains an LFS pointer here: pull login-attempt failure,
+authenticated batch HTTP403, cause unknown. No weights fabricated/replaced.
+
+NOT VERIFIED: new CI result, loaded M5/all_hot, actual phone/CallActor audio,
+human warmth, controlled latency/model RAM/100-call throughput. Source push is
+not deployment; this cut does not establish conversation quality.
+REMAINING RISKS: sparse legal set, SDK/actor producer parity, compound handling,
+known user-question/current-severity/global-stop gaps, ACK timer semantics.
+NEXT GATE: M5 regression recording + canonical producer parity before authority
+promotion/thread evolution. No soft/policy or generative cutover.
+
+---
+
 # Conversational move architecture audit and Cut0 (2026-10-02)
 
 Owner requested audit BEFORE production changes and a first safe evolutionary

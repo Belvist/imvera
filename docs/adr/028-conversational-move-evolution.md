@@ -1,7 +1,7 @@
 # ADR-028: Evolve the existing conversational move authority
 
 Date: 2026-10-02
-Status: proposed; audit/Cut0 measurements authorized, authority promotion NOT VERIFIED
+Status: proposed; Cut0 measurements/Cut1a common executor implemented, authority promotion NOT VERIFIED
 Branch: feature/voice-zoiper-m5
 
 ## Context
@@ -48,3 +48,12 @@ but does not itself establish arbitrary free conversation. B remains conditional
 
 Recorded baseline plus common reducer-owned authority lifecycle and canonical
 SDK/actor parity proof; no soft/policy promotion or generative adoption by this ADR.
+
+## Implementation evidence (2026-10-02)
+
+[Cut1a](../evaluation/plan-lifecycle-cut1a-2026-10-02/README.md) moves selected
+episode/ITS commitment from the legacy selector into the existing reducer emit
+executor, retaining early/interrupted answer context. Emission/planning budgets
+are distinct from confirmed playback. Full delivery/cancellation identity stays
+code-owned. This closes the displaced-commit prerequisite, not the incomplete
+legal set, canonical producer parity or voice acceptance gates.

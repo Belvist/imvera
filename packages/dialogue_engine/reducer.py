@@ -52,6 +52,7 @@ from packages.dialogue_engine.policy import (
     release_reservation,
     reserve_question,
 )
+from packages.dialogue_engine.question_context import QuestionNeed
 from packages.dialogue_engine.response_plan import (
     build_response_plan,
     composed_text,
@@ -393,6 +394,8 @@ def _emit_speak(
     goal_id: str | None = None,
     bridge_text: str = "",
     question_text: str = "",
+    episode_id: str | None = None,
+    semantic_need: QuestionNeed | None = None,
 ) -> tuple[EngineState, list[Effect]]:
     from packages.dialogue_engine.speech_ledger import (
         record as _record_surface,
@@ -478,10 +481,14 @@ def _emit_speak(
         phase=QuestionPhase.PLANNED,
         intent=intent,
         goal_id=resolved_goal,
+        episode_id=episode_id,
+        semantic_need=semantic_need,
     )
     state.planned_question = q if marks_question else None
     state.playing_question = q if marks_question else None
     state.active_playout = q
+    if marks_question:
+        _commit_emitted_question(state, q)
     if intent == "summary":
         state.summary_delivered = False
     state.bump_revision()
@@ -644,6 +651,50 @@ def _on_playout_completed(
     return state, []
 
 
+def _commit_emitted_question(state: EngineState, question: Question) -> None:
+    """Apply one selected question after reservation, for either scheduler.
+
+    Pending is an interpretation obligation, needed for early/interrupted
+    answers too. Historical _product_asked markers are the pack's planning
+    budget, not heard proof. Actual delivery remains phase/delivered_attempts.
+    No clinical value or delivered-question record is inferred here.
+    """
+    if question.intent == "important_to_share":
+        state.important_to_share_asked = True
+    if not question.episode_id or question.semantic_need is None:
+        return
+    ep = state.issue_episodes.get(question.episode_id)
+    if ep is None or ep.subject == "other_person":
+        return
+    from packages.dialogue_engine.product import bump_product_ask, classify_episode_family
+
+    state.active_episode_id = ep.episode_id
+    state.pending_episode_attribute = question.semantic_need.attribute
+    mark = f"_product_asked:{question.semantic_need.attribute}"
+    if mark not in ep.known_attributes:
+        ep.known_attributes[mark] = "1"
+        bump_product_ask(state, classify_episode_family(ep))
+
+
+def _consume_pending_share_decline(state: EngineState, turn: RichUserTurn) -> None:
+    """Terminal ITS reply consumption is independent of the next selector."""
+    if (
+        not state.important_to_share_asked or state.important_to_share_resolved
+        or turn.control not in ("none", "") or turn.user_question
+        or state.pending_episode_attribute or state.probe_phase
+        or is_topic_slot(state.answer_context_slot())
+    ):
+        return
+    from packages.dialogue_engine.conversation_policy import (
+        _classify_important_to_share_answer,
+        _turn_reports_fresh_negative,
+    )
+
+    kind = _classify_important_to_share_answer(turn, turn.raw_text, state)
+    if kind in ("DECLINE", "TOPIC_COMPLETE") and not _turn_reports_fresh_negative(turn):
+        state.important_to_share_resolved = True
+
+
 def _on_playout_cancelled(
     state: EngineState,
     event: PlayoutCancelled,
@@ -651,6 +702,9 @@ def _on_playout_cancelled(
     if _stale(state, event.revision):
         return state, []
     if event.generation != state.active_playout_generation:
+        return state, []
+    current = state.playing_question or state.active_playout
+    if event.question_id and current and event.question_id != current.question_id:
         return state, []
     if state.playing_question:
         q = state.playing_question
@@ -975,6 +1029,8 @@ def _emit_from_plan(
         goal_id=goal_id,
         bridge_text=getattr(rendered, "acknowledge", "") or "",
         question_text=getattr(rendered, "mandatory_question", "") or "",
+        episode_id=rendered.episode_id,
+        semantic_need=rendered.question_needs[0] if rendered.question_needs else None,
     )
 
 
@@ -1207,6 +1263,8 @@ def _apply_rich_turn(
                     intent=decision.intent or "rich_policy",
                     slot=decision.slot or answer_slot or "wellness",
                     marks_question=decision.marks_question,
+                    episode_id=decision.episode_id,
+                    semantic_need=decision.semantic_need,
                 )
         if turn.correction:
             decision = decide_conversation_policy(state, turn)
@@ -1220,6 +1278,8 @@ def _apply_rich_turn(
                     intent=decision.intent or "rich_policy",
                     slot=decision.slot or answer_slot or "wellness",
                     marks_question=decision.marks_question,
+                    episode_id=decision.episode_id,
+                    semantic_need=decision.semantic_need,
                 )
         newly_filled = _apply_goal_facts(state, turn)
         state.processing_turn_id = None
@@ -1235,6 +1295,7 @@ def _apply_rich_turn(
 
     turn = filter_rich_turn_mentions(state, turn)
     atomic_semantic_apply(state, turn)
+    _consume_pending_share_decline(state, turn)
     if turn.issue_mentions:
         from packages.dialogue_engine.mission_flow import (
             capture_mission_suspend,
@@ -1286,6 +1347,8 @@ def _apply_rich_turn(
                 intent=decision.intent or "rich_policy",
                 slot=decision.slot or answer_slot or "wellness",
                 marks_question=decision.marks_question,
+                episode_id=decision.episode_id,
+                semantic_need=decision.semantic_need,
                 goal_id=goal_id,
             )
 
@@ -1322,6 +1385,8 @@ def _apply_rich_turn(
                 intent=decision.intent or "rich_policy",
                 slot=decision.slot or answer_slot or "wellness",
                 marks_question=decision.marks_question,
+                episode_id=decision.episode_id,
+                semantic_need=decision.semantic_need,
             )
 
     if turn.issue_mentions and answer_slot in ("wellness", "mood", "sleep", "plans"):
@@ -1359,6 +1424,8 @@ def _apply_rich_turn(
                 intent=decision.intent or "rich_policy",
                 slot=decision.slot or answer_slot,
                 marks_question=decision.marks_question,
+                episode_id=decision.episode_id,
+                semantic_need=decision.semantic_need,
             )
             if spoken[1]:
                 return spoken
