@@ -312,7 +312,6 @@ def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
             _init_silero_lab(tts_cfg)
             return
         print(f"TTS qwen warmup first chunk in {first_s:.2f}s", flush=True)
-        state.model_revision = "qwen_gguf:qwen-talker-0.6b-customvoice-Q8_0"
         state.warmup_error = None
         state.ready = True
     except Exception as exc:
