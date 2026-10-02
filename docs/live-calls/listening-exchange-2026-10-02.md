@@ -6,6 +6,20 @@ voice adapter, not the DialogueEngine's words. This is an offline defect
 reproduction and candidate correction, not a diagnosis of the owner's recording.
 Actual M5 SHA, providers, flags, audio and current call trace remain unknown here.
 
+Published correction: `5abc23697b3994c705cc01359044d071da5ad46b` on m5.
+GitHub [run36988690466](https://github.com/Belvist/imvera/actions/runs/36988690466)
+passes all nine specialized jobs; full suite has2487 passes and the same eight
+missing-model failures (three skips). This is source publication, not target
+deployment or an audible-quality acceptance.
+
+Followup preserves peer `2314092` clone voice and `d4be4f4` model revision fix;
+the health revision is promoted after successful selected-provider warmup.
+Registration/model mocks keep the original synth failure cases exercising their
+actual boundary. Two added cases verify the base model's reported revision and
+missing clone registration's actual Silero fallback. Local integrated suite:
+2485 passes/eight inherited missing-model failures/nine skips; runtime239/239.
+Peer deployment reports are not independent heard-quality evidence here.
+
 ## Reproduced decisions
 
 1. Each substantive personal reply replaced an already consumed `open_hook`

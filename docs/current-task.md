@@ -8,6 +8,37 @@ the seven dialogue source fingerprints still match after integration.
 main untouched. No actual target access/recording or trained NLP
 heads here. No-generative-live-LLM constraint persists.
 
+Published code: **5abc23697b3994c705cc01359044d071da5ad46b**, m5 only;
+remote tree **bbd848f6c51cf65ce4d3b95984cfebbbd644fc29** exactly matches
+the tested local tree. GitHub [run36988690466](https://github.com/Belvist/imvera/actions/runs/36988690466)
+completed on this code: nine specialized jobs PASS; full suite **2487 passed /
+8 inherited missing-model failures /3 skipped**,148.78s. Failure log inspected:
+same act delivery/readiness/warmup/polarity cases as the local run, no new
+failure. CI remains red. These CI results apply to5abc236; later peer voice
+updates are verified separately below. Source publication does not establish
+deployment or heard improvement on M5.
+
+Publication followup preserved peer clone voice/model registry `4f9e055/57fafc0`
+and merge `2314092`, then peer dynamic-revision fix `d4be4f4`. Clone artifacts
+and target access remain absent here; the peer's live journal is not independent
+phone verification. A new health case reproduced the stale customvoice revision
+on2314092 (one failure); the actual server model is now assigned after successful
+warmup. Existing synth-failure cases explicitly mock registration/model discovery
+so they still reach their original failure boundary rather than passing on a
+missing local clone. Original assertions retained; add base-model health and
+missing-registration fallback cases. No voice design or model was replaced.
+
+VERIFIED followup: same621 tracked Python/Makefile/pyproject source hashes
+before/after preserving d4be4f4; full `python -m pytest -q --tb=short`: **2485
+passed /8 inherited missing-model failures /9 skipped**,126.39s. Focused
+provider/warmup/story/ownership cases **73 passed**,0.99s; frozen sequential
+`make test-dialogue-runtime`: **239 passed**,11.98s. One unchanged60ms timing
+case failed in an earlier concurrent run; two later sequential runtime runs
+passed without changing its code/assertions (12.15/11.98s). `make lint`
+(packages/services/tests/scripts) PASS; unscoped `ruff check .` also inspects
+archive/lab and reports nine existing errors, not a claimed green command.
+The new followup has no GitHub CI receipt yet. Heard warmth remains NOT_RUN.
+
 CHANGED: existing discourse/scheduler/delivery ownership fixes the rearmed
 personal hook and the undelivered invitation; a bounded two-question listening
 exchange returns to the real unanswered health goal. SDK integration exposed
@@ -46,8 +77,8 @@ absent; existing defer recognition and past-plan extraction gaps remain.
 Qwen before-audio fallback is still the explicit peer behavior; log its actual
 engine. Native model/HTTP calls already running cannot be forcibly interrupted;
 Qwen first-byte/prosody parameters remain outside this correction.
-NEXT GATE: actual M5 candidate audio+JSONL acceptance after authorized m5
-publication; production readiness requires the existing full handoff/model gates.
+NEXT GATE: actual M5 candidate audio+JSONL acceptance on the published code;
+production readiness requires the existing full handoff/model gates.
 
 ---
 
