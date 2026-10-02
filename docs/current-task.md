@@ -686,6 +686,36 @@ canonical == TTS == delivered speech, and a single farewell.
 
 ---
 
+# Flirty voice + TG reports + speed audit (2026-10-02)
+
+- Owner: Qwen serena sounds anime/flirty. Words are fine — prosody is
+  not. 5 candidate wavs in .run/qwen_bench/voices (4 speakers x t0.6 +
+  serena t0.9) for ear pick. Server takes per-request temperature/seed.
+- Speed: worker TTFA ~1.0s, server 332ms, VAD 650ms (not cutting — would
+  clip elderly). No blind optimization; full-turn measure needs live ear.
+- TG report fixed: DSN default, PG store passed (was InMemory miss),
+  TECHNICAL calls labeled partial. Found data pollution: sleep slot holds
+  flirting complaint — content-fit guard backlog, not fixed here.
+- Pushed d4f576b, sync 0/0. No runtime change → no bridge move.
+
+---
+
+# Seventh merge live on 030e262: lifecycle hardening + qwen kept (2026-10-02)
+
+- His 8f7e296 (lifecycle, closing evidence, no-silent-fallback) + a0b7aa0
+  (image/CI evidence). One conflict (tts worker): his silent-fallback
+  removal kept; my qwen path rebased on explicit owner-blessed fallback.
+- Pre-existing red found by comparison: deadline test x2 fails identically
+  on his clean tree — his bug, documented in merge msg, not weakened.
+- Gates on merged: 2425 passed / same 2 origin-reds, corpus 500/500.
+  Pushed normally. TTS workers + bridge restarted -> 030e262, qwen
+  revision serving, voice smoke OK, watch OK.
+- Remote origin history was rewritten (old hashes gone) — merges carry
+  the content forward; main untouched throughout.
+- NOT VERIFIED: ear proof (qwen voice + barge-in), :9103, remote CI.
+
+---
+
 # Fifth merge live on d9e24f6: responsive dialogue (2026-10-01)
 
 - cf19cc8 (attentive reports/closings, ack clarifying flag, responsive
