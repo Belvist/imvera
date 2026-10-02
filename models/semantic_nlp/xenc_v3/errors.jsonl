@@ -1,0 +1,80 @@
+{"utterance": "Да, принимаю.", "goal": "medications_taken", "true_rel": true, "pred_rel": false}
+{"utterance": "Нет, не принимаю.", "goal": "medications_taken", "true_rel": true, "pred_rel": false}
+{"utterance": "Не помню.", "goal": "medications_taken", "true_rel": true, "pred_rel": false}
+{"utterance": "Внук не спал.", "goal": "sleep", "true_rel": false, "pred_rel": true}
+{"utterance": "Да.", "goal": "medications_taken", "true_rel": true, "pred_rel": false}
+{"utterance": "Нет.", "goal": "medications_taken", "true_rel": true, "pred_rel": false}
+{"utterance": "Ага.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Спал плохо, настроение никакое.", "goal": "plans", "true_rel": false, "pred_rel": true}
+{"utterance": "Настроение хорошее.", "goal": "mood", "true_rel": true, "pred_rel": false}
+{"utterance": "Спокойное настроение.", "goal": "mood", "true_rel": true, "pred_rel": false}
+{"utterance": "Спокойное настроение.", "goal": "mood", "true_rel": true, "pred_rel": false}
+{"utterance": "Довольно спокойно.", "goal": "mood", "true_rel": true, "pred_rel": false}
+{"utterance": "В магазин надо сходить.", "goal": "plans", "true_rel": true, "pred_rel": false}
+{"utterance": "Буду дома.", "goal": "plans", "true_rel": true, "pred_rel": false}
+{"utterance": "С утра беспокоит.", "goal": "onset", "true_rel": true, "pred_rel": false}
+{"utterance": "На прошлой неделе ещё началось.", "goal": "onset", "true_rel": true, "pred_rel": false}
+{"utterance": "Не помню когда началось.", "goal": "onset", "true_rel": true, "pred_rel": false}
+{"utterance": "С утра беспокоит.", "goal": "onset", "true_rel": true, "pred_rel": false}
+{"utterance": "На прошлой неделе ещё началось.", "goal": "onset", "true_rel": true, "pred_rel": false}
+{"utterance": "Сегодня после завтрака.", "goal": "onset", "true_rel": true, "pred_rel": false}
+{"utterance": "Нет, сегодня забыла.", "goal": "medications_taken", "true_rel": true, "pred_rel": false}
+{"utterance": "Вроде принимала утром.", "goal": "medications_taken", "true_rel": true, "pred_rel": false}
+{"utterance": "Около ста пятидесяти было.", "goal": "blood_pressure", "true_rel": true, "pred_rel": false}
+{"utterance": "Около ста пятидесяти было.", "goal": "blood_pressure", "true_rel": true, "pred_rel": false}
+{"utterance": "Не мерил сегодня.", "goal": "blood_pressure", "true_rel": true, "pred_rel": false}
+{"utterance": "Сегодня буду дома.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Настроение хорошее.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Сегодня буду дома.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Настроение хорошее.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Сегодня буду дома.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Спала восемь часов.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Дочь вечером заедет.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Таблетки утром приняла.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Настроение хорошее.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Спала восемь часов.", "goal": "wellness", "true_rel": false, "pred_rel": true}
+{"utterance": "Сегодня пойду гулять.", "goal": "sleep", "true_rel": false, "pred_rel": true}
+{"utterance": "Давление нормальное.", "goal": "sleep", "true_rel": false, "pred_rel": true}
+{"utterance": "Муж плохо спал.", "goal": "sleep", "true_rel": false, "pred_rel": true}
+{"utterance": "Голова болит.", "goal": "sleep", "true_rel": false, "pred_rel": true}
+{"utterance": "Давление нормальное.", "goal": "sleep", "true_rel": false, "pred_rel": true}
+{"utterance": "За свет заплатила вчера.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Всё оплачено.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Дочь утром звонила.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Платёжки на тумбочке лежат.", "goal": "utilities_paid", "true_rel": false, "pred_rel": true}
+{"utterance": "Сын вчера был.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Да, всё оплатила.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Нет, не успела.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Не знаю.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Хорошо себя чувствую.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Оплатил всё.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Ещё нет.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Не знаю.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Нет.", "goal": "daughter_visit", "true_rel": true, "pred_rel": false}
+{"utterance": "Да, всё оплатил вчера.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "За свет и воду уже заплатила.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Счета ещё висят неоплаченными.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Да, квитанции оплатил.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Да, всё оплатил вчера.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "За свет и воду уже заплатила.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Коммуналку пока не оплатил.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Счета ещё висят неоплаченными.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Да, квитанции оплатил.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Вчера через банк всё заплатила.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Да, всё оплатил вчера.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "За свет и воду уже заплатила.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Да, квитанции оплатил.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Вчера через банк всё заплатила.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Да, квитанции оплатил.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Вчера через банк всё заплатила.", "goal": "utilities_paid", "true_rel": true, "pred_rel": false}
+{"utterance": "Дочь живёт рядом.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Сын сегодня приедет.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Вчера дочь была у меня.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Дочь работает сегодня.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Муж ждёт дочь.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Дочь утром звонила.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Сын сегодня приедет.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Вчера дочь была у меня.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Дочь работает сегодня.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Дочь утром звонила.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}
+{"utterance": "Вчера дочь была у меня.", "goal": "daughter_visit", "true_rel": false, "pred_rel": true}

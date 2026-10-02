@@ -1,0 +1,17 @@
+{
+  "acts": [
+    "greeting",
+    "backchannel",
+    "goodbye",
+    "confirm",
+    "decline",
+    "answer",
+    "not_recalled",
+    "uncertain",
+    "correction",
+    "complaint",
+    "user_question",
+    "repeat_request",
+    "stop"
+  ]
+}

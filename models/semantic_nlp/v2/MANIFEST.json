@@ -1,0 +1,17 @@
+{
+  "generated_by": "tools/voice_lab/gen_status.py",
+  "generated_at_head": "a213730acf89b30178d7c358b26d9d7822cf7edd",
+  "artifact": "models/semantic_nlp/v2",
+  "head_pt": {
+    "sha256": "7ac7bb265b467bb0dc399271c651f16524ebc6be1eeb0e738ca5c03533dd6901",
+    "bytes": 41741
+  },
+  "seed": {
+    "path": "packages/dialogue_engine/semantic_nlp/seed.jsonl",
+    "sha256": "34c6f372f51c7a2764b5da06b802e5dfa3428f13bd81cba1d19b14d55cb9ff5b",
+    "lines": 246,
+    "training_commit": "4f7d1014e051fe7b794215a15d0dd23cb1397b4b"
+  },
+  "metrics": "models/semantic_nlp/v2/metrics.json",
+  "labels": "models/semantic_nlp/v2/labels.json"
+}

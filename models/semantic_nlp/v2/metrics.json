@@ -1,0 +1,8 @@
+{
+  "train_acc": 0.9715447425842285,
+  "held_acc": 1.0,
+  "n_train": 246,
+  "n_held": 0,
+  "model_id": "deepvk/RuModernBERT-base",
+  "errors": []
+}

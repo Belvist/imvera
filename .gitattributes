@@ -1,0 +1,1 @@
+models/semantic_nlp/xenc_v3/encoder/model.safetensors filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,21 @@
+{
+  "train_acc": 0.9746835231781006,
+  "held_acc": 0.9629629850387573,
+  "n_train": 237,
+  "n_held": 54,
+  "model_id": "deepvk/RuModernBERT-base",
+  "errors": [
+    {
+      "text": "Нет.",
+      "question": "Продолжить?",
+      "true": "decline",
+      "pred": "confirm"
+    },
+    {
+      "text": "Не расслышала.",
+      "question": "Как вы себя чувствуете?",
+      "true": "repeat_request",
+      "pred": "stop"
+    }
+  ]
+}

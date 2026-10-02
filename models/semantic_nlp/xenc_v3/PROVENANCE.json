@@ -1,0 +1,13 @@
+{
+  "artifact": "xenc_v3",
+  "base_dataset": "datasets/semantic_nlu/v2.jsonl",
+  "base_dataset_sha256": "a6856ab810732d9f624f52d2ed3b4ba2b4287401d3789805d4c4d5840f8751ab",
+  "extra_dataset": "imvera_semantic_pairs_1600_v1.jsonl (train: rows only, eval-overlap excluded)",
+  "extra_dataset_sha256": "db00986d16f01ad7dda94284f4bf001c16d490d39a8d30fbd7e84ffb79e4837b",
+  "training_commit": "1f1de3f",
+  "eval": {
+    "eval_fixed_F1": 0.788,
+    "eval_fixed_AP": 0.939,
+    "wrong_goal_fp": 3
+  }
+}
