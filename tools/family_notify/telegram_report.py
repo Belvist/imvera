@@ -51,15 +51,22 @@ def _save_sent(sent: set[str]) -> None:
     SENT_FILE.write_text(json.dumps(sorted(sent)), encoding="utf-8")
 
 
+def _dsn() -> str:
+    return (
+        os.environ.get("IMVERA_PG_URL")
+        or os.environ.get("IMVERA_VOICE_DATABASE_URL")
+        or "postgresql://imvera:imvera_dev_change_me@127.0.0.1:5432/imvera"
+    )
+
+
 def _snapshot(call_id: str):
     from packages.core import create_call_record_store
 
-    store = create_call_record_store()
+    store = create_call_record_store(_dsn())
     try:
         import psycopg
 
-        dsn = os.environ.get("IMVERA_PG_URL", "")
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        with psycopg.connect(_dsn(), connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT family_id FROM call_results WHERE call_id = %s",
@@ -110,6 +117,9 @@ def build_message(call_id: str, snap) -> str:
                 its = o.get("value")
     if its:
         lines.append(f"Важно: {its}")
+    outcome = str(outcomes.get("call_outcome") or "")
+    if outcome == "TECHNICAL":
+        lines.append("Звонок сорвался по технической причине — данные частичные.")
     if not ended:
         lines.append("Звонок не завершён штатно.")
     lines += [
