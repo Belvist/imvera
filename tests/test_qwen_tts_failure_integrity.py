@@ -33,6 +33,9 @@ def qwen_worker(monkeypatch):
     monkeypatch.setattr(worker.state, "model_revision", QWEN_REVISION)
     monkeypatch.setattr(worker.state, "warmup_error", None)
     monkeypatch.setattr(worker, "_cancelled", set())
+    # Resident registry/model lookup is independent of the synth failures below.
+    monkeypatch.setattr(qwen_gguf, "ensure_voice_registered", lambda _: True)
+    monkeypatch.setattr(qwen_gguf, "server_model_id", lambda: QWEN_REVISION.split(":", 1)[1])
     return cfg
 
 
@@ -154,6 +157,34 @@ def test_successful_qwen_warmup_proves_qwen(monkeypatch, qwen_worker) -> None:
     assert health.status_code == 200
     assert health.json()["model_revision"] == QWEN_REVISION
     assert worker.tts_engine(qwen_worker) == "qwen_gguf"
+
+
+def test_clone_warmup_reports_actual_base_model(monkeypatch, qwen_worker) -> None:
+    model_id = "qwen-talker-0.6b-base-Q8_0.gguf"
+    monkeypatch.setattr(qwen_gguf, "server_model_id", lambda: model_id)
+    monkeypatch.setattr(qwen_gguf, "ping", lambda: True)
+    monkeypatch.setattr(qwen_gguf, "synthesize_stream", lambda *_, **__: iter([QWEN_PCM]))
+    monkeypatch.setattr(worker, "_init_silero_lab", lambda _: pytest.fail("unexpected fallback"))
+    worker._ping_and_warmup_qwen(qwen_worker)
+    health = TestClient(worker.app).get("/health/ready")
+    assert health.status_code == 200
+    assert health.json()["model_revision"] == f"qwen_gguf:{model_id}"
+    assert worker.tts_engine(qwen_worker) == "qwen_gguf"
+
+
+def test_missing_clone_registration_reports_actual_silero(monkeypatch, qwen_worker) -> None:
+    monkeypatch.setenv("IMVERA_SILERO_LAB_ACK", "1")
+    monkeypatch.setattr(qwen_gguf, "ping", lambda: True)
+    monkeypatch.setattr(qwen_gguf, "ensure_voice_registered", lambda _: False)
+    monkeypatch.setattr(
+        qwen_gguf, "synthesize_stream", lambda *_, **__: pytest.fail("unregistered clone used")
+    )
+    monkeypatch.setattr("services.tts.silero_lab.load_silero", lambda _: (object(), None))
+    worker._ping_and_warmup_qwen(qwen_worker)
+    health = TestClient(worker.app).get("/health/ready")
+    assert health.status_code == 200
+    assert health.json()["model_revision"] == SILERO_REVISION
+    assert worker.tts_engine(qwen_worker) == "silero_lab"
 
 
 @pytest.mark.parametrize("failure", ["ping", "warmup"])

@@ -297,7 +297,7 @@ def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
             print("TTS qwen voice missing — explicit fallback to silero", flush=True)
             _init_silero_lab(tts_cfg)
             return
-        state.model_revision = f"qwen_gguf:{server_model_id()}"
+        selected_revision = f"qwen_gguf:{server_model_id()}"
 
         def produce_selected(req: SynthesizeRequest, out_q: queue.Queue) -> None:
             try:
@@ -312,6 +312,7 @@ def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
             _init_silero_lab(tts_cfg)
             return
         print(f"TTS qwen warmup first chunk in {first_s:.2f}s", flush=True)
+        state.model_revision = selected_revision
         state.warmup_error = None
         state.ready = True
     except Exception as exc:
