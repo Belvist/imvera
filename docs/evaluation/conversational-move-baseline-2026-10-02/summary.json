@@ -1,0 +1,781 @@
+{
+  "audited_sha": "09cff20133fcf77b32bf9b32357ee0dd1922daa2",
+  "boundary": "Actual SDK-only text; simulated playout; no live model/CallActor/audio acceptance",
+  "runs": {
+    "legacy": {
+      "effective_router": {
+        "action_policy.mode": "legacy",
+        "action_policy.mode_raw": "legacy",
+        "action_policy.cutover_enabled": false,
+        "action_policy.soft_percent": 0,
+        "action_policy.policy_version": "action-policy-phase1-v9",
+        "action_policy.frozen_policy_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
+        "action_policy.decision_scope": "conversation_scheduler",
+        "IMVERA_ACTION_POLICY_MODE": "legacy",
+        "IMVERA_ACTION_POLICY_CUTOVER_ENABLED": "0",
+        "IMVERA_ACTION_POLICY_SOFT_PERCENT": "0"
+      },
+      "aggregate_counts": {
+        "speech_presentations": 57,
+        "distinct_question_ids": 49,
+        "user_turns": 42,
+        "nonquestion_speech_presentations": 8,
+        "budget_to_wellness_return_proxy": 4,
+        "user_question_turns": 1,
+        "user_question_without_answer_intent_proxy": 1
+      },
+      "cases": [
+        {
+          "id": "volunteered_four_facts",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 2,
+            "user_turns": 3,
+            "nonquestion_speech_presentations": 2
+          },
+          "max_consecutive_vera_question_presentations": 2,
+          "max_newly_filled_slots_per_user_turn": 4,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "daughter_story",
+          "counts": {
+            "speech_presentations": 5,
+            "distinct_question_ids": 5,
+            "user_turns": 4,
+            "budget_to_wellness_return_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 5,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "yesterday_story",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3,
+            "budget_to_wellness_return_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "open_user_question",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 2,
+            "user_turns": 2,
+            "user_question_turns": 1,
+            "user_question_without_answer_intent_proxy": 1,
+            "nonquestion_speech_presentations": 1
+          },
+          "max_consecutive_vera_question_presentations": 2,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "topic_switch",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3,
+            "budget_to_wellness_return_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "return_to_topic",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "not_recalled",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "ambiguous_reply",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "self_correction",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 2,
+            "user_turns": 3,
+            "nonquestion_speech_presentations": 2
+          },
+          "max_consecutive_vera_question_presentations": 2,
+          "max_newly_filled_slots_per_user_turn": 2,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "barge_in",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 3,
+            "user_turns": 2
+          },
+          "max_consecutive_vera_question_presentations": 3,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "phone_audio",
+            "interruption",
+            "playout_cancel"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "slow_speech",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 2,
+            "user_turns": 2,
+            "nonquestion_speech_presentations": 1
+          },
+          "max_consecutive_vera_question_presentations": 2,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "phone_audio",
+            "slow_speech_endpoint"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "symptom_inside_story",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 3,
+            "user_turns": 2
+          },
+          "max_consecutive_vera_question_presentations": 3,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "refuse_one_question",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 3,
+            "user_turns": 3,
+            "nonquestion_speech_presentations": 1
+          },
+          "max_consecutive_vera_question_presentations": 3,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "finish_entire_call",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 2,
+            "user_turns": 2,
+            "nonquestion_speech_presentations": 1
+          },
+          "max_consecutive_vera_question_presentations": 2,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "just_conversation",
+          "counts": {
+            "speech_presentations": 5,
+            "distinct_question_ids": 5,
+            "user_turns": 4,
+            "budget_to_wellness_return_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 5,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        }
+      ]
+    },
+    "shadow": {
+      "effective_router": {
+        "action_policy.mode": "shadow",
+        "action_policy.mode_raw": "shadow",
+        "action_policy.cutover_enabled": false,
+        "action_policy.soft_percent": 0,
+        "action_policy.policy_version": "action-policy-phase1-v9",
+        "action_policy.frozen_policy_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
+        "action_policy.decision_scope": "conversation_scheduler",
+        "IMVERA_ACTION_POLICY_MODE": "shadow",
+        "IMVERA_ACTION_POLICY_CUTOVER_ENABLED": "0",
+        "IMVERA_ACTION_POLICY_SOFT_PERCENT": "0"
+      },
+      "aggregate_counts": {
+        "speech_presentations": 57,
+        "distinct_question_ids": 49,
+        "user_turns": 42,
+        "nonquestion_speech_presentations": 8,
+        "budget_to_wellness_return_proxy": 4,
+        "user_question_turns": 1,
+        "user_question_without_answer_intent_proxy": 1
+      },
+      "cases": [
+        {
+          "id": "volunteered_four_facts",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 2,
+            "user_turns": 3,
+            "nonquestion_speech_presentations": 2
+          },
+          "max_consecutive_vera_question_presentations": 2,
+          "max_newly_filled_slots_per_user_turn": 4,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "daughter_story",
+          "counts": {
+            "speech_presentations": 5,
+            "distinct_question_ids": 5,
+            "user_turns": 4,
+            "budget_to_wellness_return_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 5,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "yesterday_story",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3,
+            "budget_to_wellness_return_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "open_user_question",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 2,
+            "user_turns": 2,
+            "user_question_turns": 1,
+            "user_question_without_answer_intent_proxy": 1,
+            "nonquestion_speech_presentations": 1
+          },
+          "max_consecutive_vera_question_presentations": 2,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "topic_switch",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3,
+            "budget_to_wellness_return_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "return_to_topic",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "not_recalled",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "ambiguous_reply",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "self_correction",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 2,
+            "user_turns": 3,
+            "nonquestion_speech_presentations": 2
+          },
+          "max_consecutive_vera_question_presentations": 2,
+          "max_newly_filled_slots_per_user_turn": 2,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "barge_in",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 3,
+            "user_turns": 2
+          },
+          "max_consecutive_vera_question_presentations": 3,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "phone_audio",
+            "interruption",
+            "playout_cancel"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "slow_speech",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 2,
+            "user_turns": 2,
+            "nonquestion_speech_presentations": 1
+          },
+          "max_consecutive_vera_question_presentations": 2,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "phone_audio",
+            "slow_speech_endpoint"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "symptom_inside_story",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 3,
+            "user_turns": 2
+          },
+          "max_consecutive_vera_question_presentations": 3,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "refuse_one_question",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 3,
+            "user_turns": 3,
+            "nonquestion_speech_presentations": 1
+          },
+          "max_consecutive_vera_question_presentations": 3,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "finish_entire_call",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 2,
+            "user_turns": 2,
+            "nonquestion_speech_presentations": 1
+          },
+          "max_consecutive_vera_question_presentations": 2,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "just_conversation",
+          "counts": {
+            "speech_presentations": 5,
+            "distinct_question_ids": 5,
+            "user_turns": 4,
+            "budget_to_wellness_return_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 5,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        }
+      ]
+    },
+    "policy": {
+      "effective_router": {
+        "action_policy.mode": "policy",
+        "action_policy.mode_raw": "policy",
+        "action_policy.cutover_enabled": true,
+        "action_policy.soft_percent": 0,
+        "action_policy.policy_version": "action-policy-phase1-v9",
+        "action_policy.frozen_policy_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
+        "action_policy.decision_scope": "conversation_scheduler",
+        "IMVERA_ACTION_POLICY_MODE": "policy",
+        "IMVERA_ACTION_POLICY_CUTOVER_ENABLED": "1",
+        "IMVERA_ACTION_POLICY_SOFT_PERCENT": "0"
+      },
+      "aggregate_counts": {
+        "speech_presentations": 57,
+        "distinct_question_ids": 32,
+        "user_turns": 42,
+        "repeated_question_key_presentations_proxy": 3,
+        "nonquestion_speech_presentations": 25,
+        "user_question_turns": 1,
+        "clinical_question_without_pending_attribute_proxy": 8
+      },
+      "cases": [
+        {
+          "id": "volunteered_four_facts",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 3,
+            "user_turns": 3,
+            "repeated_question_key_presentations_proxy": 1,
+            "nonquestion_speech_presentations": 1
+          },
+          "max_consecutive_vera_question_presentations": 3,
+          "max_newly_filled_slots_per_user_turn": 4,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "daughter_story",
+          "counts": {
+            "speech_presentations": 5,
+            "distinct_question_ids": 1,
+            "user_turns": 4,
+            "nonquestion_speech_presentations": 4
+          },
+          "max_consecutive_vera_question_presentations": 1,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "yesterday_story",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 1,
+            "user_turns": 3,
+            "nonquestion_speech_presentations": 3
+          },
+          "max_consecutive_vera_question_presentations": 1,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "open_user_question",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 2,
+            "user_turns": 2,
+            "user_question_turns": 1,
+            "nonquestion_speech_presentations": 1,
+            "clinical_question_without_pending_attribute_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 1,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "topic_switch",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 1,
+            "user_turns": 3,
+            "nonquestion_speech_presentations": 3
+          },
+          "max_consecutive_vera_question_presentations": 1,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "return_to_topic",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 1,
+            "user_turns": 3,
+            "nonquestion_speech_presentations": 3
+          },
+          "max_consecutive_vera_question_presentations": 1,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "not_recalled",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3,
+            "clinical_question_without_pending_attribute_proxy": 3,
+            "repeated_question_key_presentations_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "ambiguous_reply",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3,
+            "clinical_question_without_pending_attribute_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "self_correction",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 4,
+            "user_turns": 3,
+            "clinical_question_without_pending_attribute_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 4,
+          "max_newly_filled_slots_per_user_turn": 2,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "barge_in",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 2,
+            "user_turns": 2,
+            "nonquestion_speech_presentations": 1
+          },
+          "max_consecutive_vera_question_presentations": 1,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "phone_audio",
+            "interruption",
+            "playout_cancel"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "slow_speech",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 3,
+            "user_turns": 2,
+            "repeated_question_key_presentations_proxy": 1
+          },
+          "max_consecutive_vera_question_presentations": 3,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "phone_audio",
+            "slow_speech_endpoint"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "symptom_inside_story",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 3,
+            "user_turns": 2,
+            "clinical_question_without_pending_attribute_proxy": 2
+          },
+          "max_consecutive_vera_question_presentations": 3,
+          "max_newly_filled_slots_per_user_turn": 1,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "refuse_one_question",
+          "counts": {
+            "speech_presentations": 4,
+            "distinct_question_ids": 1,
+            "user_turns": 3,
+            "nonquestion_speech_presentations": 3
+          },
+          "max_consecutive_vera_question_presentations": 1,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "finish_entire_call",
+          "counts": {
+            "speech_presentations": 3,
+            "distinct_question_ids": 1,
+            "user_turns": 2,
+            "nonquestion_speech_presentations": 2
+          },
+          "max_consecutive_vera_question_presentations": 1,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        },
+        {
+          "id": "just_conversation",
+          "counts": {
+            "speech_presentations": 5,
+            "distinct_question_ids": 1,
+            "user_turns": 4,
+            "nonquestion_speech_presentations": 4
+          },
+          "max_consecutive_vera_question_presentations": 1,
+          "max_newly_filled_slots_per_user_turn": 0,
+          "required_modalities": [
+            "text"
+          ],
+          "phone_acceptance": "NOT_RUN"
+        }
+      ]
+    }
+  },
+  "not_measured": {
+    "topic_jump_rate": "NOT_RUN",
+    "questions_per_minute": "NOT_RUN",
+    "grounded_fact_recall": "NOT_RUN",
+    "safety_error_rate": "NOT_RUN",
+    "human_questionnaire_feel": "NOT_RUN",
+    "listener_warmth": "NOT_RUN",
+    "end_of_speech_to_first_pcm_ms": "NOT_RUN",
+    "model_invocation_counts": "NOT_RUN",
+    "model_ram": "NOT_RUN",
+    "concurrent_call_capacity": "NOT_RUN",
+    "barge_in": "NOT_RUN",
+    "slow_speech": "NOT_RUN"
+  },
+  "response_sequences_changed_vs_legacy": {
+    "shadow": 0,
+    "policy": 15
+  }
+}

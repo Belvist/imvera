@@ -1,0 +1,25 @@
+{
+  "version": "conversational-moves-v1",
+  "language": "ru",
+  "elder_display_name": "Тамара Юрьевна",
+  "speech_day": "0",
+  "speech_hour": "10",
+  "missions": {},
+  "cases": [
+    {"id": "volunteered_four_facts", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Самочувствие хорошее, настроение спокойное, спала хорошо, сегодня пойду гулять.", "Нет, больше ничего.", "До свидания."]},
+    {"id": "daughter_story", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Дочь вчера приехала, хорошо посидели.", "Чай пили и фотографии смотрели.", "А потом вспоминали наши поездки.", "Я еще хотела рассказать про дачу."]},
+    {"id": "yesterday_story", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Вчера ходила в парк и встретила подругу.", "Долго сидели на скамейке и разговаривали.", "Я рада была ее увидеть."]},
+    {"id": "open_user_question", "mission": "daily", "mandatory_background_goals": false, "inputs": ["А вы любите музыку?", "Я часто слушаю старые песни."]},
+    {"id": "topic_switch", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Дочь вчера приезжала.", "А лучше про огород расскажу.", "Помидоры уже собрала."]},
+    {"id": "return_to_topic", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Дочь вчера приезжала.", "Сегодня я гуляла в парке.", "Вернемся к дочери, она фотографии привезла."]},
+    {"id": "not_recalled", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Голова болит.", "Не помню.", "Терпимо."]},
+    {"id": "ambiguous_reply", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Как-то не очень.", "Не знаю, как объяснить.", "Ничего не болит, просто устала."]},
+    {"id": "self_correction", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Самочувствие хорошее, спала хорошо.", "Нет, я перепутала, спала плохо.", "Часто просыпалась."]},
+    {"id": "barge_in", "mission": "daily", "mandatory_background_goals": false, "required_modalities": ["phone_audio", "interruption", "playout_cancel"], "inputs": ["Подождите, я еще не закончила.", "Голова болит со вчера."]},
+    {"id": "slow_speech", "mission": "daily", "mandatory_background_goals": false, "required_modalities": ["phone_audio", "slow_speech_endpoint"], "inputs": ["Самочувствие хорошее, но вчера долго не могла уснуть.", "Сегодня спала нормально."]},
+    {"id": "symptom_inside_story", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Вчера с дочерью чай пили, а голова болит со вчера, сейчас сильная боль.", "Да, сейчас тоже беспокоит."]},
+    {"id": "refuse_one_question", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Не хочу отвечать про здоровье, давайте просто поговорим.", "Внучка вчера приезжала.", "Фотографии привезла."]},
+    {"id": "finish_entire_call", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Спасибо, не хочу больше разговаривать.", "До свидания."]},
+    {"id": "just_conversation", "mission": "daily", "mandatory_background_goals": false, "inputs": ["Я просто поговорить хотела, жалоб нет.", "Мне нравится рассказывать про сад.", "Розы в этом году красивые.", "И про соседку хотела рассказать."]}
+  ]
+}

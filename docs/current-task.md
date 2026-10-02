@@ -1,3 +1,54 @@
+# Conversational move architecture audit and Cut0 (2026-10-02)
+
+Owner requested audit BEFORE production changes and a first safe evolutionary
+cut. Fetched m5 **09cff20133fcf77b32bf9b32357ee0dd1922daa2**, exactly 137 commits
+ahead of main; initial tree clean. Work remains on codex/live-loop-fix for m5
+publication; main untouched. Reviewed requested trees/ADRs/caring/realtime tests,
+including three read-only parallel audits and independent Cut0 review.
+
+CHANGED: [architecture report](conversational-move-architecture-2026-10-02.md)
+created before code, proposed [ADR028](adr/028-conversational-move-evolution.md),
+existing comparison tool decision/state/delivery capture + honest metrics,
+15-type explicit short preset and [baseline/handoff](evaluation/conversational-move-baseline-2026-10-02/README.md).
+No new runtime component, scheduler, FSM, renderer, provider or default flag.
+All 331 tracked packages/services/infra/config/scripts files byte-identical to
+audited HEAD. No old test/assertion/skip changed.
+
+VERIFIED:
+
+| Command / boundary | Result |
+|---|---|
+| pytest comparison + measurements | 23 passed,1.06s; independent review 23 passed,.92s |
+| full `python -m pytest -q --tb=short` | 2502 passed /8 inherited missing-model failures /9 skipped,114.67s; NOT green |
+| policy/router/shadow audit tests | 115 passed,.87s |
+| Same 15 SDK inputs legacy/shadow/policy | shadow 0/15 changed outputs; diagnostic policy15/15 changed, not all changes erroneous |
+| Measurement proxies | forced-count return legacy/shadow 4 each; delivered clinical without pending legacy/shadow 0,policy 8 |
+| Frozen artifact metrics/import comparison CLI | PASS; source hashes match, projected/raw metric equality; no invented phone/model values |
+| Existing `benchmark_action_policy --iterations10000 --json` | Linux selector p50=.832ms,p95=1.305ms,p99=5.018ms; not M5/end-to-end |
+| `policy_diff_v8_v9 --stdout-only` / 10 frozen hashes | 4 expected /0 unexplained PASS; all hashes unchanged |
+| `make lint` /diff check /independent reviewer | PASS /PASS /APPROVE for offline scope |
+
+Audit correction: coverage already uses scored_next_domain; legacy mode here
+is the new Engine's scheduler, not the old Planner. Frozen policy lacks thread
+context/candidates and loses pending/ITS commits when authoritative. Also found
+SDK/actor producer divergence, lost open question, lost volunteered current+
+severity and the global-stop phrase `Спасибо, не хочу больше разговаривать`
+remaining control=none. These are real SDK blockers, not new phrase requests.
+No soft/policy cutover, frozen core repin or generative activation was attempted.
+
+NOT VERIFIED: loaded M5/recording/runtime flags, actual actor/phone/model
+accuracy, acoustic latency/slow/barge, human questionnaire-feel, generative model
+memory/throughput, 100 calls/Core acceptance/competitors. Original trained heads
+are still absent here; torch presence does not replace weights.
+REMAINING RISKS: authoritative plan lifecycle, sparse legal set, producer parity,
+semantic/control coverage and live ACK timer semantics. A remains operational;
+B is benchmark-only proposed, C rejected as state/control owner.
+NEXT GATE: reducer-owned chosen-plan target/delivery/answer/ITS commit plus
+canonical producer parity before any authority promotion; collect actual phone
+baseline on M5 per handoff. Cut0 improves measurement, not speech.
+
+---
+
 # Listening exchange and truthful Qwen delivery (2026-10-02)
 
 Owner feedback: «по диалогам что я слушал ничего прям такого не поменялось».
