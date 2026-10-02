@@ -271,6 +271,13 @@ class EngineState(BaseModel):
     # garbage or silence.
     open_hook: str = ""
     open_hook_used: bool = False
+    # Listening exchange: the scheduler limits prompts independently of
+    # topic decay. Discourse ties a reply to its accepted utterance, never
+    # substitutes a new hook for each sentence in the same exchange.
+    thread_followup_count: int = 0
+    thread_reply_turn_id: str = ""
+    thread_reply_finished: bool = False
+    thread_consumed_reply_id: str = ""
     # Normalized signature of what Vera just acknowledged — anti-parrot
     # for acks (questions are covered by asked_signatures).
     last_ack_signature: str = ""

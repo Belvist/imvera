@@ -1,0 +1,802 @@
+{
+  "before_revision": "030e2629c0848a92f66d4a271e52345466c40cb2",
+  "after_identity": "source_sha256 below; tested candidate on m5 base",
+  "comparison": "identical inputs, clock, call IDs; normal and complaint speech unchanged",
+  "before": {
+    "layer": "offline canonical DialogueEngine SDK text; no STT, TTS or phone",
+    "clock": "2026-10-02 10:00; fixed copy rotation and call IDs",
+    "human_warmth": "NOT_RUN",
+    "heard_audio": "NOT_RUN",
+    "inputs": {
+      "ordinary_good": [
+        "Хорошо.",
+        "Нет.",
+        "До свидания."
+      ],
+      "complaint": [
+        "Голова болит.",
+        "С утра.",
+        "Терпимо.",
+        "Нет.",
+        "До свидания."
+      ],
+      "personal_story": [
+        "Внучка приезжала, хорошо посидели.",
+        "Чай пили, разговаривали.",
+        "Да, приятно было.",
+        "Хорошо.",
+        "Нет.",
+        "До свидания."
+      ],
+      "lonely": [
+        "Мне одиноко, скучаю по дочери.",
+        "Она далеко, редко звонит.",
+        "Я просто поговорить хотела.",
+        "Нормально.",
+        "Нет.",
+        "До свидания."
+      ]
+    },
+    "source_sha256": {
+      "packages/dialogue_engine/conversation_policy.py": "8f9f8833fc6e2eb8cceede8db6ab16cbb9e3154a1351fdeae024ebd5ba64b9ad",
+      "packages/dialogue_engine/discourse.py": "5ec20d0bab04df9771674695b09c95f377d4d932efd08967bf35bb13a387fe1a",
+      "packages/dialogue_engine/questions.py": "a97f423190ec9eb90aefcfd2dc1278f1818bc59a859c670829ab702bc52b4ed8",
+      "packages/dialogue_engine/reducer.py": "93c5d88cad014f32d089705f3b9e2fbd66e8b77299ce6c6a9337b2615485a9e4",
+      "packages/dialogue_engine/state.py": "8670b1ed4966556449dc96b8692188d952bdffa62492e8ff454c150a0bb1b86a",
+      "packages/dialogue_engine/turn_understanding.py": "8c57fb6a3a1ba927a3aa36ad27da5288f232f05dccc063897bc95b1e8b2f42c8",
+      "packages/dialogue_engine/deterministic_mission.py": "90bc6adf2816f99080eb08131da26677a9ccfd5e0dbbca87e3409ee96d2e71c4"
+    },
+    "outputs": {
+      "ordinary_good": [
+        {
+          "speaker": "vera",
+          "text": "Доброе утро. Это Вера из сервиса Амвера. Тамара Юрьевна, как ваше самочувствие сегодня?",
+          "intent": "opening_wellness",
+          "marks_question": true,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Хорошо.",
+          "proposed_goal_answers": [
+            {
+              "goal_id": "wellness",
+              "value": "Хорошо.",
+              "confidence": 0.8,
+              "evidence": "Хорошо.",
+              "is_correction": false
+            }
+          ]
+        },
+        {
+          "speaker": "vera",
+          "text": "Поняла вас. Может, ещё что-то важное хотите рассказать — по здоровью или дома?",
+          "intent": "important_to_share",
+          "marks_question": true,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Хорошо."
+        },
+        {
+          "speaker": "caller",
+          "text": "Нет.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Спасибо, Тамара Юрьевна. На сегодня всё. Берегите себя.",
+          "intent": "summary",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Хорошо."
+        },
+        {
+          "speaker": "caller",
+          "text": "До свидания.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+          "intent": "goodbye_final",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Хорошо."
+        }
+      ],
+      "complaint": [
+        {
+          "speaker": "vera",
+          "text": "Доброе утро. Это Вера из сервиса Амвера. Тамара Юрьевна, как ваше самочувствие сегодня?",
+          "intent": "opening_wellness",
+          "marks_question": true,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Голова болит.",
+          "proposed_goal_answers": [
+            {
+              "goal_id": "wellness",
+              "value": "Голова болит.",
+              "confidence": 0.8,
+              "evidence": "Голова болит.",
+              "is_correction": false
+            }
+          ]
+        },
+        {
+          "speaker": "vera",
+          "text": "Жаль, что голова болит. Когда начала болеть голова — сегодня или раньше?",
+          "intent": "episode_headache_duration",
+          "marks_question": true,
+          "pending_intent": "episode_headache_duration",
+          "wellness": "FILLED",
+          "wellness_quote": "Голова болит."
+        },
+        {
+          "speaker": "caller",
+          "text": "С утра.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Сейчас голова болит сильно или терпимо?",
+          "intent": "episode_headache_severity",
+          "marks_question": true,
+          "pending_intent": "episode_headache_severity",
+          "wellness": "FILLED",
+          "wellness_quote": "Голова болит."
+        },
+        {
+          "speaker": "caller",
+          "text": "Терпимо.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Поняла, сейчас терпимо. Может, ещё что-то важное хотите рассказать — по здоровью или дома?",
+          "intent": "important_to_share",
+          "marks_question": true,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Голова болит."
+        },
+        {
+          "speaker": "caller",
+          "text": "Нет.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Спасибо, Тамара Юрьевна. Я записала: головная боль. На сегодня всё. Берегите себя.",
+          "intent": "summary",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Голова болит."
+        },
+        {
+          "speaker": "caller",
+          "text": "До свидания.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+          "intent": "goodbye_final",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Голова болит."
+        }
+      ],
+      "personal_story": [
+        {
+          "speaker": "vera",
+          "text": "Доброе утро. Это Вера из сервиса Амвера. Тамара Юрьевна, как ваше самочувствие сегодня?",
+          "intent": "opening_wellness",
+          "marks_question": true,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Внучка приезжала, хорошо посидели.",
+          "proposed_goal_answers": [
+            {
+              "goal_id": "wellness",
+              "value": "хорошо посидели.",
+              "confidence": 0.8,
+              "evidence": "хорошо посидели.",
+              "is_correction": false
+            }
+          ]
+        },
+        {
+          "speaker": "vera",
+          "text": "Вы говорили: «внучка приезжала, хорошо посидели». Я вас слушаю. Хотите рассказать чуть подробнее?",
+          "intent": "thread_followup",
+          "marks_question": false,
+          "pending_intent": "opening_wellness",
+          "wellness": "FILLED",
+          "wellness_quote": "хорошо посидели."
+        },
+        {
+          "speaker": "caller",
+          "text": "Чай пили, разговаривали.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Вы говорили: «чай пили, разговаривали». Я вас слушаю. Хотите рассказать чуть подробнее?",
+          "intent": "thread_followup",
+          "marks_question": false,
+          "pending_intent": "opening_wellness",
+          "wellness": "FILLED",
+          "wellness_quote": "хорошо посидели."
+        },
+        {
+          "speaker": "caller",
+          "text": "Да, приятно было.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Поняла. Что-то ещё важное есть?",
+          "intent": "important_to_share",
+          "marks_question": true,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "хорошо посидели."
+        },
+        {
+          "speaker": "caller",
+          "text": "Хорошо.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Спасибо, что рассказали. На сегодня всё. Берегите себя.",
+          "intent": "summary",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "хорошо посидели."
+        },
+        {
+          "speaker": "caller",
+          "text": "Нет.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+          "intent": "goodbye_final",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "хорошо посидели."
+        },
+        {
+          "speaker": "caller",
+          "text": "До свидания.",
+          "proposed_goal_answers": []
+        }
+      ],
+      "lonely": [
+        {
+          "speaker": "vera",
+          "text": "Доброе утро. Это Вера из сервиса Амвера. Тамара Юрьевна, как ваше самочувствие сегодня?",
+          "intent": "opening_wellness",
+          "marks_question": true,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Мне одиноко, скучаю по дочери.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Вы говорили: «мне одиноко, скучаю по дочери». Я вас слушаю. Хотите рассказать чуть подробнее?",
+          "intent": "thread_followup",
+          "marks_question": false,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Она далеко, редко звонит.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Вы говорили: «она далеко, редко звонит». Я вас слушаю. Хотите рассказать чуть подробнее?",
+          "intent": "thread_followup",
+          "marks_question": false,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Я просто поговорить хотела.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Вы говорили: «я просто поговорить хотела». Я вас слушаю. Хотите рассказать чуть подробнее?",
+          "intent": "thread_followup",
+          "marks_question": false,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Нормально.",
+          "proposed_goal_answers": [
+            {
+              "goal_id": "wellness",
+              "value": "Нормально.",
+              "confidence": 0.8,
+              "evidence": "Нормально.",
+              "is_correction": false
+            }
+          ]
+        },
+        {
+          "speaker": "vera",
+          "text": "Хорошо. Что-то ещё хотите сказать?",
+          "intent": "important_to_share",
+          "marks_question": true,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Нормально."
+        },
+        {
+          "speaker": "caller",
+          "text": "Нет.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Спасибо, Тамара Юрьевна. На сегодня всё. Берегите себя.",
+          "intent": "summary",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Нормально."
+        },
+        {
+          "speaker": "caller",
+          "text": "До свидания.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+          "intent": "goodbye_final",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Нормально."
+        }
+      ]
+    }
+  },
+  "after": {
+    "layer": "offline canonical DialogueEngine SDK text; no STT, TTS or phone",
+    "clock": "2026-10-02 10:00; fixed copy rotation and call IDs",
+    "human_warmth": "NOT_RUN",
+    "heard_audio": "NOT_RUN",
+    "inputs": {
+      "ordinary_good": [
+        "Хорошо.",
+        "Нет.",
+        "До свидания."
+      ],
+      "complaint": [
+        "Голова болит.",
+        "С утра.",
+        "Терпимо.",
+        "Нет.",
+        "До свидания."
+      ],
+      "personal_story": [
+        "Внучка приезжала, хорошо посидели.",
+        "Чай пили, разговаривали.",
+        "Да, приятно было.",
+        "Хорошо.",
+        "Нет.",
+        "До свидания."
+      ],
+      "lonely": [
+        "Мне одиноко, скучаю по дочери.",
+        "Она далеко, редко звонит.",
+        "Я просто поговорить хотела.",
+        "Нормально.",
+        "Нет.",
+        "До свидания."
+      ]
+    },
+    "source_sha256": {
+      "packages/dialogue_engine/conversation_policy.py": "85f268aaf349c3b8c95daf2d52b705311efee9f945a857caa5ca4194ac56c98f",
+      "packages/dialogue_engine/discourse.py": "acaac2c83ca9cb52657aa7efb81c387be4bd8d5c60452244ce00a6437be41d60",
+      "packages/dialogue_engine/questions.py": "83dae7bbd33e0539e66b61ecad444f5dd26ad595bc82bd9ea324f7c598925e7e",
+      "packages/dialogue_engine/reducer.py": "de2975546a3a2aaa1279235c84887e33638727fbc5299173cd7c521e75fc04d3",
+      "packages/dialogue_engine/state.py": "47a7b1006356d96cef9c454a7ac58ddd62039ae97ecaa216afd42fd9afbaa0ae",
+      "packages/dialogue_engine/turn_understanding.py": "8e9c972493564f8be7ccc033be3f8f137ea46330899c55adb9aded818081ca2d",
+      "packages/dialogue_engine/deterministic_mission.py": "020084de02dbfc4b7ffd3aa00e1870837a75528d210f1b47ed67f60d9df0e201"
+    },
+    "outputs": {
+      "ordinary_good": [
+        {
+          "speaker": "vera",
+          "text": "Доброе утро. Это Вера из сервиса Амвера. Тамара Юрьевна, как ваше самочувствие сегодня?",
+          "intent": "opening_wellness",
+          "marks_question": true,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Хорошо.",
+          "proposed_goal_answers": [
+            {
+              "goal_id": "wellness",
+              "value": "Хорошо.",
+              "confidence": 0.8,
+              "evidence": "Хорошо.",
+              "is_correction": false
+            }
+          ]
+        },
+        {
+          "speaker": "vera",
+          "text": "Поняла вас. Может, ещё что-то важное хотите рассказать — по здоровью или дома?",
+          "intent": "important_to_share",
+          "marks_question": true,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Хорошо."
+        },
+        {
+          "speaker": "caller",
+          "text": "Нет.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Спасибо, Тамара Юрьевна. На сегодня всё. Берегите себя.",
+          "intent": "summary",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Хорошо."
+        },
+        {
+          "speaker": "caller",
+          "text": "До свидания.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+          "intent": "goodbye_final",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Хорошо."
+        }
+      ],
+      "complaint": [
+        {
+          "speaker": "vera",
+          "text": "Доброе утро. Это Вера из сервиса Амвера. Тамара Юрьевна, как ваше самочувствие сегодня?",
+          "intent": "opening_wellness",
+          "marks_question": true,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Голова болит.",
+          "proposed_goal_answers": [
+            {
+              "goal_id": "wellness",
+              "value": "Голова болит.",
+              "confidence": 0.8,
+              "evidence": "Голова болит.",
+              "is_correction": false
+            }
+          ]
+        },
+        {
+          "speaker": "vera",
+          "text": "Жаль, что голова болит. Когда начала болеть голова — сегодня или раньше?",
+          "intent": "episode_headache_duration",
+          "marks_question": true,
+          "pending_intent": "episode_headache_duration",
+          "wellness": "FILLED",
+          "wellness_quote": "Голова болит."
+        },
+        {
+          "speaker": "caller",
+          "text": "С утра.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Сейчас голова болит сильно или терпимо?",
+          "intent": "episode_headache_severity",
+          "marks_question": true,
+          "pending_intent": "episode_headache_severity",
+          "wellness": "FILLED",
+          "wellness_quote": "Голова болит."
+        },
+        {
+          "speaker": "caller",
+          "text": "Терпимо.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Поняла, сейчас терпимо. Может, ещё что-то важное хотите рассказать — по здоровью или дома?",
+          "intent": "important_to_share",
+          "marks_question": true,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Голова болит."
+        },
+        {
+          "speaker": "caller",
+          "text": "Нет.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Спасибо, Тамара Юрьевна. Я записала: головная боль. На сегодня всё. Берегите себя.",
+          "intent": "summary",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Голова болит."
+        },
+        {
+          "speaker": "caller",
+          "text": "До свидания.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+          "intent": "goodbye_final",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Голова болит."
+        }
+      ],
+      "personal_story": [
+        {
+          "speaker": "vera",
+          "text": "Доброе утро. Это Вера из сервиса Амвера. Тамара Юрьевна, как ваше самочувствие сегодня?",
+          "intent": "opening_wellness",
+          "marks_question": true,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Внучка приезжала, хорошо посидели.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Вы говорили: «внучка приезжала, хорошо посидели». Я вас слушаю. Хотите рассказать чуть подробнее?",
+          "intent": "thread_followup",
+          "marks_question": true,
+          "pending_intent": "thread_followup",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Чай пили, разговаривали.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Как вам сейчас, когда вы об этом рассказываете?",
+          "intent": "thread_continue",
+          "marks_question": true,
+          "pending_intent": "thread_continue",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Да, приятно было.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Спасибо, что поделились. А как ваше самочувствие сегодня?",
+          "intent": "resume_after_thread",
+          "marks_question": true,
+          "pending_intent": "resume_after_thread",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Хорошо.",
+          "proposed_goal_answers": [
+            {
+              "goal_id": "wellness",
+              "value": "Хорошо.",
+              "confidence": 0.8,
+              "evidence": "Хорошо.",
+              "is_correction": false
+            }
+          ]
+        },
+        {
+          "speaker": "vera",
+          "text": "Поняла. Что-то ещё важное есть?",
+          "intent": "important_to_share",
+          "marks_question": true,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Хорошо."
+        },
+        {
+          "speaker": "caller",
+          "text": "Нет.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Спасибо, Тамара Юрьевна. На сегодня всё. Берегите себя.",
+          "intent": "summary",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Хорошо."
+        },
+        {
+          "speaker": "caller",
+          "text": "До свидания.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+          "intent": "goodbye_final",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Хорошо."
+        }
+      ],
+      "lonely": [
+        {
+          "speaker": "vera",
+          "text": "Доброе утро. Это Вера из сервиса Амвера. Тамара Юрьевна, как ваше самочувствие сегодня?",
+          "intent": "opening_wellness",
+          "marks_question": true,
+          "pending_intent": "opening_wellness",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Мне одиноко, скучаю по дочери.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Вы говорили: «мне одиноко, скучаю по дочери». Я вас слушаю. Хотите рассказать чуть подробнее?",
+          "intent": "thread_followup",
+          "marks_question": true,
+          "pending_intent": "thread_followup",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Она далеко, редко звонит.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Как вам сейчас, когда вы об этом рассказываете?",
+          "intent": "thread_continue",
+          "marks_question": true,
+          "pending_intent": "thread_continue",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Я просто поговорить хотела.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Спасибо, что поделились. А как ваше самочувствие сегодня?",
+          "intent": "resume_after_thread",
+          "marks_question": true,
+          "pending_intent": "resume_after_thread",
+          "wellness": "OPEN",
+          "wellness_quote": null
+        },
+        {
+          "speaker": "caller",
+          "text": "Нормально.",
+          "proposed_goal_answers": [
+            {
+              "goal_id": "wellness",
+              "value": "Нормально.",
+              "confidence": 0.8,
+              "evidence": "Нормально.",
+              "is_correction": false
+            }
+          ]
+        },
+        {
+          "speaker": "vera",
+          "text": "Хорошо. Что-то ещё хотите сказать?",
+          "intent": "important_to_share",
+          "marks_question": true,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Нормально."
+        },
+        {
+          "speaker": "caller",
+          "text": "Нет.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "Спасибо, Тамара Юрьевна. На сегодня всё. Берегите себя.",
+          "intent": "summary",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Нормально."
+        },
+        {
+          "speaker": "caller",
+          "text": "До свидания.",
+          "proposed_goal_answers": []
+        },
+        {
+          "speaker": "vera",
+          "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+          "intent": "goodbye_final",
+          "marks_question": false,
+          "pending_intent": "important_to_share",
+          "wellness": "FILLED",
+          "wellness_quote": "Нормально."
+        }
+      ]
+    }
+  }
+}

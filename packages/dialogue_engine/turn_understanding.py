@@ -431,6 +431,33 @@ def build_rich_turn_from_text(
     engine_state: object | None = None,
     mission_provider: object | None = None,
 ) -> RichUserTurn:
+    """Adjudicate all harvesters into one canonical, context-owned turn."""
+    from packages.dialogue_engine.deterministic_mission import (
+        _unowned_positive_wellness_evaluation,
+    )
+
+    turn = _build_rich_turn_from_text(
+        text, utterance_id=utterance_id,
+        engine_state=engine_state, mission_provider=mission_provider,
+    )
+    if any(f.field == "wellness" for f in turn.goal_facts) and (
+        _unowned_positive_wellness_evaluation(text, positive_proposed=any(
+            f.field == "wellness" and f.value == "positive" for f in turn.goal_facts
+        ))
+    ):
+        return turn.model_copy(update={
+            "goal_facts": tuple(f for f in turn.goal_facts if f.field != "wellness"),
+        })
+    return turn
+
+
+def _build_rich_turn_from_text(
+    text: str,
+    *,
+    utterance_id: str,
+    engine_state: object | None = None,
+    mission_provider: object | None = None,
+) -> RichUserTurn:
     """Semantic Kernel → RichUserTurn (canonical NLU path)."""
     from packages.dialogue_engine.semantic_kernel.kernel import interpret, kernel_to_rich_turn
 
@@ -448,6 +475,14 @@ def build_rich_turn_from_text(
     turn = attach_mission_understanding(
         turn, engine_state=engine_state, provider=mission_provider
     )
+    from packages.dialogue_engine.discourse import is_listening_evaluation
+
+    if is_listening_evaluation(engine_state, text):
+        # A response to the actual listening question is an evaluation of
+        # the story, not an answer to an unasked medical question.
+        return turn.model_copy(update={
+            "goal_facts": tuple(f for f in turn.goal_facts if f.field != "wellness"),
+        })
     if engine_state is not None and hasattr(engine_state, "answer_context_slot"):
         from packages.dialogue_engine.context import InterpretContext
         from packages.dialogue_engine.contextual_interpreter import contextual_interpret

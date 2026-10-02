@@ -582,6 +582,17 @@ def _on_playout_completed(
         if q.slot:
             mark_question_delivered(state, q.slot, q.question_id)
         state.bump_revision()
+        from packages.dialogue_engine.discourse import THREAD_QUESTION_INTENTS
+
+        if q.intent in THREAD_QUESTION_INTENTS:
+            state.waiting_on_slot = None
+            return state, [
+                TimerEffect(
+                    effect_id=_new_effect_id(), revision=state.revision,
+                    timer_id=f"thread-{q.question_id}",
+                    wait_ms=questions._ANSWER_WAIT_MS, reason="thread_wait",
+                )
+            ]
         if (
             q.slot
             and state.fsm_state == FsmState.DAILY_CHECK
@@ -608,6 +619,20 @@ def _on_playout_completed(
     if ap.intent == "summary":
         state.summary_delivered = True
     state.bump_revision()
+    from packages.dialogue_engine.discourse import listening_question_pending
+
+    if (
+        listening_question_pending(state)
+        and ap.intent in ("repair_repeat", "thread_listening_ack", "mic_check")
+    ):
+        q = state.delivered_question
+        return state, [
+            TimerEffect(
+                effect_id=_new_effect_id(), revision=state.revision,
+                timer_id=f"thread-{q.question_id}",
+                wait_ms=questions._ANSWER_WAIT_MS, reason="thread_wait",
+            )
+        ]
     if ap.intent in _CONTROL_HANGUP_INTENTS:
         return state, [
             EndCallEffect(
@@ -629,7 +654,14 @@ def _on_playout_cancelled(
         return state, []
     if state.playing_question:
         q = state.playing_question
-        release_reservation(state, q.slot)
+        if q.slot:
+            release_reservation(state, q.slot)
+        from packages.dialogue_engine.discourse import THREAD_QUESTION_INTENTS
+
+        if q.intent in THREAD_QUESTION_INTENTS:
+            state.thread_followup_count = max(0, state.thread_followup_count - 1)
+            if q.intent == "thread_followup" and state.thread_followup_count == 0:
+                state.open_hook_used = False
         # Cancel before delivery: roll back planned-only mutations.
         if q.intent == "mission_final_open" or q.slot == "mission_final_open":
             state.important_to_share_planned = False
@@ -1028,6 +1060,69 @@ def _apply_rich_turn(
     if control_outcome is not None:
         return control_outcome
 
+    from packages.dialogue_engine.deterministic_mission import (
+        _unowned_positive_wellness_evaluation,
+    )
+
+    if any(f.field == "wellness" for f in turn.goal_facts) and (
+        _unowned_positive_wellness_evaluation(user_text, positive_proposed=any(
+            f.field == "wellness" and f.value == "positive" for f in turn.goal_facts
+        ))
+    ):
+        # SDK payloads and direct RichUserTurn proposals obey the same
+        # predicate ownership as canonical text understanding.
+        turn = turn.model_copy(update={
+            "goal_facts": tuple(f for f in turn.goal_facts if f.field != "wellness"),
+        })
+
+    from packages.dialogue_engine.discourse import (
+        is_listening_evaluation,
+        listening_question_pending,
+    )
+
+    listening = listening_question_pending(state)
+    if listening:
+        # Bare valence evaluates the just-delivered personal invitation.
+        # Context-blind fact extraction must not invent a medical answer;
+        # explicit volunteered health reports and other facts still apply.
+        bare = user_text.lower().strip().rstrip(".!?…")
+        if is_listening_evaluation(state, user_text):
+            turn = turn.model_copy(update={
+                "goal_facts": tuple(f for f in turn.goal_facts if f.field != "wellness"),
+            })
+        if (
+            turn.utterance_id == state.thread_consumed_reply_id
+            and not turn.issue_mentions and not turn.goal_facts and not turn.goal_answers
+            and not turn.correction and not turn.user_question and not turn.risk_candidates
+        ):
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            return state, []
+        if (
+            (_is_not_recalled_answer(turn, user_text)
+             or bare in ("нет", "неа", "не знаю", "ничего", "больше нечего добавить"))
+            and not turn.issue_mentions and not turn.goal_facts and not turn.goal_answers
+            and not turn.correction and not turn.user_question and not turn.risk_candidates
+        ):
+            atomic_semantic_apply(state, turn)
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            state.bump_revision()
+            return _emit_from_plan(state, schedule_next_action(
+                state, TurnContext(turn=turn, user_text=user_text),
+            ))
+        if (
+            bare in _BACKCHANNEL_ONLY
+            and not turn.issue_mentions and not turn.goal_facts and not turn.goal_answers
+            and not turn.correction and not turn.user_question and not turn.risk_candidates
+        ):
+            state.processing_turn_id = None
+            state.processing_effect_id = None
+            return _emit_speak(
+                state, text=questions.thread_listener_ack(), intent="thread_listening_ack",
+                slot=None, marks_question=False,
+            )
+
     if (
         _is_not_recalled_answer(turn, user_text)
         and (state.delivered_question is not None or answer_slot)
@@ -1276,7 +1371,7 @@ def _apply_rich_turn(
                 state, slot_filled, user_text=user_text, turn=turn
             )
 
-    if not turn.goal_facts and not answer_slot:
+    if not turn.goal_facts and not answer_slot and not listening:
         from packages.dialogue_engine.issue_mention_extract import extract_goal_facts
 
         for slot in ("wellness", "mood", "sleep", "plans"):
@@ -1288,7 +1383,8 @@ def _apply_rich_turn(
                 break
 
     if (
-        not turn.goal_answers
+        not listening
+        and not turn.goal_answers
         and not turn.goal_facts
         and _is_bare_valence_for_wellness(user_text, turn)
     ):
@@ -2873,7 +2969,12 @@ def _speak_repair(
     explanation = questions.requests_question_explanation(request_text)
     question_text = repair_question_text(state, slot, explain=explanation)
     text = questions.repair_response(question_text, explanation=explanation)
-    repair_slot = ctx.slot if ctx and ctx.slot else slot
+    from packages.dialogue_engine.discourse import listening_question_pending
+
+    repair_slot = (
+        delivered.slot if listening_question_pending(state)
+        else ctx.slot if ctx and ctx.slot else slot
+    )
     # Never echo the just-spoken question byte-identically (live: ITS
     # twice in a row after «нормально»): second identical re-ask becomes
     # a clarification. First verbatim repeat keeps its existing contract.
@@ -3088,6 +3189,29 @@ def _on_speak_effect_stale(
 def _on_timer_expired(state: EngineState, event: TimerExpired) -> tuple[EngineState, list[Effect]]:
     if _stale(state, event.revision):
         return state, []
+    if event.timer_id.startswith("thread-"):
+        from packages.dialogue_engine.conversation_policy import resume_after_user_thread
+        from packages.dialogue_engine.discourse import listening_question_pending
+
+        q = state.delivered_question
+        if (
+            not listening_question_pending(state) or q is None
+            or event.timer_id != f"thread-{q.question_id}"
+            or state.call_closed or state.fsm_state != FsmState.DAILY_CHECK
+            or state.risk_handling or state.red_state_pending
+            or state.safety_mode == "red" or _has_open_episodes(state)
+        ):
+            return state, []
+        if event.uplink_frames == 0 and not state.mic_check_spoken:
+            state.mic_check_spoken = True
+            return _emit_speak(
+                state, text="Вас не слышно. Проверьте, пожалуйста, микрофон.",
+                intent="mic_check", slot=None, marks_question=False,
+            )
+        state.waiting_on_slot = None
+        state.delivered_question = None
+        state.bump_revision()
+        return _emit_from_plan(state, resume_after_user_thread(state))
     slot = state.waiting_on_slot
     if event.timer_id.startswith("wait-") and not slot:
         slot = event.timer_id.removeprefix("wait-")

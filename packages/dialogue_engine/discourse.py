@@ -29,6 +29,47 @@ _FACT_THREAD_LABELS = {
 _THREAD_DECAY_TURNS = 3
 _HOOK_MAX_CHARS = 70
 _HOOK_MIN_WORDS = 2
+THREAD_QUESTION_INTENTS = frozenset({"thread_followup", "thread_continue"})
+_BARE_EVALUATIONS = frozenset({"хорошо", "плохо", "нормально", "неплохо", "так себе"})
+
+
+def listening_question_pending(state) -> bool:
+    delivered = getattr(state, "delivered_question", None)
+    return getattr(delivered, "intent", "") in THREAD_QUESTION_INTENTS
+
+
+def is_listening_evaluation(state, text: str) -> bool:
+    return listening_question_pending(state) and (
+        text.lower().strip().rstrip(".!?…") in _BARE_EVALUATIONS
+    )
+
+
+def _listening_reply(state, turn, raw: str) -> bool:
+    """The delivered invitation, rather than an old health slot, owns this answer."""
+    if not listening_question_pending(state):
+        return False
+    if (
+        getattr(turn, "control", "none") not in ("none", "")
+        or getattr(turn, "correction", False)
+        or getattr(turn, "user_question", None)
+        or getattr(turn, "issue_mentions", ())
+        or getattr(turn, "goal_facts", ())
+        or getattr(turn, "goal_answers", ())
+        or getattr(turn, "risk_candidates", ())
+    ):
+        return False
+    low = raw.lower().rstrip(".!?…")
+    finished = bool(getattr(turn, "not_recalled", False)) or low in (
+        "нет", "неа", "не знаю", "не помню", "ничего", "больше нечего добавить",
+    )
+    if not finished and (
+        getattr(turn, "dialogue_act", "") != "answer" or not raw or len(raw) > 200
+    ):
+        return False
+    state.thread_reply_turn_id = turn.utterance_id
+    state.thread_reply_finished = finished
+    state.current_thread_turns = 0
+    return True
 
 # Reactive-led turns answer the pending question («Да, дочь
 # раскладывает», «Постоянно нет, только иногда») — they belong to the
@@ -121,6 +162,8 @@ def update_discourse(state, turn) -> None:
         user_question = (getattr(turn, "user_question", None) or "").strip()
         raw = (getattr(turn, "raw_text", None) or "").strip()
         raw_lower = raw.lower()
+        if _listening_reply(state, turn, raw):
+            return
         engaged = _engaged_with_pending(state, raw, raw_lower)
         if engaged:
             _age(state, raw.split())
@@ -159,7 +202,7 @@ def update_discourse(state, turn) -> None:
                 # substantive span — never from one-word answers, easing
                 # reports, or non-health evaluations (owned elsewhere).
                 if (
-                    (not state.open_hook or state.open_hook_used)
+                    not state.open_hook
                     and not _easing
                     and not _nohealth
                 ):
@@ -212,7 +255,7 @@ def update_discourse(state, turn) -> None:
             else:
                 state.current_thread_label = "рассказ"
                 state.current_thread_turns = 0
-            if (not state.open_hook or state.open_hook_used) and raw:
+            if not state.open_hook and raw:
                 hook = raw[:_HOOK_MAX_CHARS].strip()
                 if hook:
                     state.open_hook = hook
@@ -263,6 +306,12 @@ def _age(state, words: list[str]) -> None:
         if state.current_thread_turns >= _THREAD_DECAY_TURNS:
             state.current_thread_label = ""
             state.current_thread_turns = 0
+            state.open_hook = ""
+            state.open_hook_used = False
+            state.thread_followup_count = 0
+            state.thread_reply_turn_id = ""
+            state.thread_reply_finished = False
+            state.thread_consumed_reply_id = ""
 
 
 def _continues(words: list[str], state) -> bool:

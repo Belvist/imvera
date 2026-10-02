@@ -35,7 +35,8 @@ test-dialogue-rich:
 		tests/test_dialogue_warmth.py tests/test_conversational_continuity.py tests/test_responsive_dialogue.py \
 		tests/test_speech_warmth_live.py tests/test_response_plan_idempotence.py \
 		tests/test_sdk_closing_evidence.py tests/test_live_onset_and_repair.py \
-		tests/test_clock_onset_ownership.py -q
+		tests/test_clock_onset_ownership.py tests/test_discourse_thread.py \
+		tests/test_personal_story_exchange.py tests/test_mission_positive_evaluation_ownership.py -q
 
 test-dialogue-runtime:
 	@echo "GATE: CallActor rich path + LLM worker contract"
@@ -47,7 +48,9 @@ test-dialogue-runtime:
 		tests/test_stt_previews.py tests/test_stt_preview_probe.py tests/test_turn_pipeline.py \
 		tests/test_voice_perception.py tests/test_uplink_preroll.py \
 		tests/test_transport_cancel.py tests/test_downstream_cancel_gap.py tests/test_inference_stop_epoch.py \
-		tests/test_call_actor_audible_playout.py tests/test_call_actor_multi_phrase_playback.py -q
+		tests/test_call_actor_audible_playout.py tests/test_call_actor_multi_phrase_playback.py \
+		tests/test_qwen_gguf_provider.py tests/test_qwen_tts_failure_integrity.py \
+		tests/test_tts_warmup.py -q
 
 test-action-policy-shadow:
 	@echo "GATE: ActionPolicy Shadow M1 (fail-open, pre-legacy, no cutover)"
