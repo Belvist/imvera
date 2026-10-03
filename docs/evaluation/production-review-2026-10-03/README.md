@@ -34,8 +34,8 @@ concurrent attempts reject immediately and caller cancellation releases the slot
 Initial container CI37162506889 observed warm readiness, stream/cancel,503 after
 resident loss, supervisor restart, recovered same-model readiness and another
 complete stream. The job then failed its log assertion because Docker's stderr
-(where the watchdog logs) was printed but not captured by the collector. Fix the
-collector to capture both log streams; retain the assertion and rerun the gate.
+(where the watchdog logs) was printed but not captured by the collector. The
+collector now captures both log streams; the assertion remains. Final gate passes.
 
 ## Verification and limits
 
@@ -51,8 +51,22 @@ restores the resident and proves same-model readiness plus another complete
 stream. `worker-recovery.json` is uploaded by CI. This fixture is explicitly not
 a neural voice, phone recording, human-dialogue evaluation or capacity test.
 
-Exact final commands/counts and source/CI are recorded in `docs/current-task.md`
-after gates complete. No load/genuine TTS/SIP acceptance is inferred from them.
+Final source **3ae3ea87465b5eb561fee716f1784610883c9343**:
+[CI37162766797](https://github.com/Belvist/imvera/actions/runs/37162766797)
+**11/11 jobs PASS**, full3193 passed/0 failed/3 skipped,223.61s;
+runtime316 passed,23.15s. The18 new fault cases join the original expectations.
+Final local runtime316 PASS,20.17s. Local full before the final HTTP-drain
+correction3184 PASS/2 inherited genuine-LFS readiness failures/9 skipped,
+147.03s; not locally green. Final CI has genuine hydrated artifacts.
+[Machine-readable checks](checks.json) preserve the failed first container gate.
+
+[Verified container artifact](container.json), official ZIP artifact11288267761,
+SHA256 `f87c2407684256faa60107253ead06106e3e770fdf8605c9a0e339a2b1a96bbd`.
+Actual image `sha256:15b63ff74236d68426552c88a4c0bbd29fd88c032ea8f3a881c657408910522f`;
+source/profile metadata verified; normal stop0.238s, warm and cold supervisor
+restarts, four frames in each completed stream, settled active/queue0, same
+model, no fallback. Controlled first-frame30.95ms is not neural TTS latency.
+No load/genuine TTS/SIP acceptance is inferred from these results.
 
 The active DialogueEngine/Reducer/renderer/playback ledger and canonical text
 are unchanged. No neural generator or template bank was enabled or extended.

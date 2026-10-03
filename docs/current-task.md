@@ -24,8 +24,8 @@ failed, then passed without weakened expectations. Exact final runtime command
 `OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 make test-dialogue-runtime
 PYTHON=/workspace/imvera-review-venv/bin/python`: **316 passed**,20.17s, includes
 **18 new fault cases** (follow-up reservation before readiness, with cancellation cleanup).
-The first version passed315 tests in19.38s before this additional case. Ruff packages/services/tests/scripts + container probe and
-whitespace PASS. Full local review run before the final HTTP-drain correction:
+The first version passed315 tests in19.38s before this additional case.
+Ruff packages/services/tests/scripts + container probe and whitespace PASS. Full local review run before the final HTTP-drain correction:
 **3184 passed /2 inherited genuine relation-LFS readiness failures /9 skipped**,
 147.03s; NOT locally green. Final runtime reran after the HTTP-drain correction.
 No readiness waiver, replacement weights or changed original assertions.
@@ -34,7 +34,15 @@ observed actual warm-loss/restart/recovered readiness and a complete stream,
 then failed its log assertion because the collector ignored Docker stderr.
 Collector now captures both streams; original assertions retained. Follow-up
 source reserves admission before provider readiness (reproduced missing
-reservation); exact final source CI is pending publication.
+reservation). Final verified source **3ae3ea87465b5eb561fee716f1784610883c9343**,
+[CI37162766797](https://github.com/Belvist/imvera/actions/runs/37162766797):
+**all11 jobs PASS**, full **3193 passed /0 failed /3 skipped**,223.61s;
+runtime316 PASS,23.15s. Actual hardened TTS container proves warm resident loss
+→readiness503→supervisor restart→same-model readiness→new complete stream,
+no lab fallback,0 settled active leases/queue, normal stop0.238s. Controlled
+PCM first-frame30.95ms is NOT neural TTS/phone latency.
+[Checks](evaluation/production-review-2026-10-03/checks.json) and
+[container artifact](evaluation/production-review-2026-10-03/container.json) preserve exact proof and failure history.
 
 NOT VERIFIED: current M5 or target server deployment, actual accepted neural
 Qwen voice/prosody, SIP/audio, Core/PG/consent, live latency/load/capacity. No target
@@ -46,8 +54,10 @@ finish an already running kernel. Admission is per bridge process. Resident
 artifacts and voice registration must remain accepted/pinned; restart reruns
 bootstrap. Source correctness does not establish human conversational quality.
 
-NEXT GATE: exact source CI and real container warm-loss/recovery, then target
-FreeSWITCH/CallActor audio+trace and capacity acceptance before raising admission.
+NEXT GATE: accepted target deployment and real FreeSWITCH/CallActor audio+trace,
+Core/consent, latency/interruption/soak before raising per-process admission.
+Do not share a FreeSWITCH shard across independent local orphan sweepers;
+shared-shard scale requires explicit cross-process channel ownership.
 
 ---
 

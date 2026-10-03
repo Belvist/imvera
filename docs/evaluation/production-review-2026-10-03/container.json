@@ -1,0 +1,82 @@
+{
+  "source_sha": "3ae3ea87465b5eb561fee716f1784610883c9343",
+  "boundary": "actual Docker, controlled PCM resident fixture in shared loopback namespace",
+  "neural_tts_or_sip_acceptance": false,
+  "image_id": "sha256:15b63ff74236d68426552c88a4c0bbd29fd88c032ea8f3a881c657408910522f",
+  "ready": {
+    "status": "ready",
+    "service": "tts",
+    "model_revision": "qwen_gguf:controlled-pcm-fixture",
+    "queue_depth": 0,
+    "cancellation": {
+      "active": 0,
+      "tombstones": 0
+    },
+    "runtime": {
+      "git_sha": "3ae3ea87465b5eb561fee716f1784610883c9343",
+      "runtime_mode": "production",
+      "profile_sha256": "ecb395c19450546696f4c9372e1a9c2fa03a6e66be66050968b1cf963b456465",
+      "profile_id": "linux-cpu-qwen-http"
+    }
+  },
+  "controlled_first_frame_ms": 30.953047000025435,
+  "successful_frames": 4,
+  "after_cancel": {
+    "status": "ready",
+    "service": "tts",
+    "model_revision": "qwen_gguf:controlled-pcm-fixture",
+    "queue_depth": 0,
+    "cancellation": {
+      "active": 0,
+      "tombstones": 1
+    },
+    "runtime": {
+      "git_sha": "3ae3ea87465b5eb561fee716f1784610883c9343",
+      "runtime_mode": "production",
+      "profile_sha256": "ecb395c19450546696f4c9372e1a9c2fa03a6e66be66050968b1cf963b456465",
+      "profile_id": "linux-cpu-qwen-http"
+    }
+  },
+  "runtime_dependency_loss": {
+    "status": "not_ready",
+    "service": "tts",
+    "error": "qwen resident readiness probe failed",
+    "queue_depth": 0,
+    "cancellation": {
+      "active": 0,
+      "tombstones": 1
+    },
+    "runtime": {
+      "git_sha": "3ae3ea87465b5eb561fee716f1784610883c9343",
+      "runtime_mode": "production",
+      "profile_sha256": "ecb395c19450546696f4c9372e1a9c2fa03a6e66be66050968b1cf963b456465",
+      "profile_id": "linux-cpu-qwen-http"
+    }
+  },
+  "runtime_recovery": {
+    "restart_count": 1,
+    "ready": {
+      "status": "ready",
+      "service": "tts",
+      "model_revision": "qwen_gguf:controlled-pcm-fixture",
+      "queue_depth": 0,
+      "cancellation": {
+        "active": 0,
+        "tombstones": 0
+      },
+      "runtime": {
+        "git_sha": "3ae3ea87465b5eb561fee716f1784610883c9343",
+        "runtime_mode": "production",
+        "profile_sha256": "ecb395c19450546696f4c9372e1a9c2fa03a6e66be66050968b1cf963b456465",
+        "profile_id": "linux-cpu-qwen-http"
+      }
+    },
+    "successful_frames": 4,
+    "same_model_revision": true,
+    "no_lab_fallback": true
+  },
+  "hardened": true,
+  "normal_stop_s": 0.2382512749999819,
+  "cold_failure_supervisor_restarts": 1,
+  "no_lab_fallback": true
+}

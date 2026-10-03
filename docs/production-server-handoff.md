@@ -137,6 +137,24 @@ cancel/deadline between packets, and closes HTTP resources. A currently blocked
 read cannot be preempted instantly; socket/process bounds contain it. Partial
 speech failure cannot replay a different voice or count as heard completion.
 
+## Scale gate
+
+Keep a single routed CallActor/SDK writer for each call. Increasing a worker's
+Python threads does not multiply neural capacity; use measured worker replicas
+and bounded queues. Raise admission only after recording target p50/p95,
+queue/CPU/RAM utilization, interruption and recovery under accepted load.
+
+The orphan sweep currently knows this bridge's local session registry. Assign
+each FreeSWITCH shard to one bridge process. Do not attach independent bridge
+processes to the same FreeSWITCH and leave their local sweeps enabled: one can
+mistake another's channels for orphans. Shared-shard scaling needs explicit
+cross-process channel ownership before deployment; it is not implemented or
+accepted by this cut. The current Compose overlay runs one bridge.
+
+The accepted resident must serve model/voice metadata within the probe budget
+under synthesis load. This cut proves controlled failure/recovery; actual
+resident responsiveness and neural throughput remain target benchmarks.
+
 ## Acceptance / rollback
 
 First verify matching deployed SHA/profile/model IDs and genuine readiness;
@@ -153,10 +171,18 @@ M5 or a target server were restarted by this source change.
 
 ## Published verification
 
+Re-review source **3ae3ea87465b5eb561fee716f1784610883c9343**:
+[CI37162766797](https://github.com/Belvist/imvera/actions/runs/37162766797),
+all11 jobs PASS,3193 tests/0 failures/3 skipped; runtime316 PASS.
+[Exact fault/container evidence](evaluation/production-review-2026-10-03/README.md)
+includes actual warm-resident loss/restart/recovered streaming. Deploy this
+corrected source with matching images/profile; target SIP/neural voice/load
+are still NOT VERIFIED. Earlier source evidence follows for comparison.
+
 Launch source `f7fbc89270ffeb67e41234b8c22e6fd4d789a08c`: [CI37159569169](https://github.com/Belvist/imvera/actions/runs/37159569169)
 all11 jobs PASS,3175 tests/0 failures/3 skipped. [Recorded image/model evidence](evaluation/portable-production-2026-10-03/README.md)
 uses runtime-identical source2e78b54: genuine CPU GigaAM4 WAVs,313–355ms HTTP
 processing, and actual Docker TTS lifecycle with controlled PCM (not neural TTS).
-Server deployment/SIP/neural voice/load still NOT VERIFIED. Build the documented
-launch source to preserve matching image/runtime SHA; final docs-only commits do
-not require changing the accepted worker/model artifacts.
+Server deployment/SIP/neural voice/load still NOT VERIFIED. Build corrected
+source3ae3ea8 above with matching image/runtime SHA. Documentation-only commits
+do not change its reviewed runtime bytes or require new model artifacts.

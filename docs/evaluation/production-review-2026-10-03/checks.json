@@ -1,0 +1,115 @@
+{
+  "branch": "feature/voice-zoiper-m5",
+  "baseline_sha": "55f38a5bdfb6d1ec5ceefcf4b4779a073b79628d",
+  "verified_source_sha": "3ae3ea87465b5eb561fee716f1784610883c9343",
+  "source_ci": {
+    "id": 37162766797,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37162766797",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "legacy-lint",
+        "databaseId": 111319453296,
+        "conclusion": "success"
+      },
+      {
+        "name": "contracts",
+        "databaseId": 111319453350,
+        "conclusion": "success"
+      },
+      {
+        "name": "dialogue-corpus-gate",
+        "databaseId": 111319453356,
+        "conclusion": "success"
+      },
+      {
+        "name": "lint-dialogue",
+        "databaseId": 111319453383,
+        "conclusion": "success"
+      },
+      {
+        "name": "production-workers",
+        "databaseId": 111319453395,
+        "conclusion": "success"
+      },
+      {
+        "name": "policy-diff",
+        "databaseId": 111319453398,
+        "conclusion": "success"
+      },
+      {
+        "name": "dialogue-rich",
+        "databaseId": 111319453407,
+        "conclusion": "success"
+      },
+      {
+        "name": "action-policy-shadow",
+        "databaseId": 111319453412,
+        "conclusion": "success"
+      },
+      {
+        "name": "dialogue-runtime",
+        "databaseId": 111319453441,
+        "conclusion": "success"
+      },
+      {
+        "name": "semantic-kernel",
+        "databaseId": 111319453515,
+        "conclusion": "success"
+      },
+      {
+        "name": "test",
+        "databaseId": 111319502731,
+        "conclusion": "success"
+      }
+    ],
+    "full_suite": {
+      "passed": 3193,
+      "failed": 0,
+      "skipped": 3,
+      "duration_s": 223.61
+    },
+    "runtime": {
+      "passed": 316,
+      "duration_s": 23.15
+    }
+  },
+  "new_fault_cases": 18,
+  "local_final_runtime": {
+    "passed": 316,
+    "duration_s": 20.17,
+    "command": "OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 make test-dialogue-runtime PYTHON=/workspace/imvera-review-venv/bin/python"
+  },
+  "local_full_before_final_http_drain_change": {
+    "passed": 3184,
+    "failed": 2,
+    "skipped": 9,
+    "duration_s": 147.03,
+    "failure_reason": "inherited missing genuine relation-LFS readiness; not waived"
+  },
+  "earlier_ci": {
+    "id": 37162506889,
+    "source_sha": "242ffcdc38850591cc4287cf8f848e094a698c6b",
+    "conclusion": "failure",
+    "full_suite": {
+      "passed": 3192,
+      "failed": 0,
+      "skipped": 3,
+      "duration_s": 174.64
+    },
+    "failed_gate": "production-workers log assertion: watchdog stderr not captured; expectation retained"
+  },
+  "container_artifact": {
+    "id": 11288267761,
+    "name": "production-worker-recovery",
+    "zip_sha256": "f87c2407684256faa60107253ead06106e3e770fdf8605c9a0e339a2b1a96bbd"
+  },
+  "neural_tts_or_sip_acceptance": false,
+  "target_deployment": false,
+  "remaining": [
+    "accepted target hardware and resident responsiveness under load",
+    "real SIP/audio latency, interruption and warmth",
+    "Core/PG/consent and soak",
+    "shared FreeSWITCH scaling requires channel ownership; current admission is per process"
+  ]
+}
