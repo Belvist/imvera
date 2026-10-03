@@ -122,12 +122,15 @@ same operation immediately to the same executor and shields its completion
 Future, preserving caller context and the cancellation fence/policy lock.
 It adds no executor, state writer or queue.74 related runtime checks PASS,2.03s.
 All16 paired SDK sequences remain identical after this runtime correction.
-The original CI200ms assertion is unchanged; timing resolution awaits exact CI.
+The original CI200ms assertion is unchanged and now PASS on23c67bf.
+[Exact code CI](ci.json): all10 jobs PASS; full3117 PASS/0 FAIL/3 SKIP,182.96s,
+genuine LFS weights. This verifies this regression, not all runtime timing
+or M5 acoustic latency. Earlier failed runs remain recorded, not erased.
 
 NOT VERIFIED: loaded M5 revision, STT/TTS/PCM, interruptions, acoustic warmth,
 blind listener ratings, Core end-to-end acceptance or competitor superiority.
 The composer still has bounded wording and conservative abstentions; this does
 not establish unrestricted human conversation or million-user capacity.
 
-NEXT GATE: install the exact CI-verified source on M5 via the existing handoff,
+NEXT GATE: install exact CI-verified source23c67bf on M5 via the existing handoff,
 then capture a CallActor/FreeSWITCH call with audio, runtime truth and trace.

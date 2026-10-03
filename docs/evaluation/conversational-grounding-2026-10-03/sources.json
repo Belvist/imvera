@@ -1,6 +1,6 @@
 {
   "base_sha": "f566cec64b5262f7a4956522ea6b7d0145aa2ef8",
-  "candidate_status": "dialogue cut22a2e5f plus executor completion fix; committed source to be recorded after CI",
+  "candidate_status": "verified committed production source23c67bfd7e5c5e9f9ca337519cff16a62724b3ea; later evidence-only commit does not change source hashes",
   "branch": "feature/voice-zoiper-m5",
   "kind": "synthetic canonical SDK + completed playout replay; not STT or audio",
   "cases": 16,
@@ -942,5 +942,7 @@
       "before": "c7534c9dd4f5db1ed1ce596956d241b294672844d9b19a0515c59a26a3d6a472",
       "after": "c7534c9dd4f5db1ed1ce596956d241b294672844d9b19a0515c59a26a3d6a472"
     }
-  }
+  },
+  "verified_code_commit": "23c67bfd7e5c5e9f9ca337519cff16a62724b3ea",
+  "verified_code_ci": "https://github.com/Belvist/imvera/actions/runs/37131206492"
 }

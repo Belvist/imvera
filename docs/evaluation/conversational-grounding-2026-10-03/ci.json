@@ -1,0 +1,77 @@
+{
+  "verified_code_commit": "23c67bfd7e5c5e9f9ca337519cff16a62724b3ea",
+  "run_id": 37131206492,
+  "url": "https://github.com/Belvist/imvera/actions/runs/37131206492",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "legacy-lint",
+      "conclusion": "success",
+      "id": 111226514798,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37131206492/job/111226514798"
+    },
+    {
+      "name": "dialogue-runtime",
+      "conclusion": "success",
+      "id": 111226514942,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37131206492/job/111226514942"
+    },
+    {
+      "name": "semantic-kernel",
+      "conclusion": "success",
+      "id": 111226514973,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37131206492/job/111226514973"
+    },
+    {
+      "name": "contracts",
+      "conclusion": "success",
+      "id": 111226514983,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37131206492/job/111226514983"
+    },
+    {
+      "name": "action-policy-shadow",
+      "conclusion": "success",
+      "id": 111226515029,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37131206492/job/111226515029"
+    },
+    {
+      "name": "dialogue-rich",
+      "conclusion": "success",
+      "id": 111226515030,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37131206492/job/111226515030"
+    },
+    {
+      "name": "policy-diff",
+      "conclusion": "success",
+      "id": 111226515064,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37131206492/job/111226515064"
+    },
+    {
+      "name": "lint-dialogue",
+      "conclusion": "success",
+      "id": 111226515113,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37131206492/job/111226515113"
+    },
+    {
+      "name": "dialogue-corpus-gate",
+      "conclusion": "success",
+      "id": 111226515921,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37131206492/job/111226515921"
+    },
+    {
+      "name": "test",
+      "conclusion": "success",
+      "id": 111226570965,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37131206492/job/111226570965"
+    }
+  ],
+  "full_suite": {
+    "passed": 3117,
+    "failed": 0,
+    "skipped": 3,
+    "seconds": 182.96
+  },
+  "weights": "genuine Git LFS checkout; model readiness assertions pass",
+  "scope": "source/contract/runtime tests and SDK traces; not deployed M5, audio or load acceptance"
+}

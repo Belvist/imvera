@@ -30,7 +30,7 @@
     "seconds": 176.58,
     "same_failure": true
   },
-  "next": "exact code CI after executor completion correction; then M5 phone gate",
+  "next": "M5 phone/audio acceptance; no assertion of eliminating all timing instability",
   "f875ea9_diagnostic_ci": {
     "run": 37129700388,
     "passed": 3115,
@@ -69,6 +69,12 @@
     "related_runtime_tests": 74,
     "related_runtime_seconds": 2.03,
     "original200ms_deadline_unchanged": true,
-    "ci_timing_fix": "PENDING actual complete run"
+    "ci_timing_fix": {
+      "run": 37131206492,
+      "commit": "23c67bfd7e5c5e9f9ca337519cff16a62724b3ea",
+      "all10_jobs": "PASS",
+      "original200ms_ordering_assertion": "PASS",
+      "full_suite": "3117 passed,0 failed,3 skipped,182.96s"
+    }
   }
 }

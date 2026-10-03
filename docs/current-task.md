@@ -1,6 +1,7 @@
 # Grounded reactions and routine-topic suspension (2026-10-03)
 
 Target: **feature/voice-zoiper-m5**, based on peer **f566cec64b5262f7a4956522ea6b7d0145aa2ef8**.
+Published code: **23c67bfd7e5c5e9f9ca337519cff16a62724b3ea**.
 Peer composer/variation/address guards and unknown bank retained. Main, models
 and loaded services untouched. [Root cause, replacements and paired SDK traces](evaluation/conversational-grounding-2026-10-03/README.md);
 [operator integration](user-led-conversation-integration.md).
@@ -31,7 +32,7 @@ VERIFIED (source candidate; not a deployment):
 | `PYTHONPATH=. python tools/voice_lab/policy_diff_v8_v9.py --stdout-only` | PASS:12 changed/12 expected/0 unexplained; all ten frozen core files untouched |
 | Paired canonical SDK/CallSession replay | 16 synthetic cases /36 accepted user turns;6 changed speech sequences; state/source/owner evidence stored |
 | Ruff + `git diff --check` | PASS on packages/services/tests/scripts and changed tool/evidence replay; archived/lab lint debt outside CI scope remains |
-| Executor-corrected source CI | PENDING publication; original200ms assertion unchanged |
+| Executor-corrected code23c67bf CI | [run37131206492](https://github.com/Belvist/imvera/actions/runs/37131206492):all10 jobs PASS; full3117 passed/0 failed/3 skipped,182.96s; genuine LFS; unchanged200ms ordering assertion PASS |
 | Earlier published code CI22a2e5f | [run37128643711](https://github.com/Belvist/imvera/actions/runs/37128643711):9/10 jobs PASS; full3115/1/3 both attempts (226.54s,176.58s); unchanged legacy200ms ordering assertion fails; not green |
 
 Runtime recheck:73 related tests PASS and30 exact-deadline repetitions PASS
@@ -41,7 +42,9 @@ f566cec. Await-chain/worker diagnostics show the actor awaiting its SDK Task wit
 idle workers. A separate original-code failure proves the nested Task can be
 cancelled before the uncancellable writer settles. The completion-Future fix
 passes that regression plus74 related tests (2.03s), retaining lock/context.
-CI timing resolution is still pending. Await-chain/lock/order diagnostics added
+Exact CI now passes the unchanged200ms assertion; evidence in the linked
+[CI record](evaluation/conversational-grounding-2026-10-03/ci.json). Earlier
+failures remain recorded. Await-chain/lock/order diagnostics added
 to the existing test, retaining the200ms deadline and original assertions.
 Actual local encoder download remains blocked by the LFS endpoint; no substitute.
 Warm intake-helper measurement,2000 Linux iterations:p50=.113217ms,
@@ -60,8 +63,7 @@ relation encoder remains an LFS pointer; two readiness checks correctly fail.
 REMAINING RISKS: bounded deterministic surfaces and conservative coverage
 understanding remain; medical scheduling is still under existing authority
 flags. This is not unrestricted free talk or proof of million-user capacity.
-NEXT GATE: exact genuine-LFS CI for the executor completion correction,
-then recorded CallActor/FreeSWITCH acceptance
+NEXT GATE: recorded CallActor/FreeSWITCH acceptance on loaded23c67bf
 on M5 with source/flags/provider truth, audio and trace. Source push is not deploy.
 
 ---

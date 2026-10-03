@@ -8,7 +8,10 @@ This is a source integration handoff, not a deployed-phone acceptance report.
 ## 2026-10-03 grounding correction
 
 [Paired SDK traces, source hashes and root causes](evaluation/conversational-grounding-2026-10-03/README.md)
-cover the latest source cut. Main remains unrelated. No deployment was performed.
+cover the latest source cut. Load source **23c67bf**, whose
+[exact CI](https://github.com/Belvist/imvera/actions/runs/37131206492) is10/10 PASS
+(full3117/0/3, genuine weights). Later evidence-only commits have identical
+package/service source hashes. Main remains unrelated. No deployment was performed.
 Use `DialogueEngine.build_rich_turn(text, utterance_id=...)` through the existing
 SDK/Actor admission path, then pass the **same** utterance identity into the
 session. Raw `kernel_to_rich_turn` alone is not equivalent to final adjudication.
