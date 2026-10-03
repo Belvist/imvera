@@ -240,10 +240,15 @@ def _slot_topic(state: EngineState, facts) -> HeardTopic | None:
 
 
 def _domain_reaction(state: EngineState, facts) -> str:
+    answered = (getattr(state, "last_answered_domain", "") or "").strip().lower()
     for slot in facts or ():
         record = state.slot_records.get(slot)
         polarity = record.polarity if record is not None else None
         stance = polarity if polarity in ("negative", "positive") else "unknown"
+        # An explicitly answered domain is engagement: acknowledge warmly
+        # even when polarity was never measured (parallel intents fused).
+        if stance == "unknown" and (slot or "").strip().lower() == answered and answered:
+            stance = "positive"
         clause = _DOMAIN_ACK[stance].get(slot, "")
         if clause and not is_verbatim_repeat(state.spoken_surfaces, clause):
             return clause
