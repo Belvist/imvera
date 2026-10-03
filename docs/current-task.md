@@ -28,7 +28,16 @@ VERIFIED (source candidate; not a deployment):
 | `PYTHONPATH=. python tools/voice_lab/policy_diff_v8_v9.py --stdout-only` | PASS:12 changed/12 expected/0 unexplained; all ten frozen core files untouched |
 | Paired canonical SDK/CallSession replay | 16 synthetic cases /36 accepted user turns;6 changed speech sequences; state/source/owner evidence stored |
 | Ruff + `git diff --check` | PASS on packages/services/tests/scripts and changed tool/evidence replay; archived/lab lint debt outside CI scope remains |
-| Exact published code CI | PENDING publication; no local readiness failure waived |
+| Exact published code CI22a2e5f | [run37128643711](https://github.com/Belvist/imvera/actions/runs/37128643711):9/10 jobs PASS; full3115/1/3 both attempts (226.54s,176.58s); unchanged legacy200ms ordering assertion fails; not green |
+
+Runtime recheck:73 related tests PASS and30 exact-deadline repetitions PASS
+locally (max17.821ms for the whole test;60 SDK writes,max2.151ms). CI failure
+is reproducible twice; source/actor/session legacy bytes were unchanged from
+f566cec. No root cause claimed. Await-chain/lock/order diagnostics now added
+to the existing test, retaining the200ms deadline and original assertions.
+Actual local encoder download remains blocked by the LFS endpoint; no substitute.
+Warm intake-helper measurement,2000 Linux iterations:p50=.113217ms,
+p95=.313735ms,p99=.372051ms; zero new neural calls, not full-turn/M5 capacity.
 
 New tests assert evidence, source, delivery, question burden, continuation,
 unknown/refusal and safety/control rather than only text. Original medical,
@@ -43,7 +52,8 @@ relation encoder remains an LFS pointer; two readiness checks correctly fail.
 REMAINING RISKS: bounded deterministic surfaces and conservative coverage
 understanding remain; medical scheduling is still under existing authority
 flags. This is not unrestricted free talk or proof of million-user capacity.
-NEXT GATE: exact genuine-LFS CI, then recorded CallActor/FreeSWITCH acceptance
+NEXT GATE: establish/fix the repeat CI ordering failure with actual await sites,
+then exact genuine-LFS CI and recorded CallActor/FreeSWITCH acceptance
 on M5 with source/flags/provider truth, audio and trace. Source push is not deploy.
 
 ---

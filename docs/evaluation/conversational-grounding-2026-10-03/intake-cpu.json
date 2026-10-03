@@ -1,0 +1,11 @@
+{
+  "source_sha": "22a2e5f171ce0d3186ace93011bdc1497e948168",
+  "scope": "warm nutrition_reply_record only; not full SDK, neural worker, M5, STT/TTS or concurrency",
+  "host": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "iterations": 2000,
+  "p50_ms": 0.113217,
+  "p95_ms": 0.313735,
+  "p99_ms": 0.372051,
+  "max_ms": 2.629395,
+  "new_neural_model_calls": 0
+}

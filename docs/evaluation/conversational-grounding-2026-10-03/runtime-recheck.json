@@ -1,0 +1,34 @@
+{
+  "source_sha": "22a2e5f171ce0d3186ace93011bdc1497e948168",
+  "ci_run": 37128643711,
+  "first_ci_attempt": {
+    "passed": 3115,
+    "failed": 1,
+    "skipped": 3,
+    "seconds": 226.54,
+    "failure": "tests/test_runtime_release_gaps_audit.py::test_out_of_order_inference_does_not_deadlock_actor",
+    "assertion_limit_ms": 200
+  },
+  "diagnostic": {
+    "actor_session_legacy_diff_from_peer": "empty",
+    "isolated_original_assertion": "PASS",
+    "runtime_group_passed": 73,
+    "runtime_group_seconds": 1.92,
+    "unchanged_deadline_repetitions": 30,
+    "sdk_writes": 60,
+    "sdk_write_ms_max": 2.151,
+    "test_total_ms_max": 17.821,
+    "test_total_ms_median": 2.399,
+    "hardware": "local Linux / test doubles",
+    "ci_timeout_root_cause": "NOT YET ESTABLISHED: reproduced twice in full CI; local actual encoder is unavailable; await-chain diagnostics added without changing deadline/assertion",
+    "assertions_or_deadline_changed": false
+  },
+  "second_ci_attempt": {
+    "passed": 3115,
+    "failed": 1,
+    "skipped": 3,
+    "seconds": 176.58,
+    "same_failure": true
+  },
+  "next": "CI with await-chain diagnostics; do not cut over or claim runtime acceptance"
+}

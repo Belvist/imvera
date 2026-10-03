@@ -17,6 +17,18 @@ async def noop(*args, **kwargs):
     pass
 
 
+def _await_chain(task):
+    """Show a failed deadline's actual await sites without dumping user data."""
+    chain = []
+    current = task.get_coro()
+    while current is not None:
+        frame = getattr(current, "cr_frame", None)
+        if frame is not None:
+            chain.append(f"{frame.f_code.co_name}:{frame.f_lineno}")
+        current = getattr(current, "cr_await", None)
+    return chain
+
+
 def session_at_wellness():
     session = CallSession(
         call_id="release-audit",
@@ -95,7 +107,11 @@ def test_out_of_order_inference_does_not_deadlock_actor(monkeypatch):
             release_first.set()
             done, pending = await asyncio.wait({first, second}, timeout=0.2)
             assert not pending, (
-                "Both model results ready; actor waits while holding policy lock"
+                "Both model results ready; actor waits while holding policy lock; "
+                f"awaits={[_await_chain(task) for task in pending]}; "
+                f"last_applied={actor._last_applied_utterance_seq}; "
+                f"buffered={sorted(actor._utterance_outcomes)}; "
+                f"policy_locked={actor._policy_lock.locked()}"
             )
             for task in done:
                 task.result()

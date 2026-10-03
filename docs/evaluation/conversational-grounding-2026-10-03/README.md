@@ -97,9 +97,21 @@ is deliberately updated: absence of eating does not prove inability to eat.
 
 No new generative/model service, model invocation, prompt containing the whole
 transcript, provider, transport or timer is added. Cached morphology is extra
-CPU work; M5 end-of-speech latency, RAM, full-turn model counts and concurrent
+CPU work. [Warm helper measurement](intake-cpu.json),2000 iterations on this Linux:
+p50=.113217ms,p95=.313735ms,p99=.372051ms. It measures this helper only,
+not full-turn/M5 latency or capacity. M5 end-of-speech latency, RAM, full-turn model counts and concurrent
 throughput are **NOT_RUN**. Current local relation encoder is still a genuine
 Git LFS pointer; two readiness checks fail rather than claim `all_hot`.
+
+The first genuine-LFS CI run passed3115 tests but failed one unchanged legacy
+200ms out-of-order runtime assertion. The actor/session/legacy code is unchanged
+from the peer. Original assertion/deadline passed30 local repetitions and73
+related runtime tests; [diagnostic record](runtime-recheck.json). The timing
+failure was not reproduced locally. A second attempt repeats that same failure (3115 PASS,1 FAIL,3 SKIP,176.58s).
+The test now reports actual coroutine await sites, buffered ordering and lock
+state on the unchanged200ms failure. No result/deadline is weakened. Local
+LFS fetching is blocked by the download endpoint; no substitute weights are used.
+This is not evidence that all runtime timing instability has been eliminated.
 
 NOT VERIFIED: loaded M5 revision, STT/TTS/PCM, interruptions, acoustic warmth,
 blind listener ratings, Core end-to-end acceptance or competitor superiority.
