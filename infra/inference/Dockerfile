@@ -11,10 +11,10 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     IMVERA_RUNTIME_MODE=production IMVERA_WORKER_HOST=0.0.0.0 \
     IMVERA_VOICE_PROFILE_PATH=/app/config/voice-linux-cpu.yaml \
     IMVERA_GIT_SHA=$IMVERA_GIT_SHA
-COPY pyproject.toml README.md ./
-COPY packages ./packages
-COPY services ./services
-COPY config ./config
+COPY --chown=10001:10001 pyproject.toml README.md ./
+COPY --chown=10001:10001 packages ./packages
+COPY --chown=10001:10001 services ./services
+COPY --chown=10001:10001 config ./config
 RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export PIP_CERT=/run/secrets/proxy_ca; fi; \
     pip install --no-cache-dir -e '.[api,voice-runtime]'

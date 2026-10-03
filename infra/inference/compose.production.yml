@@ -7,6 +7,9 @@ services:
     environment:
       IMVERA_GIT_SHA: ${IMVERA_GIT_SHA:?full source SHA required}
       IMVERA_RUNTIME_MODE: production
+      OMP_NUM_THREADS: ${IMVERA_BRIDGE_INFERENCE_THREADS:-2}
+      OPENBLAS_NUM_THREADS: ${IMVERA_BRIDGE_INFERENCE_THREADS:-2}
+      MKL_NUM_THREADS: ${IMVERA_BRIDGE_INFERENCE_THREADS:-2}
       IMVERA_MEDIA_BRIDGE_MODE: callactor
       IMVERA_DIALOGUE_ENGINE: "1"
       IMVERA_VOICE_PROFILE_PATH: /app/config/voice-linux-cpu.yaml

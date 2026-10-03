@@ -172,6 +172,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Exercise private source-file permissions with unprivileged workers
+        run: chmod -R go-rwx packages services config pyproject.toml README.md
       - name: Build portable production worker images
         run: |
           for target in tts-http stt-cpu; do
