@@ -78,8 +78,9 @@ def _predicate_tense(text: str) -> str | None:
     tenses = set()
     for token in re.findall(r"[а-яё-]+", text.lower()):
         parsed = morph.parse(token)
-        if parsed and parsed[0].tag.POS == "VERB" and parsed[0].tag.tense:
-            tenses.add(parsed[0].tag.tense)
+        tag = getattr(parsed[0], "tag", None) if parsed else None
+        if tag is not None and tag.POS == "VERB" and tag.tense:
+            tenses.add(tag.tense)
     return next(iter(tenses)) if len(tenses) == 1 else None
 
 

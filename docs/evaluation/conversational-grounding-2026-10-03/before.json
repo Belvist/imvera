@@ -1,0 +1,971 @@
+{
+  "food_no": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. Как сегодня с едой — нормально поели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_no-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Не поел.",
+      "vera": "Хорошо, что поели. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+      "intent": "background_medication",
+      "question": true,
+      "coverage": {
+        "coverage_nutrition": "Не поел."
+      },
+      "pending": "medication",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_no-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ],
+  "food_bare_no": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. Как сегодня с едой — нормально поели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_bare_no-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Нет.",
+      "vera": "Хорошо, что поели. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+      "intent": "background_medication",
+      "question": true,
+      "coverage": {
+        "coverage_nutrition": "Нет."
+      },
+      "pending": "medication",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_bare_no-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ],
+  "food_yes": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. А покушать сегодня уже успели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_yes-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Да, поел.",
+      "vera": "Хорошо, что поели. Есть ли у вас лекарства, которые вы обычно принимаете?",
+      "intent": "background_medication",
+      "question": true,
+      "coverage": {
+        "coverage_nutrition": "Да, поел."
+      },
+      "pending": "medication",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_yes-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ],
+  "food_unknown": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. А покушать сегодня уже успели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_unknown-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Не помню.",
+      "vera": "Понимаю, не будем угадывать. Есть ли у вас лекарства, которые вы обычно принимаете?",
+      "intent": "background_medication",
+      "question": true,
+      "coverage": {},
+      "pending": "medication",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_unknown-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ],
+  "food_future": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. А покушать сегодня уже успели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_future-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Потом поем.",
+      "vera": "Есть ли у вас лекарства, которые вы обычно принимаете?",
+      "intent": "background_medication",
+      "question": true,
+      "coverage": {},
+      "pending": "medication",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_future-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ],
+  "volunteered_negative_food": [
+    {
+      "user": "Чувствую себя хорошо, но сегодня ещё не поел.",
+      "vera": "Спасибо, что сказали, как себя чувствуете. Расскажите, я слушаю.",
+      "intent": "thread_invite",
+      "question": false,
+      "coverage": {},
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "volunteered_negative_food-0",
+          "source_text": "Чувствую себя хорошо, но сегодня ещё не поел.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ],
+  "volunteered_other_food": [
+    {
+      "user": "Чувствую себя хорошо, дочь уже поела.",
+      "vera": "Про дочь поняла. Расскажите, я слушаю.",
+      "intent": "thread_invite",
+      "question": false,
+      "coverage": {},
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "conversation_policy_authoritative": 1
+      },
+      "slots": {},
+      "coverage_records": {},
+      "thread_statement": "Чувствую себя хорошо, дочь уже поела."
+    }
+  ],
+  "sleep_mixed": [
+    {
+      "user": "Чувствую себя хорошо, спала всего два часа.",
+      "vera": "Рада это слышать. Расскажите, пожалуйста, чуть подробнее.",
+      "intent": "topic_sleep_quality",
+      "question": true,
+      "coverage": {},
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "sleep_mixed-0",
+          "source_text": "Чувствую себя хорошо, спала всего два часа.",
+          "polarity": "positive",
+          "confirmed": false
+        },
+        "sleep": {
+          "value": "Чувствую себя хорошо, спала всего два часа.",
+          "confidence": 0.9,
+          "source_turn_id": "sleep_mixed-0",
+          "source_text": "Чувствую себя хорошо, спала всего два часа.",
+          "polarity": null,
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ],
+  "food_story": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. А покушать сегодня уже успели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_story-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Вчера дочь приезжала, смотрели старые фотографии.",
+      "vera": "Про дочь поняла. Расскажите, я слушаю.",
+      "intent": "thread_invite",
+      "question": false,
+      "coverage": {
+        "coverage_nutrition": "Вчера дочь приезжала, смотрели старые фотографии."
+      },
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_story-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": "Вчера дочь приезжала, смотрели старые фотографии."
+    },
+    {
+      "user": "Вспоминали, как вместе жили в деревне.",
+      "vera": "Поняла про деревню.",
+      "intent": "thread_listening_ack",
+      "question": false,
+      "coverage": {
+        "coverage_nutrition": "Вчера дочь приезжала, смотрели старые фотографии."
+      },
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2,
+        "conversation_policy_authoritative": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_story-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": "Вспоминали, как вместе жили в деревне."
+    },
+    {
+      "user": "А потом ещё посидели и поговорили.",
+      "vera": "Я вас слушаю.",
+      "intent": "thread_listening_ack",
+      "question": false,
+      "coverage": {
+        "coverage_nutrition": "Вчера дочь приезжала, смотрели старые фотографии."
+      },
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2,
+        "conversation_policy_authoritative": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_story-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": "А потом ещё посидели и поговорили."
+    },
+    {
+      "user": "Больше нечего добавить.",
+      "vera": "Есть ли у вас лекарства, которые вы обычно принимаете?",
+      "intent": "background_medication",
+      "question": true,
+      "coverage": {
+        "coverage_nutrition": "Вчера дочь приезжала, смотрели старые фотографии."
+      },
+      "pending": "medication",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 3,
+        "legacy_invocations": 3,
+        "conversation_policy_authoritative": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_story-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": "А потом ещё посидели и поговорили."
+    }
+  ],
+  "food_reactive_story": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. А покушать сегодня уже успели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_reactive_story-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Да, поела. А вчера дочь приезжала, мы смотрели старые фотографии.",
+      "vera": "Про дочь поняла. Расскажите, я слушаю.",
+      "intent": "thread_invite",
+      "question": false,
+      "coverage": {
+        "coverage_nutrition": "Да, поела. А вчера дочь приезжала, мы смотрели старые фотографии."
+      },
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_reactive_story-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Потом вспоминали нашу деревню и соседей.",
+      "vera": "Поняла про деревню.",
+      "intent": "thread_listening_ack",
+      "question": false,
+      "coverage": {
+        "coverage_nutrition": "Да, поела. А вчера дочь приезжала, мы смотрели старые фотографии."
+      },
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2,
+        "conversation_policy_authoritative": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_reactive_story-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": "Потом вспоминали нашу деревню и соседей."
+    },
+    {
+      "user": "Больше нечего добавить.",
+      "vera": "Есть ли у вас лекарства, которые вы обычно принимаете?",
+      "intent": "background_medication",
+      "question": true,
+      "coverage": {
+        "coverage_nutrition": "Да, поела. А вчера дочь приезжала, мы смотрели старые фотографии."
+      },
+      "pending": "medication",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 3,
+        "legacy_invocations": 3,
+        "conversation_policy_authoritative": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "food_reactive_story-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": "Потом вспоминали нашу деревню и соседей."
+    }
+  ],
+  "meds_unknown": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. Как сегодня с едой — нормально поели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "meds_unknown-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Да, поела.",
+      "vera": "Хорошо, что поели. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+      "intent": "background_medication",
+      "question": true,
+      "coverage": {
+        "coverage_nutrition": "Да, поела."
+      },
+      "pending": "medication",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "meds_unknown-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Не помню.",
+      "vera": "Понимаю, не будем угадывать. Как настроение? Ничего не беспокоит?",
+      "intent": "background_mood",
+      "question": true,
+      "coverage": {
+        "coverage_nutrition": "Да, поела."
+      },
+      "pending": "mood",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 3,
+        "legacy_invocations": 3
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "meds_unknown-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ],
+  "meds_no": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. А покушать сегодня уже успели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "meds_no-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Да, поела.",
+      "vera": "Хорошо, что поели. Есть ли у вас лекарства, которые вы обычно принимаете?",
+      "intent": "background_medication",
+      "question": true,
+      "coverage": {
+        "coverage_nutrition": "Да, поела."
+      },
+      "pending": "medication",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "meds_no-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Нет, не принимаю.",
+      "vera": "Хорошо, что сказали про лекарства. А настроение сегодня как — ничего не тревожит?",
+      "intent": "background_mood",
+      "question": true,
+      "coverage": {
+        "coverage_nutrition": "Да, поела.",
+        "coverage_medication": "Нет, не принимаю."
+      },
+      "pending": "mood",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 3,
+        "legacy_invocations": 3
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "meds_no-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ],
+  "question": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. А покушать сегодня уже успели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "question-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "А какая погода сегодня?",
+      "vera": "На этот вопрос у меня нет надёжного ответа.",
+      "intent": "answer_user_question",
+      "question": false,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "question-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": "А какая погода сегодня?"
+    }
+  ],
+  "clinical": [
+    {
+      "user": "Голова тяжёлая со вчера, сейчас сильно болит.",
+      "vera": "Слушаю вас. Что-то ещё хотите сказать?",
+      "intent": "important_to_share",
+      "question": true,
+      "coverage": {},
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "Голова тяжёлая со вчера, сейчас сильно болит.",
+          "confidence": 0.9,
+          "source_turn_id": "clinical-0",
+          "source_text": "Голова тяжёлая со вчера, сейчас сильно болит.",
+          "polarity": "negative",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ],
+  "local_refusal": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. Как сегодня с едой — нормально поели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "local_refusal-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Не хочу отвечать про еду, но хочу поговорить.",
+      "vera": "Хорошо, что поели. Расскажите, я слушаю.",
+      "intent": "thread_invite",
+      "question": false,
+      "coverage": {
+        "coverage_nutrition": "Не хочу отвечать про еду, но хочу поговорить."
+      },
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "local_refusal-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": "Не хочу отвечать про еду, но хочу поговорить."
+    },
+    {
+      "user": "Дочь приезжала, мы гуляли вместе.",
+      "vera": "Про дочь поняла.",
+      "intent": "thread_listening_ack",
+      "question": false,
+      "coverage": {
+        "coverage_nutrition": "Не хочу отвечать про еду, но хочу поговорить."
+      },
+      "pending": null,
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 2,
+        "legacy_invocations": 2,
+        "conversation_policy_authoritative": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "local_refusal-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": "Дочь приезжала, мы гуляли вместе."
+    }
+  ],
+  "stop": [
+    {
+      "user": "Чувствую себя хорошо.",
+      "vera": "Рада это слышать. А покушать сегодня уже успели?",
+      "intent": "background_nutrition",
+      "question": true,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": false,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "stop-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    },
+    {
+      "user": "Спасибо, не хочу больше разговаривать.",
+      "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+      "intent": "goodbye_final",
+      "question": false,
+      "coverage": {},
+      "pending": "nutrition",
+      "closed": true,
+      "thread_origin": {
+        "mode_legacy": 1,
+        "legacy_invocations": 1
+      },
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "stop-0",
+          "source_text": "Чувствую себя хорошо.",
+          "polarity": "positive",
+          "confirmed": false
+        }
+      },
+      "coverage_records": {},
+      "thread_statement": ""
+    }
+  ]
+}

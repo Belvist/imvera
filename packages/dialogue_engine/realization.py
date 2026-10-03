@@ -130,6 +130,10 @@ def heard_topic(text: str) -> HeardTopic | None:
     raw = (text or "").strip()
     if len(raw) < 4:
         return None
+    from packages.dialogue_engine.deterministic_mission import _is_user_question
+
+    if _is_user_question(raw):
+        return None
     for match in _WORD_RE.finditer(raw):
         word = match.group(0).lower().replace("ё", "е")
         word = _PARTICLE_RE.sub("", word)
@@ -213,43 +217,55 @@ _DOMAIN_ACK = {
         "plans": "Спасибо, что рассказали про планы.",
         "nutrition": "Спасибо, что сказали про еду.",
         "sleep": "Спасибо, что сказали, как спалось.",
-        "medication": "Спасибо, что сказали про лекарства.",
+        "medication": "Хорошо, что сказали про лекарства.",
         "mood": "Спасибо, что сказали про настроение.",
     },
     "negative": {
         "wellness": "Понимаю, спасибо, что сказали, как себя чувствуете.",
         "wellbeing": "Понимаю, спасибо, что сказали, как себя чувствуете.",
-        "plans": "Понимаю, что с планами непросто.",
-        "nutrition": "Понимаю, что поесть не получилось.",
+        "plans": "Хорошо, что поделились планами.",
+        "nutrition": "Поняла, пока не ели.",
         "sleep": "Понимаю, ночь была тяжёлая.",
         "medication": "Понимаю, про лекарства услышала.",
         "mood": "Понимаю, спасибо, что сказали про настроение.",
     },
 }
 
+# A topic having been discussed is not evidence of a positive outcome. In
+# particular, baseline coverage has a verbatim observation, not a SlotValue
+# with adjudicated polarity. Do not manufacture one in the renderer.
+_NEUTRAL_DOMAIN_ACK = _DOMAIN_ACK["unknown"]
+
+
+def _current_record(state: EngineState, slot: str):
+    record = state.slot_records.get(slot) or state.coverage_records.get(slot)
+    if record is None:
+        return None
+    if state.last_user_utterance_id:
+        if record.source_turn_id != state.last_user_utterance_id:
+            return None
+    elif not record.source_text or record.source_text not in state.last_user_text:
+        return None
+    return record
+
 
 def _slot_topic(state: EngineState, facts) -> HeardTopic | None:
     """The topic of a goal the person just answered, from their own words."""
     for slot in facts or ():
-        record = state.slot_records.get(slot)
+        record = _current_record(state, slot)
         if record is not None and record.source_text:
             topic = heard_topic(record.source_text)
-            if topic is not None:
+            if topic is not None and not _is_elder_name(state, topic.noun):
                 return topic
     return None
 
 
 def _domain_reaction(state: EngineState, facts) -> str:
-    answered = (getattr(state, "last_answered_domain", "") or "").strip().lower()
     for slot in facts or ():
-        record = state.slot_records.get(slot)
+        record = _current_record(state, slot)
         polarity = record.polarity if record is not None else None
-        stance = polarity if polarity in ("negative", "positive") else "unknown"
-        # An explicitly answered domain is engagement: acknowledge warmly
-        # even when polarity was never measured (parallel intents fused).
-        if stance == "unknown" and (slot or "").strip().lower() == answered and answered:
-            stance = "positive"
-        clause = _DOMAIN_ACK[stance].get(slot, "")
+        bank = _DOMAIN_ACK.get(polarity, _NEUTRAL_DOMAIN_ACK)
+        clause = bank.get(slot, "")
         if clause and not is_verbatim_repeat(state.spoken_surfaces, clause):
             return clause
     return ""
@@ -263,14 +279,16 @@ def _answered_this_turn(state: EngineState, facts) -> list[str]:
     slot. Grounding is the evidence, not the declaration: a slot whose source
     turn is this utterance was answered by this utterance.
     """
-    out = list(facts or ())
+    # A plan can carry older facts for a summary. Only current evidence may
+    # acknowledge an answer; old facts cannot colour a new refusal/unknown.
+    out = [slot for slot in facts or () if _current_record(state, slot) is not None]
     answered_domain = getattr(state, "last_answered_domain", "") or ""
     if answered_domain and answered_domain not in out:
         out.append(answered_domain)
     turn_id = getattr(state, "last_user_utterance_id", "") or ""
     if not turn_id:
         return out
-    for slot, record in state.slot_records.items():
+    for slot, record in {**state.coverage_records, **state.slot_records}.items():
         if slot not in out and record.source_turn_id == turn_id:
             out.append(slot)
     return out

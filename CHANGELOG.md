@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — 2026-10-03
+
+- Ground routine reactions in actual current-turn polarity and heard question ownership; never congratulate negative/unknown intake or treat a story/refusal as a food answer.
+- Let existing ActionPolicy suspend a nonurgent routine question for a grounded story and return to the same unresolved need; remove the duplicate length-based invitation selector.
+- Preserve separate answer/story evidence, scoped refusals and unknown dispositions; replay quality checks through canonical SDK adjudication.
+- Keep medical/safety authority and models unchanged; record paired SDK traces and M5 audio acceptance requirements.
+
 ## Unreleased — 2026-10-01
 
 - Preserve peer m5 onset/hedge/repair/dedup updates; prevent medication or plan clocks from filling symptom onset and keep clock time distinct from elapsed duration.

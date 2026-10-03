@@ -867,6 +867,12 @@ def _on_user_turn(
     ):
         return state, []
     state.first_user_turn_received = True
+    heard_question = state.delivered_question
+    state.last_user_delivered_slot = (
+        (heard_question.goal_id or heard_question.slot)
+        if heard_question is not None and heard_question.phase == QuestionPhase.DELIVERED
+        and not state.thread_heard_listening_id else ""
+    )
     state.turn_seq += 1
     # Triple-backchannel honest close (single funnel for rich and semantic
     # paths): three consecutive «ага»-only turns with no engagement close

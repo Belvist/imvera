@@ -1,3 +1,53 @@
+# Grounded reactions and routine-topic suspension (2026-10-03)
+
+Target: **feature/voice-zoiper-m5**, based on peer **f566cec64b5262f7a4956522ea6b7d0145aa2ef8**.
+Peer composer/variation/address guards and unknown bank retained. Main, models
+and loaded services untouched. [Root cause, replacements and paired SDK traces](evaluation/conversational-grounding-2026-10-03/README.md);
+[operator integration](user-led-conversation-integration.md).
+
+CHANGED: routine answer consumption is one shared execution boundary before
+selection, replacing the legacy-only any-answer block. Only relevant evidence
+can answer a routine domain. Unknown/refusal remain dispositions, not intake
+facts. Reducer snapshots actually delivered question ownership; planned/unheard
+questions cannot bind bare yes/no. Existing SlotValue records carry current
+intake polarity/source; missing polarity never becomes positive engagement.
+Existing discourse/ActionPolicy owns mixed answer+story and nonurgent routine
+question suspension. The duplicate character-count follow-person selector is
+removed; the unmet need resumes after an actual story finish. No new dialogue
+brain, FSM, scheduler, generator, model service, or neural invocation added.
+Canonical quality replay no longer bypasses SDK adjudication. Mixed legacy
+observation types and absent morphology metadata no longer crash proof readers.
+
+VERIFIED (source candidate; not a deployment):
+
+| Command / boundary | Actual result |
+|---|---|
+| Full `PYTHONPATH=. python -m pytest -q --tb=short` | 3108 passed / 2 inherited LFS failures / 9 skipped,147.72s; NOT locally green |
+| `PYTHONPATH=. python scripts/dialogue_corpus_gate.py` | 500/500 PASS,5.67s on integrated source |
+| `PYTHONPATH=. python scripts/agent_dialogue_gate.py` | PASS: agent and dream narrative, text Layer A |
+| `PYTHONPATH=. python tools/voice_lab/policy_diff_v8_v9.py --stdout-only` | PASS:12 changed/12 expected/0 unexplained; all ten frozen core files untouched |
+| Paired canonical SDK/CallSession replay | 16 synthetic cases /36 accepted user turns;6 changed speech sequences; state/source/owner evidence stored |
+| Ruff + `git diff --check` | PASS on packages/services/tests/scripts and changed tool/evidence replay; archived/lab lint debt outside CI scope remains |
+| Exact published code CI | PENDING publication; no local readiness failure waived |
+
+New tests assert evidence, source, delivery, question burden, continuation,
+unknown/refusal and safety/control rather than only text. Original medical,
+snapshot, consent and delivery assertions retained. One exact negative-food
+wording assertion changes deliberately: not eating does not establish inability.
+The peer medication acknowledgment remains about reporting, not taking drugs.
+
+NOT VERIFIED: actual loaded M5 source/flags/endpoints, STT/TTS, PCM, SIP call,
+acoustic warmth, interruptions/slow speech, M5 p50/p95, model calls/call, RAM,
+concurrent throughput, Core delivery or competitor superiority. The local real
+relation encoder remains an LFS pointer; two readiness checks correctly fail.
+REMAINING RISKS: bounded deterministic surfaces and conservative coverage
+understanding remain; medical scheduling is still under existing authority
+flags. This is not unrestricted free talk or proof of million-user capacity.
+NEXT GATE: exact genuine-LFS CI, then recorded CallActor/FreeSWITCH acceptance
+on M5 with source/flags/provider truth, audio and trace. Source push is not deploy.
+
+---
+
 # Meaning-driven realization + adaptive length (2026-10-03)
 
 Base: **49f99f4** (owner handed this workstream the policy layer and paused the

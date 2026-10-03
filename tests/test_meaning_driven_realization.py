@@ -95,7 +95,8 @@ def test_domain_reaction_respects_negative_polarity():
         value="не поел", source_text="Не поел сегодня.", polarity="negative"
     )
     clause = realization.reaction_clause(state, ["nutrition"])
-    assert clause == "Понимаю, что поесть не получилось."
+    # A negative intake answer does not explain why the person did not eat.
+    assert clause == "Поняла, пока не ели."
 
 
 # ------------------------------------------------------------------ wiring in

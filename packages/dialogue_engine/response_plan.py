@@ -305,6 +305,12 @@ def _acknowledge_fills(state: EngineState, filled: list[str]) -> str:
         value = rec.value if rec else state.slot_values.get("sleep", "")
         if pol == "negative" or (pol is None and _looks_bad_sleep(value)):
             return "Понимаю, ночь была тяжёлая."
+        if rec is not None and pol is None:
+            # A good overall assessment does not tell us how restorative this
+            # unpolarised sleep answer was. React to the actual sleep report.
+            from packages.dialogue_engine.realization import _NEUTRAL_DOMAIN_ACK
+
+            return _NEUTRAL_DOMAIN_ACK["sleep"]
 
     if "mood" in filled:
         rec = state.slot_records.get("mood")

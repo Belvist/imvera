@@ -165,6 +165,41 @@ def _mention_thread_label(mention) -> str:
     return label[:60]
 
 
+def _story_after_coverage_answer(state, turn, raw: str) -> str:
+    """A separately asserted story after a routine answer, never a long-answer guess.
+
+    «Да, поела. А вчера дочь приезжала…» contains two purposes. The first
+    remains coverage evidence; the second is discourse evidence. No facts or
+    clinical episodes are written here and no additional model is invoked.
+    """
+    domain = getattr(state, "pending_coverage_domain", None)
+    if (not domain or getattr(turn, "issue_mentions", ())
+            or getattr(turn, "user_question", None)):
+        return ""
+    from packages.dialogue_engine.coverage import coverage_reply_quote
+    from packages.dialogue_engine.deterministic_mission import split_mission_clauses
+    from packages.dialogue_engine.fast_interpreter import _detect_polarity
+    from packages.dialogue_engine.issue_mention_extract import extract_goal_facts
+
+    if coverage_reply_quote(turn, domain) is None:
+        return ""
+    for clause in split_mission_clauses(raw):
+        text = clause.text
+        scoped = turn.model_copy(update={"raw_text": text, "goal_facts": ()})
+        if (coverage_reply_quote(scoped, domain) or extract_goal_facts(text)
+                or _detect_polarity(text)):
+            continue
+        if len(text.split()) >= 3 and not any(_speech_owned_elsewhere(text)):
+            from packages.dialogue_engine.semantic_kernel.lexicon import has_other_person
+
+            if has_other_person(text) and _OTHER_HEALTH.search(text):
+                continue
+            # Keep one contiguous, attributable suffix; do not splice clauses
+            # into a story the person never actually told.
+            return raw[clause.start:][:200]
+    return ""
+
+
 def update_discourse(state, turn) -> None:
     """Single writer of thread/hook fields. Never raises; never writes
     from garbage — a turn with no mentions, facts, or question only ages
@@ -203,6 +238,15 @@ def update_discourse(state, turn) -> None:
             return
         engaged = _engaged_with_pending(state, raw, raw_lower)
         if engaged:
+            story = _story_after_coverage_answer(state, turn, raw)
+            if story:
+                state.current_thread_label = "рассказ"
+                state.current_thread_turns = 0
+                state.thread_last_statement = story
+                state.thread_last_utterance_id = turn.utterance_id
+                state.thread_reply_turn_id = ""
+                state.thread_reply_finished = False
+                return
             _age(state, raw.split())
             return
 

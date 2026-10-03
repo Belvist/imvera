@@ -165,6 +165,150 @@ def next_uncovered_domain(
     return None
 
 
+def coverage_reply_quote(turn, domain: str) -> str | None:
+    """Evidence about this domain, never just a substantive answer act.
+
+    Reuse Understand's clause/subject owners and the domain vocabulary already
+    used for coverage. This is a relevance gate, not a positive/negative judge.
+    The renderer must not infer an outcome from this quote.
+    """
+    from packages.dialogue_engine.deterministic_mission import split_mission_clauses
+    from packages.dialogue_engine.reluctance import _SHORT_CONTENT_VERBS
+    from packages.dialogue_engine.semantic_kernel.controls import is_local_question_refusal
+    from packages.dialogue_engine.semantic_kernel.lexicon import FOOD_WORDS
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_token
+    from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
+    from packages.dialogue_engine.semantic_kernel.types import SubjectKind
+
+    raw = (turn.raw_text or "").strip()
+    if (
+        not raw or turn.user_question or turn.control not in ("", "none")
+        or turn.not_recalled or is_local_question_refusal(raw)
+    ):
+        return None
+    for fact in turn.goal_facts:
+        if fact.field == domain and fact.subject != "other":
+            quote = fact.evidence.quote.strip()
+            if quote and quote in raw:
+                return quote
+    bare = None
+    for clause in split_mission_clauses(raw):
+        text = clause.text
+        tokens = set(re.findall(r"[а-яё]+", text.casefold()))
+        if (_subject_for_clause(text, has_issue=False) == SubjectKind.OTHER_PERSON
+                or {"он", "она", "они", "оно"}.intersection(tokens)):
+            continue
+        core = text.casefold().strip().rstrip(".!?…")
+        if core in {"да", "нет", "неа", "конечно"}:
+            bare = text
+            continue
+        food_object = bool(FOOD_WORDS.intersection(normalize_token(word) for word in tokens))
+        if domain == "medication" and not _MEDICATION_MARKERS.search(text):
+            scoped = turn.model_copy(update={"raw_text": text, "goal_facts": ()})
+            if food_object or nutrition_reply_record(scoped) is not None:
+                continue
+        if (domain == "nutrition" and _MEDICATION_MARKERS.search(text)
+                and not _NUTRITION_MARKERS.search(text)):
+            continue
+        if domain == "medication" and classify_medication_screen(text) != "unclear":
+            return text
+        marker = _DOMAIN_MARKERS.get(domain)
+        if marker is not None and marker.search(text):
+            return text
+        if domain in ("nutrition", "medication") and _SHORT_CONTENT_VERBS.search(text):
+            return text
+    return bare
+
+
+def nutrition_reply_record(turn, *, answering: bool = False):
+    """Ground intake tense/negation once; never promote a topic to an outcome.
+
+    Only speaker-owned past-tense ingestion, or a bare contextual yes/no, can
+    establish ate/not-ate. Future, infinitive, uncertain, quoted and other-person
+    predicates abstain. Uses existing morphology and clause/negation owners.
+    """
+    from packages.dialogue_engine.context import SlotValue
+    from packages.dialogue_engine.deterministic_mission import (
+        _clause_uncertain,
+        _is_user_question,
+        split_mission_clauses,
+    )
+    from packages.dialogue_engine.fast_interpreter import _detect_polarity
+    from packages.dialogue_engine.semantic_kernel.controls import is_local_question_refusal
+    from packages.dialogue_engine.semantic_kernel.morphology import _load_morph
+    from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
+    from packages.dialogue_engine.semantic_kernel.types import SubjectKind
+    from packages.safety.patterns import is_negated_at, is_past_without_present
+
+    raw = (turn.raw_text or "").strip()
+    from packages.dialogue_engine.check_path import is_narrative_fiction_frame
+
+    if (turn.not_recalled or turn.user_question or _is_user_question(raw)
+            or turn.control not in ("", "none") or is_local_question_refusal(raw)
+            or any(mark in raw for mark in ('"', '«', '»'))
+            or is_narrative_fiction_frame(raw)):
+        return None
+    morph = _load_morph()
+    if morph is None:
+        return None
+    clauses = split_mission_clauses(raw)
+    record = None
+    for index, clause in enumerate(clauses):
+        tokens = re.findall(r"[а-яё]+", clause.text.casefold())
+        if (_subject_for_clause(clause.text, has_issue=False) == SubjectKind.OTHER_PERSON
+                or {"он", "она", "они", "оно", "если", "бы"}.intersection(tokens)
+                or _clause_uncertain(clauses, index) or is_past_without_present(clause.text)):
+            continue
+        for match in re.finditer(r"[а-яё]+", clause.text, re.I):
+            parses = morph.parse(match.group())
+            if not parses:
+                continue
+            parsed = parses[0]
+            # A small closed predicate vocabulary, inflected by morphology,
+            # instead of copying hundreds of surface forms into the renderer.
+            if (getattr(parsed, "score", 0.0) < .5
+                    or parsed.tag.POS != "VERB" or parsed.tag.tense != "past"
+                    or parsed.normal_form not in {
+                        "есть", "поесть", "кушать", "покушать", "завтракать", "позавтракать",
+                        "обедать", "пообедать", "ужинать", "поужинать",
+                    }):
+                continue
+            if any("Name" in item.tag and "nomn" in item.tag for word in
+                   re.findall(r"[а-яё]+", clause.text[:match.start()], re.I)
+                   for item in morph.parse(word)[:1]):
+                continue
+            # A reported fictional/past-resolved world is not today's intake.
+            from packages.dialogue_engine.discourse import _speech_owned_elsewhere
+
+            if any(_speech_owned_elsewhere(clause.text)):
+                continue
+            negative = is_negated_at(clause.text, match.start())
+            prefix = clause.text[:match.start()].casefold().split()
+            if negative and not (prefix and (
+                prefix[-1] == "не" or (len(prefix) >= 2 and prefix[-2] == "не"
+                and prefix[-1] in {"ещё", "еще", "пока", "совсем", "вовсе"})
+            )):
+                continue
+            if not negative and _detect_polarity(clause.text) == "negative":
+                continue
+            record = SlotValue(
+                value="not_eaten" if negative else "eaten",
+                polarity="negative" if negative else "positive", confirmed=True,
+                source_text=clause.text, source_turn_id=turn.utterance_id,
+            )
+    if record is not None:
+        return record
+    core = raw.casefold().strip().rstrip(".!?…")
+    if answering and core in {"да", "нет", "неа"}:
+        negative = core != "да"
+        return SlotValue(
+            value="not_eaten" if negative else "eaten",
+            polarity="negative" if negative else "positive", confirmed=True,
+            source_text=raw, source_turn_id=turn.utterance_id,
+        )
+    return None
+
+
 _DOMAIN_MARKERS: dict[str, re.Pattern[str]] = {
     "mood": _MOOD_MARKERS,
     "sleep": _SLEEP_MARKERS,

@@ -194,66 +194,6 @@ _ITS_META_LISTEN_QUESTION = (
 )
 _ITS_META_LISTEN = f"{_ITS_META_LISTEN_ACK} {_ITS_META_LISTEN_QUESTION}"
 
-# One "follow the person" invitation per call, spent either mid-check-in (here)
-# or at the close (reducer._open_continuation). Never both.
-MAX_FOLLOW_PERSONS = 1
-
-_FOLLOW_MIN_CHARS = 25
-# Above this length even an answer carries enough of the person to follow.
-_FOLLOW_VOLUNTEERED_CHARS = 45
-_FOLLOW_DONE_RE = re.compile(
-    r"(спасибо,?\s*что\s+позвон|спасибо\s+за\s+звонок|не\s+буду\s+задерживать|"
-    r"пойду\s+(?:я\s+)?(?:спать|дела|готовить|отдыхать)|"
-    r"пора\s+(?:мне\s+)?(?:идти|спать)|"
-    r"давай\s+прощаться|будем\s+прощаться)",
-    re.I,
-)
-
-
-def _follow_person_plan(
-    state: EngineState, turn_context: TurnContext
-) -> ResponsePlan | None:
-    """Follow what the person just said before the next routine question.
-
-    The baseline check-in is a list of questions; a person who is telling
-    something of their own gets one bounded invitation first, and the pending
-    routine domain is asked on the next turn (it is not consumed here, so the
-    care goal is not lost — only deferred by one exchange).
-    Clinical content, distress, fatigue and every finish signal keep priority
-    and never pass through this.
-    """
-    if state.open_continuations >= MAX_FOLLOW_PERSONS:
-        return None
-    if not state.first_user_turn_received:
-        return None
-    if _has_open_episodes(state) and not _all_episodes_resolved(state):
-        return None
-    turn = turn_context.turn
-    text = (turn_context.user_text or state.last_user_text or "").strip()
-    if len(text) < _FOLLOW_MIN_CHARS:
-        return None
-    # A short answer to Vera's own question is not an invitation to talk about
-    # something else: the check-in moves on and asks the next useful thing.
-    answered = bool(getattr(turn, "answers_pending_question", False))
-    if answered and len(text) < _FOLLOW_VOLUNTEERED_CHARS:
-        return None
-    if _has_distress_markers(text) or _has_fatigue_markers(text):
-        return None
-    if state.elder_asked_to_stop or state.awaiting_goodbye_confirm:
-        return None
-    if _FOLLOW_DONE_RE.search(text):
-        return None
-    state.open_continuations += 1
-    return ResponsePlan(
-        obligation=ConversationObligation.FOLLOW_USER_THREAD,
-        action="speak",
-        thread_mode="invite",
-        marks_question=False,
-        intent="thread_invite",
-    )
-
-
-
 def _mentions_medication(raw: str) -> bool:
     """Tablets/meds mention is grounded family info (live fs-a7bffaf1).
 
@@ -403,6 +343,94 @@ def _is_coverage_debris(turn: RichUserTurn, domain: str | None = None) -> bool:
     return len(text.split()) <= 4
 
 
+def _apply_coverage_reply(state: EngineState, context: TurnContext) -> ResponsePlan | None:
+    """Consume heard routine answers once, before either selector can defer them.
+
+    A story/question suspends the obligation. A local refusal drops that topic
+    without manufacturing a health answer. Clinical/safety owners still win.
+    """
+    domain, turn = state.pending_coverage_domain, context.turn
+    if state.red_state_pending or state.risk_handling or state.check_path == CheckPath.URGENT:
+        return None
+    if (domain and (context.answer_not_recalled or getattr(turn, "not_recalled", False))
+            and state.last_user_delivered_slot in {domain, f"background_{domain}"}):
+        # Unknown discharges this question; it does not establish an outcome.
+        # Semantic-path unknowns can arrive here without a RichUserTurn.
+        state.observations[f"coverage_{domain}_unknown"] = context.user_text or (
+            turn.raw_text if turn is not None else ""
+        )
+        state.pending_coverage_domain = None
+        return None
+    if turn is None:
+        return None
+    from packages.dialogue_engine.coverage import nutrition_reply_record
+    from packages.dialogue_engine.discourse import listening_question_pending
+
+    # A volunteered intake answer can satisfy coverage before the meal question
+    # is ever asked. No clinical/consent fact is inferred from this record.
+    food = nutrition_reply_record(
+        turn, answering=domain == "nutrition"
+        and state.last_user_delivered_slot == "background_nutrition"
+        and not listening_question_pending(state),
+    )
+    if food is not None:
+        state.coverage_records["nutrition"] = food
+        state.observations["coverage_nutrition"] = food.source_text
+    if not domain:
+        return None
+    if turn.issue_mentions or turn.control not in ("", "none") or turn.correction:
+        state.pending_coverage_domain = None
+        return None
+    if (turn.user_question or turn.dialogue_act == "repair"
+            or state.red_state_pending or state.risk_handling or _has_open_episodes(state)):
+        return None
+    from packages.dialogue_engine.semantic_kernel.controls import is_local_question_refusal
+
+    if is_local_question_refusal(turn.raw_text):
+        state.observations[f"coverage_{domain}_declined"] = turn.raw_text.strip()
+        state.pending_coverage_domain = None
+        return None
+    if listening_question_pending(state):
+        return None
+    from packages.dialogue_engine.coverage import (
+        classify_medication_screen,
+        coverage_reply_quote,
+    )
+
+    quote = coverage_reply_quote(turn, domain)
+    if quote is not None and quote.casefold().strip().rstrip(".!?…") in {
+        "да", "нет", "неа", "конечно",
+    } and state.last_user_delivered_slot not in {domain, f"background_{domain}"}:
+        # A planned question cannot borrow a bare answer to an older heard
+        # question. Lexical volunteered facts remain independent of delivery.
+        return None
+    screen = classify_medication_screen(quote or "") if domain == "medication" else "unclear"
+    if domain == "medication" and not state.medication_asked and screen == "takes_meds":
+        state.medication_asked = True
+        return ResponsePlan(
+            obligation=ConversationObligation.BACKGROUND_GOAL,
+            action="speak", mandatory_question=_medication_today_text(state),
+            intent="background_medication_today", slot="background_medication", marks_question=True,
+        )
+    if screen == "refused":
+        state.observations[f"coverage_{domain}_declined"] = turn.raw_text.strip()
+        state.pending_coverage_domain = None
+        return None
+    if quote is None and screen not in ("no_meds", "already_took"):
+        # Source-grounded discourse owns the floor. Even a lengthy answer act
+        # cannot turn photographs or a family story into a food/meds answer.
+        if (state.current_thread_label == "рассказ"
+                and state.thread_last_utterance_id == turn.utterance_id):
+            return None
+        if _is_coverage_debris(turn, domain):
+            state.pending_coverage_domain = None
+        return None
+    state.observations[f"coverage_{domain}"] = quote or turn.raw_text.strip()
+    state.last_answered_domain = domain
+    state.pending_coverage_domain = None
+    return None
+
+
 def _mark_slot_coverage(state: EngineState, slot: str, coverage: BackgroundGoalCoverage) -> None:
     state.set_background_goal_coverage(slot, coverage)
 
@@ -549,10 +577,7 @@ def _wellness_entry_covered(state: EngineState) -> bool:
     return False
 
 
-_VOLUNTEERED_ACKS: tuple[tuple[str, str], ...] = (
-    ("nutrition", "Хорошо, что поели."),
-    ("sleep", "Хорошо, что выспались."),
-)
+_VOLUNTEERED_ACK_DOMAINS = ("nutrition", "sleep")
 
 _DISTRESS_MARKERS = re.compile(
     r"(очень\s+плохо|(?<!не\s)\bплохо\b|ужасн\w*|не\s+могу|невыносим\w*|"
@@ -598,10 +623,13 @@ def _volunteered_ack(state: EngineState) -> str:
 
     covered = covered_domains(state)
     asked = state.coverage_asked_domains
-    for domain, ack in _VOLUNTEERED_ACKS:
+    for domain in _VOLUNTEERED_ACK_DOMAINS:
         if domain in covered and domain not in asked:
-            state.volunteered_ack_done = True
-            return ack
+            from packages.dialogue_engine.realization import _current_record, reaction_clause
+
+            if _current_record(state, domain) is not None:
+                state.volunteered_ack_done = True
+                return reaction_clause(state, (domain,))
     return ""
 
 
@@ -1381,60 +1409,6 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             action="close_urgent",
         )
 
-    # Coverage filler answers are fact-checks: any substantive reply
-    # (yes/no included) covers the domain and is recorded verbatim.
-    # Acute content (symptoms/questions/controls) takes over instead.
-    # Debris («поэтому», «со мной замуж») is NEVER recorded as coverage:
-    # one re-ask of the same domain, then move on uncovered (live fs-5324e8b6
-    # slid down the ladder on garbage). Medication screener is conditional:
-    # no_meds/already_took close the domain at once; takes_meds earns ONE
-    # «сегодня приняли?» followup.
-    if state.pending_coverage_domain and turn is not None:
-        _pcd = state.pending_coverage_domain
-        if (
-            turn.issue_mentions
-            or turn.user_question
-            or turn.control not in ("none", "")
-            or turn.correction
-        ):
-            state.pending_coverage_domain = None
-        elif turn.dialogue_act != "repair" and (turn.raw_text or "").strip():
-            # Domain understanding first (medication screen knows «не каждый
-            # день» is meaningful), debris detection only for the rest.
-            if _pcd == "medication" and not state.medication_asked:
-                from packages.dialogue_engine.coverage import classify_medication_screen
-
-                _screen = classify_medication_screen(turn.raw_text)
-                if _screen == "takes_meds":
-                    state.medication_asked = True
-                    return ResponsePlan(
-                        obligation=ConversationObligation.BACKGROUND_GOAL,
-                        action="speak",
-                        mandatory_question=_medication_today_text(state),
-                        intent="background_medication_today",
-                        slot="background_medication",
-                        marks_question=True,
-                    )
-                if _screen in ("no_meds", "already_took", "refused"):
-                    # refused (spec 9): topic dropped, no re-ask, move on.
-                    state.observations[f"coverage_{_pcd}"] = turn.raw_text.strip()
-                    state.last_answered_domain = _pcd
-                    state.pending_coverage_domain = None
-                elif _is_coverage_debris(turn, _pcd):
-                    state.pending_coverage_domain = None
-                else:
-                    state.observations[f"coverage_{_pcd}"] = turn.raw_text.strip()
-                    state.last_answered_domain = _pcd
-                    state.pending_coverage_domain = None
-            elif _is_coverage_debris(turn, _pcd):
-                # Debris is NEVER recorded as coverage: drop pending and move
-                # on uncovered (strict asked-once, no nagging repeats).
-                state.pending_coverage_domain = None
-            else:
-                state.observations[f"coverage_{_pcd}"] = turn.raw_text.strip()
-                state.last_answered_domain = _pcd
-                state.pending_coverage_domain = None
-
     probe = _probe_plan(state, clarify=clarify)
     if probe:
         return probe
@@ -1442,6 +1416,33 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
     topic = _topic_plan(state)
     if topic:
         return topic
+
+    bare_unheard = (
+        not state.last_user_delivered_slot
+        and (turn_context.user_text or getattr(turn, "raw_text", "")).casefold().strip()
+        .rstrip(".!?…") in {"да", "нет", "неа"}
+    )
+    if (state.pending_coverage_domain and (state.thread_reply_finished or bare_unheard)
+            and _routine_ladder_allowed(state)
+            and not _has_open_episodes(state)):
+        # Resume the same unanswered need after a finished story or a reply
+        # that could not bind to an unheard question. A grounded active thread
+        # has already been selected by ActionPolicy, before this legacy path.
+        from packages.dialogue_engine.coverage import domain_question
+
+        domain = state.pending_coverage_domain
+        previous = state.delivered_question or state.playing_question
+        text, intent, slot = domain_question(domain, variant=0)
+        if previous is not None and text in previous.text:
+            text, intent, slot = domain_question(domain, variant=1)
+        if domain == "medication" and state.medication_asked:
+            text, intent = _medication_today_text(state), "background_medication_today"
+        return ResponsePlan(
+            obligation=ConversationObligation.BACKGROUND_GOAL,
+            action="speak", thread_mode="resume" if state.thread_reply_finished else None,
+            mandatory_question=text,
+            intent=intent, slot=slot, marks_question=True,
+        )
 
     if state.important_to_share_asked and not state.important_to_share_resolved:
         raw = ""
@@ -1800,11 +1801,6 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 _turn.raw_text if _turn is not None else ""
             )
             _domain = scored_next_domain(state, _last_text)
-            # The person's own content comes before the next routine question;
-            # the pending domain is asked on the following turn.
-            _follow = _follow_person_plan(state, turn_context)
-            if _follow is not None:
-                return _follow
             if _domain is not None:
                 import zlib
 
@@ -1990,6 +1986,10 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
     requested = _requested_episode_plan(state, turn_context)
     if requested is not None:
         return requested
+
+    coverage = _apply_coverage_reply(state, turn_context)
+    if coverage is not None:
+        return coverage
 
     answered_episode_id = state.active_episode_id
     plan = route_schedule_next_action(

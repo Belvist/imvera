@@ -287,8 +287,6 @@ def replay_call(user_turns: list[str], call_id: str) -> tuple[list[tuple[str, st
 
     from packages.core.memory_store import InMemoryCallRecordStore
     from packages.dialogue.session import CallSession
-    from packages.dialogue_engine.semantic_kernel.kernel import interpret as kernel_interpret
-    from packages.dialogue_engine.semantic_kernel.kernel import kernel_to_rich_turn
 
     session = CallSession(call_id=f"replay-{call_id}", family_id="replay",
                           elder_display_name="Тамара Юрьевна",
@@ -303,12 +301,12 @@ def replay_call(user_turns: list[str], call_id: str) -> tuple[list[tuple[str, st
     for i, text in enumerate(user_turns):
         if engine.state.call_closed:
             break
-        slot = engine.answer_context_slot()
-        rich = kernel_to_rich_turn(
-            kernel_interpret(text, utterance_id=f"u{i}", engine_state=engine.state,
-                             answer_slot=slot),
-            answer_slot=slot, engine_state=engine.state)
-        result = session.handle_user_text(text, rich_turn=rich)
+        # Use the same complete understanding boundary as the SDK/CallActor.
+        # A raw kernel projection omits question adjudication and mission
+        # meaning, so its replies are not evidence of the live engine path.
+        uid = f"u{i}"
+        rich = engine.build_rich_turn(text, utterance_id=uid)
+        result = session.handle_user_text(text, rich_turn=rich, utterance_id=uid)
         session.mark_spoken_action(result.proposal.generation_id)
         pairs.append((text, (result.proposal.speech or "").strip()))
         intents.append(str(getattr(result.speak_effect, "intent", "") or ""))

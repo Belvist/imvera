@@ -337,6 +337,12 @@ def route_schedule_next_action(
             specific_question = bool(
                 delivered and delivered.slot not in ("", "wellness")
                 and delivered.intent not in ("thread_followup", "thread_continue")
+                # Nonurgent routine coverage may be suspended by a grounded
+                # story. The shared executor retains the unanswered domain.
+                and delivered.intent not in (
+                    "background_nutrition", "background_medication",
+                    "background_medication_today", "background_mood", "background_sleep",
+                )
             )
             eligible = thread_context_eligible(snapshot, view) and not specific_question
         except Exception as exc:

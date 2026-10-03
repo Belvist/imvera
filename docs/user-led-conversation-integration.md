@@ -5,6 +5,37 @@ Design: [ADR-029](adr/029-user-led-conversation-moves.md).
 Paired SDK evidence and gates: [Cut1b report](evaluation/user-led-conversation-cut1b-2026-10-02/README.md).
 This is a source integration handoff, not a deployed-phone acceptance report.
 
+## 2026-10-03 grounding correction
+
+[Paired SDK traces, source hashes and root causes](evaluation/conversational-grounding-2026-10-03/README.md)
+cover the latest source cut. Main remains unrelated. No deployment was performed.
+Use `DialogueEngine.build_rich_turn(text, utterance_id=...)` through the existing
+SDK/Actor admission path, then pass the **same** utterance identity into the
+session. Raw `kernel_to_rich_turn` alone is not equivalent to final adjudication.
+
+Only actual completed current-generation playback proves a question was heard.
+Do not call completion on cancelled/partial audio. Reducer snapshots the heard
+answer owner before scheduling; bare “да/нет” after an unheard question cannot
+assert an eating fact. Do not manufacture `coverage_records`, positive polarity
+or answered domains from an engagement label. They need original speaker
+quote/turn identity. `coverage_*_unknown` and `coverage_*_declined` express
+question disposition, never positive/negative food or medication values.
+
+For a nonurgent daughter/photos story during a meal question, preserve the
+unanswered domain while ActionPolicy owns invitation/listening. When the person
+actually finishes, resume that need. If the same utterance also says “да, поела”,
+retain its eating evidence and do not reask it after the story. Explicit symptoms,
+stop, consent and urgent conditions keep priority. Global medical authority flags
+and the ten frozen core files remain unchanged; no live generator is enabled.
+
+Operator acceptance must include negative intake, mixed answer+story, at least
+three uninterrupted story turns, unknown, topic refusal while continuing to talk,
+and actual cancelled/unheard playback. Check both audible replies and trace:
+no food fact from photos/refusal, no positive outcome without evidence, one real
+return point, no safety regression. Save loaded commit, model hashes, flags,
+endpoints, per-turn trace and recording. Drain calls and load code via the
+existing handoff; this cut requires no FreeSWITCH rebuild or database reset.
+
 ## Ownership and actual live path
 
 `audio → final STT → TurnUnderstandingV2.prepare_kernel → existing post-STT

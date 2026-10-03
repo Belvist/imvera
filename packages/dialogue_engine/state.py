@@ -292,11 +292,18 @@ class EngineState(BaseModel):
     # and it never fills a slot. Written once per accepted turn.
     last_user_text: str = ""
     last_user_utterance_id: str = ""
+    # Actual delivered answer owner at admission, before scheduling may replace
+    # the question. Planning/starting another question is not delivery proof.
+    last_user_delivered_slot: str = ""
     # A baseline domain the person answered in this turn (food, meds, mood,
     # sleep). Coverage answers are observations, not slots, so the renderer
     # needs this to ground a reaction instead of asking the next question cold.
     # Turn-scoped: reset when a new user turn is recorded.
     last_answered_domain: str = ""
+    # Evidence-bearing routine answers, kept separate from medical check slots.
+    # A discussed domain never implies positive polarity. Reducer scheduling
+    # records only source-attributable answers; renderer reads without mutation.
+    coverage_records: dict[str, SlotValue] = Field(default_factory=dict)
     # Adaptive length (owner mandate 2026-10-03): bounded invitations used to
     # keep a call alive while the person is still talking, instead of ending it
     # because the list of routine questions ran out.

@@ -15,6 +15,7 @@ from packages.dialogue_engine.product.issue_plans import (
 from packages.dialogue_engine.product.known import step_already_known
 from packages.dialogue_engine.product.spoken import intent_for, spoken_question
 from packages.dialogue_engine.question_context import QuestionNeed, attribute_need_satisfied
+from packages.dialogue_engine.semantic_kernel.types import Observation
 
 if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState, IssueEpisode
@@ -86,6 +87,7 @@ def _has_grounded_current(state: EngineState, ep: IssueEpisode) -> bool:
         and obs.temporal.current is True and bool(obs.evidence.strip())
         and bool(obs.source_turn_id.strip())
         for obs in state.observations.values()
+        if isinstance(obs, Observation)
     )
 
 
