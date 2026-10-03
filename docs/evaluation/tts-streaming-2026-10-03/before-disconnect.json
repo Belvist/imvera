@@ -1,0 +1,8 @@
+{
+  "source_sha": "72235946c3f5f66bb925923bc02c7f6f8540088c",
+  "boundary": "exact original worker _ndjson_stream; controlled producer, no real model",
+  "consumer_close_timeout_200ms": true,
+  "executor_pending_after_disconnect": 1,
+  "queue_items": 8,
+  "result": "FAIL: disconnected consumer strands sole worker"
+}

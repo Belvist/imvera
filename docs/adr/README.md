@@ -42,3 +42,5 @@ ADR-012 is **lab/spike only** for production telephony (see ADR-013).
 ADR-014 **does not** stamp `ARCHITECTURE = FROZEN` until gates 1–7 are VERIFIED.
 
 Master plan: [PLAN.md](../PLAN.md) v1.2 (historical freeze candidate). Active freeze: ADR-014.
+
+| [030](030-bounded-inference-streaming.md) | Bounded inference streaming and parallel PCM delivery | runtime slice implemented; M5/audio NOT VERIFIED |

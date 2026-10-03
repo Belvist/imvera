@@ -1,0 +1,41 @@
+{
+  "baseline_sha": "72235946c3f5f66bb925923bc02c7f6f8540088c",
+  "boundary": "review Linux source; controlled synthesis fixtures; actual HTTP TCP and CallActor; no M5/SIP/model latency",
+  "new_cases": {
+    "passed": 18,
+    "seconds": 1.7
+  },
+  "focused": {
+    "passed": 46,
+    "seconds": 5.65
+  },
+  "runtime_gate": {
+    "passed": 258,
+    "seconds": 15.76
+  },
+  "full_local": {
+    "passed": 3126,
+    "failed": 2,
+    "skipped": 9,
+    "seconds": 142.34,
+    "inherited_failures": [
+      "test_media_bridge_readiness_green_without_llm",
+      "test_warmup_all_hot"
+    ],
+    "note": "production source exact; ran17/18 final cases before adding interrupt parameter; no LFS substitute"
+  },
+  "corpus": {
+    "passed": 500,
+    "total": 500,
+    "seconds": 5.74
+  },
+  "policy_diff": {
+    "changed": 12,
+    "expected": 12,
+    "unexplained": 0
+  },
+  "lint": "PASS packages/services/tests/scripts and new tool/probe",
+  "real_model_latency": "NOT_RUN",
+  "deployed_runtime": "NOT_VERIFIED",
+  "capacity": "NOT_RUN"
+}

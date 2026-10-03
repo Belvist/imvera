@@ -149,6 +149,7 @@ class HttpTTSProvider:
                         "generation_id": generation_id,
                         "phrase_id": phrase_id,
                         "sample_rate": 16000,
+                        "timeout_ms": max(1, int(remaining * 1000)),
                     },
                     timeout=timeout,
                 ) as response:
@@ -185,6 +186,7 @@ class HttpTTSProvider:
                             is_last=bool(data.get("is_last", False)),
                         )
                         seq += 1
+                    raise ProviderUnavailable("TTS stream ended without completion marker")
             finally:
                 if owned:
                     await client.aclose()

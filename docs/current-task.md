@@ -1,3 +1,51 @@
+# Bounded TTS streaming and parallel delivery (2026-10-03)
+
+Target: **feature/voice-zoiper-m5**, baseline **72235946c3f5f66bb925923bc02c7f6f8540088c**.
+Source implementation only; loaded M5 source/endpoints/flags remain unavailable.
+[Architecture/source audit](adr/030-bounded-inference-streaming.md),
+[operator handoff](tts-streaming-handoff.md),
+[baseline failure and evidence](evaluation/tts-streaming-2026-10-03/README.md).
+
+CHANGED: replace TTS HTTP blocking queue bridge with bounded inference producer
+and async consumer. HTTP/playback overlap existing model-thread synthesis;
+remove blocked queue-reader thread and disconnect deadlock. Queue capacity stays
+occupied until an actual running kernel finishes. Admission rejects overload
+before headers. Relative timeout_ms is propagated and expires locally, including
+queued work. Request-ID cancellation now reaches the active stream. Native
+MLX/Qwen audio stays incremental. Opt-in Silero sentence synthesis preserves
+canonical text/order and sends initial PCM before remaining synthesis completes.
+Sentence mode is OFF pending audible comparison. No LLM activation, new brain,
+model replacement, slot/state writer, or change to SDK completion fencing.
+Missing HTTP completion marker is an error; partial audio cannot trigger replay
+on another replica. Health reports actual inference queue depth.
+
+VERIFIED: exact original worker function reproduced a 200ms disconnect timeout,
+8 queued chunks and occupied sole model thread. New genuine TCP HTTP adapter →
+CallActor → transport callback receives PCM before later synthesis completes;
+interruption suppresses subsequent PCM and leaves the ledger interrupted.
+Controlled synthesis fixtures verify transport ordering, not model latency.
+18 new cases PASS; focused executor/provider/playback/failure gate46 PASS,5.65s;
+complete runtime CI selection258 PASS,15.76s. Corpus 500/500 PASS,5.74s; policy diff12/12 expected,0 unexplained.
+Local full suite on production source:3126 passed /2 inherited real-LFS readiness
+failures /9 skipped,142.34s; it contained17 of the18 final new cases (final added
+interrupt parameter separately passed). Local full suite is NOT green. Ruff and
+whitespace checks recorded. Exact remote CI acceptance is pending publication.
+
+NOT VERIFIED: M5 model first-PCM p50/p95, real STT/endpoint/first audible sound,
+SIP recordings, sentence joins/prosody, deployment, throughput/capacity. Actual
+M5 credentials/VPN are absent; no services restarted. No artificial-model timing
+is presented as speed gained. Benchmark tool records real provider boundaries.
+
+REMAINING RISKS: a running model kernel cannot be preempted by Python; producer
+checks cancellation at output boundaries. Sentence mode adds synthesis calls and
+may affect prosody. Final STT and barge-in live gates remain. Inference concurrency
+stays one model thread per worker; large capacity requires measured replicas.
+
+NEXT GATE: paired M5 HTTP benchmark + real FreeSWITCH/CallActor phone recording
+and trace, interruption under backpressure and admitted concurrency measurement.
+
+---
+
 # Grounded reactions and routine-topic suspension (2026-10-03)
 
 Target: **feature/voice-zoiper-m5**, based on peer **f566cec64b5262f7a4956522ea6b7d0145aa2ef8**.

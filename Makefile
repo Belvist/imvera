@@ -55,7 +55,7 @@ test-dialogue-runtime:
 		tests/test_transport_cancel.py tests/test_downstream_cancel_gap.py tests/test_inference_stop_epoch.py \
 		tests/test_call_actor_audible_playout.py tests/test_call_actor_multi_phrase_playback.py \
 		tests/test_qwen_gguf_provider.py tests/test_qwen_tts_failure_integrity.py \
-		tests/test_tts_warmup.py -q
+		tests/test_tts_warmup.py tests/test_bounded_tts_streaming.py -q
 
 test-action-policy-shadow:
 	@echo "GATE: ActionPolicy Shadow M1 (fail-open, pre-legacy, no cutover)"

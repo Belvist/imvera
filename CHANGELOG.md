@@ -2,6 +2,10 @@
 
 ## Unreleased — 2026-10-03
 
+- Bound TTS production with disconnect-aware backpressure and async HTTP consumption; preserve actual model completion and reject overload before headers.
+- Propagate relative TTS deadlines, honor request-ID cancellation and reject truncated audio streams without replaying another voice.
+- Add opt-in batch sentence streaming, real TCP/CallActor delivery-and-cancel tests, and a real-worker first-PCM p50/p95 benchmark. M5/audio acceptance remains pending.
+
 - Shield actual SDK executor completion through cancellation/shutdown, preserving caller context and the policy lock until the writer settles.
 
 - Ground routine reactions in actual current-turn polarity and heard question ownership; never congratulate negative/unknown intake or treat a story/refusal as a food answer.

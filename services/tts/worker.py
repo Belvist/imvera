@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import json
 import os
 import queue
 import threading
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -28,7 +28,9 @@ from services.inference.common import (
     mount_health,
     new_request_id,
 )
+from services.inference.streaming import BoundedInferenceStream, StreamCancelled
 from services.tts.gen_params import build_mlx_gen_kwargs, resolve_model_id, tts_engine
+from services.tts.sentence_stream import sentence_segments
 from services.tts.silero_lab import (
     SILERO_WARNING,
     lab_backend_name,
@@ -54,6 +56,7 @@ class SynthesizeRequest(BaseModel):
     voice: str | None = None
     language: str | None = None
     deadline: float | None = None
+    timeout_ms: int | None = Field(default=None, gt=0)
 
 
 app = FastAPI(title="IMVERA TTS Worker", version="0.1.0")
@@ -87,20 +90,29 @@ def _produce_silero_chunks(
     silero_cfg = dict(tts_cfg.get("silero_lab") or {})
     seq = 0
     try:
-        audio, sample_rate = synthesize_silero(req.text, silero_cfg)
-        pcm = _float_to_pcm16(audio)
-        for chunk_pcm, sr in _chunk_pcm(pcm, sample_rate):
+        segments = (
+            sentence_segments(req.text)
+            if os.environ.get("IMVERA_TTS_SENTENCE_STREAM", "0") == "1"
+            else [req.text]
+        )
+        for segment in segments:
             if req.generation_id in _cancelled:
                 break
-            out_q.put(
-                {
-                    "sequence": seq,
-                    "sample_rate": sr,
-                    "pcm_b64": base64.b64encode(chunk_pcm).decode("ascii"),
-                    "is_last": False,
-                }
-            )
-            seq += 1
+            check_deadline(req.deadline)
+            audio, sample_rate = synthesize_silero(segment, silero_cfg)
+            pcm = _float_to_pcm16(audio)
+            for chunk_pcm, sr in _chunk_pcm(pcm, sample_rate):
+                if req.generation_id in _cancelled:
+                    break
+                out_q.put(
+                    {
+                        "sequence": seq,
+                        "sample_rate": sr,
+                        "pcm_b64": base64.b64encode(chunk_pcm).decode("ascii"),
+                        "is_last": False,
+                    }
+                )
+                seq += 1
     finally:
         out_q.put(None)
 
@@ -183,6 +195,8 @@ def _produce_qwen_chunks(
                     }
                 )
                 seq += 1
+    except (StreamCancelled, TimeoutError):
+        raise
     except Exception as exc:
         raise _QwenStreamFailure(str(exc), seq) from exc
     return seq
@@ -198,6 +212,8 @@ def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
         reason = "no audio generated"
         try:
             produced = _produce_qwen_chunks(req, out_q, tts_cfg)
+        except (StreamCancelled, TimeoutError):
+            raise
         except Exception as exc:
             if isinstance(exc, _QwenStreamFailure) and exc.emitted_chunks > 0:
                 print(
@@ -356,44 +372,56 @@ def _load_and_warmup_mlx(tts_cfg: dict[str, Any], engine: str) -> None:
         print(f"TTS load/warmup failed: {exc}", flush=True)
 
 
-mount_health(app, state, "tts")
+mount_health(app, state, "tts", executor_supplier=lambda: executor)
 
 
-async def _ndjson_stream(req: SynthesizeRequest) -> AsyncIterator[bytes]:
-    try:
-        check_deadline(req.deadline)
-    except (TimeoutError, QueueFullError) as exc:
-        raise executor_http_error(exc) from exc
-    out_q: queue.Queue = queue.Queue(maxsize=8)
+def _prepare_stream(req: SynthesizeRequest) -> BoundedInferenceStream:
+    return BoundedInferenceStream(
+        executor,
+        lambda out_q: _produce_chunks(req, out_q),
+        deadline=req.deadline,
+        cancelled=lambda: (
+            req.generation_id in _cancelled or req.request_id in state.cancelled_requests
+        ),
+    )
 
-    def produce() -> None:
-        _produce_chunks(req, out_q)
 
-    try:
-        fut = executor.submit(produce)
-    except QueueFullError as exc:
-        # Raised before the first byte: fail over cleanly with 429.
-        raise executor_http_error(exc) from exc
+class _InferenceResponse(StreamingResponse):
+    def __init__(self, req: SynthesizeRequest, stream: BoundedInferenceStream) -> None:
+        super().__init__(_ndjson_stream(req, stream), media_type="application/x-ndjson")
+        self._inference_stream = stream
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            # Also handles disconnect before body iteration/header send.
+            self._inference_stream.close()
+
+
+async def _ndjson_stream(
+    req: SynthesizeRequest,
+    stream: BoundedInferenceStream,
+) -> AsyncIterator[bytes]:
     got_audio = False
     try:
-        while True:
-            item = await asyncio.to_thread(out_q.get)
-            if item is None:
-                break
-            if req.generation_id in _cancelled:
-                yield (json.dumps({"done": True, "cancelled": True}) + "\n").encode()
-                return
+        async for item in stream.items():
             if item.get("done"):
                 yield (json.dumps(item, ensure_ascii=False) + "\n").encode()
                 return
             got_audio = True
             yield (json.dumps(item, ensure_ascii=False) + "\n").encode()
+    except StreamCancelled:
+        yield (json.dumps({"done": True, "cancelled": True}) + "\n").encode()
+        return
+    except Exception as exc:
+        yield (json.dumps({"done": True, "error": str(exc) or type(exc).__name__}) + "\n").encode()
+        return
     finally:
-        await asyncio.wrap_future(fut)
+        stream.close()
     if not got_audio and req.generation_id not in _cancelled:
         yield (
-            json.dumps({"done": True, "error": "no audio generated"}, ensure_ascii=False)
-            + "\n"
+            json.dumps({"done": True, "error": "no audio generated"}, ensure_ascii=False) + "\n"
         ).encode()
         return
     yield (json.dumps({"done": True}) + "\n").encode()
@@ -411,9 +439,15 @@ async def synthesize(req: SynthesizeRequest) -> StreamingResponse:
         raise HTTPException(503, detail=state.warmup_error or "qwen not ready")
     if engine == "silero_lab" and not state.ready:
         raise HTTPException(503, detail=state.warmup_error or "silero lab not ready")
-    if executor.queue_depth >= 4:
-        raise HTTPException(503, detail="inference queue full")
-    return StreamingResponse(_ndjson_stream(req), media_type="application/x-ndjson")
+    if req.timeout_ms is not None:
+        req = req.model_copy(update={"deadline": time.monotonic() + req.timeout_ms / 1000})
+    try:
+        stream = _prepare_stream(req)
+    except StreamCancelled as exc:
+        raise HTTPException(499, detail="cancelled") from exc
+    except (TimeoutError, QueueFullError) as exc:
+        raise executor_http_error(exc) from exc
+    return _InferenceResponse(req, stream)
 
 
 @app.post("/v1/cancel")
