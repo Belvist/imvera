@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -84,7 +85,7 @@ def main() -> None:
     names = []
     record = {
         "source_sha": args.sha,
-        "boundary": "actual Docker, controlled PCM resident fixture",
+        "boundary": "actual Docker, controlled PCM resident fixture in shared loopback namespace",
         "neural_tts_or_sip_acceptance": False,
     }
     details = json.loads(docker("image", "inspect", image))[0]
@@ -124,6 +125,8 @@ def main() -> None:
                 network,
                 "--network-alias",
                 "resident",
+                "-p",
+                "127.0.0.1::9102",
                 *hardened,
                 "-v",
                 f"{fixture}:/fixture.py:ro",
@@ -152,12 +155,10 @@ def main() -> None:
                 "--restart",
                 "unless-stopped",
                 "--network",
-                network,
+                "container:" + resident,
                 *hardened,
-                "-p",
-                "127.0.0.1::9102",
                 "-e",
-                "IMVERA_QWEN_TTS_URL=http://resident:8899",
+                "IMVERA_QWEN_TTS_URL=http://127.0.0.1:8899",
                 image,
             )
             binding = wait(
@@ -165,7 +166,9 @@ def main() -> None:
                     ports
                     if (
                         ports := json.loads(
-                            docker("inspect", "--format", "{{json .NetworkSettings.Ports}}", worker)
+                            docker(
+                                "inspect", "--format", "{{json .NetworkSettings.Ports}}", resident
+                            )
                         )
                     ).get("9102/tcp")
                     else None
@@ -261,6 +264,13 @@ def main() -> None:
             record["cold_failure_supervisor_restarts"] = restarted
             record["no_lab_fallback"] = True
             docker("stop", failed)
+    except BaseException:
+        for name in names:
+            result = subprocess.run(
+                prefix + ["logs", name], env=env, capture_output=True, text=True
+            )
+            print(name, result.stdout, result.stderr, file=sys.stderr)
+        raise
     finally:
         for name in reversed(names):
             subprocess.run(prefix + ["rm", "-f", name], env=env, capture_output=True)

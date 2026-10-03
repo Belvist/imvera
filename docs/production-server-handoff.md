@@ -34,6 +34,10 @@ system; never commit database credentials:
 - `IMVERA_PG_URL`: real production PG with required migrations and Core handoff.
 - `IMVERA_NLP_MODELS_DIR`: genuine accepted act/relation/polarity/head artifacts;
   Git LFS pointers are not weights.
+- `IMVERA_HF_CACHE_DIR`: prepared accepted RuModernBERT encoder/tokenizer
+  Hugging Face home (includes `hub/` snapshots and pinned refs). Bridge mounts it
+  read-only and sets HF/Transformers offline mode; no live download of an
+  unreviewed encoder revision. Verify snapshot revision/checksums with the heads.
 - `IMVERA_GIGAAM_MODELS_DIR`: prepared `v3_e2e_rnnt.ckpt` plus
   `v3_e2e_rnnt_tokenizer.model`; worker checks upstream checkpoint checksum.
 - `IMVERA_QWEN_TTS_URL`: reachable accepted resident server (HTTP/S, no embedded credentials).
@@ -57,6 +61,8 @@ BuildKit secret `proxy_ca`; never disable TLS verification. Model preparation is
 a separate controlled operation; production STT defaults to offline artifacts.
 Use entrypoints `python -m services.stt.worker` / `python -m services.tts.worker`:
 TTS main-thread warmup must finish before the HTTP server binds.
+Model mounts must be readable by worker UID10001. Prepare permissions for the
+public model artifacts explicitly; do not relax database/recording permissions.
 
 ## Bounds and failure behavior
 
@@ -67,6 +73,16 @@ worker, STT12s/TTS20s call budgets, job120s/startup240s hard process bounds.
 Multiple calls are async; HTTP/playback overlap synthesis. Replicate workers only
 after measuring accepted model throughput; extra threads do not create neural
 compute capacity. No large LLM is enabled by this deployment.
+Bridge defaults to4GiB/two CPU cores and two OMP/BLAS threads; inference workers
+also cap library threads. Align thread counts with measured CPU quotas. Default
+host-wide thread counts exceeded the unchanged300ms polarity budget locally;
+the same model/tests pass with two threads, without raising the budget.
+
+Keep each active CallActor/EngineState on one bridge process. Scale the existing
+STT/TTS replica pool with explicit reachable worker URLs: cancellation broadcasts
+to the configured replicas and failover is allowed only before first PCM.
+An opaque load-balancer URL is not proof that cancellation reaches every worker.
+Check private service DNS/routing and configured proxies on the deployment host.
 
 Workers have private Docker networking, unprivileged UID10001, read-only root,
 bounded writable tmpfs/memory/CPU/PIDs and30s container shutdown budget.
