@@ -204,6 +204,18 @@ _DOMAIN_ACK = {
         "medication": "Хорошо, что сказали про лекарства.",
         "mood": "Спасибо, что сказали про настроение.",
     },
+    # Polarity unknown: say only that the answer was heard. Claiming «Хорошо,
+    # что…» for a value nobody measured is the same class of error as inventing
+    # a fact, and it read tone-deaf on live refusals.
+    "unknown": {
+        "wellness": "Спасибо, что сказали, как себя чувствуете.",
+        "wellbeing": "Спасибо, что сказали, как себя чувствуете.",
+        "plans": "Спасибо, что рассказали про планы.",
+        "nutrition": "Спасибо, что сказали про еду.",
+        "sleep": "Спасибо, что сказали, как спалось.",
+        "medication": "Спасибо, что сказали про лекарства.",
+        "mood": "Спасибо, что сказали про настроение.",
+    },
     "negative": {
         "wellness": "Понимаю, спасибо, что сказали, как себя чувствуете.",
         "wellbeing": "Понимаю, спасибо, что сказали, как себя чувствуете.",
@@ -230,8 +242,9 @@ def _slot_topic(state: EngineState, facts) -> HeardTopic | None:
 def _domain_reaction(state: EngineState, facts) -> str:
     for slot in facts or ():
         record = state.slot_records.get(slot)
-        negative = record is not None and record.polarity == "negative"
-        clause = _DOMAIN_ACK["negative" if negative else "positive"].get(slot, "")
+        polarity = record.polarity if record is not None else None
+        stance = polarity if polarity in ("negative", "positive") else "unknown"
+        clause = _DOMAIN_ACK[stance].get(slot, "")
         if clause and not is_verbatim_repeat(state.spoken_surfaces, clause):
             return clause
     return ""
