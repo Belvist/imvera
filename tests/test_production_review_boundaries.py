@@ -180,6 +180,38 @@ async def test_call_reservation_survives_concurrent_setup_and_releases_on_failur
 
 
 @pytest.mark.asyncio
+async def test_pending_readiness_already_owns_slot_and_cancellation_releases_it(monkeypatch):
+    from services.imvera_media_bridge import callactor
+
+    entered = asyncio.Event()
+    live = {}
+    closed = []
+
+    async def blockers():
+        entered.set()
+        await asyncio.Event().wait()
+
+    async def close(**kwargs):
+        closed.append(kwargs)
+
+    monkeypatch.setattr(callactor, "inference_blockers", blockers)
+    monkeypatch.setattr(callactor, "_production_call_limit", lambda: 1)
+    monkeypatch.setattr(callactor, "_live_actors", live)
+    ws = SimpleNamespace(close=close)
+    first = asyncio.create_task(callactor.handle_callactor_ws(ws, "first"))
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        assert "first" in live, "readiness await left a connecting channel unowned"
+        await asyncio.wait_for(callactor.handle_callactor_ws(ws, "second"), 0.25)
+        assert closed == [{"code": 1013, "reason": "bridge call capacity reached"}]
+    finally:
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+    assert not live
+
+
+@pytest.mark.asyncio
 async def test_failed_websocket_accept_stops_constructed_actor_and_releases_slot(monkeypatch):
     from services.imvera_media_bridge import callactor
 

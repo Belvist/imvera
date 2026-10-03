@@ -79,7 +79,12 @@ def main() -> None:
     prefix = ["docker", "--host=unix:///var/run/docker.sock"]
 
     def docker(*command: str) -> str:
-        return subprocess.check_output(prefix + list(command), env=env, text=True).strip()
+        # Docker preserves container stdout/stderr. Watchdog/Uvicorn logs use
+        # stderr; include both streams when verifying actual recovery evidence.
+        return subprocess.check_output(
+            prefix + list(command), env=env, text=True,
+            stderr=subprocess.STDOUT if command[0] == "logs" else None,
+        ).strip()
 
     def wait(check, timeout=30):
         end = time.monotonic() + timeout

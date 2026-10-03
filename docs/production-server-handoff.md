@@ -8,7 +8,7 @@ This is a server launch contract, not a claim of an accepted deployment.
 The [2026-10-03 re-review](evaluation/production-review-2026-10-03/README.md)
 corrects the first launch's admission claim: the profile contained a one-call
 limit, but the bridge did not enforce it. Production now reserves a slot before
-setup, rejects excess sessions with WS1013, and releases it on every exit,
+the provider-readiness await, rejects excess sessions with WS1013, and releases it on every exit,
 including failed construction/accept. The limit is **per bridge process**;
 do not run multiple ASGI workers to multiply admission implicitly. Production
 connections require `call_id` / `imvera_call_id` and a real shared CallBinding;

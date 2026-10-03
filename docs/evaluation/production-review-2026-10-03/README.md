@@ -27,6 +27,16 @@ reproduction failed to time out. Missing product identity (two cases) and active
 session count separately failed. Expectations were retained; no existing test
 was removed, weakened or skipped.
 
+The follow-up reproduced one admission gap in the initial fix: a channel waiting
+for provider readiness was not yet reserved. Reservation now precedes that await;
+concurrent attempts reject immediately and caller cancellation releases the slot.
+
+Initial container CI37162506889 observed warm readiness, stream/cancel,503 after
+resident loss, supervisor restart, recovered same-model readiness and another
+complete stream. The job then failed its log assertion because Docker's stderr
+(where the watchdog logs) was printed but not captured by the collector. Fix the
+collector to capture both log streams; retain the assertion and rerun the gate.
+
 ## Verification and limits
 
 `tests/test_production_review_boundaries.py` verifies the faults plus concurrent

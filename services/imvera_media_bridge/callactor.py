@@ -149,10 +149,10 @@ async def inference_blockers() -> list[str]:
 
 async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
     """Bidirectional FS stream: uplink → CallActor, TTS → mod_audio_stream JSON playback."""
-    blockers = await inference_blockers()
-    if blockers:
-        await websocket.close(code=1013, reason=f"inference not ready: {', '.join(blockers)}")
-        log.error("callactor.ws.rejected fs_uuid=%s blockers=%s", fs_uuid, blockers)
+    try:
+        limit = _production_call_limit()
+    except ValueError as exc:
+        await websocket.close(code=1013, reason=str(exc))
         return
 
     if fs_uuid in _live_actors:
@@ -160,7 +160,6 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
                   fs_uuid, _live_actors[fs_uuid])
         await websocket.close(code=1008, reason="duplicate channel session")
         return
-    limit = _production_call_limit()
     if limit is not None and len(_live_actors) >= limit:
         await websocket.close(code=1013, reason="bridge call capacity reached")
         return
@@ -169,6 +168,11 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
     # event loop. Setup counts too; every failure releases the same slot.
     _live_actors[fs_uuid] = fs_uuid
     try:
+        blockers = await inference_blockers()
+        if blockers:
+            await websocket.close(code=1013, reason=f"inference not ready: {', '.join(blockers)}")
+            log.error("callactor.ws.rejected fs_uuid=%s blockers=%s", fs_uuid, blockers)
+            return
         try:
             call_id, family_id, elder, mission_obj = _resolve_product_mission(websocket, fs_uuid)
         except ProductBindingMissing as exc:

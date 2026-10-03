@@ -22,13 +22,19 @@ VERIFIED: five initial reproductions failed before fixes; separate stale-health,
 slow-trickle, missing-product-ID and wrong-session-count reproductions also
 failed, then passed without weakened expectations. Exact final runtime command
 `OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 make test-dialogue-runtime
-PYTHON=/workspace/imvera-review-venv/bin/python`: **315 passed**,19.38s, includes
-**17 new fault cases**. Ruff packages/services/tests/scripts + container probe and
+PYTHON=/workspace/imvera-review-venv/bin/python`: **316 passed**,20.17s, includes
+**18 new fault cases** (follow-up reservation before readiness, with cancellation cleanup).
+The first version passed315 tests in19.38s before this additional case. Ruff packages/services/tests/scripts + container probe and
 whitespace PASS. Full local review run before the final HTTP-drain correction:
 **3184 passed /2 inherited genuine relation-LFS readiness failures /9 skipped**,
 147.03s; NOT locally green. Final runtime reran after the HTTP-drain correction.
 No readiness waiver, replacement weights or changed original assertions.
-Exact source CI including new actual container recovery is pending publication.
+Initial published code242ffcdc38850591cc4287cf8f848e094a698c6b [CI37162506889](https://github.com/Belvist/imvera/actions/runs/37162506889)
+observed actual warm-loss/restart/recovered readiness and a complete stream,
+then failed its log assertion because the collector ignored Docker stderr.
+Collector now captures both streams; original assertions retained. Follow-up
+source reserves admission before provider readiness (reproduced missing
+reservation); exact final source CI is pending publication.
 
 NOT VERIFIED: current M5 or target server deployment, actual accepted neural
 Qwen voice/prosody, SIP/audio, Core/PG/consent, live latency/load/capacity. No target
