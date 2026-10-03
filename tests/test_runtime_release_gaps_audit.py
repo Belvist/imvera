@@ -1,6 +1,8 @@
 """Release-path regressions for 489003e. Test doubles are not model/SIP benchmarks."""
 
 import asyncio
+import sys
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -27,6 +29,22 @@ def _await_chain(task):
             chain.append(f"{frame.f_code.co_name}:{frame.f_lineno}")
         current = getattr(current, "cr_await", None)
     return chain
+
+
+def _sdk_worker_sites():
+    """Only frame names/lines from SDK executor threads; never local values."""
+    frames = sys._current_frames()
+    sites = {}
+    for thread in threading.enumerate():
+        if not thread.name.startswith("asyncio_"):
+            continue
+        frame = frames.get(thread.ident)
+        chain = []
+        while frame is not None and len(chain) < 20:
+            chain.append(f"{frame.f_code.co_name}:{frame.f_lineno}")
+            frame = frame.f_back
+        sites[thread.name] = chain
+    return sites
 
 
 def session_at_wellness():
@@ -111,7 +129,7 @@ def test_out_of_order_inference_does_not_deadlock_actor(monkeypatch):
                 f"awaits={[_await_chain(task) for task in pending]}; "
                 f"last_applied={actor._last_applied_utterance_seq}; "
                 f"buffered={sorted(actor._utterance_outcomes)}; "
-                f"policy_locked={actor._policy_lock.locked()}"
+                f"policy_locked={actor._policy_lock.locked()}; workers={_sdk_worker_sites()}"
             )
             for task in done:
                 task.result()
