@@ -186,12 +186,72 @@ def _classify_important_to_share_answer(
     return "UNCLEAR"
 
 
-_ITS_META_LISTEN = (
-    "Я вас слушаю. Если хотите, можете сказать, что ещё для вас сейчас важно."
+# The listening move, as a pair: the listener clause is an acknowledgement the
+# renderer may replace with a grounded reaction, the invitation is the move.
+_ITS_META_LISTEN_ACK = "Я вас слушаю."
+_ITS_META_LISTEN_QUESTION = (
+    "Если хотите, можете сказать, что ещё для вас сейчас важно."
+)
+_ITS_META_LISTEN = f"{_ITS_META_LISTEN_ACK} {_ITS_META_LISTEN_QUESTION}"
+
+# One "follow the person" invitation per call, spent either mid-check-in (here)
+# or at the close (reducer._open_continuation). Never both.
+MAX_FOLLOW_PERSONS = 1
+
+_FOLLOW_MIN_CHARS = 25
+# Above this length even an answer carries enough of the person to follow.
+_FOLLOW_VOLUNTEERED_CHARS = 45
+_FOLLOW_DONE_RE = re.compile(
+    r"(спасибо,?\s*что\s+позвон|спасибо\s+за\s+звонок|не\s+буду\s+задерживать|"
+    r"пойду\s+(?:я\s+)?(?:спать|дела|готовить|отдыхать)|"
+    r"пора\s+(?:мне\s+)?(?:идти|спать)|"
+    r"давай\s+прощаться|будем\s+прощаться)",
+    re.I,
 )
 
 
-_MEDICATION_RE = None
+def _follow_person_plan(
+    state: EngineState, turn_context: TurnContext
+) -> ResponsePlan | None:
+    """Follow what the person just said before the next routine question.
+
+    The baseline check-in is a list of questions; a person who is telling
+    something of their own gets one bounded invitation first, and the pending
+    routine domain is asked on the next turn (it is not consumed here, so the
+    care goal is not lost — only deferred by one exchange).
+    Clinical content, distress, fatigue and every finish signal keep priority
+    and never pass through this.
+    """
+    if state.open_continuations >= MAX_FOLLOW_PERSONS:
+        return None
+    if not state.first_user_turn_received:
+        return None
+    if _has_open_episodes(state) and not _all_episodes_resolved(state):
+        return None
+    turn = turn_context.turn
+    text = (turn_context.user_text or state.last_user_text or "").strip()
+    if len(text) < _FOLLOW_MIN_CHARS:
+        return None
+    # A short answer to Vera's own question is not an invitation to talk about
+    # something else: the check-in moves on and asks the next useful thing.
+    answered = bool(getattr(turn, "answers_pending_question", False))
+    if answered and len(text) < _FOLLOW_VOLUNTEERED_CHARS:
+        return None
+    if _has_distress_markers(text) or _has_fatigue_markers(text):
+        return None
+    if state.elder_asked_to_stop or state.awaiting_goodbye_confirm:
+        return None
+    if _FOLLOW_DONE_RE.search(text):
+        return None
+    state.open_continuations += 1
+    return ResponsePlan(
+        obligation=ConversationObligation.FOLLOW_USER_THREAD,
+        action="speak",
+        thread_mode="invite",
+        marks_question=False,
+        intent="thread_invite",
+    )
+
 
 
 def _mentions_medication(raw: str) -> bool:
@@ -524,12 +584,16 @@ def _has_distress_markers(text: str) -> bool:
     return bool(_DISTRESS_MARKERS.search(text or ""))
 
 
-def _with_volunteered_ack(state: EngineState, text: str) -> str:
+def _volunteered_ack(state: EngineState) -> str:
     """Acknowledge a volunteered topic once before moving on (live 30a2a638:
     «покушала» → silence about food felt wrong). Asked domains excluded —
-    only volunteered ones get the ack."""
+    only volunteered ones get the ack.
+
+    Returns the acknowledgement as its own clause: the renderer owns the
+    surface and composes it with the question (see realization.py).
+    """
     if state.volunteered_ack_done:
-        return text
+        return ""
     from packages.dialogue_engine.coverage import covered_domains
 
     covered = covered_domains(state)
@@ -537,8 +601,8 @@ def _with_volunteered_ack(state: EngineState, text: str) -> str:
     for domain, ack in _VOLUNTEERED_ACKS:
         if domain in covered and domain not in asked:
             state.volunteered_ack_done = True
-            return f"{ack} {text}"
-    return text
+            return ack
+    return ""
 
 
 def _turn_reports_fresh_negative(turn) -> bool:
@@ -556,16 +620,17 @@ def _turn_reports_fresh_negative(turn) -> bool:
     return False
 
 
-def _its_question(state: EngineState, user_text: str = "") -> str:
-    """ITS question with a fatigue ack when the last turn was fatigue.
+def _its_pair(state: EngineState, user_text: str = "") -> tuple[str, str]:
+    """(acknowledgement, question) for an ITS turn.
 
-    Single owner for both ITS emission sites so the empathy prefix cannot
-    rot in one of them.
+    The transition acknowledgement and the question travel as separate fields
+    so the renderer owns the surface (and may replace a content-free transition
+    with a grounded reaction). Fatigue empathy outranks the neutral transition.
     """
-    question = questions.important_to_share_question(state)
+    ack, question = questions.its_question_and_ack(state)
     if user_text and _has_fatigue_markers(user_text):
-        question = f"{_FATIGUE_ACK} {question}"
-    return question
+        ack = _FATIGUE_ACK
+    return ack, question
 
 
 def _important_to_share_plan(
@@ -579,10 +644,12 @@ def _important_to_share_plan(
         return None
     if not _wellness_entry_covered(state):
         return None
+    _its_ack_text, _its_question_text = _its_pair(state, user_text)
     return ResponsePlan(
         obligation=ConversationObligation.IMPORTANT_TO_SHARE,
         action="speak",
-        mandatory_question=_its_question(state, user_text),
+        transition_ack=_its_ack_text,
+        mandatory_question=_its_question_text,
         intent="important_to_share",
         slot="important_to_share",
         marks_question=True,
@@ -653,6 +720,9 @@ def _summary_plan(state: EngineState, *, acknowledge: str = "") -> ResponsePlan:
         marks_question=False,
         acknowledge=acknowledge,
     )
+
+
+_MEDICATION_RE = None
 
 
 def _correction_plan(state: EngineState, turn: RichUserTurn) -> ResponsePlan:
@@ -1067,11 +1137,13 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 # Heard, but off-topic («фильм плохой»): acknowledge and
                 # redirect to self instead of lying «не расслышала».
                 _raw = (turn.raw_text or "").strip()
+                _ack = ""
                 if _film_clarify(_raw) and len(_raw.split()) >= 2:
-                    _q = (
-                        "Понятно. А вы сами как себя чувствуете — "
-                        "хорошо или не очень?"
-                    )
+                    # Heard? No — it was off-topic. The receipt is its own
+                    # field so the renderer may answer with a grounded
+                    # reaction instead of a bare «Понятно.».
+                    _ack = "Понятно."
+                    _q = "А вы сами как себя чувствуете — хорошо или не очень?"
                 else:
                     _q = (
                         "Простите, не расслышала. Как вы себя чувствуете — "
@@ -1080,6 +1152,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 return ResponsePlan(
                     obligation=ConversationObligation.NEVER_SILENT,
                     action="speak",
+                    acknowledge=_ack,
                     mandatory_question=_q,
                     intent="clarify_wellness",
                     slot="wellness",
@@ -1269,7 +1342,8 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 return ResponsePlan(
                     obligation=ConversationObligation.NEVER_SILENT,
                     action="speak",
-                    mandatory_question=_ITS_META_LISTEN,
+                    acknowledge=_ITS_META_LISTEN_ACK,
+                    mandatory_question=_ITS_META_LISTEN_QUESTION,
                     intent="listen_open",
                     marks_question=True,
                 )
@@ -1344,11 +1418,13 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 if _screen in ("no_meds", "already_took", "refused"):
                     # refused (spec 9): topic dropped, no re-ask, move on.
                     state.observations[f"coverage_{_pcd}"] = turn.raw_text.strip()
+                    state.last_answered_domain = _pcd
                     state.pending_coverage_domain = None
                 elif _is_coverage_debris(turn, _pcd):
                     state.pending_coverage_domain = None
                 else:
                     state.observations[f"coverage_{_pcd}"] = turn.raw_text.strip()
+                    state.last_answered_domain = _pcd
                     state.pending_coverage_domain = None
             elif _is_coverage_debris(turn, _pcd):
                 # Debris is NEVER recorded as coverage: drop pending and move
@@ -1356,6 +1432,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 state.pending_coverage_domain = None
             else:
                 state.observations[f"coverage_{_pcd}"] = turn.raw_text.strip()
+                state.last_answered_domain = _pcd
                 state.pending_coverage_domain = None
 
     probe = _probe_plan(state, clarify=clarify)
@@ -1373,10 +1450,12 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         elif turn_context.user_text.strip():
             raw = turn_context.user_text.strip()
         if not raw:
+            _ack_text, _question_text = _its_pair(state)
             return ResponsePlan(
                 obligation=ConversationObligation.IMPORTANT_TO_SHARE,
                 action="speak",
-                mandatory_question=questions.important_to_share_question(state),
+                transition_ack=_ack_text,
+                mandatory_question=_question_text,
                 intent="important_to_share",
                 slot="important_to_share",
                 marks_question=True,
@@ -1442,7 +1521,8 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
             return ResponsePlan(
                 obligation=ConversationObligation.IMPORTANT_TO_SHARE,
                 action="speak",
-                mandatory_question=_ITS_META_LISTEN,
+                acknowledge=_ITS_META_LISTEN_ACK,
+                mandatory_question=_ITS_META_LISTEN_QUESTION,
                 intent="important_to_share_listen",
                 slot="important_to_share",
                 marks_question=True,
@@ -1671,13 +1751,15 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                     _q = questions.probe_question("concern", state=state)
                 if _q:
                     _turn_text = turn.raw_text if turn is not None else ""
+                    _empathy = ""
                     if _has_distress_markers(_turn_text):
                         # Live fs-2d8153a8: «очень плохо» → bare «Что беспокоит».
                         # Name the pain first, then ask — pools intact.
-                        _q = f"Сочувствую. {_q}"
+                        _empathy = "Сочувствую."
                     return ResponsePlan(
                         obligation=ConversationObligation.NEVER_SILENT,
                         action="speak",
+                        acknowledge=_empathy,
                         mandatory_question=_q,
                         intent="probe_concern",
                         slot="wellness",
@@ -1718,6 +1800,11 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 _turn.raw_text if _turn is not None else ""
             )
             _domain = scored_next_domain(state, _last_text)
+            # The person's own content comes before the next routine question;
+            # the pending domain is asked on the following turn.
+            _follow = _follow_person_plan(state, turn_context)
+            if _follow is not None:
+                return _follow
             if _domain is not None:
                 import zlib
 
@@ -1725,10 +1812,10 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 state.pending_coverage_domain = _domain
                 _variant = zlib.crc32((state.call_id or "").encode()) % 2
                 _text, _intent, _slot = domain_question(_domain, variant=_variant)
-                _text = _with_volunteered_ack(state, _text)
                 return ResponsePlan(
                     obligation=ConversationObligation.BACKGROUND_GOAL,
                     action="speak",
+                    acknowledge=_volunteered_ack(state),
                     mandatory_question=_text,
                     intent=_intent,
                     slot=_slot,
@@ -1749,14 +1836,14 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
         if _next_background_goal(state) is None:
             if not state.important_to_share_resolved:
                 if state.first_user_turn_received:
+                    _ack_text, _question_text = _its_pair(
+                        state, getattr(turn, "raw_text", "") or turn_context.user_text
+                    )
                     return ResponsePlan(
                         obligation=ConversationObligation.IMPORTANT_TO_SHARE,
                         action="speak",
-                        mandatory_question=_its_question(
-                            state,
-                            getattr(turn, "raw_text", "")
-                            or turn_context.user_text,
-                        ),
+                        transition_ack=_ack_text,
+                        mandatory_question=_question_text,
                         intent="important_to_share",
                         slot="important_to_share",
                         marks_question=True,

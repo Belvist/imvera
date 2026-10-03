@@ -10,14 +10,13 @@ import pytest
 
 from packages.dialogue_engine.events import CallStarted
 from packages.dialogue_engine.product import (
-    IMPORTANT_TO_SHARE_QUESTION,
     MAX_ASKS_PER_FAMILY,
     MAX_CONTENT_ASKS_PER_CALL,
     ProductFamily,
     classify_episode_family,
 )
 from packages.dialogue_engine.product.spoken import spoken_question
-from packages.dialogue_engine.questions import important_to_share_question
+from packages.dialogue_engine.questions import its_question_and_ack
 from packages.dialogue_engine.scenario_runner import ScenarioRunner
 from packages.dialogue_engine.state import IssueEpisode
 
@@ -46,8 +45,11 @@ def test_pack_its_is_status_check_not_message_relay(
 ) -> None:
     # Canonical pool[0] pinned by day (variety rotates live by date).
     monkeypatch.setenv("IMVERA_SPEECH_DAY", "102")
-    q = important_to_share_question()
-    assert q == IMPORTANT_TO_SHARE_QUESTION
+    # One source of truth: the ITS pair lives in questions.py. The transition
+    # acknowledgement is its own field; the question never carries it.
+    its_ack, q = its_question_and_ack()
+    assert its_ack == "Поняла вас."
+    assert q == "А кроме этого — по самочувствию ничего не тревожит?"
     low = q.lower()
     assert "самочувств" in low
     assert "передам" not in low

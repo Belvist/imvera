@@ -27,13 +27,11 @@ from packages.dialogue_engine.product.planner import (
     product_episode_complete,
     spoken_for_need,
 )
-from packages.dialogue_engine.product.spoken import IMPORTANT_TO_SHARE_QUESTION
 
 __all__ = [
     "ASSOCIATED_LABELS",
     "CallKnownFacts",
     "FAMILY_PLANS",
-    "IMPORTANT_TO_SHARE_QUESTION",
     "MAX_ASKS_PER_FAMILY",
     "MAX_CONTENT_ASKS_PER_CALL",
     "ProductFamily",

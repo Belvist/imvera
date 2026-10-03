@@ -35,6 +35,10 @@ class ResponsePlan:
 
     # Legacy compatibility for gradual migration
     acknowledge: str = ""
+    # A neutral transition clause ("Поняла вас.") that may introduce a question.
+    # Lower priority than `acknowledge` and than any grounded reaction: it is
+    # spoken only when nothing better was accepted for this turn.
+    transition_ack: str = ""
     facts_to_reference: list[str] = field(default_factory=list)
     next_slot: str | None = None
     mandatory_question: str = ""
@@ -65,6 +69,11 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
         if plan.thread_mode == "invite":
             plan.mandatory_question = "Расскажите, я слушаю."
             plan.intent = "thread_invite"
+            # An invitation to a person who just said something of their own
+            # opens with what Vera heard, not with a bare request.
+            from packages.dialogue_engine.realization import reaction_clause
+
+            plan.acknowledge = reaction_clause(state, plan.acknowledge_facts)
         else:
             previous = state.thread_last_move
             last_text = state.thread_listening_text
@@ -92,7 +101,7 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
         return plan
 
     facts = plan.acknowledge_facts or plan.facts_to_reference
-    ack = plan.acknowledge or _acknowledge_fills(state, facts)
+    ack = plan.acknowledge or _acknowledge_fills(state, facts) or plan.transition_ack
     if plan.acknowledgement_kind == "not_recalled":
         ack = questions.not_recalled_ack()
     elif plan.acknowledgement_kind == "temporal_answer" and plan.acknowledgement_value:
@@ -107,6 +116,19 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
         ack = questions.current_relief_ack()
 
     if plan.action == "close_summary":
+        # A call must not end over the person: when the closing line carries no
+        # reference to what they just said, a grounded reaction goes in front
+        # of the summary. The summary itself is unchanged.
+        if not plan.control and not plan.safety_class:
+            from packages.dialogue_engine.realization import (
+                is_content_free_ack,
+                reaction_clause,
+            )
+
+            if not ack or is_content_free_ack(ack):
+                reaction = reaction_clause(state, facts)
+                if reaction:
+                    ack = reaction
         text = questions.summary_close_speech(state, acknowledge=ack)
         plan.acknowledge = ack
         plan.mandatory_question = text.removeprefix(ack + " ") if ack else text
@@ -144,6 +166,35 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
         elif plan.slot in ("wellness", "mood", "sleep", "plans"):
             question = questions.slot_question(plan.slot, state=state)
             plan.intent = plan.intent or f"check_{plan.slot}"
+
+    # Ordinary move with a real question: show first that the person was heard,
+    # then ask. A content-free acknowledgement is replaced by the grounded
+    # reaction; a meaningful one (severity, temporal, relief…) is kept, so the
+    # reaction never erases an accepted fact. See realization.py.
+    # A question that already opens with a statement («Сочувствую. Что…»,
+    # «Поняла вас. А кроме этого…») has its acknowledgement inside the question
+    # text; adding one more would say the same thing twice.
+    first_stop = question.find(".")
+    first_ask = question.find("?")
+    already_acknowledged = first_stop != -1 and (first_ask == -1 or first_stop < first_ask)
+    if (
+        question
+        and not already_acknowledged
+        and plan.action == "speak"
+        and not plan.control
+        and not plan.safety_class
+        and plan.thread_mode is None
+        and plan._answer_render is None
+    ):
+        from packages.dialogue_engine.realization import (
+            is_content_free_ack,
+            reaction_clause,
+        )
+
+        if not ack or is_content_free_ack(ack):
+            reaction = reaction_clause(state, facts)
+            if reaction:
+                ack = reaction
 
     if ack and plan.intent == "important_to_share":
         question = questions.without_listener_prefix(question)

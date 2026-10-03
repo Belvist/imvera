@@ -89,13 +89,18 @@ _PROBE_QUESTION_VARIANTS: dict[str, list[str]] = {
     ],
 }
 
-_ITS_QUESTION_VARIANTS: tuple[str, ...] = (
-    "Поняла вас. А кроме этого — по самочувствию ничего не тревожит?",
-    "Поняла вас. Может, ещё что-то важное хотите рассказать — по здоровью или дома?",
-    "Записала. Подскажите, есть ли ещё что-то важное по здоровью или дома?",
-    "Поняла. Что-то ещё важное есть?",
-    "Записала. Ещё что-то беспокоит?",
-    "Хорошо. Что-то ещё хотите сказать?",
+_ITS_VARIANTS: tuple[tuple[str, str], ...] = (
+    ("Поняла вас.", "А кроме этого — по самочувствию ничего не тревожит?"),
+    ("Поняла вас.", "Может, ещё что-то важное хотите рассказать — по здоровью или дома?"),
+    ("Записала.", "Подскажите, есть ли ещё что-то важное по здоровью или дома?"),
+    ("Поняла.", "Что-то ещё важное есть?"),
+    ("Записала.", "Ещё что-то беспокоит?"),
+    ("Хорошо.", "Что-то ещё хотите сказать?"),
+)
+# The spoken shape of the same bank (acknowledgement + question), kept for the
+# speech-discipline scanners. The pair above stays the single source of truth.
+_ITS_QUESTION_VARIANTS: tuple[str, ...] = tuple(
+    f"{ack} {question}" for ack, question in _ITS_VARIANTS
 )
 
 
@@ -211,6 +216,10 @@ _WELLNESS_ACK_TAILS: dict[str, list[str]] = {
 }
 
 _REPAIR_ACK = "Да, слышу."
+# Neutral receipt before a clarifying re-ask. Lives in the bank so the reducer
+# and the policy never hardcode it (phrase-discipline gate), and so the
+# renderer may replace it with a grounded reaction.
+CLARIFY_ACK = "Понимаю."
 _PARTIAL_CLOSE = "Сейчас не получилось узнать, как у вас дела. До свидания."
 # Partial close when facts WERE learned: claiming «не получилось» would be
 # a lie the elder hears (live: three positive answers followed by «не
@@ -548,8 +557,20 @@ def without_listener_prefix(text: str) -> str:
     return re.sub(r"^(Поняла вас|Поняла|Записала|Хорошо)\.\s*", "", text)
 
 
+def its_question_and_ack(state: EngineState | None = None) -> tuple[str, str]:
+    """The ITS transition acknowledgement and its question, chosen together.
+
+    Returned separately because the renderer owns the spoken surface and may
+    replace a content-free transition with a grounded reaction. The pair is
+    taken from the same rotated variant, and the pool advances exactly once.
+    """
+    ack, question = rotate_pool(state, "its", _ITS_VARIANTS)
+    return ack, question
+
+
 def important_to_share_question(state: EngineState | None = None) -> str:
-    return rotate_pool(state, "its", _ITS_QUESTION_VARIANTS)
+    """The ITS question alone (no transition acknowledgement)."""
+    return its_question_and_ack(state)[1]
 
 
 def topic_question(intent: str) -> str:

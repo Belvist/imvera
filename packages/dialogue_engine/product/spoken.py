@@ -9,10 +9,6 @@ from packages.dialogue_engine.product.issue_plans import ProductFamily
 if TYPE_CHECKING:
     from packages.dialogue_engine.state import IssueEpisode
 
-IMPORTANT_TO_SHARE_QUESTION = (
-    "Поняла вас. А кроме этого — по самочувствию ничего не тревожит?"
-)
-
 # (attribute → spoken). {label} substituted from episode.primary_label.
 _FAMILY_SPOKEN: dict[ProductFamily, dict[str, str]] = {
     ProductFamily.HEADACHE: {

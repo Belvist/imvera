@@ -81,10 +81,12 @@ def to_response_plan(
             marks_question=True,
         )
     if kind == ActionKind.IMPORTANT_TO_SHARE:
+        its_ack, its_question = questions.its_question_and_ack()
         return ResponsePlan(
             obligation="important_to_share",
             action="speak",
-            mandatory_question=questions.important_to_share_question(),
+            transition_ack=its_ack,
+            mandatory_question=its_question,
             intent="important_to_share",
             slot="important_to_share",
             marks_question=True,

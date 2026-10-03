@@ -1,3 +1,45 @@
+# Meaning-driven realization + adaptive length (2026-10-03)
+
+Base: **49f99f4** (owner handed this workstream the policy layer and paused the
+second agent mid-round). Owner mandate: deterministic composition from meaning,
+adaptive call length, acceptance by metrics on real recordings plus blind
+listeners. Report: [realization cut R1](realization-cut-r1-2026-10-03.md).
+
+CHANGED: new `packages/dialogue_engine/realization.py` (Renderer-owned
+composer: grounded noun from the person's own sentence, pymorphy3 inflection,
+spoken particles stripped, abstains when morphology is uncertain, refuses
+ledger repeats, empathy outranks reflection). `EngineState.last_user_text` /
+`last_user_utterance_id` / `last_answered_domain`; the reducer records them once
+per accepted turn. `ResponsePlan.transition_ack` (low-priority transition, real
+acknowledgement always wins). The acknowledgement is no longer glued into the
+question at the ITS bank, the coverage ladder, the concern-probe ladder, the
+listening move, `_speak_never_silent` or `_backchannel_reask` — it travels as
+its own field and `render_response_plan` composes the surface. `questions.CLARIFY_ACK`
+replaces a reducer literal (caught by the phrase-discipline gate). Adaptive
+length: `reducer._open_continuation` yields the floor in `_close_partial`
+instead of ending the call over a person who is still talking; every finish
+signal still closes. The third duplicate of the ITS sentence (product/spoken)
+is deleted.
+
+VERIFIED: full `pytest tests/` 3040 passed / 2 failed / 8 skipped (the 2 are
+pre-existing on this macOS/Python 3.13 box, green in CI); corpus 500/500;
+policy diff PASS (12 expected / 0 unexplained, files restored); repo-wide ruff
+clean; 31 new tests across two files. A/B replay of 40 real calls with isolated
+switches: reaction 19.9 % -> 38.9 %, question-only 37.5 % -> 16.6 %, closed
+without reaction 62.5 % -> 52.5 %, Vera closes 77.5 % -> 72.5 %, median turns
+before close 3 -> 4. New instrument: `tools/voice_lab/conversation_quality.py`.
+No corpus re-baseline was needed.
+
+NOT VERIFIED: acoustic delivery, prosody, blind listener ratings; a live call on
+this code (the bridge still runs 49f99f4 without these uncommitted changes).
+REMAINING RISKS: repair/medication/refusal/safety-close sites still build their
+line outside the composer (low value or frozen by design); reactions are still
+neutral rather than stance-aware; one intermittent `test_polarity_model`
+failure was seen once and did not reproduce.
+NEXT GATE: live call on the bridge with this code, then stance-aware warmth.
+
+---
+
 # Cut1b: user-led conversation inside the existing engine (2026-10-02)
 
 Base m5: **75280deaa0ab2b3e3ff070fba378edd1ef66d542**. Published code: **6705f7651b3f0be1194344bf1e777da8a9a195a2**. Main and loaded
@@ -942,6 +984,18 @@ canonical == TTS == delivered speech, and a single farewell.
 - Verified: 4 sofia profiles RUNNING, Zoiper re-registered (TCP,
   Reachable), STT transcribes, TTS (clone) synthesizes, bridge hot,
   version_watch OK. No code changed; no version move.
+
+---
+
+# Fast-forward to 49f99f4: v10 policy + yield-the-floor (2026-10-03)
+
+- His 3 (selected-question commit, yield-the-floor + v10, CI pin).
+  Fast-forward, no conflicts. Our thread branch coexists (43 thread +
+  story tests green). Remote CI green on all three incl. LFS models.
+- Local gates: 3009 passed / 2 known origin-reds (deadline test, red on
+  his tree too — his next fix, not ours). Corpus 500/500.
+- Bridge in no-call window -> 49f99f4, hot, watch OK. No push needed
+  (nothing local to push).
 
 ---
 

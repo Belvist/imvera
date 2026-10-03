@@ -287,6 +287,20 @@ class EngineState(BaseModel):
     # Bounded, verbatim discourse evidence; never a clinical/family fact.
     thread_last_statement: str = ""
     thread_last_utterance_id: str = ""
+    # What the person actually said in the current turn (bounded verbatim).
+    # The renderer may reflect it back; it is never a clinical or family fact
+    # and it never fills a slot. Written once per accepted turn.
+    last_user_text: str = ""
+    last_user_utterance_id: str = ""
+    # A baseline domain the person answered in this turn (food, meds, mood,
+    # sleep). Coverage answers are observations, not slots, so the renderer
+    # needs this to ground a reaction instead of asking the next question cold.
+    # Turn-scoped: reset when a new user turn is recorded.
+    last_answered_domain: str = ""
+    # Adaptive length (owner mandate 2026-10-03): bounded invitations used to
+    # keep a call alive while the person is still talking, instead of ending it
+    # because the list of routine questions ran out.
+    open_continuations: int = 0
     # Non-question listening is activated only by matching audible completion.
     thread_listening_id: str = ""
     thread_listening_text: str = ""

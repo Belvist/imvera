@@ -20,7 +20,12 @@ def test_day_zero_yields_canonical(monkeypatch: pytest.MonkeyPatch) -> None:
     assert questions.slot_question("mood") == "А какое у вас сегодня настроение?"
     assert questions.slot_question("sleep") == "Как вы спали?"
     assert questions.probe_question("concern") == "Что именно беспокоит?"
-    assert questions.important_to_share_question().startswith("Поняла вас. А кроме этого")
+    # The ITS transition acknowledgement is its own field now: the canonical
+    # question no longer carries it and the renderer composes the surface.
+    its_ack, its_question = questions.its_question_and_ack()
+    assert its_ack == "Поняла вас."
+    assert its_question == "А кроме этого — по самочувствию ничего не тревожит?"
+    assert questions.important_to_share_question() == its_question
 
 
 def test_rotation_varies_by_day(monkeypatch: pytest.MonkeyPatch) -> None:

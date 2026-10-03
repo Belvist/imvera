@@ -1191,11 +1191,24 @@ def _schedule_advance(
     return _emit_from_plan(state, plan)
 
 
+def _note_heard_user_turn(state: EngineState, turn: RichUserTurn) -> None:
+    """Record the person's own words for this turn, bounded and verbatim.
+
+    The renderer may reflect them back; this never fills a slot, never becomes
+    a clinical or family fact, and carries no interpretation.
+    """
+    text = (turn.raw_text or "").strip()
+    state.last_user_text = text[:200]
+    state.last_user_utterance_id = turn.utterance_id or ""
+    state.last_answered_domain = ""
+
+
 def _apply_rich_turn(
     state: EngineState,
     turn: RichUserTurn,
 ) -> tuple[EngineState, list[Effect]]:
     user_text = turn.raw_text
+    _note_heard_user_turn(state, turn)
     answer_slot = state.answer_context_slot()
 
     safety_done = _maybe_handle_safety_continuation(state, user_text=user_text)
@@ -1919,7 +1932,9 @@ def _backchannel_reask(state: EngineState) -> tuple[str, str, str] | None:
     ] or list(_BACKCHANNEL_ACKS)
     ack = questions.rotate_pool(state, "reask-ack", _ack_pool)
     intent = (delivered.intent or "").strip() or slot
-    return (f"{ack} {rephrase}", slot, intent)
+    # The acknowledgement travels as its own clause so the renderer composes
+    # the surface (and may answer with a grounded reaction instead).
+    return (ack, rephrase, slot, intent)
 
 
 def _coerce_unclear_by_content(
@@ -2180,13 +2195,20 @@ def _answer_backchannel(
         return state, effects
     reask = _backchannel_reask(state)
     if reask is not None:
-        text, slot, intent = reask
-        state, effects = _emit_speak(
+        ack, rephrase, slot, intent = reask
+        from packages.dialogue_engine.response_plan import ResponsePlan
+
+        state, effects = _emit_from_plan(
             state,
-            text=text,
-            intent=intent,
-            slot=slot,
-            marks_question=True,
+            ResponsePlan(
+                obligation="never_silent",
+                action="speak",
+                acknowledge=ack,
+                mandatory_question=rephrase,
+                intent=intent,
+                slot=slot,
+                marks_question=True,
+            ),
         )
         effects.append(
             TimerEffect(
@@ -2715,14 +2737,23 @@ def _speak_never_silent(
     if outcome[1]:
         return outcome
     if can_ask_slot(state, answer_slot):
-        ack = "Понимаю."
-        question = questions.slot_question(answer_slot, clarification=True, state=state)
-        return _emit_speak(
+        # Composed by the renderer, not glued here: the acknowledgement is its
+        # own field so a grounded reaction can stand in for a bare «Понимаю.».
+        from packages.dialogue_engine.response_plan import ResponsePlan
+
+        return _emit_from_plan(
             state,
-            text=f"{ack} {question}".strip(),
-            intent=f"clarify_{answer_slot}",
-            slot=answer_slot,
-            marks_question=True,
+            ResponsePlan(
+                obligation="never_silent",
+                action="speak",
+                acknowledge=questions.CLARIFY_ACK,
+                mandatory_question=questions.slot_question(
+                    answer_slot, clarification=True, state=state
+                ),
+                intent=f"clarify_{answer_slot}",
+                slot=answer_slot,
+                marks_question=True,
+            ),
         )
     return _speak_repair(state, answer_slot)
 
@@ -3311,6 +3342,13 @@ def _close_partial(state: EngineState) -> tuple[EngineState, list[Effect]]:
 
     if is_forbidden(state, "concern_probe"):
         return _emit_summary(state, acknowledge="Хорошо, записала.")
+    # Adaptive length (owner mandate 2026-10-03): the episode question caps
+    # running out is not the person's signal to hang up. While they are still
+    # talking and never asked to finish, Vera yields the floor once more
+    # instead of ending the call over them. Red/urgent already returned above.
+    continuation = _open_continuation(state)
+    if continuation is not None:
+        return continuation
     state.call_closed = True
     state.closing_reason = "partial_unresolved"
     state.fsm_state = FsmState.FINAL_CLASSIFICATION
@@ -3328,8 +3366,68 @@ def _close_partial(state: EngineState) -> tuple[EngineState, list[Effect]]:
     )
 
 
+# One invitation per call: the speech ledger refuses to repeat the same
+# invitation, so a second continuation would have nothing new to say.
+MAX_OPEN_CONTINUATIONS = 1
+_OPEN_INVITATION = "Расскажите, я слушаю."
+
+# «Ну ладно, спасибо, что позвонили.» is a wrap-up, not more conversation.
+_WRAP_UP_RE = re.compile(
+    r"(спасибо,?\s*что\s+позвон|спасибо\s+за\s+звонок|"
+    r"не\s+буду\s+(?:больше\s+)?(?:вас\s+)?задерживать|"
+    r"пойду\s+(?:я\s+)?(?:спать|дела|готовить|отдыхать)|"
+    r"пора\s+(?:мне\s+)?(?:идти|спать|делать)|"
+    r"давай\s+прощаться|будем\s+прощаться)",
+    re.I,
+)
+
+
+def _open_continuation(state: EngineState):
+    """A bounded invitation instead of a close for a person still talking.
+
+    Returns None whenever the person signalled they want to finish, said too
+    little to be worth an invitation, or the budget is spent. Never reached on
+    red/urgent paths — those return before the caller gets here.
+    """
+    if state.open_continuations >= MAX_OPEN_CONTINUATIONS:
+        return None
+    text = (state.last_user_text or "").strip()
+    if len(text) < 12:
+        return None
+    if state.elder_asked_to_stop or state.awaiting_goodbye_confirm:
+        return None
+    from packages.dialogue_engine.conversation_policy import (
+        _has_distress_markers,
+        _has_fatigue_markers,
+    )
+
+    if _has_distress_markers(text) or _has_fatigue_markers(text):
+        return None
+    if _is_explicit_farewell(text) or _WRAP_UP_RE.search(text):
+        return None
+    # Never answer a person with the same invitation twice.
+    from packages.dialogue_engine.speech_ledger import is_verbatim_repeat
+
+    if is_verbatim_repeat(state.spoken_surfaces, _OPEN_INVITATION):
+        return None
+    state.open_continuations += 1
+    from packages.dialogue_engine.response_plan import ResponsePlan
+
+    return _emit_from_plan(
+        state,
+        ResponsePlan(
+            obligation="follow_user_thread",
+            action="speak",
+            thread_mode="invite",
+            marks_question=False,
+            intent="thread_invite",
+        ),
+    )
+
+
 def _has_learned_facts(state: EngineState) -> bool:
     """Any grounded user content on record: filled slots with values or
+
     issue episodes. Decides the honest partial-close wording (fs-0f94e538
     said «не получилось» after three positive answers)."""
     for slot, status in (getattr(state, "slots", {}) or {}).items():
