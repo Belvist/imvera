@@ -287,8 +287,10 @@ def test_offline_production_model_artifacts_fail_before_download(monkeypatch, tm
     monkeypatch.setattr(
         "services.stt.gigaam_engine._download_file", lambda *args: pytest.fail("download")
     )
+    missing = tmp_path / "read-only-model-mount"
     with pytest.raises(FileNotFoundError, match="downloads disabled"):
-        ensure_gigaam_artifacts("v3_e2e_rnnt", tmp_path, allow_download=False)
+        ensure_gigaam_artifacts("v3_e2e_rnnt", missing, allow_download=False)
+    assert not missing.exists()
 
 
 def test_executor_shutdown_cancels_queued_work_without_lying_about_running_job():

@@ -166,3 +166,30 @@ jobs:
         run: make test-dialogue-topic
       - name: Pytest (full runnable suite)
         run: make test
+
+  production-workers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build portable production worker images
+        run: |
+          for target in tts-http stt-cpu; do
+            docker build --target "$target" -f infra/inference/Dockerfile \
+              --build-arg IMVERA_GIT_SHA="$GITHUB_SHA" \
+              --build-arg PYTHON_IMAGE=python:3.12-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3 \
+              -t "imvera/$target:$GITHUB_SHA" .
+          done
+      - name: Verify CPU dependencies and fail-closed voice startup
+        run: |
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=128m \
+            "imvera/stt-cpu:$GITHUB_SHA" python -c \
+            "import gigaam, torch, torchaudio, subprocess; assert not torch.cuda.is_available(); subprocess.run(['ffmpeg', '-version'], check=True, stdout=subprocess.DEVNULL); print(torch.__version__, torchaudio.__version__)"
+          set +e
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            -e IMVERA_QWEN_TTS_URL=http://127.0.0.1:9 \
+            "imvera/tts-http:$GITHUB_SHA" > tts-boot.log 2>&1
+          boot_status=$?
+          set -e
+          cat tts-boot.log
+          test "$boot_status" = 70

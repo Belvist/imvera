@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ffmpeg libs
     && rm -rf /var/lib/apt/lists/*
 RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export PIP_CERT=/run/secrets/proxy_ca GIT_SSL_CAINFO=/run/secrets/proxy_ca; fi; \
-    pip install --no-cache-dir torch==2.14.1 torchaudio==2.14.1 --index-url https://download.pytorch.org/whl/cpu \
+    pip install --no-cache-dir torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -e '.[gigaam-stt]'
 USER 10001:10001
 EXPOSE 9101

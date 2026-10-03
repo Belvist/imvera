@@ -101,7 +101,6 @@ def ensure_gigaam_artifacts(
         raise ValueError(f"Unsupported GigaAM model {resolved!r}; supported: {known}")
 
     root = download_root or _DEFAULT_CACHE
-    root.mkdir(parents=True, exist_ok=True)
 
     ckpt_name = f"{resolved}.ckpt"
     ckpt_path = root / ckpt_name
@@ -110,6 +109,8 @@ def ensure_gigaam_artifacts(
         required.append(root / f"{resolved}_tokenizer.model")
     if not allow_download and any(not path.is_file() for path in required):
         raise FileNotFoundError("prepared GigaAM checkpoint/tokenizer required; downloads disabled")
+    if allow_download:
+        root.mkdir(parents=True, exist_ok=True)
     if not ckpt_path.exists():
         logger.info("Downloading GigaAM %s (~450 MB)...", resolved)
         _download_file(f"{_URL_DIR}/{ckpt_name}", ckpt_path)
