@@ -20,8 +20,9 @@ a running kernel retains its admission slot until it actually settles. Do not
 raise model thread counts or call caps without a measured capacity probe.
 
 Generation ID, phrase ID, canonical text and playout ledger are unchanged.
-HTTP `done` must arrive; EOF after PCM is failure, never successful delivery or
-permission to replay another replica. Request-ID and generation cancellation
+An explicit completion marker must arrive (current worker uses `done`; legacy
+empty `is_last` remains supported). EOF after PCM without a marker is failure,
+never successful delivery or permission to replay another replica. Request-ID and generation cancellation
 both terminate worker output. Producer errors after a sentinel are still errors.
 
 MLX and Qwen retain native chunk delivery. Silero is batch-only: optional
@@ -82,3 +83,9 @@ real TCP HTTP/provider/CallActor delivery and cancellation; see evidence.
 NOT VERIFIED: actual M5 speed, SIP/audio, joins/prosody, deployment, scale.
 REMAINING RISKS: model kernel preemption, batch voice prosody/extra inference,
 final STT and model throughput. NEXT GATE: paired actual M5 phone/audio traces.
+
+Exact published source d0275d2863e304d7edf8fae07ad237ad20c24bbc:
+[CI37154389817](https://github.com/Belvist/imvera/actions/runs/37154389817)
+all10 jobs PASS;3135 passed/0 failed/3 skipped,197.33s. This is code acceptance,
+not a deployment or acoustic acceptance. Existing cancellation-ID retention
+still needs a separate long-lived worker limit/TTL gate before high-volume use.

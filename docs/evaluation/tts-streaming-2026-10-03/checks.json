@@ -37,5 +37,16 @@
   "lint": "PASS packages/services/tests/scripts and new tool/probe",
   "real_model_latency": "NOT_RUN",
   "deployed_runtime": "NOT_VERIFIED",
-  "capacity": "NOT_RUN"
+  "capacity": "NOT_RUN",
+  "remote_ci": {
+    "source_sha": "d0275d2863e304d7edf8fae07ad237ad20c24bbc",
+    "run_id": 37154389817,
+    "all_jobs": "10/10 PASS",
+    "full_suite": {
+      "passed": 3135,
+      "failed": 0,
+      "skipped": 3,
+      "seconds": 197.33
+    }
+  }
 }

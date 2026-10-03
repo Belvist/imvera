@@ -1,6 +1,7 @@
 # Bounded TTS streaming and parallel delivery (2026-10-03)
 
 Target: **feature/voice-zoiper-m5**, baseline **72235946c3f5f66bb925923bc02c7f6f8540088c**.
+Published code **d0275d2863e304d7edf8fae07ad237ad20c24bbc**.
 Source implementation only; loaded M5 source/endpoints/flags remain unavailable.
 [Architecture/source audit](adr/030-bounded-inference-streaming.md),
 [operator handoff](tts-streaming-handoff.md),
@@ -29,7 +30,8 @@ complete runtime CI selection258 PASS,15.76s. Corpus 500/500 PASS,5.74s; policy 
 Local full suite on production source:3126 passed /2 inherited real-LFS readiness
 failures /9 skipped,142.34s; it contained17 of the18 final new cases (final added
 interrupt parameter separately passed). Local full suite is NOT green. Ruff and
-whitespace checks recorded. Exact remote CI acceptance is pending publication.
+whitespace checks PASS. Exact source [CI37154389817](https://github.com/Belvist/imvera/actions/runs/37154389817)
+all10 jobs PASS;3135 passed/0 failed/3 skipped,197.33s, genuine Git LFS.
 
 NOT VERIFIED: M5 model first-PCM p50/p95, real STT/endpoint/first audible sound,
 SIP recordings, sentence joins/prosody, deployment, throughput/capacity. Actual
@@ -40,6 +42,8 @@ REMAINING RISKS: a running model kernel cannot be preempted by Python; producer
 checks cancellation at output boundaries. Sentence mode adds synthesis calls and
 may affect prosody. Final STT and barge-in live gates remain. Inference concurrency
 stays one model thread per worker; large capacity requires measured replicas.
+Existing worker cancellation-ID tombstone retention is not redesigned here and
+remains a long-lived/high-volume worker hardening gap.
 
 NEXT GATE: paired M5 HTTP benchmark + real FreeSWITCH/CallActor phone recording
 and trace, interruption under backpressure and admitted concurrency measurement.

@@ -36,7 +36,11 @@ not waived. Corpus500/500 PASS5.74s; policy diff12 changed/12 expected/0 unexpla
 Focused executor/provider/playback/failure selection46 PASS,5.65s. The final
 `make test-dialogue-runtime` selection258 PASS,15.76s. Ruff+whitespace PASS.
 Real-worker benchmark CLI help verified; no real worker available here.
-Remote source CI is pending publication.
+Exact source **d0275d2863e304d7edf8fae07ad237ad20c24bbc**:
+[CI37154389817](https://github.com/Belvist/imvera/actions/runs/37154389817)
+**all10 jobs PASS;3135 passed/0 failed/3 skipped,197.33s**, genuine Git LFS.
+[CI record](ci.json); [combined checks](checks.json). Final documentation edits
+leave packages/services/tests/Makefile identical to this tested code SHA.
 
 ## What is not measured
 
