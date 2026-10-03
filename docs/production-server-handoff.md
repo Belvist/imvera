@@ -5,6 +5,16 @@ Target branch: `feature/voice-zoiper-m5`. Source baseline: `75508eb`.
 [current-task](current-task.md) records exact tested/published revisions.
 This is a server launch contract, not a claim of an accepted deployment.
 
+The [2026-10-03 re-review](evaluation/production-review-2026-10-03/README.md)
+corrects the first launch's admission claim: the profile contained a one-call
+limit, but the bridge did not enforce it. Production now reserves a slot before
+setup, rejects excess sessions with WS1013, and releases it on every exit,
+including failed construction/accept. The limit is **per bridge process**;
+do not run multiple ASGI workers to multiply admission implicitly. Production
+connections require `call_id` / `imvera_call_id` and a real shared CallBinding;
+no manual `mission` or lab family fallback is allowed. Health counts this same
+registry, including setups/closing sessions.
+
 ## One codebase, explicit backend
 
 The bridge, DialogueEngine/Reducer, CallActor, provider contracts, streaming and
@@ -83,6 +93,26 @@ target load/capacity still needs measurement.
 Keep each active CallActor/EngineState on one bridge process. Scale the existing
 STT/TTS replica pool with explicit reachable worker URLs: cancellation broadcasts
 to the configured replicas and failover is allowed only before first PCM.
+TTS cancellation is concurrent across replicas and drains its child requests
+when CallActor cancels the cleanup; a hung first replica cannot prevent the
+playing replica from receiving cancellation.
+
+Production Qwen readiness rechecks the warmed model identity and accepted voice
+registration, without synthesizing speech. Metadata reads are bounded by time
+and64KiB. Lost resident/registry revokes admission immediately when observed;
+the existing model-process watchdog drains admitted producers **and HTTP leases**
+before exit70 (hard recovery bound remains the configured job timeout).
+`restart: unless-stopped` then repeats the existing bootstrap and voice
+registration/warmup. New readiness requests must pass before admitting calls.
+Model identity change instead returns503 for operator review and does not
+automatically accept a new model. Pin the resident executable/model/artifacts
+as described above; an intentional process restart reruns bootstrap, so the
+deployment's accepted artifact identity remains an operator contract.
+
+The bridge orphan sweep honours60s monotonic startup grace and consults current
+live sessions before each hangup. Reconnect/resume of the same channel remains
+unsupported; a new channel is required. None of these checks proves an audible
+stop or a warm, natural dialogue: retain the real audio/trace acceptance gate.
 An opaque load-balancer URL is not proof that cancellation reaches every worker.
 Check private service DNS/routing and configured proxies on the deployment host.
 

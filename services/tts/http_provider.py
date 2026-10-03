@@ -7,6 +7,7 @@ cannot be un-yielded). Cancel is broadcast to all replicas.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
@@ -47,22 +48,30 @@ class HttpTTSProvider:
 
     async def cancel(self, generation_id: str) -> None:
         self._cancelled.add(generation_id)
-        for url in self._pool.urls:
+
+        async def send(client: httpx.AsyncClient, url: str) -> None:
             try:
-                if self._client is not None:
-                    await self._client.post(
-                        f"{url}/v1/cancel",
-                        json={"generation_id": generation_id},
-                        timeout=2.0,
-                    )
-                else:
-                    async with httpx.AsyncClient(timeout=2.0) as client:
-                        await client.post(
-                            f"{url}/v1/cancel",
-                            json={"generation_id": generation_id},
-                        )
+                await client.post(
+                    f"{url}/v1/cancel",
+                    json={"generation_id": generation_id},
+                    timeout=2.0,
+                )
             except httpx.HTTPError:
                 pass
+
+        async def broadcast(client: httpx.AsyncClient) -> None:
+            # A stalled replica must not consume CallActor's 250ms cleanup
+            # budget before the playing replica gets its cancel. TaskGroup
+            # owns and drains every child when the caller cancels this work.
+            async with asyncio.TaskGroup() as group:
+                for url in self._pool.urls:
+                    group.create_task(send(client, url))
+
+        if self._client is not None:
+            await broadcast(self._client)
+        else:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                await broadcast(client)
 
     async def synthesize(
         self,

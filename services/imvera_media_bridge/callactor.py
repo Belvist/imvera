@@ -29,6 +29,7 @@ from packages.voice_runtime.call_actor import MediaCallbacks, build_call_actor
 from packages.voice_runtime.call_registry import build_call_registry
 from packages.voice_runtime.codec_output import bridge_audio_rates, resampler_chain_summary
 from packages.voice_runtime.trace import record_event
+from services.inference.config import production_mode
 
 log = logging.getLogger("imvera_media_bridge.callactor")
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,6 +41,17 @@ _live_actors: dict[str, str] = {}
 
 _teardown_executor: concurrent.futures.ThreadPoolExecutor | None = None
 _teardown_lock = threading.Lock()
+
+
+def _production_call_limit() -> int | None:
+    if not production_mode():
+        return None
+    from packages.voice_runtime.profile import load_profile
+
+    limit = load_profile().get("limits", {}).get("max_active_calls")
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        raise ValueError("production profile requires positive integer max_active_calls")
+    return limit
 
 
 class ProductBindingMissing(RuntimeError):
@@ -67,12 +79,14 @@ def _resolve_product_mission(websocket: WebSocket, fs_uuid: str):
     """
     from packages.dialogue_engine.mission import CallMission
 
-    # Same create_call_record_store() as voice_service → shared PG when IMVERA_PG_URL set.
-    registry = build_call_registry(create_call_record_store())
     product_call_id = websocket.query_params.get("call_id") or websocket.query_params.get(
         "imvera_call_id"
     )
+    if production_mode() and not product_call_id:
+        raise ProductBindingMissing("", fs_uuid)
     if product_call_id:
+        # Same store as voice_service: the product path must resolve its binding.
+        registry = build_call_registry(create_call_record_store())
         binding = registry.resolve(call_id=product_call_id, fs_uuid=fs_uuid)
         if binding is None:
             raise ProductBindingMissing(product_call_id, fs_uuid)
@@ -111,6 +125,10 @@ async def inference_blockers() -> list[str]:
 
     stt, tts, _llm = _gateway_urls()
     blockers: list[str] = nlp_blockers()
+    try:
+        _production_call_limit()
+    except ValueError as exc:
+        blockers.append(str(exc))
     async with httpx.AsyncClient(timeout=2.0) as client:
         for name, base in (("stt", stt), ("tts", tts)):
             urls = split_urls(base)
@@ -137,16 +155,39 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
         log.error("callactor.ws.rejected fs_uuid=%s blockers=%s", fs_uuid, blockers)
         return
 
-    try:
-        call_id, family_id, elder, mission_obj = _resolve_product_mission(websocket, fs_uuid)
-    except ProductBindingMissing as exc:
-        log.error(
-            "callactor.binding.missing call_id=%s fs_uuid=%s — rejecting WS, no CallActor",
-            exc.call_id,
-            exc.fs_uuid,
-        )
-        await websocket.close(code=1008, reason="product CallBinding not found")
+    if fs_uuid in _live_actors:
+        log.error("callactor.duplicate_rejected fs_uuid=%s live_call_id=%s",
+                  fs_uuid, _live_actors[fs_uuid])
+        await websocket.close(code=1008, reason="duplicate channel session")
         return
+    limit = _production_call_limit()
+    if limit is not None and len(_live_actors) >= limit:
+        await websocket.close(code=1013, reason="bridge call capacity reached")
+        return
+
+    # No await between checking capacity and reserving on this process's
+    # event loop. Setup counts too; every failure releases the same slot.
+    _live_actors[fs_uuid] = fs_uuid
+    try:
+        try:
+            call_id, family_id, elder, mission_obj = _resolve_product_mission(websocket, fs_uuid)
+        except ProductBindingMissing as exc:
+            log.error(
+                "callactor.binding.missing call_id=%s fs_uuid=%s — rejecting WS, no CallActor",
+                exc.call_id,
+                exc.fs_uuid,
+            )
+            await websocket.close(code=1008, reason="product CallBinding not found")
+            return
+        _live_actors[fs_uuid] = call_id
+        await _serve_callactor_ws(websocket, fs_uuid, call_id, family_id, elder, mission_obj)
+    finally:
+        _live_actors.pop(fs_uuid, None)
+
+
+async def _serve_callactor_ws(
+    websocket: WebSocket, fs_uuid: str, call_id: str, family_id: str, elder: str, mission_obj
+) -> None:
 
     stt, tts, llm = _gateway_urls()
     capture_sr, playback_sr = bridge_audio_rates()
@@ -159,17 +200,6 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
     actor_holder: dict[str, Any] = {}
     bridge_holder: dict[str, FreeSwitchBridgeSession] = {}
     _nonzero_logged = False
-
-    if fs_uuid in _live_actors:
-        log.error(
-            "callactor.duplicate_rejected fs_uuid=%s live_call_id=%s new_call_id=%s",
-            fs_uuid,
-            _live_actors[fs_uuid],
-            call_id,
-        )
-        await websocket.close(code=1008, reason="duplicate channel session")
-        return
-    _live_actors[fs_uuid] = call_id
 
     async def on_inbound(frame: InboundMediaFrame) -> None:
         rms = pcm_rms_s16le(frame.pcm_s16le)
@@ -264,26 +294,17 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
     )
     actor_holder["actor"] = actor
 
-    await websocket.accept()
-    mission_id = ""
-    if mission_obj is not None:
-        mission_id = mission_obj.mission_id
-    log.info(
-        "callactor.ws.connected call_id=%s fs_uuid=%s mission_id=%s capture_sr=%s playback_sr=%s "
-        "negotiated_codec=%s resampler_hops=%s stt=%s tts=%s llm=%s",
-        call_id,
-        fs_uuid,
-        mission_id or "-",
-        capture_sr,
-        playback_sr,
-        chain["negotiated_codec"],
-        chain["resampler_hops"],
-        stt,
-        tts,
-        llm,
-    )
-    actor.start()
     try:
+        await websocket.accept()
+        mission_id = mission_obj.mission_id if mission_obj is not None else ""
+        log.info(
+            "callactor.ws.connected call_id=%s fs_uuid=%s mission_id=%s "
+            "capture_sr=%s playback_sr=%s "
+            "negotiated_codec=%s resampler_hops=%s stt=%s tts=%s llm=%s",
+            call_id, fs_uuid, mission_id or "-", capture_sr, playback_sr,
+            chain["negotiated_codec"], chain["resampler_hops"], stt, tts, llm,
+        )
+        actor.start()
         await actor.on_media_ready(
             playback_sr,
             output_frame_bytes,
@@ -292,7 +313,6 @@ async def handle_callactor_ws(websocket: WebSocket, fs_uuid: str) -> None:
         await bridge.handle_ws(websocket)
     finally:
         await actor.stop()
-        _live_actors.pop(fs_uuid, None)
         _teardown_in_background(call_id, bridge, fs_uuid)
         log.info("callactor.session.closed call_id=%s", call_id)
 

@@ -53,6 +53,7 @@ CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "voice-m5.yaml"
 _tts = None
 _cancellations = CancellationRegistry()
 _watchdog: InferenceWatchdog | None = None
+_dependency_probe_lock = threading.Lock()
 
 
 def _load_config() -> dict[str, Any]:
@@ -238,6 +239,7 @@ def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
         except (StreamCancelled, TimeoutError):
             raise
         except Exception as exc:
+            _verify_qwen_readiness()
             if isinstance(exc, _QwenStreamFailure) and exc.emitted_chunks > 0:
                 print(
                     f"TTS actual_engine=qwen_gguf status=failed_after_pcm "
@@ -377,7 +379,9 @@ def startup() -> None:
     tts_cfg = cfg["models"]["tts"]
     if tts_engine(tts_cfg) == "silero_lab":
         _init_silero_lab(tts_cfg)
-    _watchdog = production_watchdog(executor, state, cfg)
+    _watchdog = production_watchdog(
+        executor, state, cfg, drained=lambda: _cancellations.stats()["active"] == 0
+    )
     # MLX load+warmup runs on the process main thread before HTTP binds (see main()).
 
 
@@ -417,12 +421,53 @@ def shutdown() -> None:
         _watchdog.stop()
 
 
+def _verify_qwen_readiness() -> bool:
+    """Warmup is historical; check the production resident without generating.
+
+    A lost registry needs the existing bootstrap/voice registration again.
+    A changed model fails closed for operator review, rather than blessing
+    a different model by automatically warming a restarted client.
+    """
+    if not production_mode():
+        return state.ready
+    cfg = _load_config()
+    tts_cfg = cfg["models"]["tts"]
+    if tts_engine(tts_cfg) != "qwen_gguf":
+        return state.ready
+    with _dependency_probe_lock:
+        if not state.ready:
+            return False
+        from services.tts.qwen_gguf import list_models, list_voices, qwen_voice
+
+        reason = "qwen resident unavailable"
+        changed_model = False
+        try:
+            models = list_models(timeout_s=0.4)
+            accepted_model = state.model_revision.removeprefix("qwen_gguf:")
+            if models and accepted_model not in models:
+                reason = "qwen resident model changed; operator review required"
+                changed_model = True
+            elif models and qwen_voice(tts_cfg) in list_voices(timeout_s=0.4):
+                return True
+            elif models:
+                reason = "qwen resident lost accepted voice registration"
+        except Exception:
+            # Errors must not turn a dependency outage into a green health.
+            reason = "qwen resident readiness probe failed"
+        state.ready = False
+        state.warmup_error = reason
+        if _watchdog is not None and not changed_model:
+            _watchdog.request_restart(reason)
+        return False
+
+
 mount_health(
     app,
     state,
     "tts",
     executor_supplier=lambda: executor,
     details_supplier=lambda: {"cancellation": _cancellations.stats()},
+    readiness_check=_verify_qwen_readiness,
 )
 
 

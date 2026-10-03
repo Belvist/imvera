@@ -47,6 +47,25 @@ For Qwen HTTP delivery, use non-buffer-filling reads, bounded connect/read/total
 budgets, cancellation between reads and guaranteed connection cleanup. Preserve
 partial-audio error semantics and disable any lab fallback in production.
 
+### Production re-review (2026-10-03)
+
+Enforce the existing profile's `max_active_calls` in the authoritative bridge
+session registry; setup consumes a slot and every exit releases it. Reject lab
+identities/manual missions in production. This is per process, not a distributed
+capacity claim. Reuse the same CallActor and state owner.
+
+Broadcast TTS cancellation concurrently with structured task lifetime. Fix
+orphan sweep to use monotonic elapsed time and current live ownership after
+awaits. Health uses the actual CallActor registry, rather than the uplink map.
+
+Warmup does not establish indefinite readiness of an external resident. Check
+model/voice metadata without generation on production health and failed
+synthesis; bound body/time. A lost resident/voice closes admission and requests
+recovery through the existing dedicated process watchdog, waiting for actual
+model and HTTP lease settlement or the hard process bound. Model substitution
+instead fails closed for operator review. No dialogue/state writer is restarted
+by this mechanism; no provider/voice substitution or new recovery brain.
+
 ## Migration and alternatives
 
 1. Red contracts: cancellation storms, active cancellation despite eviction,

@@ -2,6 +2,12 @@
 
 ## Unreleased — 2026-10-03
 
+- Enforce production call admission and real product bindings; release reservations on setup/disconnect errors and count actual duplex sessions.
+- Send TTS cancellation to replicas concurrently with owned cleanup; retain canonical speech and playback truth.
+- Honour monotonic orphan-sweep grace and recheck current live sessions after ESL awaits.
+- Revoke stale Qwen readiness on resident/voice loss; drain model jobs and HTTP consumers before supervisor recovery, fail model substitution closed.
+- Bound resident metadata reads by total deadline and64KiB; add source fault regressions and actual warm-loss/recovery container CI.
+
 - Reuse one explicit voice profile across Mac/Linux workers; add CPU STT/HTTP TTS images and a production Compose overlay with private networking and resource bounds.
 - Replace unbounded TTS cancel IDs with bounded expiring tombstones and active leases; bound output bytes, active HTTP streams and stalled writes.
 - Reject lab voice fallback in production; contain hung startup/model processes with watchdog exit70 and supervisor restart.

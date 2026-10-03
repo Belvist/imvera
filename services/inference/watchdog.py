@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
@@ -21,13 +22,27 @@ class InferenceWatchdog:
         max_job_s: float,
         fatal: Callable[[], None] = lambda: os._exit(70),
         poll_s: float = 0.5,
+        drained: Callable[[], bool] = lambda: True,
     ) -> None:
         if max_job_s <= 0 or poll_s <= 0:
             raise ValueError("watchdog limits must be positive")
         self._stop = threading.Event()
+        self._restart_requested = threading.Event()
+        self._restart_lock = threading.Lock()
+        self._restart_since = 0.0
+        self._state = state
 
         def watch() -> None:
             while not self._stop.wait(poll_s):
+                if self._restart_requested.is_set() and (
+                    (executor.queue_depth == 0 and drained())
+                    or time.monotonic() - self._restart_since > max_job_s
+                ):
+                    logging.getLogger("inference.watchdog").error(
+                        "model process restart requested: %s", state.warmup_error
+                    )
+                    fatal()
+                    return
                 if executor.running_age_s > max_job_s:
                     state.ready = False
                     state.warmup_error = "inference job exceeded process hard timeout"
@@ -38,6 +53,15 @@ class InferenceWatchdog:
         self._thread = threading.Thread(target=watch, name="inference-watchdog", daemon=True)
         self._thread.start()
 
+    def request_restart(self, reason: str) -> None:
+        """Fail admission closed; drain admitted work before supervisor recovery."""
+        with self._restart_lock:
+            self._state.ready = False
+            self._state.warmup_error = reason
+            if not self._restart_requested.is_set():
+                self._restart_since = time.monotonic()
+                self._restart_requested.set()
+
     def stop(self) -> None:
         self._stop.set()
         self._thread.join(timeout=1)
@@ -47,6 +71,8 @@ def production_watchdog(
     executor: InferenceExecutor,
     state: WorkerState,
     config: dict,
+    *,
+    drained: Callable[[], bool] = lambda: True,
 ) -> InferenceWatchdog | None:
     if not production_mode():
         return None
@@ -54,6 +80,7 @@ def production_watchdog(
         executor,
         state,
         max_job_s=float(config.get("limits", {}).get("worker_job_hard_timeout_s", 120)),
+        drained=drained,
     )
 
 

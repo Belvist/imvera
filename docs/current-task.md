@@ -1,3 +1,50 @@
+# Production fault re-review (2026-10-03)
+
+Branch: **feature/voice-zoiper-m5**; audit baseline **55f38a5bdfb6d1ec5ceefcf4b4779a073b79628d**.
+[Cause/reproduction report](evaluation/production-review-2026-10-03/README.md),
+[updated operator handoff](production-server-handoff.md), [ADR-031](adr/031-portable-production-inference.md).
+
+CHANGED: concurrent, owned replica cancellation; monotonic startup sweep grace,
+live-session recheck and JSON-list handling; production call-slot admission,
+cleanup on setup/accept failures, required product binding and accurate duplex
+session count. Qwen health rechecks model/voice without synthesis; resident/voice
+loss closes admission and drains model jobs plus HTTP leases before exit70 and
+supervisor bootstrap. Model substitution requires operator review. Resident
+metadata has total deadline checks and64KiB ceiling. Existing DialogueEngine,
+Reducer, canonical speech and heard-playback ledger remain the owners.
+
+Correction: earlier launch documentation said Linux admitted one call; source
+only contained `max_active_calls: 1` in YAML and did not enforce it. This cut
+implements the actual per-process admission; multiple ASGI workers do not share
+this registry and must not silently multiply the accepted limit.
+
+VERIFIED: five initial reproductions failed before fixes; separate stale-health,
+slow-trickle, missing-product-ID and wrong-session-count reproductions also
+failed, then passed without weakened expectations. Exact final runtime command
+`OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 make test-dialogue-runtime
+PYTHON=/workspace/imvera-review-venv/bin/python`: **315 passed**,19.38s, includes
+**17 new fault cases**. Ruff packages/services/tests/scripts + container probe and
+whitespace PASS. Full local review run before the final HTTP-drain correction:
+**3184 passed /2 inherited genuine relation-LFS readiness failures /9 skipped**,
+147.03s; NOT locally green. Final runtime reran after the HTTP-drain correction.
+No readiness waiver, replacement weights or changed original assertions.
+Exact source CI including new actual container recovery is pending publication.
+
+NOT VERIFIED: current M5 or target server deployment, actual accepted neural
+Qwen voice/prosody, SIP/audio, Core/PG/consent, live latency/load/capacity. No target
+address/hardware is available; no existing services were restarted.
+
+REMAINING RISKS: current kernel/socket/DNS operations cannot all be preempted
+instantly. Process bounds contain dedicated model failures; cancellation may
+finish an already running kernel. Admission is per bridge process. Resident
+artifacts and voice registration must remain accepted/pinned; restart reruns
+bootstrap. Source correctness does not establish human conversational quality.
+
+NEXT GATE: exact source CI and real container warm-loss/recovery, then target
+FreeSWITCH/CallActor audio+trace and capacity acceptance before raising admission.
+
+---
+
 # Portable production inference (2026-10-03)
 
 Target: **feature/voice-zoiper-m5**, baseline **75508ebf27f2c76a3eb26d23326fd1c841af0ac5**.

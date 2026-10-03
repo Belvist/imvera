@@ -130,6 +130,7 @@ def mount_health(
     *,
     executor_supplier: Callable[[], InferenceExecutor | None] | None = None,
     details_supplier: Callable[[], dict] | None = None,
+    readiness_check: Callable[[], bool] | None = None,
 ) -> None:
     def _queue_depth() -> int:
         ex = executor_supplier() if executor_supplier is not None else executor
@@ -145,7 +146,10 @@ def mount_health(
     def ready() -> JSONResponse:
         details = details_supplier() if details_supplier is not None else {}
         details["runtime"] = dict(state.runtime_metadata)
-        if state.ready:
+        dependency_ready = (
+            readiness_check() if state.ready and readiness_check is not None else True
+        )
+        if state.ready and dependency_ready:
             return JSONResponse(
                 {
                     "status": "ready",

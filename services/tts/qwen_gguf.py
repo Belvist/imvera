@@ -46,9 +46,27 @@ def _models_dir() -> str:
     )
 
 
+def _resident_json(path: str, timeout_s: float) -> dict:
+    deadline = time.monotonic() + timeout_s
+    body = bytearray()
+    with urllib.request.urlopen(f"{server_url()}{path}", timeout=timeout_s) as response:
+        while True:
+            check_deadline(deadline)
+            packet = response.read1(4096)
+            check_deadline(deadline)
+            if not packet:
+                break
+            if len(body) + len(packet) > 65536:
+                raise RuntimeError("resident metadata exceeds 64KiB")
+            body.extend(packet)
+    data = json.loads(body)
+    if not isinstance(data, dict):
+        raise RuntimeError("resident metadata must be a JSON object")
+    return data
+
+
 def list_models(timeout_s: float = 10.0) -> list[str]:
-    with urllib.request.urlopen(f"{server_url()}/v1/models", timeout=timeout_s) as r:
-        data = json.loads(r.read())
+    data = _resident_json("/v1/models", timeout_s)
     return [m.get("id", "") for m in data.get("data", []) if m.get("id")]
 
 
@@ -65,8 +83,7 @@ def server_model_id(timeout_s: float = 10.0) -> str:
 
 def list_voices(timeout_s: float = 10.0) -> list[str]:
     try:
-        with urllib.request.urlopen(f"{server_url()}/v1/audio/voices", timeout=timeout_s) as r:
-            data = json.loads(r.read())
+        data = _resident_json("/v1/audio/voices", timeout_s)
         voices = data.get("voices") or data.get("data") or []
         return [v.get("name", "") if isinstance(v, dict) else v for v in voices]
     except Exception:

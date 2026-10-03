@@ -110,9 +110,7 @@ async def _sweep_orphan_channels() -> None:
     After a bridge restart, FS may still park channels whose WS died.
     Only audio_stream-app channels are touched; grace 60s for fresh setups.
     """
-    import time as _time
-
-    started_ago = _time.time() - _bridge_start_mono
+    started_ago = time.monotonic() - _bridge_start_mono
     if started_ago < 60:
         await asyncio.sleep(60 - started_ago)
     try:
@@ -127,17 +125,20 @@ async def _sweep_orphan_channels() -> None:
         import json as _json
 
         data = _json.loads(out)
-        rows = data.get("rows", data if isinstance(data, list) else [])
+        rows = data if isinstance(data, list) else data.get("rows", [])
     except Exception:
         log.warning("bridge.sweep.unparseable")
         return
-    live_uuids = set(_live_actors)
     for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
         uuid = str(row.get("uuid", ""))
         app = str(row.get("application", "") or row.get("app", ""))
         if not uuid or "audio_stream" not in app:
             continue
-        if uuid in live_uuids:
+        # An earlier ESL hangup awaits I/O: a fresh session may have registered
+        # since the query. Consult the authoritative live registry each time.
+        if uuid in _live_actors:
             continue
         try:
             from packages.telephony.freeswitch_esl import hangup_channel
@@ -169,8 +170,9 @@ async def ready() -> JSONResponse | dict:
     except Exception:
         pass
     if mode == "callactor":
-        from services.imvera_media_bridge.callactor import inference_blockers
+        from services.imvera_media_bridge.callactor import _live_actors, inference_blockers
 
+        payload["active_sessions"] = len(_live_actors)
         blockers = await inference_blockers()
         if blockers:
             return JSONResponse(

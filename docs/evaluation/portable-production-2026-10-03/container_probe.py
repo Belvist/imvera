@@ -17,10 +17,16 @@ import httpx
 FIXTURE = """
 import json, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+available = True
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     def log_message(self, *args): pass
     def do_GET(self):
+        if not available:
+            self.send_response(503)
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
         value = ({'data': [{'id': 'controlled-pcm-fixture'}]}
                  if self.path == '/v1/models' else {'voices': ['vera_kseniya']})
         body = json.dumps(value).encode()
@@ -29,7 +35,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
     def do_POST(self):
+        global available
         data = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+        if self.path == '/control':
+            available = data['available']
+            self.send_response(200)
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
         self.send_response(200)
         self.send_header('Content-Type', 'audio/pcm')
         self.send_header('Transfer-Encoding', 'chunked')
@@ -52,6 +65,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sha", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--exercise-runtime-recovery", action="store_true")
     args = parser.parse_args()
     env = dict(os.environ)
     for key in (
@@ -227,6 +241,51 @@ def main() -> None:
                     )
                 )
                 record["after_cancel"] = settled
+                if args.exercise_runtime_recovery:
+                    def resident_available(available: bool) -> None:
+                        body = json.dumps({"available": available}).encode()
+                        docker(
+                            "exec", resident, "python", "-c",
+                            "import urllib.request; "
+                            "urllib.request.urlopen(urllib.request.Request("
+                            "'http://127.0.0.1:8899/control', "
+                            f"data={body!r}, "
+                            "headers={'Content-Type': 'application/json'}), timeout=1).close()",
+                        )
+
+                    before = int(docker("inspect", "--format", "{{.RestartCount}}", worker))
+                    resident_available(False)
+                    lost_health = client.get(url + "/health/ready")
+                    assert lost_health.status_code == 503
+                    record["runtime_dependency_loss"] = lost_health.json()
+                    restarted = wait(
+                        lambda: (
+                            count if (count := int(docker(
+                                "inspect", "--format", "{{.RestartCount}}", worker
+                            ))) > before else None
+                        ), timeout=20,
+                    )
+                    resident_available(True)
+                    recovered = wait(ready)
+                    assert recovered["model_revision"] == health["model_revision"]
+                    payload.update(
+                        request_id="r3", generation_id="g3", text="После восстановления."
+                    )
+                    result = client.post(url + "/v1/synthesize", json=payload)
+                    recovered_frames = [json.loads(line) for line in result.text.splitlines()]
+                    assert result.status_code == 200
+                    assert any(frame.get("pcm_b64") for frame in recovered_frames)
+                    assert recovered_frames[-1] == {"done": True}
+                    logs = docker("logs", worker)
+                    assert "model process restart requested" in logs
+                    assert "silero" not in logs.lower()
+                    record["runtime_recovery"] = {
+                        "restart_count": restarted,
+                        "ready": recovered,
+                        "successful_frames": len(recovered_frames),
+                        "same_model_revision": True,
+                        "no_lab_fallback": True,
+                    }
             config = json.loads(docker("inspect", worker))[0]["HostConfig"]
             assert config["ReadonlyRootfs"] and config["Memory"] == 1024**3
             assert config["PidsLimit"] == 128 and config["Init"]
