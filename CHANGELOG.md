@@ -5,6 +5,8 @@
 - Reuse one explicit voice profile across Mac/Linux workers; add CPU STT/HTTP TTS images and a production Compose overlay with private networking and resource bounds.
 - Replace unbounded TTS cancel IDs with bounded expiring tombstones and active leases; bound output bytes, active HTTP streams and stalled writes.
 - Reject lab voice fallback in production; contain hung startup/model processes with watchdog exit70 and supervisor restart.
+- Require prepared offline encoder/tokenizer cache, cap Linux library threads and exercise private-source image imports in CI.
+- Verify actual Linux CPU GigaAM on four WAVs and TTS container streaming/cancellation/restart; publish exact source CI3175/0/3 and operator handoff.
 - Yield Qwen HTTP PCM as received, with bounded reads and cancellation; pin existing GigaAM source and require prepared offline artifacts. Real target model/SIP/load acceptance remains pending.
 
 - Bound TTS production with disconnect-aware backpressure and async HTTP consumption; preserve actual model completion and reject overload before headers.

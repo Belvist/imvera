@@ -1,7 +1,7 @@
 # ADR-031: Portable production inference and bounded request lifetime
 
 Date: 2026-10-03
-Status: accepted for implementation; actual deployment/model/audio NOT VERIFIED
+Status: runtime/launch slice implemented; actual target deployment/neural TTS/SIP NOT VERIFIED
 
 ## Context / current owners
 
@@ -74,3 +74,13 @@ production rejection of fallback. Linux image must build and run without MLX;
 missing real backend/model must fail readiness, not masquerade as ready.
 No actual server address/GPU/model endpoint is supplied yet. Product acceptance
 still requires actual hardware models, consent/Core/SIP audio, latency and soak.
+
+## Implemented evidence
+
+Published launch f7fbc89; Linux runtime images/model proof2e78b54.
+[Actual evidence](../evaluation/portable-production-2026-10-03/README.md) records
+all source/image/checksum/HTTP/fault/CI boundaries. Real CPU GigaAM checked on
+four WAVs; neural TTS/full SIP/deployment/capacity still NOT VERIFIED.
+Production overlay also caps bridge CPU/memory/PIDs and mounts accepted encoder/
+tokenizer HF snapshots offline; no dynamic unreviewed model download at boot.
+Private-source permissions and actual CPU dependency availability are CI gates.

@@ -1,40 +1,53 @@
 # Portable production inference (2026-10-03)
 
 Target: **feature/voice-zoiper-m5**, baseline **75508ebf27f2c76a3eb26d23326fd1c841af0ac5**.
-Source implementation, not loaded M5 diagnosis or a target-server deployment.
-[Architecture/source audit](adr/031-portable-production-inference.md),
-[server operator handoff](production-server-handoff.md),
-[reproducible evidence](evaluation/portable-production-2026-10-03/README.md).
+Published launch source **f7fbc89270ffeb67e41234b8c22e6fd4d789a08c**;
+actual Linux image/model proof **2e78b543d3ccd5854d44eb681f1f07b8d016b06c**.
+Runtime/model/Dockerfile/config/test bytes identical between these revisions;
+final overlay also requires offline encoder cache and bounds bridge resources.
+[Architecture](adr/031-portable-production-inference.md),
+[agent/operator handoff](production-server-handoff.md),
+[actual evidence and retained failures](evaluation/portable-production-2026-10-03/README.md).
 
-CHANGED: workers share the existing profile resolver; production validates source,
-platform/backend and finite budgets. Linux launch artifacts use existing GigaAM
-CPU and Qwen HTTP contracts, without MLX or another dialogue brain. Dedicated
-model-process guards contain stuck startup/jobs with exit70. Replace TTS cancel
-sets with one bounded registry: active cancellation survives eviction; active
-HTTP streams and encoded output bytes are bounded too. Include stalled ASGI
-writes in the request deadline. Production never substitutes a lab voice.
-Qwen delivers available PCM instead of waiting for a0.4s buffer. Same state,
-Reducer, canonical text and playback ledger on both platforms.
+CHANGED: workers share the existing profile resolver on Mac/Linux. Production
+validates source/platform/backend/budgets, rejects lab fallback, mounts genuine
+model artifacts/cache offline and caps library threads. Dedicated model-process
+guards contain stuck startup/jobs with exit70; no SDK writer termination. TTS
+cancel IDs now expire/bound2048; active HTTP leases≤32, output≤8chunks/2MiB;
+response deadlines cover blocked socket writes. Qwen yields available PCM without
+buffer-fill delay. Unprivileged CPU STT/HTTP TTS images and bounded/private Compose
+launch reuse the same DialogueEngine, Reducer, CallActor, text and playback ledger.
+Image builds/private-permission/dependency/failed-boot/Compose checks join CI.
 
-VERIFIED: exact previous cancellation handler retained20000 IDs after10000
-cancel commands; the new registry retains at most2048 tombstones (probe linked).
-Controlled native HTTP proves first short PCM before later synthesis finishes,
-cancellation between packets and bounded stalled reads. Actual subprocesses
-prove hung startup/job exit70. Final source/image/CI counts are being recorded
-in the linked evidence; no real-model benchmark is inferred from fixtures.
+VERIFIED: real Linux CPU GigaAM checkpoint checksum, warmup and four repository
+WAVs through HTTP: correct captured texts,312.76–354.77ms processing; two-core/4GiB
+cap, actual1.707GiB idle after calls. Real TTS container with controlled PCM
+fixture: ready identity, stream completion, cancellation, zero settled queue/
+active leases, normal0.232s stop, supervisor restart on cold failure, no lab voice.
+Fixture first-PCM timing is not neural TTS speed. Exact old handler retained20000
+IDs after10000 cancellations versus2048 new tombstones. Actual stuck startup/job
+subprocesses exit70. Runtime gate298 PASS; focused58 PASS; final corpus500/500,
+policy12/12 expected,0 unexplained; Ruff/whitespace/Compose PASS. Local full with
+bounded CPU:3167 passed/2 inherited genuine-LFS failures/9 skipped,153.94s,
+NOT locally green. An earlier default-thread run had additional candidate-abstention failures;
+two-thread tests and later idle direct probes in both configurations pass.
+Exact earlier rejection reason and loaded capacity are not proven. Proof-source CI37158803714 all11 jobs PASS,3175/0/3,
+184.71s with genuine LFS; final launch-source [CI37159569169](https://github.com/Belvist/imvera/actions/runs/37159569169)
+all11 PASS,3175 passed/0 failed/3 skipped,224.09s; runtime298 PASS,20.11s.
 
-NOT VERIFIED: actual M5 or target server deployment/endpoints, accepted resident
-Qwen implementation on target hardware, real ASR/TTS weights, SIP/audio/soak/load.
-No server OS/GPU/address has yet been supplied; no live services restarted.
+NOT VERIFIED: actual M5/target deployment/endpoints, accepted Qwen resident
+implementation/voice on target CPU/GPU, real SIP/audio/prosody/soak/capacity,
+Core/PG/consent integration. Linux x86_64 checked; ARM/GPU capacity not measured.
+No target server address/hardware supplied; no existing services restarted.
 
-REMAINING RISKS: Python cancellation cannot interrupt a running kernel/read;
-process/socket budgets contain that failure. Server model artifacts, Core/PG
-configuration and measured capacity must match the deployment. Linux profile's
-one-call admission is an initial limit, not throughput proof.
+REMAINING RISKS: current kernel/socket reads cannot be preempted instantly;
+process/socket bounds contain failures. Target artifacts, routing, Core/PG and
+resource limits must match launch. Four warm short STT samples and controlled
+TTS PCM are not complete phone latency or scalable capacity. Initial one-call
+admission must stay until measured live load acceptance.
 
-NEXT GATE: deploy matching source/profile and genuine accepted model artifacts
-on selected hardware, then capture real FreeSWITCH/CallActor audio/trace and
-latency/interruption/soak before raising admission.
+NEXT GATE: matching target deployment with genuine accepted models, then real
+FreeSWITCH/CallActor recording/trace, latency/interruption/soak before more calls.
 
 ---
 

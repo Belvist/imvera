@@ -74,9 +74,11 @@ Multiple calls are async; HTTP/playback overlap synthesis. Replicate workers onl
 after measuring accepted model throughput; extra threads do not create neural
 compute capacity. No large LLM is enabled by this deployment.
 Bridge defaults to4GiB/two CPU cores and two OMP/BLAS threads; inference workers
-also cap library threads. Align thread counts with measured CPU quotas. Default
-host-wide thread counts exceeded the unchanged300ms polarity budget locally;
-the same model/tests pass with two threads, without raising the budget.
+also cap library threads. Align thread counts with measured CPU quotas. A concurrent
+review run had polarity candidate-abstention failures; two-thread isolated tests
+passed without raising the300ms budget. Later idle probes passed with both
+default3 threads (94–108ms) and2 threads (64–66ms). Thread caps bound resource use;
+target load/capacity still needs measurement.
 
 Keep each active CallActor/EngineState on one bridge process. Scale the existing
 STT/TTS replica pool with explicit reachable worker URLs: cancellation broadcasts
@@ -118,3 +120,13 @@ Rollback uses the previously accepted source **and its matching profile/images,
 model artifacts and resident endpoint**; preserve database/consent/recordings.
 Do not substitute another backend to make readiness green. No services on the
 M5 or a target server were restarted by this source change.
+
+## Published verification
+
+Launch source `f7fbc89270ffeb67e41234b8c22e6fd4d789a08c`: [CI37159569169](https://github.com/Belvist/imvera/actions/runs/37159569169)
+all11 jobs PASS,3175 tests/0 failures/3 skipped. [Recorded image/model evidence](evaluation/portable-production-2026-10-03/README.md)
+uses runtime-identical source2e78b54: genuine CPU GigaAM4 WAVs,313–355ms HTTP
+processing, and actual Docker TTS lifecycle with controlled PCM (not neural TTS).
+Server deployment/SIP/neural voice/load still NOT VERIFIED. Build the documented
+launch source to preserve matching image/runtime SHA; final docs-only commits do
+not require changing the accepted worker/model artifacts.

@@ -1,0 +1,44 @@
+{
+  "source_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+  "boundary": "actual Docker, controlled PCM resident fixture in shared loopback namespace",
+  "neural_tts_or_sip_acceptance": false,
+  "image_id": "sha256:953a45b8b5f7712ea64640ed382df2b8ab54d370672b5492ceb210c606c9016d",
+  "ready": {
+    "status": "ready",
+    "service": "tts",
+    "model_revision": "qwen_gguf:controlled-pcm-fixture",
+    "queue_depth": 0,
+    "cancellation": {
+      "active": 0,
+      "tombstones": 0
+    },
+    "runtime": {
+      "git_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+      "runtime_mode": "production",
+      "profile_sha256": "ecb395c19450546696f4c9372e1a9c2fa03a6e66be66050968b1cf963b456465",
+      "profile_id": "linux-cpu-qwen-http"
+    }
+  },
+  "controlled_first_frame_ms": 62.18228201032616,
+  "successful_frames": 4,
+  "after_cancel": {
+    "status": "ready",
+    "service": "tts",
+    "model_revision": "qwen_gguf:controlled-pcm-fixture",
+    "queue_depth": 0,
+    "cancellation": {
+      "active": 0,
+      "tombstones": 1
+    },
+    "runtime": {
+      "git_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+      "runtime_mode": "production",
+      "profile_sha256": "ecb395c19450546696f4c9372e1a9c2fa03a6e66be66050968b1cf963b456465",
+      "profile_id": "linux-cpu-qwen-http"
+    }
+  },
+  "hardened": true,
+  "normal_stop_s": 0.23195043700980023,
+  "cold_failure_supervisor_restarts": 1,
+  "no_lab_fallback": true
+}

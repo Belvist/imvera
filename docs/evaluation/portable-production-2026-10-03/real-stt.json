@@ -1,0 +1,124 @@
+{
+  "boundary": "real GigaAM weights + Linux CPU worker over actual HTTP; repository WAVs, no SIP/TTS",
+  "source_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+  "cpu_quota": 2,
+  "memory_limit_gib": 4,
+  "cases": [
+    {
+      "fixture": "tests/assets/blackbox_voice/wav/wellness_bad_03.wav",
+      "audio_sha256": "bf74f22f648a4851fcdf82ec20e11be351b1c3d33ac64414dfa8a2163e7a02dc",
+      "http_latency_ms": 312.75557802291587,
+      "response": {
+        "request_id": "real-linux-0",
+        "is_final": true,
+        "duration_ms": 1162,
+        "pcm_rms": 1931.5,
+        "engine": "gigaam",
+        "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+        "text": "Сегодня плохо.",
+        "raw_text": "Сегодня плохо.",
+        "asr_quality": "GOOD",
+        "generation_tokens": null,
+        "critical_terms": []
+      }
+    },
+    {
+      "fixture": "tests/assets/blackbox_voice/wav/decline_nothing_hurts_01.wav",
+      "audio_sha256": "02c66611c24ab515503224ce10949b42f9c797113a9a398aafcd16ea7bc367e6",
+      "http_latency_ms": 354.76746899075806,
+      "response": {
+        "request_id": "real-linux-1",
+        "is_final": true,
+        "duration_ms": 1950,
+        "pcm_rms": 2871.1,
+        "engine": "gigaam",
+        "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+        "text": "Ничего не болит, всё хорошо.",
+        "raw_text": "Ничего не болит, всё хорошо.",
+        "asr_quality": "GOOD",
+        "generation_tokens": null,
+        "critical_terms": []
+      }
+    },
+    {
+      "fixture": "tests/assets/blackbox_voice/wav/mood_positive_01.wav",
+      "audio_sha256": "9a23fcf9519d523bdc5686a04dc6e162ebca4a650fae8f8f949a49cf50c9648b",
+      "http_latency_ms": 349.44282498327084,
+      "response": {
+        "request_id": "real-linux-2",
+        "is_final": true,
+        "duration_ms": 1550,
+        "pcm_rms": 2200.7,
+        "engine": "gigaam",
+        "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+        "text": "Настроение хорошее.",
+        "raw_text": "Настроение хорошее.",
+        "asr_quality": "GOOD",
+        "generation_tokens": null,
+        "critical_terms": []
+      }
+    },
+    {
+      "fixture": "tests/assets/blackbox_voice/wav/plans_walk_01.wav",
+      "audio_sha256": "8acd32363cb0c9633136f1fae513ec4d001512923d9de2009e84fcfbbf8667ab",
+      "http_latency_ms": 329.6156889991835,
+      "response": {
+        "request_id": "real-linux-3",
+        "is_final": true,
+        "duration_ms": 1037,
+        "pcm_rms": 2432.2,
+        "engine": "gigaam",
+        "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+        "text": "Пойду гулять.",
+        "raw_text": "Пойду гулять.",
+        "asr_quality": "GOOD",
+        "generation_tokens": null,
+        "critical_terms": []
+      }
+    }
+  ],
+  "ready": {
+    "status": "ready",
+    "service": "stt",
+    "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+    "queue_depth": 0,
+    "runtime": {
+      "git_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+      "runtime_mode": "production",
+      "profile_sha256": "ecb395c19450546696f4c9372e1a9c2fa03a6e66be66050968b1cf963b456465",
+      "profile_id": "linux-cpu-qwen-http"
+    }
+  },
+  "samples": 4,
+  "http_p50_ms": 339.52925699122716,
+  "http_p95_nearest_rank_ms": 354.76746899075806,
+  "after": {
+    "status": "ready",
+    "service": "stt",
+    "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+    "queue_depth": 0,
+    "runtime": {
+      "git_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+      "runtime_mode": "production",
+      "profile_sha256": "ecb395c19450546696f4c9372e1a9c2fa03a6e66be66050968b1cf963b456465",
+      "profile_id": "linux-cpu-qwen-http"
+    }
+  },
+  "image_id": "sha256:e166562ee8209a4672ef7c9e07fd55b22562cba793a3a1460c12f44354ddc659",
+  "oom_killed": false,
+  "idle_resources_after_four_calls": {
+    "BlockIO": "274MB / 0B",
+    "CPUPerc": "0.19%",
+    "Container": "imvera-review-gigaam-2e78b54",
+    "ID": "92561941caee",
+    "MemPerc": "42.68%",
+    "MemUsage": "1.707GiB / 4GiB",
+    "Name": "imvera-review-gigaam-2e78b54",
+    "NetIO": "248kB / 4.32kB",
+    "PIDs": "12"
+  },
+  "normal_stop_exit_code": 143,
+  "shutdown_complete": true,
+  "normal_stop_under_30_s": true,
+  "stop_measurement_note": "Actual <30s stop assertion passed; exact duration was not persisted before incorrect expected-exit-0 assertion. Uvicorn re-raises SIGTERM after shutdown: 143 and complete shutdown log verified."
+}

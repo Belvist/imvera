@@ -1,0 +1,91 @@
+{
+  "baseline_sha": "75508ebf27f2c76a3eb26d23326fd1c841af0ac5",
+  "source_sha": "f7fbc89270ffeb67e41234b8c22e6fd4d789a08c",
+  "actual_linux_runtime_proof_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+  "runtime_source_identical_at_final_sha": true,
+  "runtime_comparison_paths": [
+    "packages",
+    "services",
+    "config",
+    "pyproject.toml",
+    "infra/inference/Dockerfile",
+    "infra/freeswitch/Dockerfile.bridge",
+    "Makefile",
+    "tests"
+  ],
+  "local_runtime_gate": {
+    "command": "make test-dialogue-runtime PYTHON=/workspace/imvera-review-venv/bin/python",
+    "passed": 298,
+    "seconds": 17.53,
+    "source_sha": "65c028fdbed4977717a0fc0398185518ac9846a4"
+  },
+  "focused_http_memory": {
+    "command": "PYTHONPATH=. python -m pytest -q tests/test_production_inference.py tests/test_qwen_http_streaming.py tests/test_bounded_tts_streaming.py",
+    "passed": 58,
+    "seconds": 3.77
+  },
+  "offline_artifact_correction": {
+    "passed": 43,
+    "seconds": 1.11
+  },
+  "local_full_suite": {
+    "command": "PYTHONPATH=. OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 python -m pytest -q --tb=short",
+    "source_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+    "passed": 3167,
+    "failed": 2,
+    "skipped": 9,
+    "seconds": 153.94,
+    "failures": [
+      "test_media_bridge_readiness_green_without_llm",
+      "test_warmup_all_hot"
+    ],
+    "reason": "genuine relation encoder is a local Git LFS pointer; SafetensorError header too large",
+    "green": false
+  },
+  "default_cpu_full_suite": {
+    "source_sha": "65c028fdbed4977717a0fc0398185518ac9846a4",
+    "passed": 3166,
+    "failed": 3,
+    "skipped": 9,
+    "seconds": 159.17,
+    "additional_failure": "test_polarity_model.test_live_shapes: predict returned None under unchanged 300ms budget"
+  },
+  "polarity_cpu_ablation": {
+    "default_threads_isolated": {
+      "passed": 1,
+      "failed": 2,
+      "seconds": 17.0
+    },
+    "two_threads_isolated": {
+      "passed": 3,
+      "failed": 0,
+      "seconds": 6.05
+    },
+    "model_budget_ms": 300,
+    "model_code_changed": false,
+    "idle_direct_probe": "cpu-thread-probe.json: default 3 and bounded 2 both pass, 94–108ms vs64–66ms; exact earlier rejection reason not instrumented"
+  },
+  "corpus": {
+    "source_sha": "f7fbc89270ffeb67e41234b8c22e6fd4d789a08c",
+    "passed": 500,
+    "total": 500,
+    "seconds": 5.74
+  },
+  "policy_diff": {
+    "source_sha": "f7fbc89270ffeb67e41234b8c22e6fd4d789a08c",
+    "changed": 12,
+    "expected": 12,
+    "unexplained": 0,
+    "gate": "PASS"
+  },
+  "compose": {
+    "source_sha": "f7fbc89270ffeb67e41234b8c22e6fd4d789a08c",
+    "command": "docker compose -f infra/freeswitch/docker-compose.yml -f infra/inference/compose.production.yml config --quiet",
+    "exit_code": 0,
+    "configuration_values": "explicit placeholders only; not a deployment"
+  },
+  "ruff_and_whitespace": "PASS",
+  "actual_server_or_m5_deployment": false,
+  "real_neural_tts_sip_or_capacity": false,
+  "main_unchanged": "fe214c58c248881ee96e4688d84e48a62aa16cf1"
+}

@@ -1,0 +1,85 @@
+{
+  "source_sha": "f7fbc89270ffeb67e41234b8c22e6fd4d789a08c",
+  "run_id": 37159569169,
+  "url": "https://github.com/Belvist/imvera/actions/runs/37159569169",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "dialogue-rich",
+      "conclusion": "success",
+      "database_id": 111310003234
+    },
+    {
+      "name": "policy-diff",
+      "conclusion": "success",
+      "database_id": 111310003365
+    },
+    {
+      "name": "production-workers",
+      "conclusion": "success",
+      "database_id": 111310003375
+    },
+    {
+      "name": "contracts",
+      "conclusion": "success",
+      "database_id": 111310003385
+    },
+    {
+      "name": "dialogue-corpus-gate",
+      "conclusion": "success",
+      "database_id": 111310003405
+    },
+    {
+      "name": "action-policy-shadow",
+      "conclusion": "success",
+      "database_id": 111310003432
+    },
+    {
+      "name": "legacy-lint",
+      "conclusion": "success",
+      "database_id": 111310003439
+    },
+    {
+      "name": "dialogue-runtime",
+      "conclusion": "success",
+      "database_id": 111310003446
+    },
+    {
+      "name": "semantic-kernel",
+      "conclusion": "success",
+      "database_id": 111310003451
+    },
+    {
+      "name": "lint-dialogue",
+      "conclusion": "success",
+      "database_id": 111310003471
+    },
+    {
+      "name": "test",
+      "conclusion": "success",
+      "database_id": 111310045917
+    }
+  ],
+  "full_suite": {
+    "passed": 3175,
+    "failed": 0,
+    "skipped": 3,
+    "seconds": 224.09,
+    "genuine_lfs": true
+  },
+  "prior_exact_runtime_source": {
+    "source_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+    "run_id": 37158803714,
+    "jobs_passed": 11,
+    "full_passed": 3175,
+    "failed": 0,
+    "skipped": 3,
+    "seconds": 184.71
+  },
+  "runtime_suite": {
+    "passed": 298,
+    "failed": 0,
+    "seconds": 20.11
+  }
+}

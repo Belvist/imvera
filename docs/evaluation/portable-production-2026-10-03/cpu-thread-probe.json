@@ -1,0 +1,46 @@
+{
+  "boundary": "actual unchanged polarity model, separate idle processes; three diagnostic inputs each",
+  "default": {
+    "torch_threads": 3,
+    "unchanged_budget_ms": 300.0,
+    "rows": [
+      {
+        "input": "Ну хорошо, только что покушала.",
+        "wall_ms": 94.364949996816,
+        "candidate": "positive"
+      },
+      {
+        "input": "Ничего меня не беспокоит.",
+        "wall_ms": 108.00599900539964,
+        "candidate": "positive"
+      },
+      {
+        "input": "Голова болит.",
+        "wall_ms": 97.91792399482802,
+        "candidate": "negative"
+      }
+    ]
+  },
+  "two_threads": {
+    "torch_threads": 2,
+    "unchanged_budget_ms": 300.0,
+    "rows": [
+      {
+        "input": "Ну хорошо, только что покушала.",
+        "wall_ms": 65.80680201295763,
+        "candidate": "positive"
+      },
+      {
+        "input": "Ничего меня не беспокоит.",
+        "wall_ms": 63.781881995964795,
+        "candidate": "positive"
+      },
+      {
+        "input": "Голова болит.",
+        "wall_ms": 65.1487779978197,
+        "candidate": "negative"
+      }
+    ]
+  },
+  "conclusion": "Both idle probes pass the unchanged 300ms budget; default has three threads here. Earlier concurrent-review candidate abstention was not instrumented for exact rejection reason. Thread caps improve these idle timings but do not prove load/capacity."
+}
