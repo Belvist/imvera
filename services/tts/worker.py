@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import os
@@ -14,11 +15,11 @@ from typing import Any
 
 import numpy as np
 import uvicorn
-import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from services.inference.cancellation import CancellationRegistry, DuplicateRequestError
 from services.inference.common import (
     InferenceExecutor,
     QueueFullError,
@@ -28,7 +29,18 @@ from services.inference.common import (
     mount_health,
     new_request_id,
 )
+from services.inference.config import (
+    load_worker_config,
+    production_mode,
+    worker_metadata,
+    worker_profile_path,
+)
 from services.inference.streaming import BoundedInferenceStream, StreamCancelled
+from services.inference.watchdog import (
+    InferenceWatchdog,
+    production_startup_guard,
+    production_watchdog,
+)
 from services.tts.gen_params import build_mlx_gen_kwargs, resolve_model_id, tts_engine
 from services.tts.sentence_stream import sentence_segments
 from services.tts.silero_lab import (
@@ -39,24 +51,33 @@ from services.tts.silero_lab import (
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "voice-m5.yaml"
 _tts = None
-_cancelled: set[str] = set()
+_cancellations = CancellationRegistry()
+_watchdog: InferenceWatchdog | None = None
 
 
 def _load_config() -> dict[str, Any]:
-    with CONFIG_PATH.open() as f:
-        return yaml.safe_load(f)
+    return load_worker_config(CONFIG_PATH, "tts")
+
+
+def _is_cancelled(req: SynthesizeRequest) -> bool:
+    return _cancellations.is_cancelled(req.request_id, req.generation_id)
 
 
 class SynthesizeRequest(BaseModel):
-    request_id: str = Field(default_factory=new_request_id)
-    call_id: str
-    generation_id: str
-    phrase_id: str
+    request_id: str = Field(default_factory=new_request_id, min_length=1, max_length=160)
+    call_id: str = Field(min_length=1, max_length=160)
+    generation_id: str = Field(min_length=1, max_length=160)
+    phrase_id: str = Field(min_length=1, max_length=160)
     text: str = Field(min_length=1, max_length=2000)
-    voice: str | None = None
-    language: str | None = None
-    deadline: float | None = None
-    timeout_ms: int | None = Field(default=None, gt=0)
+    voice: str | None = Field(default=None, max_length=160)
+    language: str | None = Field(default=None, max_length=32)
+    deadline: float | None = Field(default=None, allow_inf_nan=False)
+    timeout_ms: int | None = Field(default=None, gt=0, le=120000)
+
+
+class CancelRequest(BaseModel):
+    generation_id: str | None = Field(default=None, min_length=1, max_length=160)
+    request_id: str | None = Field(default=None, min_length=1, max_length=160)
 
 
 app = FastAPI(title="IMVERA TTS Worker", version="0.1.0")
@@ -96,13 +117,13 @@ def _produce_silero_chunks(
             else [req.text]
         )
         for segment in segments:
-            if req.generation_id in _cancelled:
+            if _is_cancelled(req):
                 break
             check_deadline(req.deadline)
             audio, sample_rate = synthesize_silero(segment, silero_cfg)
             pcm = _float_to_pcm16(audio)
             for chunk_pcm, sr in _chunk_pcm(pcm, sample_rate):
-                if req.generation_id in _cancelled:
+                if _is_cancelled(req):
                     break
                 out_q.put(
                     {
@@ -126,7 +147,7 @@ def _produce_mlx_chunks(
     lang = req.language or tts_cfg["lang_code"]
     gen_kwargs, ref_id = build_mlx_gen_kwargs(
         tts_cfg,
-        CONFIG_PATH,
+        worker_profile_path(CONFIG_PATH),
         text=req.text,
         voice=voice,
         lang_code=lang,
@@ -142,7 +163,7 @@ def _produce_mlx_chunks(
     seq = 0
     try:
         for result in _tts.generate(**gen_kwargs):
-            if req.generation_id in _cancelled:
+            if _is_cancelled(req):
                 break
             audio = getattr(result, "audio", None)
             if audio is None:
@@ -182,8 +203,10 @@ def _produce_qwen_chunks(
             voice=req.voice,
             lang=req.language or "Russian",
             cfg=tts_cfg,
+            deadline=req.deadline,
+            cancelled=lambda: _is_cancelled(req),
         ):
-            if req.generation_id in _cancelled:
+            if _is_cancelled(req):
                 break
             for chunk_pcm, sr in _chunk_pcm(pcm, QWEN_SAMPLE_RATE):
                 out_q.put(
@@ -227,7 +250,11 @@ def _produce_chunks(req: SynthesizeRequest, out_q: queue.Queue) -> None:
                 return
             produced = 0
             reason = str(exc)
-        if produced == 0 and req.generation_id not in _cancelled:
+        if produced == 0 and not _is_cancelled(req):
+            if production_mode():
+                out_q.put({"done": True, "error": f"selected TTS failed: {reason}"})
+                out_q.put(None)
+                return
             # Fallback is permitted only before any Qwen PCM was emitted.
             print(
                 f"TTS requested_engine=qwen_gguf actual_engine=silero_lab "
@@ -293,6 +320,16 @@ def _load_mlx_model(model_id: str, timeout_s: float) -> tuple[Any | None, str | 
     return box["model"], None
 
 
+def _qwen_warmup_failure(tts_cfg: dict[str, Any], reason: str) -> None:
+    if production_mode():
+        state.ready = False
+        state.warmup_error = reason
+        print(f"TTS startup_failed selected_engine=qwen_gguf error={reason[:200]}", flush=True)
+        return
+    print(f"TTS {reason} — explicit lab fallback to silero", flush=True)
+    _init_silero_lab(tts_cfg)
+
+
 def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
     """Ping resident qwen server + warmup phrase; explicit owner-blessed
     fallback to silero (loud log — never silent). The removed generic
@@ -304,14 +341,12 @@ def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
         from services.tts.warmup import warmup_synthesis
 
         if not ping():
-            print("TTS qwen server unreachable — explicit fallback to silero", flush=True)
-            _init_silero_lab(tts_cfg)
+            _qwen_warmup_failure(tts_cfg, "qwen server unreachable")
             return
         from services.tts.qwen_gguf import server_model_id
 
         if not ensure_voice_registered(qwen_voice(tts_cfg)):
-            print("TTS qwen voice missing — explicit fallback to silero", flush=True)
-            _init_silero_lab(tts_cfg)
+            _qwen_warmup_failure(tts_cfg, "qwen voice missing")
             return
         selected_revision = f"qwen_gguf:{server_model_id()}"
 
@@ -324,24 +359,25 @@ def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
         # Probe the selected provider; per-request fallback cannot prove it ready.
         first_s = warmup_synthesis(produce_selected, text="А.", timeout_s=180.0)
         if first_s <= 0:
-            print("TTS qwen warmup produced no audio — explicit fallback to silero", flush=True)
-            _init_silero_lab(tts_cfg)
+            _qwen_warmup_failure(tts_cfg, "qwen warmup produced no audio")
             return
         print(f"TTS qwen warmup first chunk in {first_s:.2f}s", flush=True)
         state.model_revision = selected_revision
         state.warmup_error = None
         state.ready = True
     except Exception as exc:
-        print(f"TTS qwen warmup failed ({exc}) — explicit fallback to silero", flush=True)
-        _init_silero_lab(tts_cfg)
+        _qwen_warmup_failure(tts_cfg, f"qwen warmup failed: {exc}")
 
 
 @app.on_event("startup")
 def startup() -> None:
+    global _watchdog
     cfg = _load_config()
+    state.runtime_metadata = worker_metadata(CONFIG_PATH)
     tts_cfg = cfg["models"]["tts"]
     if tts_engine(tts_cfg) == "silero_lab":
         _init_silero_lab(tts_cfg)
+    _watchdog = production_watchdog(executor, state, cfg)
     # MLX load+warmup runs on the process main thread before HTTP binds (see main()).
 
 
@@ -372,28 +408,54 @@ def _load_and_warmup_mlx(tts_cfg: dict[str, Any], engine: str) -> None:
         print(f"TTS load/warmup failed: {exc}", flush=True)
 
 
-mount_health(app, state, "tts", executor_supplier=lambda: executor)
+@app.on_event("shutdown")
+def shutdown() -> None:
+    state.ready = False
+    _cancellations.cancel_all_active()
+    executor.shutdown()
+    if _watchdog is not None:
+        _watchdog.stop()
+
+
+mount_health(
+    app,
+    state,
+    "tts",
+    executor_supplier=lambda: executor,
+    details_supplier=lambda: {"cancellation": _cancellations.stats()},
+)
 
 
 def _prepare_stream(req: SynthesizeRequest) -> BoundedInferenceStream:
-    return BoundedInferenceStream(
-        executor,
-        lambda out_q: _produce_chunks(req, out_q),
-        deadline=req.deadline,
-        cancelled=lambda: (
-            req.generation_id in _cancelled or req.request_id in state.cancelled_requests
-        ),
-    )
+    lease = _cancellations.register(req.request_id, req.generation_id)
+    try:
+        return BoundedInferenceStream(
+            executor,
+            lambda out_q: _produce_chunks(req, out_q),
+            deadline=req.deadline,
+            cancelled=lease.cancelled.is_set,
+            on_close=lease.cancelled.set,
+            on_settled=lambda: _cancellations.release(lease),
+        )
+    except BaseException:
+        _cancellations.release(lease)
+        raise
 
 
 class _InferenceResponse(StreamingResponse):
     def __init__(self, req: SynthesizeRequest, stream: BoundedInferenceStream) -> None:
         super().__init__(_ndjson_stream(req, stream), media_type="application/x-ndjson")
         self._inference_stream = stream
+        self._deadline = req.deadline
 
     async def __call__(self, scope, receive, send) -> None:
         try:
-            await super().__call__(scope, receive, send)
+            remaining = (
+                None if self._deadline is None else max(0, self._deadline - time.monotonic())
+            )
+            # Includes blocked ASGI socket writes, not only queue/model waits.
+            async with asyncio.timeout(remaining):
+                await super().__call__(scope, receive, send)
         finally:
             # Also handles disconnect before body iteration/header send.
             self._inference_stream.close()
@@ -419,7 +481,7 @@ async def _ndjson_stream(
         return
     finally:
         stream.close()
-    if not got_audio and req.generation_id not in _cancelled:
+    if not got_audio and not _is_cancelled(req):
         yield (
             json.dumps({"done": True, "error": "no audio generated"}, ensure_ascii=False) + "\n"
         ).encode()
@@ -441,36 +503,56 @@ async def synthesize(req: SynthesizeRequest) -> StreamingResponse:
         raise HTTPException(503, detail=state.warmup_error or "silero lab not ready")
     if req.timeout_ms is not None:
         req = req.model_copy(update={"deadline": time.monotonic() + req.timeout_ms / 1000})
+    else:
+        budget = min(float(cfg.get("limits", {}).get("tts_deadline_s", 20)), 120)
+        req = req.model_copy(
+            update={
+                "deadline": min(
+                    req.deadline if req.deadline is not None else time.monotonic() + budget,
+                    time.monotonic() + 120,
+                )
+            }
+        )
     try:
         stream = _prepare_stream(req)
     except StreamCancelled as exc:
         raise HTTPException(499, detail="cancelled") from exc
+    except DuplicateRequestError as exc:
+        raise HTTPException(409, detail="request_id already active") from exc
     except (TimeoutError, QueueFullError) as exc:
         raise executor_http_error(exc) from exc
     return _InferenceResponse(req, stream)
 
 
 @app.post("/v1/cancel")
-def cancel(body: dict[str, Any]) -> dict[str, str]:
-    gid = body.get("generation_id")
-    if gid:
-        _cancelled.add(gid)
-    rid = body.get("request_id")
-    if rid:
-        state.cancelled_requests.add(rid)
+def cancel(body: CancelRequest) -> dict[str, str]:
+    if body.generation_id is None and body.request_id is None:
+        raise HTTPException(422, detail="cancellation requires request_id or generation_id")
+    _cancellations.cancel(request_id=body.request_id, generation_id=body.generation_id)
     return {"status": "accepted"}
 
 
 def main() -> None:
+    global executor
     cfg = _load_config()
+    executor = InferenceExecutor(max_queue=int(cfg.get("limits", {}).get("queue_depth", 4)))
     port = int(os.environ.get("IMVERA_TTS_PORT", cfg["ports"]["tts"]))
     tts_cfg = cfg["models"]["tts"]
     engine = tts_engine(tts_cfg)
-    if engine == "qwen_gguf":
-        _ping_and_warmup_qwen(tts_cfg)
-    elif engine != "silero_lab":
-        _load_and_warmup_mlx(tts_cfg, engine)
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+    with production_startup_guard(state, cfg):
+        if engine == "qwen_gguf":
+            _ping_and_warmup_qwen(tts_cfg)
+        elif engine != "silero_lab":
+            _load_and_warmup_mlx(tts_cfg, engine)
+    if production_mode() and not state.ready:
+        raise SystemExit(70)
+    uvicorn.run(
+        app,
+        host=os.environ.get("IMVERA_WORKER_HOST", "127.0.0.1"),
+        port=port,
+        log_level="info",
+        timeout_graceful_shutdown=25,
+    )
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from packages.core.memory_store import InMemoryCallRecordStore
 from packages.dialogue.session import CallSession
 from packages.voice_runtime.call_actor import CallActor, CallActorConfig, MediaCallbacks
 from packages.voice_runtime.playback import PlaybackQueue
+from services.inference.cancellation import CancellationRegistry
 from services.inference.common import InferenceExecutor
 from services.inference.streaming import BoundedInferenceStream
 from services.providers.replica_pool import MidStreamUnavailable
@@ -38,8 +39,7 @@ async def settled(executor: InferenceExecutor) -> None:
 def tts_worker(monkeypatch):
     executor = InferenceExecutor(max_queue=1)
     monkeypatch.setattr(worker, "executor", executor)
-    monkeypatch.setattr(worker, "_cancelled", set())
-    monkeypatch.setattr(worker.state, "cancelled_requests", set())
+    monkeypatch.setattr(worker, "_cancellations", CancellationRegistry())
     monkeypatch.setattr(worker.state, "ready", True)
     monkeypatch.setattr(
         worker, "_load_config", lambda: {"models": {"tts": {"engine": "silero_lab"}}}
@@ -181,7 +181,7 @@ async def test_cancel_request_id_stops_blocked_producer(monkeypatch, tts_worker)
     req = request()
     response = await worker.synthesize(req)
     await anext(response.body_iterator)
-    worker.cancel({"request_id": req.request_id})
+    worker.cancel(worker.CancelRequest(request_id=req.request_id))
     frames = [json.loads(line) async for line in response.body_iterator]
     assert frames == [{"done": True, "cancelled": True}]
     await settled(tts_worker)

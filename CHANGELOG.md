@@ -2,6 +2,11 @@
 
 ## Unreleased — 2026-10-03
 
+- Reuse one explicit voice profile across Mac/Linux workers; add CPU STT/HTTP TTS images and a production Compose overlay with private networking and resource bounds.
+- Replace unbounded TTS cancel IDs with bounded expiring tombstones and active leases; bound output bytes, active HTTP streams and stalled writes.
+- Reject lab voice fallback in production; contain hung startup/model processes with watchdog exit70 and supervisor restart.
+- Yield Qwen HTTP PCM as received, with bounded reads and cancellation; pin existing GigaAM source and require prepared offline artifacts. Real target model/SIP/load acceptance remains pending.
+
 - Bound TTS production with disconnect-aware backpressure and async HTTP consumption; preserve actual model completion and reject overload before headers.
 - Propagate relative TTS deadlines, honor request-ID cancellation and reject truncated audio streams without replaying another voice.
 - Add opt-in batch sentence streaming, real TCP/CallActor delivery-and-cancel tests, and a real-worker first-PCM p50/p95 benchmark. M5/audio acceptance remains pending.

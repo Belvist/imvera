@@ -1,0 +1,84 @@
+# Merge with infra/freeswitch/docker-compose.yml; never start a second bridge.
+services:
+  media-bridge:
+    build:
+      args:
+        PYTHON_IMAGE: ${IMVERA_PYTHON_IMAGE:?pinned Python image digest required}
+    environment:
+      IMVERA_GIT_SHA: ${IMVERA_GIT_SHA:?full source SHA required}
+      IMVERA_RUNTIME_MODE: production
+      IMVERA_MEDIA_BRIDGE_MODE: callactor
+      IMVERA_DIALOGUE_ENGINE: "1"
+      IMVERA_VOICE_PROFILE_PATH: /app/config/voice-linux-cpu.yaml
+      IMVERA_STT_URL: http://stt-worker:9101
+      IMVERA_TTS_URL: http://tts-worker:9102
+      IMVERA_PG_URL: ${IMVERA_PG_URL:?configured production database required}
+    volumes:
+      - ${IMVERA_NLP_MODELS_DIR:?genuine NLP models required}:/app/models:ro
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      stt-worker:
+        condition: service_healthy
+      tts-worker:
+        condition: service_healthy
+
+  tts-worker:
+    build:
+      context: ../..
+      dockerfile: infra/inference/Dockerfile
+      target: tts-http
+      args:
+        IMVERA_GIT_SHA: ${IMVERA_GIT_SHA:?full source SHA required}
+        PYTHON_IMAGE: ${IMVERA_PYTHON_IMAGE:?pinned Python image digest required}
+    image: imvera/tts-http:${IMVERA_GIT_SHA:?full source SHA required}
+    environment:
+      IMVERA_QWEN_TTS_URL: ${IMVERA_QWEN_TTS_URL:?provisioned resident TTS endpoint required}
+      IMVERA_QWEN_GGUF_DIR: /models/voice
+    volumes:
+      - ${IMVERA_VOICE_ARTIFACTS_DIR:?accepted voice artifacts required}:/models/voice:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: ${IMVERA_TTS_WORKER_MEMORY:-1g}
+    cpus: ${IMVERA_TTS_WORKER_CPUS:-1}
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9102/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 180s
+    networks: [p0a]
+
+  stt-worker:
+    build:
+      context: ../..
+      dockerfile: infra/inference/Dockerfile
+      target: stt-cpu
+      args:
+        IMVERA_GIT_SHA: ${IMVERA_GIT_SHA:?full source SHA required}
+        PYTHON_IMAGE: ${IMVERA_PYTHON_IMAGE:?pinned Python image digest required}
+    image: imvera/stt-cpu:${IMVERA_GIT_SHA:?full source SHA required}
+    volumes:
+      - ${IMVERA_GIGAAM_MODELS_DIR:?prepared GigaAM checkpoint and tokenizer required}:/models/gigaam:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: ${IMVERA_STT_WORKER_MEMORY:-4g}
+    cpus: ${IMVERA_STT_WORKER_CPUS:-2}
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9101/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 180s
+    networks: [p0a]

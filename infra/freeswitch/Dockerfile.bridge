@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.7
-FROM python:3.12-slim-bookworm
+ARG PYTHON_IMAGE=python:3.12-slim-bookworm
+FROM ${PYTHON_IMAGE}
 
 ARG IMVERA_GIT_SHA=unknown
 LABEL org.opencontainers.image.revision=$IMVERA_GIT_SHA

@@ -13,6 +13,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from services.inference.cancellation import CancellationRegistry
 from services.providers.replica_pool import MidStreamUnavailable
 from services.tts import qwen_gguf, worker
 from services.tts.http_provider import HttpTTSProvider
@@ -32,7 +33,7 @@ def qwen_worker(monkeypatch):
     monkeypatch.setattr(worker.state, "ready", True)
     monkeypatch.setattr(worker.state, "model_revision", QWEN_REVISION)
     monkeypatch.setattr(worker.state, "warmup_error", None)
-    monkeypatch.setattr(worker, "_cancelled", set())
+    monkeypatch.setattr(worker, "_cancellations", CancellationRegistry())
     # Resident registry/model lookup is independent of the synth failures below.
     monkeypatch.setattr(qwen_gguf, "ensure_voice_registered", lambda _: True)
     monkeypatch.setattr(qwen_gguf, "server_model_id", lambda: QWEN_REVISION.split(":", 1)[1])

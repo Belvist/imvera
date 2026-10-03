@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -28,6 +27,12 @@ from services.inference.common import (
     mount_health,
     new_request_id,
 )
+from services.inference.config import load_worker_config, production_mode, worker_metadata
+from services.inference.watchdog import (
+    InferenceWatchdog,
+    production_startup_guard,
+    production_watchdog,
+)
 from services.stt.backends import load_asr_backend
 from services.stt.critical_terms import match_critical_terms
 from services.stt.normalize import normalize_transcript
@@ -40,8 +45,7 @@ CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "voice-m5.yaml"
 
 
 def _load_config() -> dict[str, Any]:
-    with CONFIG_PATH.open() as f:
-        return yaml.safe_load(f)
+    return load_worker_config(CONFIG_PATH, "stt")
 
 
 class TranscribeRequest(BaseModel):
@@ -72,6 +76,7 @@ executor = InferenceExecutor(max_queue=4)
 _asr: Any = None
 _asr_engine = "gigaam"
 _model_id = ""
+_watchdog: InferenceWatchdog | None = None
 # Cancellation is scoped to this worker. Active requests carry an Event; early
 # or late cancel messages retain only bounded, expiring tombstones so retries
 # and disconnected callers cannot grow WorkerState forever.
@@ -157,31 +162,47 @@ def _transcribe_sync(
 
 @app.on_event("startup")
 def warmup() -> None:
-    global _asr, _model_id, _asr_engine
+    global _asr, _model_id, _asr_engine, _watchdog
     cfg = _load_config()
+    state.runtime_metadata = worker_metadata(CONFIG_PATH)
     asr_cfg = cfg["models"]["asr"]
     _asr_engine = str(asr_cfg.get("engine", "gigaam"))
     try:
-        _asr, _model_id = load_asr_backend(asr_cfg)
-        state.model_revision = _model_id
-        state.ready = True
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            wav_path = Path(tmp.name)
-        silence = b"\x00\x00" * 1600
-        _pcm_to_wav(silence, 16000, wav_path)
-        try:
-            _transcribe_sync(
-                wav_path,
-                pcm=silence,
-                sample_rate=16000,
-                duration_ms=100,
-                asr_cfg=asr_cfg,
-            )
-        finally:
-            wav_path.unlink(missing_ok=True)
+        with production_startup_guard(state, cfg):
+            _asr, _model_id = load_asr_backend(asr_cfg)
+            state.model_revision = _model_id
+            state.ready = True
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                wav_path = Path(tmp.name)
+            silence = b"\x00\x00" * 1600
+            _pcm_to_wav(silence, 16000, wav_path)
+            try:
+                _transcribe_sync(
+                    wav_path,
+                    pcm=silence,
+                    sample_rate=16000,
+                    duration_ms=100,
+                    asr_cfg=asr_cfg,
+                )
+            finally:
+                wav_path.unlink(missing_ok=True)
     except Exception as exc:
         state.warmup_error = str(exc)
         state.ready = False
+        if production_mode():
+            raise RuntimeError("selected production STT failed warmup") from exc
+    _watchdog = production_watchdog(executor, state, cfg)
+
+
+@app.on_event("shutdown")
+def shutdown() -> None:
+    state.ready = False
+    with state.lock:
+        for cancellation in _active_requests.values():
+            cancellation.set()
+    executor.shutdown()
+    if _watchdog is not None:
+        _watchdog.stop()
 
 
 mount_health(app, state, "stt", executor_supplier=lambda: executor)
@@ -221,7 +242,9 @@ async def preview(req: PreviewRequest) -> dict[str, Any]:
 
 
 async def _run_transcription(
-    req: TranscribeRequest, *, preview: bool,
+    req: TranscribeRequest,
+    *,
+    preview: bool,
 ) -> dict[str, Any]:
     if not state.ready or _asr is None:
         raise HTTPException(503, detail=state.warmup_error or "not ready")
@@ -230,7 +253,10 @@ async def _run_transcription(
     _register_request(req.request_id, cancelled)
     try:
         return await _run_registered_transcription(
-            req, preview=preview, abandoned=abandoned, cancelled=cancelled,
+            req,
+            preview=preview,
+            abandoned=abandoned,
+            cancelled=cancelled,
         )
     finally:
         abandoned.set()
@@ -238,8 +264,11 @@ async def _run_transcription(
 
 
 async def _run_registered_transcription(
-    req: TranscribeRequest, *, preview: bool,
-    abandoned: threading.Event, cancelled: threading.Event,
+    req: TranscribeRequest,
+    *,
+    preview: bool,
+    abandoned: threading.Event,
+    cancelled: threading.Event,
 ) -> dict[str, Any]:
     deadline = time.monotonic() + (req.timeout_s if req.timeout_s is not None else 60.0)
     if req.deadline is not None:
@@ -290,8 +319,11 @@ async def _run_registered_transcription(
             _pcm_to_wav(pcm, req.sample_rate, wav_path)
             check_request()
             result = _transcribe_sync(
-                wav_path, pcm=pcm, sample_rate=req.sample_rate,
-                duration_ms=duration_ms, asr_cfg=cfg["models"]["asr"],
+                wav_path,
+                pcm=pcm,
+                sample_rate=req.sample_rate,
+                duration_ms=duration_ms,
+                asr_cfg=cfg["models"]["asr"],
             )
             # In-flight model computation cannot be preempted; discard its
             # output rather than claim cancellation stopped CPU inference.
@@ -314,7 +346,8 @@ async def _run_registered_transcription(
     logger.info(
         "stt preview=%s call_id=%s utterance_id=%s duration_ms=%d pcm_rms=%.1f "
         "raw=%r text=%r quality=%s model=%s",
-        preview, req.call_id,
+        preview,
+        req.call_id,
         req.utterance_id or "-",
         duration_ms,
         pcm_rms,
@@ -357,9 +390,17 @@ def cancel(body: dict[str, Any]) -> dict[str, str]:
 
 
 def main() -> None:
+    global executor
     cfg = _load_config()
+    executor = InferenceExecutor(max_queue=int(cfg.get("limits", {}).get("queue_depth", 4)))
     port = int(os.environ.get("IMVERA_STT_PORT", cfg["ports"]["stt"]))
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+    uvicorn.run(
+        app,
+        host=os.environ.get("IMVERA_WORKER_HOST", "127.0.0.1"),
+        port=port,
+        log_level="info",
+        timeout_graceful_shutdown=25,
+    )
 
 
 if __name__ == "__main__":

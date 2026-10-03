@@ -44,3 +44,5 @@ ADR-014 **does not** stamp `ARCHITECTURE = FROZEN` until gates 1–7 are VERIFIE
 Master plan: [PLAN.md](../PLAN.md) v1.2 (historical freeze candidate). Active freeze: ADR-014.
 
 | [030](030-bounded-inference-streaming.md) | Bounded inference streaming and parallel PCM delivery | runtime slice implemented; M5/audio NOT VERIFIED |
+
+| [031](031-portable-production-inference.md) | Portable production inference and bounded request lifetime | runtime/launch slice implemented; real model/server/SIP NOT VERIFIED |

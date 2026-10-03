@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -25,12 +24,12 @@ from services.inference.common import (
     mount_health,
     new_request_id,
 )
+from services.inference.config import load_worker_config, worker_metadata
 from services.llm.prompts import INTERPRETER_SYSTEM, RENDERER_SYSTEM
 
 SEMANTIC_SCHEMA_HINT = (
     "Верни ТОЛЬКО JSON SemanticPayload (без call_id и прочих полей контекста). "
-    "Схема:\n"
-    + json.dumps(SemanticPayload.model_json_schema(), ensure_ascii=False, indent=2)
+    "Схема:\n" + json.dumps(SemanticPayload.model_json_schema(), ensure_ascii=False, indent=2)
 )
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "voice-m5.yaml"
@@ -40,8 +39,7 @@ _cancelled: set[str] = set()
 
 
 def _load_config() -> dict[str, Any]:
-    with CONFIG_PATH.open() as f:
-        return yaml.safe_load(f)
+    return load_worker_config(CONFIG_PATH, "llm")
 
 
 def _extract_json(text: str) -> dict[str, Any]:
@@ -107,6 +105,7 @@ executor = InferenceExecutor(max_queue=4)
 def warmup() -> None:
     global _model, _tokenizer
     cfg = _load_config()
+    state.runtime_metadata = worker_metadata(CONFIG_PATH)
     model_id = cfg["models"]["llm"]["id"]
     try:
         from mlx_lm import load

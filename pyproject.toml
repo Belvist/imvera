@@ -63,7 +63,7 @@ mlx = [
     "soundfile>=0.12",
 ]
 gigaam-stt = [
-    "gigaam @ git+https://github.com/salute-developers/GigaAM.git",
+    "gigaam @ git+https://github.com/salute-developers/GigaAM.git@7447938d791c4f3e643386ee22c33777004293a5",
     "torch>=2.2",
     "torchaudio>=2.2",
     "omegaconf>=2.3",

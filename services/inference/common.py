@@ -26,6 +26,7 @@ class WorkerState:
     cancelled_generations: set[str] = field(default_factory=set)
     cancelled_requests: set[str] = field(default_factory=set)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    runtime_metadata: dict[str, str] = field(default_factory=dict)
 
 
 def new_request_id() -> str:
@@ -44,6 +45,19 @@ class InferenceExecutor:
         self._max_queue = max_queue
         self._pending = 0
         self._lock = threading.Lock()
+        self._stopping = False
+        self._running_since: float | None = None
+
+    @property
+    def running_age_s(self) -> float:
+        with self._lock:
+            return 0 if self._running_since is None else time.monotonic() - self._running_since
+
+    def shutdown(self) -> None:
+        """Stop admission/cancel queued work; running jobs retain their lifetime."""
+        with self._lock:
+            self._stopping = True
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     @property
     def queue_depth(self) -> int:
@@ -51,9 +65,14 @@ class InferenceExecutor:
             return self._pending
 
     def submit(
-        self, fn: Callable[[], T], *, idle_only: bool = False,
+        self,
+        fn: Callable[[], T],
+        *,
+        idle_only: bool = False,
     ) -> concurrent.futures.Future[T]:
         with self._lock:
+            if self._stopping:
+                raise QueueFullError("inference worker draining")
             if idle_only and self._pending:
                 raise QueueFullError("inference worker busy; preview not admitted")
             if self._pending >= self._max_queue:
@@ -65,7 +84,17 @@ class InferenceExecutor:
                 self._pending -= 1
 
         try:
-            future = self._executor.submit(fn)
+
+            def run_job() -> T:
+                with self._lock:
+                    self._running_since = time.monotonic()
+                try:
+                    return fn()
+                finally:
+                    with self._lock:
+                        self._running_since = None
+
+            future = self._executor.submit(run_job)
         except BaseException:
             with self._lock:
                 self._pending -= 1
@@ -84,6 +113,7 @@ class InferenceExecutor:
             # Await the Future directly, without a second blocked pool thread.
             return await asyncio.shield(wrapped)
         except asyncio.CancelledError:
+
             def consume_result(done: asyncio.Future) -> None:
                 if not done.cancelled():
                     done.exception()
@@ -99,6 +129,7 @@ def mount_health(
     executor: InferenceExecutor | None = None,
     *,
     executor_supplier: Callable[[], InferenceExecutor | None] | None = None,
+    details_supplier: Callable[[], dict] | None = None,
 ) -> None:
     def _queue_depth() -> int:
         ex = executor_supplier() if executor_supplier is not None else executor
@@ -112,6 +143,8 @@ def mount_health(
 
     @app.get("/health/ready")
     def ready() -> JSONResponse:
+        details = details_supplier() if details_supplier is not None else {}
+        details["runtime"] = dict(state.runtime_metadata)
         if state.ready:
             return JSONResponse(
                 {
@@ -119,6 +152,7 @@ def mount_health(
                     "service": service,
                     "model_revision": state.model_revision,
                     "queue_depth": _queue_depth(),
+                    **details,
                 }
             )
         return JSONResponse(
@@ -127,6 +161,8 @@ def mount_health(
                 "status": "not_ready",
                 "service": service,
                 "error": state.warmup_error or "warming up",
+                "queue_depth": _queue_depth(),
+                **details,
             },
         )
 

@@ -1,0 +1,42 @@
+profile_id: linux-cpu-qwen-http
+description: Portable production clients and CPU GigaAM; Qwen resident server is separately provisioned
+ports:
+  stt: 9101
+  tts: 9102
+models:
+  asr:
+    engine: gigaam
+    id: v3_e2e_rnnt
+    language: Russian
+    device: cpu
+    fp16_encoder: false
+    use_flash: false
+    download_root: /models/gigaam
+  tts:
+    engine: qwen_gguf
+    lang_code: Russian
+    qwen_gguf:
+      voice: vera_kseniya
+limits:
+  # Initial admission only; raise after the actual hardware capacity gate.
+  max_active_calls: 1
+  queue_depth: 4
+  worker_job_hard_timeout_s: 120
+  worker_startup_hard_timeout_s: 240
+  stt_deadline_s: 12.0
+  tts_deadline_s: 20.0
+  llm_deadline_s: 15.0
+  playback_buffer_ms: 60
+audio:
+  internal_sample_rate: 16000
+  inject_format: slin24
+  capture_format: slin16
+  output_sample_rate: 24000
+  frame_ms: 20
+  sip_codecs: g722,slin24,slin16
+  sip_codecs_e2e: ulaw,alaw
+dialogue_timing:
+  answer_wait_ms: 7000
+  backchannel_extra_ms: 2000
+  pause_wait_ms: 30000
+  max_pause_wait_ms: 60000

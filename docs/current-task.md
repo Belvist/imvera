@@ -1,3 +1,43 @@
+# Portable production inference (2026-10-03)
+
+Target: **feature/voice-zoiper-m5**, baseline **75508ebf27f2c76a3eb26d23326fd1c841af0ac5**.
+Source implementation, not loaded M5 diagnosis or a target-server deployment.
+[Architecture/source audit](adr/031-portable-production-inference.md),
+[server operator handoff](production-server-handoff.md),
+[reproducible evidence](evaluation/portable-production-2026-10-03/README.md).
+
+CHANGED: workers share the existing profile resolver; production validates source,
+platform/backend and finite budgets. Linux launch artifacts use existing GigaAM
+CPU and Qwen HTTP contracts, without MLX or another dialogue brain. Dedicated
+model-process guards contain stuck startup/jobs with exit70. Replace TTS cancel
+sets with one bounded registry: active cancellation survives eviction; active
+HTTP streams and encoded output bytes are bounded too. Include stalled ASGI
+writes in the request deadline. Production never substitutes a lab voice.
+Qwen delivers available PCM instead of waiting for a0.4s buffer. Same state,
+Reducer, canonical text and playback ledger on both platforms.
+
+VERIFIED: exact previous cancellation handler retained20000 IDs after10000
+cancel commands; the new registry retains at most2048 tombstones (probe linked).
+Controlled native HTTP proves first short PCM before later synthesis finishes,
+cancellation between packets and bounded stalled reads. Actual subprocesses
+prove hung startup/job exit70. Final source/image/CI counts are being recorded
+in the linked evidence; no real-model benchmark is inferred from fixtures.
+
+NOT VERIFIED: actual M5 or target server deployment/endpoints, accepted resident
+Qwen implementation on target hardware, real ASR/TTS weights, SIP/audio/soak/load.
+No server OS/GPU/address has yet been supplied; no live services restarted.
+
+REMAINING RISKS: Python cancellation cannot interrupt a running kernel/read;
+process/socket budgets contain that failure. Server model artifacts, Core/PG
+configuration and measured capacity must match the deployment. Linux profile's
+one-call admission is an initial limit, not throughput proof.
+
+NEXT GATE: deploy matching source/profile and genuine accepted model artifacts
+on selected hardware, then capture real FreeSWITCH/CallActor audio/trace and
+latency/interruption/soak before raising admission.
+
+---
+
 # Bounded TTS streaming and parallel delivery (2026-10-03)
 
 Target: **feature/voice-zoiper-m5**, baseline **72235946c3f5f66bb925923bc02c7f6f8540088c**.

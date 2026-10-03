@@ -88,7 +88,12 @@ def _verify_checksum(path: Path, model_name: str) -> None:
         )
 
 
-def ensure_gigaam_artifacts(model_name: str, download_root: Path | None = None) -> Path:
+def ensure_gigaam_artifacts(
+    model_name: str,
+    download_root: Path | None = None,
+    *,
+    allow_download: bool = True,
+) -> Path:
     """Download checkpoint (+ tokenizer for e2e) into gigaam cache if missing."""
     resolved = _resolve_model_name(model_name)
     if resolved not in _MODEL_HASHES:
@@ -100,6 +105,11 @@ def ensure_gigaam_artifacts(model_name: str, download_root: Path | None = None) 
 
     ckpt_name = f"{resolved}.ckpt"
     ckpt_path = root / ckpt_name
+    required = [ckpt_path]
+    if _needs_tokenizer(resolved):
+        required.append(root / f"{resolved}_tokenizer.model")
+    if not allow_download and any(not path.is_file() for path in required):
+        raise FileNotFoundError("prepared GigaAM checkpoint/tokenizer required; downloads disabled")
     if not ckpt_path.exists():
         logger.info("Downloading GigaAM %s (~450 MB)...", resolved)
         _download_file(f"{_URL_DIR}/{ckpt_name}", ckpt_path)
@@ -142,9 +152,7 @@ class GigaAMEngine:
         with wave.open(str(wav_path), "rb") as wf:
             rate = wf.getframerate()
             pcm = wf.readframes(wf.getnframes())
-        return transcribe_long_audio(
-            pcm, rate, lambda chunk_wav: self._transcribe_chunk(chunk_wav)
-        )
+        return transcribe_long_audio(pcm, rate, lambda chunk_wav: self._transcribe_chunk(chunk_wav))
 
     def _transcribe_chunk(self, wav_path: Path) -> str:
         result = self.model.transcribe(str(wav_path))
@@ -165,7 +173,13 @@ def load_gigaam_engine(asr_cfg: dict[str, Any]) -> GigaAMEngine:
     download_root_raw = asr_cfg.get("download_root")
     download_root = Path(os.path.expanduser(str(download_root_raw))) if download_root_raw else None
 
-    ensure_gigaam_artifacts(resolved, download_root)
+    from services.inference.config import production_mode
+
+    ensure_gigaam_artifacts(
+        resolved,
+        download_root,
+        allow_download=bool(asr_cfg.get("allow_download", not production_mode())),
+    )
 
     model = gigaam.load_model(
         resolved,

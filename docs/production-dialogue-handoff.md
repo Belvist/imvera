@@ -1,5 +1,7 @@
 # M5 dialogue reliability: запуск и приёмка
 
+Общий Mac/Linux worker contract и серверный запуск: [portable production handoff](production-server-handoff.md).
+
 Текущий dialogue cut (2026-10-02): [user-led conversation handoff](user-led-conversation-integration.md).
 Общий SDK/Actor producer, ActionPolicy personal-thread moves и реальное ожидание
 после ACK; точный опубликованный SHA и ворота — в `current-task.md`.

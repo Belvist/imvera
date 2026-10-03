@@ -1,0 +1,10 @@
+{
+  "baseline_sha": "75508ebf27f2c76a3eb26d23326fd1c841af0ac5",
+  "boundary": "10000 cancel commands; exact old handler vs current registry",
+  "before_retained_ids": 20000,
+  "after": {
+    "active": 0,
+    "tombstones": 2048
+  },
+  "real_model_or_capacity_benchmark": false
+}
