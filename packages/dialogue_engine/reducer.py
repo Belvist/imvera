@@ -1859,6 +1859,17 @@ _GREETING_ONLY = frozenset(
 
 _BACKCHANNEL_ONLY = frozenset({"ага", "угу", "мгм", "м-м", "мм"})
 
+# Presence signals: the person is on the line and ready, which is not an answer
+# and must never be answered with «Простите, не расслышала» (they heard fine).
+# Compared with commas removed ("Да, слушаю." -> "да слушаю").
+_PRESENCE_ONLY = frozenset(
+    {
+        "да слушаю", "слушаю", "слушаю вас", "я слушаю", "вас слушаю",
+        "говорите", "да говорите", "да говорите пожалуйста",
+        "я здесь", "здесь", "на связи", "да на связи", "да я здесь",
+    }
+)
+
 _AFFIRM_ONLY = frozenset(
     {"ага", "угу", "мгм", "м-м", "мм", "да", "да-да", "конечно", "верно"}
 )
@@ -1956,6 +1967,8 @@ def _coerce_unclear_by_content(
 
     stripped = user_text.strip().lower().rstrip(".!?…")
     if stripped in _GREETING_ONLY and state.delivered_question is not None:
+        return SemanticAct.BACKCHANNEL
+    if _is_presence_only(user_text) and state.delivered_question is not None:
         return SemanticAct.BACKCHANNEL
     if state.delivered_question is not None:
         yes_no = _is_yes_no_question(state.delivered_question.text or "")
@@ -2152,9 +2165,19 @@ def _severity_probe_due(state: EngineState) -> bool:
     return True
 
 
+def _is_presence_only(text: str) -> bool:
+    """«Да, слушаю.» / «Я здесь.» — the person is on the line, not answering."""
+    stripped = (text or "").strip().lower().rstrip(".!?…").replace(",", "")
+    return stripped in _PRESENCE_ONLY
+
+
 def _is_greeting_or_backchannel_text(text: str) -> bool:
     stripped = (text or "").strip().lower().rstrip(".!?…")
-    return stripped in _GREETING_ONLY or stripped in _BACKCHANNEL_ONLY
+    return (
+        stripped in _GREETING_ONLY
+        or stripped in _BACKCHANNEL_ONLY
+        or _is_presence_only(text)
+    )
 
 
 def _is_backchannel_only_text(text: str) -> bool:

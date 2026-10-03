@@ -62,14 +62,14 @@ _WORD_RE = re.compile(r"[А-Яа-яЁё][А-Яа-яЁё-]{3,}")
 _PARTICLE_RE = re.compile(r"-(?:то|ка|таки|де|с|ста)$")
 
 # Stance frames. A frame takes the reflected noun in the accusative after
-# «про»; the set exists so the same person is not answered with the same
-# sentence shape twice in a row. Order is preference order, not rotation:
-# the first frame that was not already said in this call wins.
-_TOPIC_FRAMES = (
-    "Про {acc} поняла.",
-    "Поняла про {acc}.",
-    "Спасибо, что рассказали про {acc}.",
-    "Про {acc} услышала.",
+# «про». Each carries the pattern that identifies it in a spoken surface, so
+# the same sentence shape is not used twice in a call: with several reactions
+# the person hears several different acknowledgements, not one repeated.
+_TOPIC_FRAMES: tuple[tuple[str, str], ...] = (
+    ("Про {acc} поняла.", r"\bпро \S+ поняла\b"),
+    ("Поняла про {acc}.", r"\bпоняла про \S+"),
+    ("Спасибо, что рассказали про {acc}.", r"\bспасибо что рассказали про \S+"),
+    ("Про {acc} услышала.", r"\bпро \S+ услышала\b"),
 )
 
 # Topics talked about in the last few turns are not parroted again.
@@ -139,14 +139,27 @@ def _topic_recently_spoken(state: EngineState, topic: HeardTopic) -> bool:
 
 
 def _frame_for(state: EngineState, topic: HeardTopic) -> str:
-    for frame in _TOPIC_FRAMES:
+    """The first frame whose shape was not already used in the recent turns.
+
+    Avoiding the exact clause is not enough: «Про внуков поняла.» and «Про
+    пирог поняла.» are different sentences with the same shape, and a call that
+    repeats one shape four times still sounds like a form.
+    """
+    import re
+
+    recent = state.spoken_surfaces[-_RECENT_WINDOW:]
+    fallback = ""
+    for frame, pattern in _TOPIC_FRAMES:
         clause = frame.format(acc=topic.acc)
         if len(clause) > MAX_REACTION_CHARS:
             continue
         if is_verbatim_repeat(state.spoken_surfaces, clause):
             continue
-        return clause
-    return ""
+        if not fallback:
+            fallback = clause
+        if not any(re.search(pattern, surface) for surface in recent):
+            return clause
+    return fallback
 
 
 # A question the person answered has a topic even when their sentence has no

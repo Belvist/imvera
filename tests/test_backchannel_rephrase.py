@@ -87,3 +87,31 @@ def test_triple_aga_closes_honestly_without_hang() -> None:
     engine = session._engine
     assert engine is not None
     assert engine.state.call_closed is True
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    ["Да, слушаю.", "Слушаю вас.", "Да, говорите.", "Я здесь.", "На связи."],
+)
+def test_presence_signal_is_not_answered_with_i_did_not_hear(phrase: str) -> None:
+    """The person is on the line and ready — that is not an unclear answer."""
+    session = _session(f"presence-{abs(hash(phrase)) % 10000}")
+    opening_q = session._engine.state.delivered_question.text
+    speech = _say(session, phrase)
+    assert "не расслышала" not in speech.lower(), speech
+    assert "не разобрать" not in speech.lower(), speech
+    assert "?" in speech, speech
+    assert speech.strip() != opening_q.strip(), speech
+
+
+def test_presence_signal_at_a_yes_no_question_still_answers_nothing() -> None:
+    """A presence signal never becomes a yes: the question must be re-asked."""
+    session = _session("presence-yn", full=True)
+    _say(session, "Привет.")
+    _say(session, "Всё хорошо, только что покушала.")
+    _say(session, "Да, было вкусно.")
+    meds_q = _say(session, "Да, от давления.")
+    assert "?" in meds_q
+    speech = _say(session, "Да, слушаю.")
+    assert "не расслышала" not in speech.lower(), speech
+    assert session._engine.state.slot_values.get("medication", "") == ""

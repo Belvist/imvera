@@ -207,3 +207,45 @@ def test_every_check_in_slot_has_a_reaction():
             polarity="positive", source_turn_id="u-1",
         )
         assert realization.reaction_clause(state, []), slot
+
+
+# ------------------------------------------------- repetition of the shape
+
+
+def test_reaction_shape_is_not_reused_within_a_call():
+    """Different topics must not be answered with the same sentence shape."""
+    from packages.dialogue_engine.response_plan import (
+        ResponsePlan,
+        composed_text,
+        render_response_plan,
+    )
+    from packages.dialogue_engine.speech_ledger import normalize
+
+    state = _state()
+    seen: list[str] = []
+    for text in (
+        "Внуки приезжают в воскресенье.",
+        "Пирог пекла с капустой.",
+        "Соседка заходила, чай пили.",
+        "Кошки у меня живут.",
+    ):
+        state.last_user_text = text
+        plan = ResponsePlan(action="speak", acknowledge="Хорошо.",
+                            mandatory_question="Что-то ещё важное есть?")
+        spoken = composed_text(render_response_plan(plan, state))
+        state.spoken_surfaces = (state.spoken_surfaces + [normalize(spoken)])[-10:]
+        seen.append(spoken.split(".")[0])
+    assert len(set(seen)) == len(seen), seen
+
+
+def test_a_used_shape_is_detected_through_normalisation():
+    """Surfaces are normalised (no punctuation), so patterns must be too."""
+    from packages.dialogue_engine.realization import _TOPIC_FRAMES
+
+    for frame, pattern in _TOPIC_FRAMES:
+        sample = frame.format(acc="внуков")
+        import re
+
+        from packages.dialogue_engine.speech_ledger import normalize
+
+        assert re.search(pattern, normalize(sample)), (frame, pattern)

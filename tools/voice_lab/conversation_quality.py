@@ -118,6 +118,29 @@ REACTION_SHAPE_RE = re.compile(
 )
 
 
+# Canonical reaction shapes. A call that answers four different topics with the
+# same shape still sounds like a form even when every sentence is unique.
+SHAPE_PATTERNS = (
+    ("pro-understood", re.compile(r"\bпро \S+ поняла\b")),
+    ("understood-pro", re.compile(r"\bпоняла про \S+")),
+    ("thanks-told-about", re.compile(r"\bспасибо что рассказали про \S+")),
+    ("pro-heard", re.compile(r"\bпро \S+ услышала\b")),
+    ("good-that", re.compile(r"\bхорошо что\b")),
+    ("thanks-that", re.compile(r"\bспасибо что (?:сказали|рассказали)\b")),
+    ("understand-that", re.compile(r"\bпонимаю что\b")),
+    ("sorry-that", re.compile(r"\bжаль что\b")),
+)
+
+
+def shape_of(vera: str) -> str | None:
+    """The reaction shape of a Vera turn, or None when it only asks."""
+    low = vera.lower().replace("ё", "е")
+    for name, pattern in SHAPE_PATTERNS:
+        if pattern.search(low):
+            return name
+    return None
+
+
 def reacts(vera: str, user: str) -> bool:
     """True when Vera's line answers the person rather than only asking."""
     if content_keys(vera) & content_keys(user):
@@ -173,6 +196,12 @@ def analyse(events: list[tuple[str, str]]) -> dict | None:
             if r is not True:
                 q_only += 1
 
+    shapes = [shape_of(vera) for _, vera in turns]
+    shapes = [s for s in shapes if s]
+    shape_repeats = sum(
+        1 for a, b in zip(shapes, shapes[1:]) if a == b
+    )
+
     seen: Counter[str] = Counter()
     verbatim = 0
     for _, vera in turns:
@@ -195,6 +224,8 @@ def analyse(events: list[tuple[str, str]]) -> dict | None:
         "question_only_turns": q_only,
         "verbatim_reask_turns": verbatim,
         "closed_without_reaction": closed_flat,
+        "reaction_shapes": shapes,
+        "shape_repeats": shape_repeats,
     }
 
 
@@ -210,6 +241,8 @@ def aggregate(rows: list[dict]) -> dict:
     q_only = sum(r["question_only_turns"] for r in rows)
     verbatim = sum(r["verbatim_reask_turns"] for r in rows)
     flat = sum(1 for r in rows if r["closed_without_reaction"])
+    shapes = sum((r.get("reaction_shapes") or [] for r in rows), [])
+    shape_repeats = sum(r.get("shape_repeats", 0) for r in rows)
     turns_sorted = sorted(turns)
 
     def q(frac: float) -> int:
@@ -232,6 +265,8 @@ def aggregate(rows: list[dict]) -> dict:
         "verbatim_reask_rate_pct": pct(verbatim, vera),
         "calls_closed_without_reaction": flat,
         "calls_closed_without_reaction_pct": pct(flat, calls),
+        "reaction_shapes_used": len(set(shapes)),
+        "shape_repeat_rate_pct": pct(shape_repeats, max(1, len(shapes) - 1)),
     }
 
 
@@ -390,6 +425,8 @@ def main() -> int:
     print(f"  reaction rate            {agg['reaction_rate_pct']}%")
     print(f"  question-only rate       {agg['question_only_rate_pct']}%")
     print(f"  verbatim re-ask rate     {agg['verbatim_reask_rate_pct']}%")
+    print(f"  reaction shapes used     {agg['reaction_shapes_used']}"
+          f"  | same shape back-to-back {agg['shape_repeat_rate_pct']}%")
     print(f"  closed without reaction  {agg['calls_closed_without_reaction']}"
           f" ({agg['calls_closed_without_reaction_pct']}%)")
 

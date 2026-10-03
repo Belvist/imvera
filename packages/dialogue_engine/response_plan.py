@@ -77,10 +77,21 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
         else:
             previous = state.thread_last_move
             last_text = state.thread_listening_text
-            plan.mandatory_question = (
+            listening_ack = (
                 "Понимаю." if previous == "invite" or last_text == "Я вас слушаю."
                 else "Я вас слушаю."
             )
+            # A content-free «Понимаю.» as the whole turn is exactly the canned
+            # surface this work removes; when the person's words can ground a
+            # reaction, the reaction IS the listening acknowledgement.
+            from packages.dialogue_engine.realization import reaction_clause
+
+            reaction = reaction_clause(state, plan.acknowledge_facts)
+            if reaction:
+                plan.acknowledge = reaction
+                plan.mandatory_question = ""
+            else:
+                plan.mandatory_question = listening_ack
             plan.intent = "thread_listening_ack"
         return plan
     if plan.thread_mode == "resume":
