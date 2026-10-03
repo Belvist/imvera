@@ -249,3 +249,39 @@ def test_a_used_shape_is_detected_through_normalisation():
         from packages.dialogue_engine.speech_ledger import normalize
 
         assert re.search(pattern, normalize(sample)), (frame, pattern)
+
+
+# ------------------------------------------------- never reflect an address
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Нет, ничего не тревожит, доченька.",
+        "Спасибо, доченька, всё хорошо.",
+        "Внученька, я тебя слушаю.",
+    ],
+)
+def test_address_terms_are_never_reflected(text: str):
+    """Live calls: «Ничего не тревожит, доченька.» must not become a topic."""
+    assert realization.heard_topic(text) is None
+    assert realization.reaction_clause(_state(text)) == ""
+
+
+def test_an_address_term_does_not_hide_the_real_topic():
+    """«Внученька, … дочку свою не видела.» talks about the daughter."""
+    topic = realization.heard_topic("Внученька, так давно дочку свою не видела.")
+    assert topic is not None and topic.noun == "дочка"
+
+
+def test_plain_kinship_nouns_stay_reflectable():
+    for text, noun in (("Моя дочка вчера приезжала.", "дочка"),
+                       ("Внуки-то приезжают, слава богу.", "внук")):
+        topic = realization.heard_topic(text)
+        assert topic is not None and topic.noun == noun, text
+
+
+def test_the_elders_own_name_is_not_a_topic():
+    state = _state("Тамара Юрьевна, здравствуйте.")
+    state.elder_display_name = "Тамара Юрьевна"
+    assert realization.reaction_clause(state) == ""

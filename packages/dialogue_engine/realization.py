@@ -57,7 +57,23 @@ _TOPIC_STOP = frozenset(
     }
 )
 
-_WORD_RE = re.compile(r"[А-Яа-яЁё][А-Яа-яЁё-]{3,}")
+# How an elderly person addresses the voice on the phone. These are vocatives,
+# not topics: reflecting «доченька» back produced «Спасибо, что рассказали про
+# доченьку» as the answer to «Ничего не тревожит, доченька.» on a live call.
+# Diminutives are listed because they are address forms in this register, while
+# the plain kinship nouns (дочка, внук, сын) stay reflectable as real topics.
+_ADDRESS_TERMS = frozenset(
+    {
+        "внученька", "внучек", "доченька", "дочурка",
+        "сыночек", "сынок", "сынуля", "мамочка", "мамуля", "мама", "папочка",
+        "папа", "бабуля", "бабулька", "бабушка", "дедуля", "дедушка",
+        "милая", "милок", "милочка", "дорогая", "дорогой", "родная", "родной",
+        "солнышко", "голубушка", "голубчик", "деточка", "детка", "крошка",
+        "вера", "верочка", "амвера", "имвера", "помощник", "робот", "девушка",
+        "женщина", "гражданка", "товарищ",
+    }
+)
+
 # Spoken particles glued to a word («внуки-то», «давай-ка») are not part of it.
 _PARTICLE_RE = re.compile(r"-(?:то|ка|таки|де|с|ста)$")
 
@@ -74,6 +90,8 @@ _TOPIC_FRAMES: tuple[tuple[str, str], ...] = (
 
 # Topics talked about in the last few turns are not parroted again.
 _RECENT_WINDOW = 6
+
+_WORD_RE = re.compile(r"[А-Яа-яЁё][А-Яа-яЁё-]{3,}")
 
 
 @dataclass(frozen=True)
@@ -115,13 +133,19 @@ def heard_topic(text: str) -> HeardTopic | None:
     for match in _WORD_RE.finditer(raw):
         word = match.group(0).lower().replace("ё", "е")
         word = _PARTICLE_RE.sub("", word)
-        if word in _TOPIC_STOP:
+        if word in _TOPIC_STOP or word in _ADDRESS_TERMS:
+            continue
+        # Vocative position: «…, дочка.» or «Дочка, …» addresses Vera, while
+        # «дочку свою не видела» is a real topic about the person's family.
+        _after = raw[match.end():].lstrip()
+        _before = raw[: match.start()].rstrip()
+        if _after.startswith(",") or (_before.endswith(",") and not _after):
             continue
         parsed = _analyse(word)
         if parsed is None:
             continue
         noun = parsed.normal_form
-        if noun in _TOPIC_STOP or len(noun) < 4:
+        if noun in _TOPIC_STOP or noun in _ADDRESS_TERMS or len(noun) < 4:
             continue
         acc = parsed.inflect({"accs"})
         acc_form = acc.word if acc is not None else noun
@@ -246,6 +270,8 @@ def reaction_clause(state: EngineState, facts=()) -> str:
         return ""
     facts = _answered_this_turn(state, facts)
     topic = heard_topic(text)
+    if topic is not None and _is_elder_name(state, topic.noun):
+        topic = None
     if topic is None:
         topic = _slot_topic(state, facts)
     if topic is not None and not _topic_recently_spoken(state, topic):
@@ -270,6 +296,14 @@ _GENERIC_ACKS = frozenset(
         "я вас слушаю", "слушаю вас", "я слушаю",
     }
 )
+
+
+def _is_elder_name(state: EngineState, noun: str) -> bool:
+    """Vera must not reflect the person's own name back as a topic."""
+    name = (getattr(state, "elder_display_name", "") or "").lower().replace("ё", "е")
+    if not name:
+        return False
+    return any(part[:4] == noun[:4] for part in name.split() if len(part) >= 4)
 
 
 def _needs_empathy(text: str) -> bool:
