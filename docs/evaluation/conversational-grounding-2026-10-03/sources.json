@@ -1,6 +1,6 @@
 {
   "base_sha": "f566cec64b5262f7a4956522ea6b7d0145aa2ef8",
-  "candidate_status": "source fingerprints before commit; not a deployed revision",
+  "candidate_status": "dialogue cut22a2e5f plus executor completion fix; committed source to be recorded after CI",
   "branch": "feature/voice-zoiper-m5",
   "kind": "synthetic canonical SDK + completed playout replay; not STT or audio",
   "cases": 16,
@@ -708,7 +708,7 @@
     },
     "packages/voice_runtime/call_actor.py": {
       "before": "8682b1d4f8c71c528ef5c603f504118d425b390fafec9466467eacdb2a47da29",
-      "after": "8682b1d4f8c71c528ef5c603f504118d425b390fafec9466467eacdb2a47da29"
+      "after": "ea2b65448f25c870513333c52e67ec8ad29114e1c93c1a4b1b76b875dac28dfa"
     },
     "packages/voice_runtime/call_registry.py": {
       "before": "f05242c1d0ea33d6c92771cd578e32bb0174cc20f59533458be81b110b4ea875",

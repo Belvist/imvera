@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import threading
 import time
 from types import SimpleNamespace
@@ -377,6 +378,45 @@ def test_disconnect_waits_for_a_sdk_mutation_already_running_in_a_thread(monkeyp
         finally:
             release.set()
             await asyncio.gather(applying, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+def test_loop_shutdown_cancellation_cannot_release_an_unsettled_sdk_writer():
+    """Runner shutdown cancels all Tasks, including a nested to_thread Task."""
+    context = contextvars.ContextVar("sdk_test_call_context", default="missing")
+
+    async def scenario():
+        actor = make_actor()
+        entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+        seen = []
+        context.set("this-call")
+
+        def mutation():
+            seen.append(context.get())
+            entered.set()
+            assert release.wait(2)
+            finished.set()
+
+        writing = asyncio.create_task(actor._session_thread_call(mutation))
+        cancelled = set()
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            # Match asyncio runner shutdown, rather than cancelling only the
+            # parent. The actual executor writer remains uncancellable.
+            cancelled = asyncio.all_tasks() - {asyncio.current_task()}
+            for task in cancelled:
+                task.cancel()
+            for _ in range(4):
+                await asyncio.sleep(0)
+            assert not writing.done() and not finished.is_set()
+            assert seen == ["this-call"]
+            release.set()
+            await asyncio.gather(*cancelled, return_exceptions=True)
+            assert finished.is_set()
+        finally:
+            release.set()
+            await asyncio.gather(writing, *cancelled, return_exceptions=True)
 
     asyncio.run(scenario())
 

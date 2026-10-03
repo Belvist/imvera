@@ -30,5 +30,45 @@
     "seconds": 176.58,
     "same_failure": true
   },
-  "next": "CI with await-chain diagnostics; do not cut over or claim runtime acceptance"
+  "next": "exact code CI after executor completion correction; then M5 phone gate",
+  "f875ea9_diagnostic_ci": {
+    "run": 37129700388,
+    "passed": 3115,
+    "failed": 1,
+    "skipped": 3,
+    "seconds": 216.62,
+    "await_sites": [
+      "_handle_utterance:1951",
+      "_handle_utterance_inner:2503",
+      "_submit_utterance_outcome:1437",
+      "_drain_utterance_outcomes:1468",
+      "_session_thread_call:444"
+    ],
+    "last_applied": 1,
+    "buffered": [
+      2
+    ],
+    "policy_locked": true
+  },
+  "7282c0e_worker_ci": {
+    "run": 37130204402,
+    "passed": 3115,
+    "failed": 1,
+    "skipped": 3,
+    "seconds": 170.93,
+    "workers": {
+      "asyncio_0": "_worker:90(queue.get)",
+      "asyncio_1": "_worker:90(queue.get)"
+    }
+  },
+  "fix": {
+    "change": "submit context-propagating SDK operation directly to existing run_in_executor; shield completion Future rather than an extra coroutine Task",
+    "confirmed_defect": "shutdown cancellation of all Tasks ended writer wait while the uncancellable executor operation was still running",
+    "shutdown_regression_before": "FAILED on f566cec original implementation",
+    "shutdown_regression_after": "PASS on candidate",
+    "related_runtime_tests": 74,
+    "related_runtime_seconds": 2.03,
+    "original200ms_deadline_unchanged": true,
+    "ci_timing_fix": "PENDING actual complete run"
+  }
 }

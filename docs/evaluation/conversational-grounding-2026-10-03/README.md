@@ -113,6 +113,17 @@ state on the unchanged200ms failure. No result/deadline is weakened. Local
 LFS fetching is blocked by the download endpoint; no substitute weights are used.
 This is not evidence that all runtime timing instability has been eliminated.
 
+The next diagnostic run shows idle executor workers while the actor awaits
+its nested SDK Task. A separate regression confirms a real ownership defect:
+runner shutdown cancels all Tasks, including the nested to_thread Task, ending
+the write wait before the actual uncancellable writer settles. That new test
+fails on peer f566cec and passes on the candidate. The correction submits the
+same operation immediately to the same executor and shields its completion
+Future, preserving caller context and the cancellation fence/policy lock.
+It adds no executor, state writer or queue.74 related runtime checks PASS,2.03s.
+All16 paired SDK sequences remain identical after this runtime correction.
+The original CI200ms assertion is unchanged; timing resolution awaits exact CI.
+
 NOT VERIFIED: loaded M5 revision, STT/TTS/PCM, interruptions, acoustic warmth,
 blind listener ratings, Core end-to-end acceptance or competitor superiority.
 The composer still has bounded wording and conservative abstentions; this does

@@ -15,6 +15,9 @@ Existing discourse/ActionPolicy owns mixed answer+story and nonurgent routine
 question suspension. The duplicate character-count follow-person selector is
 removed; the unmet need resumes after an actual story finish. No new dialogue
 brain, FSM, scheduler, generator, model service, or neural invocation added.
+CallActor now shields the actual executor completion Future instead of a
+nested coroutine Task: cancellation at runner shutdown cannot release an
+unsettled writer. Same executor, same policy lock, propagated caller context.
 Canonical quality replay no longer bypasses SDK adjudication. Mixed legacy
 observation types and absent morphology metadata no longer crash proof readers.
 
@@ -22,18 +25,23 @@ VERIFIED (source candidate; not a deployment):
 
 | Command / boundary | Actual result |
 |---|---|
-| Full `PYTHONPATH=. python -m pytest -q --tb=short` | 3108 passed / 2 inherited LFS failures / 9 skipped,147.72s; NOT locally green |
+| Full `PYTHONPATH=. python -m pytest -q --tb=short` | 3109 passed / 2 inherited LFS failures / 9 skipped,143.93s (includes executor correction); NOT locally green |
 | `PYTHONPATH=. python scripts/dialogue_corpus_gate.py` | 500/500 PASS,5.67s on integrated source |
 | `PYTHONPATH=. python scripts/agent_dialogue_gate.py` | PASS: agent and dream narrative, text Layer A |
 | `PYTHONPATH=. python tools/voice_lab/policy_diff_v8_v9.py --stdout-only` | PASS:12 changed/12 expected/0 unexplained; all ten frozen core files untouched |
 | Paired canonical SDK/CallSession replay | 16 synthetic cases /36 accepted user turns;6 changed speech sequences; state/source/owner evidence stored |
 | Ruff + `git diff --check` | PASS on packages/services/tests/scripts and changed tool/evidence replay; archived/lab lint debt outside CI scope remains |
-| Exact published code CI22a2e5f | [run37128643711](https://github.com/Belvist/imvera/actions/runs/37128643711):9/10 jobs PASS; full3115/1/3 both attempts (226.54s,176.58s); unchanged legacy200ms ordering assertion fails; not green |
+| Executor-corrected source CI | PENDING publication; original200ms assertion unchanged |
+| Earlier published code CI22a2e5f | [run37128643711](https://github.com/Belvist/imvera/actions/runs/37128643711):9/10 jobs PASS; full3115/1/3 both attempts (226.54s,176.58s); unchanged legacy200ms ordering assertion fails; not green |
 
 Runtime recheck:73 related tests PASS and30 exact-deadline repetitions PASS
 locally (max17.821ms for the whole test;60 SDK writes,max2.151ms). CI failure
 is reproducible twice; source/actor/session legacy bytes were unchanged from
-f566cec. No root cause claimed. Await-chain/lock/order diagnostics now added
+f566cec. Await-chain/worker diagnostics show the actor awaiting its SDK Task with
+idle workers. A separate original-code failure proves the nested Task can be
+cancelled before the uncancellable writer settles. The completion-Future fix
+passes that regression plus74 related tests (2.03s), retaining lock/context.
+CI timing resolution is still pending. Await-chain/lock/order diagnostics added
 to the existing test, retaining the200ms deadline and original assertions.
 Actual local encoder download remains blocked by the LFS endpoint; no substitute.
 Warm intake-helper measurement,2000 Linux iterations:p50=.113217ms,
@@ -52,8 +60,8 @@ relation encoder remains an LFS pointer; two readiness checks correctly fail.
 REMAINING RISKS: bounded deterministic surfaces and conservative coverage
 understanding remain; medical scheduling is still under existing authority
 flags. This is not unrestricted free talk or proof of million-user capacity.
-NEXT GATE: establish/fix the repeat CI ordering failure with actual await sites,
-then exact genuine-LFS CI and recorded CallActor/FreeSWITCH acceptance
+NEXT GATE: exact genuine-LFS CI for the executor completion correction,
+then recorded CallActor/FreeSWITCH acceptance
 on M5 with source/flags/provider truth, audio and trace. Source push is not deploy.
 
 ---

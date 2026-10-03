@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import hashlib
 import logging
 import os
@@ -439,7 +440,14 @@ class CallActor:
 
     async def _session_thread_call(self, method: Callable, *args, **kwargs):
         """Keep the caller's policy lock until an uncancellable SDK write settles."""
-        apply_task = asyncio.create_task(asyncio.to_thread(method, *args, **kwargs))
+        # Submit immediately to the existing executor. An extra coroutine Task
+        # adds a scheduling hop and can itself be cancelled at loop shutdown,
+        # even though the SDK writer is still running. Shield the executor's
+        # completion future, retaining to_thread's caller-context propagation.
+        context = contextvars.copy_context()
+        apply_task = asyncio.get_running_loop().run_in_executor(
+            None, lambda: context.run(method, *args, **kwargs)
+        )
         try:
             return await asyncio.shield(apply_task)
         except asyncio.CancelledError:

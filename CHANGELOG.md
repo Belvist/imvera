@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-03
 
+- Shield actual SDK executor completion through cancellation/shutdown, preserving caller context and the policy lock until the writer settles.
+
 - Ground routine reactions in actual current-turn polarity and heard question ownership; never congratulate negative/unknown intake or treat a story/refusal as a food answer.
 - Let existing ActionPolicy suspend a nonurgent routine question for a grounded story and return to the same unresolved need; remove the duplicate length-based invitation selector.
 - Preserve separate answer/story evidence, scoped refusals and unknown dispositions; replay quality checks through canonical SDK adjudication.

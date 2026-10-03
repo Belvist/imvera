@@ -13,6 +13,11 @@ Use `DialogueEngine.build_rich_turn(text, utterance_id=...)` through the existin
 SDK/Actor admission path, then pass the **same** utterance identity into the
 session. Raw `kernel_to_rich_turn` alone is not equivalent to final adjudication.
 
+SDK mutations still run under the one Actor policy lock. Await the executor
+completion through the existing shielded fence; do not wrap the writer in a
+separately cancellable coroutine Task or release the lock on an unsettled write.
+Caller context remains propagated and disconnect/timeout cannot overtake it.
+
 Only actual completed current-generation playback proves a question was heard.
 Do not call completion on cancelled/partial audio. Reducer snapshots the heard
 answer owner before scheduling; bare “да/нет” after an unheard question cannot
