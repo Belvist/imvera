@@ -1,0 +1,1569 @@
+{
+  "checkout": "/workspace/imvera-live-review",
+  "head": "d0bfac667f6a97426d42974c60127b1958a673d5",
+  "dirty": true,
+  "flags": {
+    "IMVERA_DIALOGUE_ENGINE": "1",
+    "IMVERA_COVERAGE_LADDER": "1",
+    "IMVERA_ACTION_POLICY_MODE": "off",
+    "IMVERA_LLM_INTERPRET": "0",
+    "IMVERA_MISSION_LLM_INTERPRET": "0",
+    "IMVERA_SPEECH_DAY": "102",
+    "IMVERA_SPEECH_HOUR": "14"
+  },
+  "scope": "synthetic canonical SDK; simulated audible completion",
+  "repeats": 10,
+  "text_turns": 300,
+  "sdk_turn_ms_p50": 1.9259334994785604,
+  "sdk_turn_ms_p95": 4.048026999953436,
+  "end_of_speech_to_PCM": "NOT_RUN",
+  "provider_model_invocations": "NOT_MEASURED",
+  "transcripts": {
+    "multiple_head": [
+      {
+        "user": "Голова болит со вчера, довольно сильно.",
+        "vera": "Головная боль — понимаю, терпеть такое трудно. Ещё что-то беспокоит?",
+        "intent": "important_to_share",
+        "slot": "important_to_share",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болит со вчера, довольно сильно."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": true
+          },
+          {
+            "attribute": "severity",
+            "value": "сильно",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "сильно",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Сейчас тоже болит.",
+        "vera": "Спасибо, Тамара Юрьевна. Я записала: головная боль. На сегодня всё. Берегите себя.",
+        "intent": "summary",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болит со вчера, довольно сильно."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": true
+          },
+          {
+            "attribute": "severity",
+            "value": "сильно",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "сильно",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "болит",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": true
+          },
+          {
+            "attribute": "onset",
+            "value": "Сейчас",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "Сейчас",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "На этом всё, спасибо.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болит со вчера, довольно сильно."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": true
+          },
+          {
+            "attribute": "severity",
+            "value": "сильно",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "сильно",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "болит",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": true
+          },
+          {
+            "attribute": "onset",
+            "value": "Сейчас",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "Сейчас",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "multiple_knee": [
+      {
+        "user": "Колено ноет со вчера, довольно сильно.",
+        "vera": "Колено ноет — понимаю, терпеть такое трудно. Как сегодня с едой — нормально поели?",
+        "intent": "background_nutrition",
+        "slot": "background_nutrition",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Колено ноет со вчера, довольно сильно."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "колено ноет",
+            "site": "колено",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "колено ноет",
+            "site": "колено",
+            "subject": "speaker",
+            "evidence": "ноет",
+            "source_turn_id": "u-1",
+            "current": true
+          },
+          {
+            "attribute": "severity",
+            "value": "сильно",
+            "site": "колено",
+            "subject": "speaker",
+            "evidence": "сильно",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "колено",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "А что вы спросили?",
+        "vera": "На этот вопрос у меня нет надёжного ответа.",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Колено ноет со вчера, довольно сильно."
+        },
+        "thread_statement": "А что вы спросили?",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "колено ноет",
+            "site": "колено",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "колено ноет",
+            "site": "колено",
+            "subject": "speaker",
+            "evidence": "ноет",
+            "source_turn_id": "u-1",
+            "current": true
+          },
+          {
+            "attribute": "severity",
+            "value": "сильно",
+            "site": "колено",
+            "subject": "speaker",
+            "evidence": "сильно",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "колено",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "До свидания.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Колено ноет со вчера, довольно сильно."
+        },
+        "thread_statement": "А что вы спросили?",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "колено ноет",
+            "site": "колено",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "колено ноет",
+            "site": "колено",
+            "subject": "speaker",
+            "evidence": "ноет",
+            "source_turn_id": "u-1",
+            "current": true
+          },
+          {
+            "attribute": "severity",
+            "value": "сильно",
+            "site": "колено",
+            "subject": "speaker",
+            "evidence": "сильно",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "колено",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "resolved": [
+      {
+        "user": "Голова болела, но сейчас всё прошло.",
+        "vera": "Слышу вас: головная боль. Что-то ещё важное есть?",
+        "intent": "important_to_share",
+        "slot": "important_to_share",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болела, но сейчас всё прошло."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "current": "resolved",
+              "onset": "но сейчас всё прошло"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болела",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болела",
+            "source_turn_id": "u-1",
+            "current": false
+          },
+          {
+            "attribute": "current",
+            "value": "прошло",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "прошло",
+            "source_turn_id": "u-1",
+            "current": false
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Чувствую себя хорошо.",
+        "vera": "Спасибо, что сказали, как себя чувствуете. Я записала: головная боль. На сегодня всё. Берегите себя.",
+        "intent": "summary",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "current": "resolved",
+              "onset": "но сейчас всё прошло"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болела",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болела",
+            "source_turn_id": "u-1",
+            "current": false
+          },
+          {
+            "attribute": "current",
+            "value": "прошло",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "прошло",
+            "source_turn_id": "u-1",
+            "current": false
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Нет, больше ничего.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "current": "resolved",
+              "onset": "но сейчас всё прошло"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болела",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болела",
+            "source_turn_id": "u-1",
+            "current": false
+          },
+          {
+            "attribute": "current",
+            "value": "прошло",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "прошло",
+            "source_turn_id": "u-1",
+            "current": false
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "resolved_with_onset": [
+      {
+        "user": "Голова болела вчера, но сейчас всё прошло.",
+        "vera": "Слышу вас: головная боль. Ещё что-то беспокоит?",
+        "intent": "important_to_share",
+        "slot": "important_to_share",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болела вчера, но сейчас всё прошло."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "current": "resolved"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болела",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болела",
+            "source_turn_id": "u-1",
+            "current": false
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "current",
+            "value": "прошло",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "прошло",
+            "source_turn_id": "u-1",
+            "current": false
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Что я говорила про голову?",
+        "vera": "В этом разговоре у меня нет подтверждённого ответа об этом.",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болела вчера, но сейчас всё прошло."
+        },
+        "thread_statement": "Что я говорила про голову?",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "current": "resolved"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болела",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болела",
+            "source_turn_id": "u-1",
+            "current": false
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "current",
+            "value": "прошло",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "прошло",
+            "source_turn_id": "u-1",
+            "current": false
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "До свидания.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болела вчера, но сейчас всё прошло."
+        },
+        "thread_statement": "Что я говорила про голову?",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "current": "resolved"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болела",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болела",
+            "source_turn_id": "u-1",
+            "current": false
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "current",
+            "value": "прошло",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "прошло",
+            "source_turn_id": "u-1",
+            "current": false
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "sensation": [
+      {
+        "user": "Голова какая-то тяжёлая со вчера.",
+        "vera": "Голова тяжёлая — записала, спасибо. А сейчас это ещё беспокоит или уже прошло?",
+        "intent": "episode_ep-e64e762f_current",
+        "slot": "episode_ep-e64e762f_current",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова какая-то тяжёлая со вчера."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "current",
+        "episodes": [
+          {
+            "label": "голова тяжёлая",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "_product_family": "generic_symptom",
+              "_product_asked:current": "1",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова тяжёлая",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "тяжёлая",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Да, довольно сильно.",
+        "vera": "Сочувствую, это тяжело переносить. А покушать сегодня уже успели?",
+        "intent": "background_nutrition",
+        "slot": "background_nutrition",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова какая-то тяжёлая со вчера."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "голова тяжёлая",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "_product_family": "generic_symptom",
+              "_product_asked:current": "1",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова тяжёлая",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "тяжёлая",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Уже отпустило.",
+        "vera": "Есть ли у вас лекарства, которые вы обычно принимаете?",
+        "intent": "background_medication",
+        "slot": "background_medication",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова какая-то тяжёлая со вчера."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "голова тяжёлая",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "_product_family": "generic_symptom",
+              "_product_asked:current": "1",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова тяжёлая",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "тяжёлая",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "world_event": [
+      {
+        "user": "Я потеряла ключи.",
+        "vera": "Про ключи поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Я потеряла ключи.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-world_event",
+            "utterance_id": "u-1",
+            "text": "Я потеряла ключи.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Потом дочь помогла искать.",
+        "vera": "Поняла про дочь.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом дочь помогла искать.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-world_event",
+            "utterance_id": "u-1",
+            "text": "Я потеряла ключи.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-world_event",
+            "utterance_id": "u-2",
+            "text": "Потом дочь помогла искать.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Что я рассказывала про ключи?",
+        "vera": "В этом разговоре вы сказали: «Я потеряла ключи.».",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом дочь помогла искать.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-world_event",
+            "utterance_id": "u-1",
+            "text": "Я потеряла ключи.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-world_event",
+            "utterance_id": "u-2",
+            "text": "Потом дочь помогла искать.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Я всё сказала.",
+        "vera": "Спасибо, что поделились. Как себя чувствуете сегодня?",
+        "intent": "check_wellness",
+        "slot": "wellness",
+        "marks_question": true,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом дочь помогла искать.",
+        "thread_finished": true,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-world_event",
+            "utterance_id": "u-1",
+            "text": "Я потеряла ключи.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-world_event",
+            "utterance_id": "u-2",
+            "text": "Потом дочь помогла искать.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ],
+    "other_person_degree": [
+      {
+        "user": "Голова болит, дочь довольно сильная.",
+        "vera": "Жаль, что голова болит. Когда начала болеть голова — сегодня или раньше?",
+        "intent": "episode_headache_duration",
+        "slot": "episode_headache_duration",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болит, дочь довольно сильная."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "duration",
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "headache",
+              "_product_asked:duration": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "До свидания.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болит, дочь довольно сильная."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": "duration",
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "headache",
+              "_product_asked:duration": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      }
+    ],
+    "other_activity_resolution": [
+      {
+        "user": "Голова болела, но сейчас все дела прошли хорошо.",
+        "vera": "Жаль, что голова болит. А сейчас голова ещё болит или уже почти прошла?",
+        "intent": "episode_headache_current",
+        "slot": "episode_headache_current",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болела, но сейчас все дела прошли хорошо."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "current",
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "но сейчас все дела прошли хорошо",
+              "_product_family": "headache",
+              "_product_asked:current": "1",
+              "current": "active",
+              "_product_asked:associated": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болела",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болела",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Сейчас голова ещё болит.",
+        "vera": "Жаль, что голова болит. Кроме головной боли, сейчас есть что-то ещё необычное — сильная слабость, головокружение или тошнота?",
+        "intent": "episode_headache_associated",
+        "slot": "episode_headache_associated",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "associated",
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "но сейчас все дела прошли хорошо",
+              "_product_family": "headache",
+              "_product_asked:current": "1",
+              "current": "active",
+              "_product_asked:associated": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болела",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болела",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "болит",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "До свидания.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": "associated",
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "но сейчас все дела прошли хорошо",
+              "_product_family": "headache",
+              "_product_asked:current": "1",
+              "current": "active",
+              "_product_asked:associated": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болела",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болела",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "болит",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "urgent": [
+      {
+        "user": "Мне нужна срочная помощь, упала и не могу встать.",
+        "vera": "Понимаю, это важно. Я передам информацию близким. Спасибо за разговор. До свидания.",
+        "intent": "urgent_close",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "RED"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      }
+    ],
+    "stop": [
+      {
+        "user": "Голова болит со вчера, довольно сильно.",
+        "vera": "Головная боль — понимаю, терпеть такое трудно. Может, ещё что-то важное хотите рассказать — по здоровью или дома?",
+        "intent": "important_to_share",
+        "slot": "important_to_share",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болит со вчера, довольно сильно."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": true
+          },
+          {
+            "attribute": "severity",
+            "value": "сильно",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "сильно",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "До свидания.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Голова болит со вчера, довольно сильно."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "onset": "вчера",
+              "severity": "сильно",
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": true
+          },
+          {
+            "attribute": "severity",
+            "value": "сильно",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "сильно",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "late_urgent": [
+      {
+        "user": "Хорошо.",
+        "vera": "Рада это слышать. Как сегодня с едой — нормально поели?",
+        "intent": "background_nutrition",
+        "slot": "background_nutrition",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Нет, ничего важного.",
+        "vera": "Спасибо, что сказали про еду. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+        "intent": "background_medication",
+        "slot": "background_medication",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Нет, больше ничего. Не могу дышать.",
+        "vera": "Понимаю, это важно. Я передам информацию близким. Спасибо за разговор. До свидания.",
+        "intent": "urgent_close",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "RED"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      }
+    ]
+  }
+}

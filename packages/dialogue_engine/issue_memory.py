@@ -455,11 +455,15 @@ def clinical_issue_concept(label: str, canonical_key: str = "") -> str:
         key, re.I,
     ):
         return "pain"
-    from packages.dialogue_engine.semantic_kernel.lexicon import BODY_SITE_LEMMAS
+    from packages.dialogue_engine.semantic_kernel.lexicon import (
+        BODY_SITE_LEMMAS,
+        SENSATION_ADJECTIVES,
+    )
 
     # Reference projections can repeat an anatomical subject. It does not
     # change the clinical predicate («горло першит» / «горло горло першит»).
-    return " ".join(token for token in key.split() if token not in BODY_SITE_LEMMAS)
+    return " ".join(SENSATION_ADJECTIVES.get(token, token)
+                    for token in key.split() if token not in BODY_SITE_LEMMAS)
 
 
 def _find_episode_for_mention(state: EngineState, mention: IssueMention) -> str | None:

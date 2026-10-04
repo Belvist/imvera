@@ -89,3 +89,21 @@ retrieval limits remain explicit. This repairs topic return, not unrestricted
 conversation or global ActionPolicy authority. See the
 [product plan](../conversation-product-plan-2026-10-04.md) and
 [attributable SDK evidence](../evaluation/personal-context-2026-10-04/README.md).
+
+## Canonical pending and closing correction (2026-10-04)
+
+Use the existing currently_askable_needs as the sole candidate/utility/transition
+set, including the reducer-owned active pending need. Current delivered
+QuestionNeed wins over intent-name compatibility inference; planned/playing
+questions are not heard questions. Same v10 action schema/weights/priority,
+truthful candidate publication then actual exact-source CI pin. Historical
+v9/v10 provenance remains immutable; global medical authority remains gated
+on fresh product need completeness and explained divergences.
+
+Shared morphology/relation ownership retains multiple volunteered facts without
+spelling-prefix anatomy guesses or invented pain. The existing closing reducer
+interprets a bounded whole no-more acknowledgment only after heard summary;
+unknown/new content remains on the ordinary path. Outcome projection honors
+the reducer's accepted urgent close before earlier positive facts or stale
+external status. Core remains final verdict owner. See the
+[source evidence and limits](../evaluation/volunteered-needs-2026-10-04/README.md).

@@ -7,6 +7,12 @@ Exact implementation source **af8df7b3efbca0a3a301fcb8ad6f4322cf1031b1**:
 all11 jobs PASS; details in [checks.json](checks.json).
 [Product architecture/next cuts](../../conversation-product-plan-2026-10-04.md).
 
+The original policy-need-audit.json is historical source evidence, preserved
+unchanged. The source-bound audit tool now also enumerates pending compatibility;
+run it with an explicit historical checkout to reproduce the original ACK result.
+The [pending/meaning follow-up](../volunteered-needs-2026-10-04/README.md) repairs
+that pending gap while keeping full medical cutover gated.
+
 ## Reproduction and changed ownership
 
 Previously discourse retained only the latest200-character story, while

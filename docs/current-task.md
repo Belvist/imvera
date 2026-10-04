@@ -1,3 +1,37 @@
+# Volunteered meaning, pending selection and closing (2026-10-04)
+
+Target **feature/voice-zoiper-m5**, baseline **d0bfac667f6a97426d42974c60127b1958a673d5**.
+[Actual exchanges, ownership and limits](evaluation/volunteered-needs-2026-10-04/README.md),
+[checks/provenance](evaluation/volunteered-needs-2026-10-04/checks.json).
+
+CHANGED: preserve volunteered degree and resolved status in the existing relation
+owner; remove anatomical/verb spelling guesses; interpret grounded nominal sensation
+without inventing pain. Shared ActionPolicy candidate/utility/transition set includes
+canonical pending product needs; delivered semantic question identity is authoritative.
+Existing closing owner accepts whole no-more acknowledgment after heard summary;
+existing outcome owner prioritizes accepted urgent close over earlier positive facts.
+One state/writer/selector, unchanged medical authority and zero added model stages.
+
+VERIFIED: rich807 PASS/11.47s, runtime316 PASS/20.02s, policy266 PASS/6.14s;
+corpus500/500/5.86s; isolated policy diff12 expected/0 unexplained; Ruff/whitespace
+PASS. Final local full3354 PASS/2 inherited genuine relation-LFS readiness FAIL/
+9 SKIP/150.34s. Exact source CI with actual weights pending publication. Paired
+11-case SDK exchanges300 turns each; speech/model/target latency outside scope.
+
+NOT VERIFIED: target deployment, actual phone/neural provider counts, warmth,
+interruptions, target latency/load and reported4165ms engine-turn cause.
+
+REMAINING RISKS: fresh product need completeness/global medical cutover remains
+gated; protocol minima, ordered plans and deterministic surface still constrain
+conversation. Bare resolution after leaving an episode lacks safe reference binding.
+No claim of unrestricted human/product dialogue or million-user capacity.
+
+NEXT GATE: exact candidate CI then truthful policy metadata pin; actual
+CallActor/FreeSWITCH recordings+trace and stage/load/human ratings. No target stack
+restart was performed. The source-compatible corrections need no new runtime flag.
+
+---
+
 # Personal conversation context and product plan (2026-10-04)
 
 Target **feature/voice-zoiper-m5**, baseline **2f18791c155079efde6c967d7292e488ecc74bac**.

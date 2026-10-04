@@ -10,6 +10,7 @@ from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
 from packages.dialogue_engine.semantic_kernel.lexicon import (
     BODY_SITE_LEMMAS,
     ISSUE_VERB_LEMMAS,
+    SENSATION_ADJECTIVES,
     SENSATION_NOUNS,
     SEVERITY_WORDS,
     TIME_WORDS,
@@ -87,7 +88,7 @@ _ISSUE_SURFACE = re.compile(
     r"залож\w*|онем\w*|тошн\w*|кашл\w*|урч\w*|стрел\w*|"
     r"щем\w*|гуд\w*|звен\w*|слез\w*|чеш\w*|горит|горят|сохн\w*|хруст\w*|"
     r"скрюч\w*|сводит|сводят|колотит\w*|рвет|рвёт|рвало|хрип\w*|дер[её]т|"
-    r"шата\w*|неме\w*|дрож\w*|тряс[её]тся|трясутся|отек\w*|пухн\w*|темне\w*|мутн\w*|поте\w*|"
+    r"шата\w*|неме\w*|дрож\w*|тряс[её]тся|трясутся|отек\w*|пухн\w*|темне\w*|мутн\w*|"
     r"задыха\w*|слабит|закрепило|частит|частят|скач\w*)$",
     re.I,
 )
@@ -207,13 +208,10 @@ def _body_site_from_token(token: str) -> str | None:
         return None
     if lemma in BODY_SITE_LEMMAS:
         return lemma
-    if len(raw) < 4:
-        return None
-    for site in BODY_SITE_LEMMAS:
-        if len(site) < 4:
-            continue
-        if site[:4] == raw[:4] and abs(len(raw) - len(site)) <= 2:
-            return site
+    if lemma.replace("ё", "е") in BODY_SITE_LEMMAS:
+        return lemma.replace("ё", "е")
+    # Inflection is handled by morphology. Shared spelling is not anatomical
+    # evidence: «ключи» must not become «ключица» through a four-letter prefix.
     return None
 
 
@@ -226,23 +224,9 @@ def _issue_from_token(token: str) -> bool:
         return True
     if _ISSUE_SURFACE.match(raw):
         return True
-    for verb in ISSUE_VERB_LEMMAS:
-        if verb == "трястись":
-            # Reflexive tremor ≠ a transitive action («трясу коврик»).
-            # Inflected reflexive forms are handled by morphology above.
-            continue
-        stem = verb[:4]
-        if len(stem) >= 4 and (raw.startswith(stem) or lemma.startswith(stem)):
-            # A shared prefix proposes a verb, it cannot establish that role.
-            # Temporal adverbs and nouns remain their own semantic types even
-            # when their spelling resembles a clinical verb's stem.
-            from packages.dialogue_engine.semantic_kernel.morphology import _load_morph
-
-            morph = _load_morph()
-            if morph is None:
-                return False
-            parsed = morph.parse(raw)
-            return bool(parsed and parsed[0].tag.POS in {"VERB", "INFN", "PRTF", "PRTS", "GRND"})
+    # A different verb with the same prefix is still a different meaning:
+    # «потеряла ключи» is not sweating. Use lemma or the explicit surface
+    # grammar above, never a prefix plus a generic VERB tag.
     return False
 
 
@@ -267,6 +251,34 @@ def _pair_clause_body_issues(
             continue
         nearest = min(body_spans, key=lambda b: min(abs(b[1] - is_), abs(b[2] - ie)))
         acc.add(SpanType.BODY_SITE, nearest[0], nearest[1], nearest[2], 0.88)
+
+
+def _pair_sensation_predicate(acc: _ParseAcc, clause: str, cstart: int) -> None:
+    """One anatomical subject plus its nominal sensation predicate.
+
+    A second entity/action is not ellipsis. Keep the person's adjective and
+    quote; do not turn heaviness into pain or assign a severity/diagnosis.
+    """
+    tokens = list(_TOKEN.finditer(clause))
+    bodies = [token for token in tokens if _body_site_from_token(token.group())]
+    predicates = [token for token in tokens
+                  if normalize_token(token.group()) in SENSATION_ADJECTIVES]
+    if len(bodies) != 1 or len(predicates) != 1:
+        return
+    body, predicate = bodies[0], predicates[0]
+    allowed = {"я", "у", "меня", "мне", "в", "на", "с", "со", "быть", "стать",
+               "какой-то", "какой", "то", "это", "уже", "ещё", "тоже", "прямо", "немного"}
+    for token in tokens:
+        if token is body or token is predicate:
+            continue
+        if any(span.type in {SpanType.TIME, SpanType.DURATION}
+               and span.start <= cstart + token.start() < span.end for span in acc.spans):
+            continue
+        if normalize_token(token.group()) not in allowed:
+            return
+    acc.add(SpanType.ISSUE, predicate.group(), cstart + predicate.start(),
+            cstart + predicate.end(), 0.86)
+    acc.add(SpanType.BODY_SITE, body.group(), cstart + body.start(), cstart + body.end(), 0.88)
 
 
 def parse_spans(text: str) -> tuple[SemanticSpan, ...]:
@@ -326,6 +338,7 @@ def parse_spans(text: str) -> tuple[SemanticSpan, ...]:
                     break
 
         _pair_clause_body_issues(acc, clause, cstart)
+        _pair_sensation_predicate(acc, clause, cstart)
 
         for m in _CONDITION.finditer(clause):
             ctext, cstart_m, cend_m = (

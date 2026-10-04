@@ -1,0 +1,31 @@
+{
+  "status": "candidate",
+  "policy_version": "action-policy-phase1-v10",
+  "tested_sha": null,
+  "historical_baseline_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
+  "historical_baseline_manifest": "docs/evaluation/action-policy-phase1-v9-freeze-manifest.json",
+  "prior_v10_sha": "6705f7651b3f0be1194344bf1e777da8a9a195a2",
+  "prior_v10_manifest": "docs/evaluation/action-policy-phase1-v10-candidate-manifest.json",
+  "source_parent_sha": "d0bfac667f6a97426d42974c60127b1958a673d5",
+  "core_file_sha256": {
+    "actions.py": "5bad9619a12de738cd5c1413e41f8261c0b8e9298ffde1cbca069663cbac282a",
+    "constraints.py": "3346520941f8002a6f59a52818a1039340f521c4ca42f2b46c4a3b07c7b31964",
+    "features.py": "5bd1204c8f7473b06318ffefa4c7aade53e9e319cc25b62640af62eaa606f832",
+    "mandatory.py": "5570d1c275e58945739bf6b4ff50d1891dbc48d887b1c69e8c97fdaa2da10d73",
+    "need_value.py": "f0a6767e1d518170ef6e5c03924dee5952b86bddad99677430d4e8879f89c863",
+    "needs.py": "bde922a3f330fbb8a5610430993f1789492f9b3eb0984e60d3f7f29ad9484e7e",
+    "policy.py": "0a6968db79cc7b83240332386f94e558d34d1a996be309381255db0815771eaf",
+    "scorer.py": "2792a46bd04756c4b8bfd63d61d964d1a214cde8de7da3f0faa91c178d2aa0be",
+    "semantic_signals.py": "ba1e77a90e8f06ffce9bc1b579c7cffa9eeaa27fce55d53cea074c15c9ab06fc",
+    "snapshot.py": "9c85fde70522fed249675df77f176a46c8908682f499fcd7358afd39b1328a71"
+  },
+  "policy_tree_sha256": "82e1443c2bad43b45a2ea6facba869ecf7f35adf95a80b0a39a26cf341beb97f",
+  "hash_construction": "sha256 per core blob; concatenated ten files sorted by filename",
+  "authority_scope": "same scoped personal authority; full medical cutover stays gated",
+  "change": "v10 correctness patch: canonical pending candidate completeness and heard semantic-need projection; unchanged actions, weights and mandatory precedence",
+  "pin_workflow": "Publish candidate, verify exact source CI, then pin actual tested_sha in metadata follow-up.",
+  "not_verified": [
+    "actual SIP/audio, warmth, target latency/load",
+    "fresh product needs outside generic optional set; pending support alone does not accept global cutover"
+  ]
+}

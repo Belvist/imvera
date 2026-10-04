@@ -141,6 +141,10 @@ ISSUE_VERB_LEMMAS: frozenset[str] = frozenset(
     }
 )
 
+# Adjectival realization of a sensation, only when grammar binds it to an
+# anatomical subject. Neither a free adjective nor its spelling is a symptom.
+SENSATION_ADJECTIVES: dict[str, str] = {"тяжёлый": "тяжесть"}
+
 # Sensation nouns — complaints without a pain verb («тяжесть в животе»,
 # «жжение в груди»). Normalized lemmas; span_parser pairs them with a body
 # site in the same clause. Deliberately excludes hunger/thirst/appetite

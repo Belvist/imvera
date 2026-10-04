@@ -10,7 +10,7 @@ from packages.contracts.mission_result import (
 )
 from packages.dialogue_engine.mission_flow import is_custom_mission
 from packages.dialogue_engine.mission_seed import mission_from_state
-from packages.dialogue_engine.state import EngineState, GoalLifecycle
+from packages.dialogue_engine.state import CheckPath, EngineState, GoalLifecycle
 
 _COMPLETED_OK = frozenset(
     {
@@ -291,7 +291,12 @@ def build_call_outcomes(
         refused_close = False
 
     family = "UNSET"
-    if state.safety_mode == "red" or state.risk_handling:
+    if state.safety_mode == "red" or state.risk_handling or (
+        state.check_path == CheckPath.URGENT and state.closing_reason == "urgent"
+    ):
+        # The reducer's immediate emergency path may run after wellness was
+        # already answered. Earlier positive facts never erase that accepted
+        # urgent action, including when a caller supplies stale GREEN status.
         family = "RED"
     elif call_out == "DECLINED" and not _has_open_complaints(state):
         # DECLINED hides nothing while a complaint is live: the symptom

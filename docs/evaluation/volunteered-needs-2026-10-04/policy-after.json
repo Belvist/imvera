@@ -1,0 +1,216 @@
+{
+  "source_sha": "d0bfac667f6a97426d42974c60127b1958a673d5",
+  "scope": "static need mapping plus synthetic read-only policy snapshot; not actual engine/phone turn",
+  "policy_askable_needs": [
+    "temporal",
+    "current",
+    "severity",
+    "functional_impact"
+  ],
+  "families": {
+    "headache": {
+      "product_steps": [
+        "duration",
+        "severity",
+        "associated"
+      ],
+      "outside_policy_askable_set": [
+        "associated"
+      ]
+    },
+    "abdominal": {
+      "product_steps": [
+        "onset",
+        "current"
+      ],
+      "outside_policy_askable_set": []
+    },
+    "limb_pain": {
+      "product_steps": [
+        "onset",
+        "severity"
+      ],
+      "outside_policy_askable_set": []
+    },
+    "weakness": {
+      "product_steps": [
+        "onset",
+        "severity"
+      ],
+      "outside_policy_askable_set": []
+    },
+    "dizziness": {
+      "product_steps": [
+        "current",
+        "severity"
+      ],
+      "outside_policy_askable_set": []
+    },
+    "sleep": {
+      "product_steps": [
+        "pattern",
+        "daytime_impact"
+      ],
+      "outside_policy_askable_set": [
+        "pattern",
+        "daytime_impact"
+      ]
+    },
+    "nutrition": {
+      "product_steps": [
+        "intake",
+        "barrier"
+      ],
+      "outside_policy_askable_set": [
+        "intake",
+        "barrier"
+      ]
+    },
+    "mood": {
+      "product_steps": [
+        "intensity",
+        "social_context"
+      ],
+      "outside_policy_askable_set": [
+        "intensity",
+        "social_context"
+      ]
+    },
+    "medication": {
+      "product_steps": [
+        "status_today"
+      ],
+      "outside_policy_askable_set": [
+        "status_today"
+      ]
+    },
+    "other": {
+      "product_steps": [
+        "needs_help"
+      ],
+      "outside_policy_askable_set": [
+        "needs_help"
+      ]
+    },
+    "generic_symptom": {
+      "product_steps": [
+        "onset",
+        "current"
+      ],
+      "outside_policy_askable_set": []
+    }
+  },
+  "synthetic_pending_associated": {
+    "snapshot": {
+      "known_attributes": {
+        "duration": "со вчера",
+        "current": "active",
+        "severity": "moderate",
+        "functional_impact": "none"
+      },
+      "pending_episode_attribute": "associated",
+      "wellness_entry_covered": true
+    },
+    "outstanding_pending_obligation": true,
+    "candidates": [
+      "SAFETY",
+      "IMPORTANT_TO_SHARE",
+      "SUMMARY_CLOSE",
+      "ACK_ONLY",
+      "ASK_EPISODE:associated"
+    ],
+    "chosen": "ASK_EPISODE:associated"
+  },
+  "canonical_pending_by_need": {
+    "associated": {
+      "askable": [
+        [
+          "e1",
+          "associated"
+        ]
+      ],
+      "chosen": "ASK_EPISODE:associated",
+      "outstanding": true
+    },
+    "barrier": {
+      "askable": [
+        [
+          "e1",
+          "barrier"
+        ]
+      ],
+      "chosen": "ASK_EPISODE:barrier",
+      "outstanding": true
+    },
+    "daytime_impact": {
+      "askable": [
+        [
+          "e1",
+          "daytime_impact"
+        ]
+      ],
+      "chosen": "ASK_EPISODE:daytime_impact",
+      "outstanding": true
+    },
+    "intake": {
+      "askable": [
+        [
+          "e1",
+          "intake"
+        ]
+      ],
+      "chosen": "ASK_EPISODE:intake",
+      "outstanding": true
+    },
+    "intensity": {
+      "askable": [
+        [
+          "e1",
+          "intensity"
+        ]
+      ],
+      "chosen": "ASK_EPISODE:intensity",
+      "outstanding": true
+    },
+    "needs_help": {
+      "askable": [
+        [
+          "e1",
+          "needs_help"
+        ]
+      ],
+      "chosen": "ASK_EPISODE:needs_help",
+      "outstanding": true
+    },
+    "pattern": {
+      "askable": [
+        [
+          "e1",
+          "pattern"
+        ]
+      ],
+      "chosen": "ASK_EPISODE:pattern",
+      "outstanding": true
+    },
+    "social_context": {
+      "askable": [
+        [
+          "e1",
+          "social_context"
+        ]
+      ],
+      "chosen": "ASK_EPISODE:social_context",
+      "outstanding": true
+    },
+    "status_today": {
+      "askable": [
+        [
+          "e1",
+          "status_today"
+        ]
+      ],
+      "chosen": "ASK_EPISODE:status_today",
+      "outstanding": true
+    }
+  }
+}

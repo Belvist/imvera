@@ -70,7 +70,7 @@ unmeasured flag flip constitutes this migration.
 |---|---|---|
 | 0. Runtime evidence | OPEN live | Exact SHA/image/providers/flags; full audio + raw trace for warmth, stage latency, interruptions; reproduce4165ms decision |
 | 1. Grounded conversation context | SOURCE + CI VERIFIED; live OPEN | Source af8df7b, all11 CI jobs PASS,3286/0/3. Existing discourse retains6 source-scoped excerpts; existing answer owner recalls a previous topic. [Paired evidence](evaluation/personal-context-2026-10-04/README.md); no clinical/cross-call writes |
-| 2. Information-driven selection | AUDIT started | Reconcile protocol minima with required mission/safety needs; relevance, burden and outstanding question before optional fields; shadow divergences explained before global policy promotion |
+| 2. Information-driven selection | pending-compatibility source cut; global cutover OPEN | Shared askable set now includes canonical pending product needs; delivered QuestionNeed is authoritative. Fresh product need completeness, protocol minima/optional classification and divergence acceptance remain open. [Evidence](evaluation/volunteered-needs-2026-10-04/README.md) |
 | 3. Semantic realization | OPEN | ResponsePlan expresses acknowledgment/reference/question/transition; one semantic need; reusable morphology and grounded fragments, rather than additional full-sentence banks |
 | 4. Optional constrained local surface | BENCHMARK proposal only | ADR028 B: existing worker, bounded ContextPack, complete grounding check, cancellation/deadline, deterministic fallback; real target quality/latency/RAM before activation |
 | 5. Realtime acceptance | OPEN live | Actual end-of-speech→first PCM p50<1s/p95≤2s, heard interruption p95<250ms; batch STT preview must not be called streaming STT |
@@ -124,7 +124,7 @@ Measure whole-dialogue topic jumps, repeated/necessary questions, question
 burden and mission completion before selecting weights. Do not remove minima
 or enable global policy authority merely to obtain a warmer text replay.
 
-[Reproducible need compatibility audit](evaluation/personal-context-2026-10-04/policy-need-audit.json)
+The historical [need compatibility audit](evaluation/personal-context-2026-10-04/policy-need-audit.json)
 finds9 distinct product dimensions outside ActionPolicy's four generic askable
 needs: associated, pattern, daytime_impact, intake, barrier, intensity,
 social_context, status_today, needs_help. This does not prove every actual turn
@@ -135,6 +135,15 @@ snapshot with all four generic needs known and pending `associated` has
 chooses ACK_ONLY. First reconcile canonical pending/product need representation,
 with real reducer/selector dialogue reproduction, before scorer tuning or
 promotion. Adding heavier ranking cannot select an absent legal candidate.
+
+The next correctness cut on d0bfac6 repairs canonical pending compatibility:
+one currently_askable_needs set supplies generation, utility and transitions;
+all nine pending dimensions become candidates in the same isolated snapshots.
+This resolves the demonstrated pending gap, not the fresh product-plan/legal-set
+gap or full medical authority. Default-live grounding now also retains volunteered
+degree/current status and rejects anatomical spelling guesses. Actual source
+checks, full exchanges and closing/outcome corrections are in the
+[new report](evaluation/volunteered-needs-2026-10-04/README.md).
 
 Personal recall in Cut1 is literal inflected-topic lookup, not semantic retrieval
 for arbitrary paraphrases. Its6-entry retention may evict an older story; a

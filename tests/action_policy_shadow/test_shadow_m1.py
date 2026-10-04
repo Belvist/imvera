@@ -476,9 +476,42 @@ def test_freeze_history_helper_fetches_actual_parent_from_shallow_metadata_clone
     assert git_at(clone, "show", f"{active_sha}:core.txt").stdout == "immutable core\n"
 
 
-def test_frozen_core_guard_ensures_active_pin_before_core_diff(monkeypatch):
+def test_frozen_core_guard_ensures_active_pin_before_core_diff(monkeypatch, tmp_path):
+    import json
+
     from packages.dialogue_engine import action_policy_shadow_config as cfg
 
+    # Exercise a real frozen commit even while deployment is a candidate.
+    # Otherwise the mandatory freeze guard itself prevents the documented
+    # candidate → verified-source → freeze-metadata release workflow.
+    _ensure_frozen_sha_available()
+    object_dir = subprocess.check_output(
+        ["git", "rev-parse", "--path-format=absolute", "--git-path", "objects"], cwd=ROOT,
+    ).decode().strip()
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".git/objects/info/alternates").write_text(object_dir + "\n")
+    historical_rel = "docs/evaluation/action-policy-phase1-v9-freeze-manifest.json"
+    historical = json.loads((ROOT / historical_rel).read_text())
+    active = json.loads((ROOT / cfg.ACTIVE_POLICY_MANIFEST).read_text())
+    for name in historical["core_file_sha256"]:
+        rel = f"packages/dialogue_engine/action_policy/{name}"
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((ROOT / rel).read_bytes())
+    subprocess.run(["git", "add", "packages"], cwd=tmp_path, check=True)
+    subprocess.run([
+        "git", "-c", "user.name=freeze-test", "-c", "user.email=freeze@example.invalid",
+        "commit", "-qm", "real frozen guard fixture",
+    ], cwd=tmp_path, check=True)
+    pin = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=tmp_path).decode().strip()
+    active.update(status="frozen", tested_sha=pin)
+    for rel, payload in ((historical_rel, historical), (cfg.ACTIVE_POLICY_MANIFEST, active)):
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload))
+    monkeypatch.setitem(globals(), "ROOT", tmp_path)
+    monkeypatch.setattr(cfg, "POLICY_STATUS", "frozen")
+    monkeypatch.setattr(cfg, "FROZEN_POLICY_SHA", pin)
     assert cfg.POLICY_STATUS == "frozen"
     ensured = []
     real_ensure = _ensure_frozen_sha_available

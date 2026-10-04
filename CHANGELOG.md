@@ -2,6 +2,10 @@
 
 ## Unreleased — 2026-10-04
 
+- Preserve volunteered symptom degree/resolution and literal nominal sensations; remove unsafe spelling-prefix anatomy/verb guesses and retain legacy diminutive evidence.
+- Share ActionPolicy's canonical pending-need candidate/utility set; read actually delivered semantic question meaning instead of intent-name guesses. Global medical promotion remains gated.
+- Close a whole no-more acknowledgment after heard summary without restarting coverage; keep unknown/new content separate. Accepted urgent close takes precedence over earlier positive wellness and stale status in candidate outcomes.
+
 - Retain bounded, source-scoped personal statements in existing discourse; answer current-call topic recall through the shared grounded answer owner without filling health fields or projecting family facts into later calls.
 - Document actual conversation owners, remaining coverage/ordered-plan constraints and the staged product acceptance plan; add dialogue-level recall and controlled CallActor parity regressions.
 

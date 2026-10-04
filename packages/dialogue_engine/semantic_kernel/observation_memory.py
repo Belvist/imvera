@@ -93,6 +93,10 @@ def _temporal_from_spans(
     current_continuation: bool = False,
 ) -> TemporalFrame:
     temporal_kwargs: dict = {"raw_evidence": issue.text}
+    # A deictic continuation («сейчас всё прошло») reports current status,
+    # never the onset of the earlier symptom. Its own observation carries it.
+    if current_continuation:
+        onset_spans = [span for span in onset_spans if span.text.lower() != "сейчас"]
     if onset_spans:
         temporal_kwargs["onset"] = onset_spans[0].text
         temporal_kwargs["raw_evidence"] = onset_spans[0].text
@@ -1213,7 +1217,15 @@ def merge_legacy_mentions(
                 for k in kernel_mentions
                 if not k.body_site
                 and len((k.label or "").split()) == 1
-                and k.label.lower() in legacy.label.lower()
+                and (
+                    k.label.lower() in legacy.label.lower()
+                    or (
+                        _PAIN_EQUIVALENCE.search(k.label)
+                        and _PAIN_EQUIVALENCE.search(legacy.label)
+                        and k.evidence.start < legacy.evidence.end
+                        and legacy.evidence.start < k.evidence.end
+                    )
+                )
             ),
             None,
         )

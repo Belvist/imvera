@@ -8,13 +8,13 @@ from __future__ import annotations
 import os
 from typing import Any
 
-# Historical baseline remains immutable. Active v10 is pinned to the exact
-# published candidate whose complete remote CI passed before this metadata cut.
+# Historical baselines remain immutable. This v10 correctness candidate keeps
+# the same move/weight schema; pin its exact source only after observed CI.
 HISTORICAL_BASELINE_SHA = "254f0baed11ba7913d276c50ca7bd574778f19a5"
-FROZEN_POLICY_SHA: str | None = "6705f7651b3f0be1194344bf1e777da8a9a195a2"
-POLICY_STATUS = "frozen"
+FROZEN_POLICY_SHA: str | None = None
+POLICY_STATUS = "candidate"
 POLICY_VERSION = "action-policy-phase1-v10"
-ACTIVE_POLICY_MANIFEST = "docs/evaluation/action-policy-phase1-v10-candidate-manifest.json"
+ACTIVE_POLICY_MANIFEST = "docs/evaluation/action-policy-v10-pending-candidate-manifest.json"
 
 
 def policy_provenance() -> dict[str, Any]:

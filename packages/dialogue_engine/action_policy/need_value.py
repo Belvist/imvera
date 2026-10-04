@@ -204,12 +204,9 @@ def best_remaining_ask_utility(
     ctx: TurnContextView | None = None,
 ) -> float:
     best = 0.0
-    for ep in snapshot.episode_decision_queue():
-        if not ep.interrogation_eligible:
-            continue
-        for need in episode_unknown_needs(ep):
-            if not need_is_currently_askable(snapshot, ep, need, ctx=ctx):
-                continue
+    for episode_id, need in currently_askable_needs(snapshot, ctx=ctx):
+        ep = snapshot.episode(episode_id)
+        if ep is not None:
             best = max(best, need_ask_utility(snapshot, ep, need, ctx=ctx))
     return best
 
@@ -222,7 +219,15 @@ def currently_askable_needs(
     """(episode_id, need) pairs that utility/candidates may consider this turn."""
     pairs: list[tuple[str, str]] = []
     for ep in snapshot.episode_decision_queue():
-        for need in episode_unknown_needs(ep):
+        needs = list(episode_unknown_needs(ep))
+        # A reducer-owned pending need is legal even when it is outside the
+        # generic optional catalogue. Candidate generation and utility share
+        # this one set; do not add a second product/clinical need registry.
+        if ep.episode_id == snapshot.active_episode_id and outstanding_pending_obligation(snapshot):
+            pending = normalize_attribute(snapshot.pending_episode_attribute)
+            if pending and pending not in needs:
+                needs.append(pending)
+        for need in needs:
             if need_is_currently_askable(snapshot, ep, need, ctx=ctx):
                 pairs.append((ep.episode_id, need))
     return tuple(pairs)

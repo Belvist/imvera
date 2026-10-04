@@ -78,6 +78,14 @@ def classify_episode_family(ep: IssueEpisode) -> ProductFamily:
     site = (ep.body_site or "").lower()
     kind = (ep.kind or "").lower()
 
+    from packages.dialogue_engine.issue_memory import clinical_issue_concept
+    from packages.dialogue_engine.semantic_kernel.lexicon import SENSATION_ADJECTIVES
+
+    if site and clinical_issue_concept(label, ep.canonical_key) in SENSATION_ADJECTIVES.values():
+        # The caller described a sensation, not pain. Generic current/onset
+        # needs preserve that distinction; headache wording would fabricate it.
+        return ProductFamily.GENERIC_SYMPTOM
+
     if kind == "sleep_problem" or any(x in label for x in ("спал", "сон", "бессон")):
         return ProductFamily.SLEEP
     if site == "голова" or "голов" in label:

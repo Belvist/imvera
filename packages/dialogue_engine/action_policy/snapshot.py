@@ -213,11 +213,7 @@ class PolicySnapshot:
             return False
         if all(ep.resolving for ep in owned):
             return True
-        currently_askable = any(
-            need_value.need_is_currently_askable(self, ep, need, ctx=ctx)
-            for ep in self.episode_decision_queue()
-            for need in need_value.episode_unknown_needs(ep)
-        )
+        currently_askable = bool(need_value.currently_askable_needs(self, ctx=ctx))
         if not currently_askable:
             return True
         # Fresh speaker issue this turn: probe it before any transition.
@@ -436,8 +432,16 @@ class TurnContextView:
         )
 
 
-def _delivered_question_need(intent: str | None) -> str | None:
+def _delivered_question_need(
+    intent: str | None, semantic_need: QuestionNeed | None = None,
+) -> str | None:
     """Map last delivered question intent → need. Never uses pending obligation."""
+    if semantic_need is not None:
+        # Current questions carry meaning with their identity. Intent-name
+        # inference remains only for old serialized questions lacking it.
+        from packages.dialogue_engine.action_policy.needs import normalize_attribute
+
+        return None if semantic_need.is_compound else normalize_attribute(semantic_need.attribute)
     text = (intent or "").lower()
     if "duration" in text or "onset" in text:
         return "temporal"
@@ -534,6 +538,10 @@ def build_policy_snapshot(
         for ep in sorted(state.issue_episodes.values(), key=lambda item: item.episode_id)
     )
     q = state.delivered_question or state.playing_question or state.planned_question
+    delivered = state.delivered_question
+    delivered_need = _delivered_question_need(
+        delivered.intent, delivered.semantic_need,
+    ) if delivered is not None else None
     recent = []
     for candidate in (state.delivered_question, state.playing_question, state.planned_question):
         if candidate and candidate.question_id not in recent:
@@ -589,8 +597,8 @@ def build_policy_snapshot(
         last_question_id=q.question_id if q else None,
         last_question_intent=q.intent if q else None,
         last_question_slot=q.slot if q else None,
-        last_question_need=_delivered_question_need(q.intent if q else None),
-        last_delivered_question_need=_delivered_question_need(q.intent if q else None),
+        last_question_need=delivered_need,
+        last_delivered_question_need=delivered_need,
         recent_question_ids=tuple(recent),
         questions_asked_this_episode=q_count,
         user_burden=burden,

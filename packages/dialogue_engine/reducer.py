@@ -3662,6 +3662,16 @@ def _handle_closing_turn(
     if semantic.act == SemanticAct.REPAIR_REQUEST:
         return None
     if (
+        state.fsm_state == FsmState.SUMMARY
+        and state.summary_delivered
+        and not state.call_closed
+        and not semantic.correction
+        and not semantic.repair
+        and not semantic.slots
+        and _is_summary_completion_ack(semantic.source_quote)
+    ):
+        return _emit_goodbye_final(state)
+    if (
         semantic.act == SemanticAct.BACKCHANNEL
         and state.summary_spoken
         and state.fsm_state == FsmState.SUMMARY
@@ -3696,6 +3706,24 @@ def _handle_closing_turn(
             marks_question=False,
         )
     return None
+
+
+def _is_summary_completion_ack(text: str) -> bool:
+    """A whole-utterance no-more acknowledgement, only after heard summary.
+
+    Reuse the existing decline meaning but admit only completion grammar:
+    unknown answers, questions, corrections and additional story/health words
+    must continue through the ordinary reducer instead of ending the call.
+    """
+    from packages.dialogue_engine.conversation_policy import _is_important_to_share_decline
+
+    if "?" in text or not _is_important_to_share_decline(text):
+        return False
+    words = set(re.findall(r"\w+", text.lower()))
+    return bool(words) and words <= {
+        "нет", "неа", "ничего", "больше", "нечего", "добавить", "спасибо",
+        "вроде", "бы", "да", "всё", "все", "пока", "ну", "на", "этом",
+    }
 
 
 def _emit_goodbye_final(state: EngineState) -> tuple[EngineState, list[Effect]]:

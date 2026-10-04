@@ -138,6 +138,71 @@ def test_addressed_refusal_after_delivered_summary_keeps_closing_evidence() -> N
     assert build_call_outcomes(engine.state).candidate_family_status == "UNSET"
 
 
+@pytest.mark.parametrize("text", ["Нет, больше ничего.", "Больше нечего добавить.",
+                                  "Ну всё, спасибо."])
+def test_no_more_after_heard_summary_closes_without_restarting_coverage(text: str) -> None:
+    engine = DialogueEngine(call_id="closing-no-more")
+    engine.start()
+    _deliver(engine)
+    _reply(engine, "Хорошо.", "wellness-1")
+    _reply(engine, "Нет, ничего важного.", "its-1")
+    assert engine.state.summary_delivered and not engine.state.call_closed
+    speech = _reply(engine, text, "completion-1")
+    assert engine.state.call_closed
+    assert speech[-1].intent == "goodbye_final"
+    assert not any(item.marks_question for item in speech)
+
+
+@pytest.mark.parametrize("text", [
+    "Не помню.", "Не знаю.", "Больше ничего?", "Нет, ещё голова болит.",
+    "Больше ничего, только дочь приезжала.", "Больше ничего не болит.",
+    "Нет, больше ничего. Help.",
+])
+def test_summary_completion_grammar_does_not_swallow_new_content(text: str) -> None:
+    from packages.dialogue_engine.reducer import _is_summary_completion_ack
+
+    assert not _is_summary_completion_ack(text)
+
+
+def test_no_more_before_summary_is_heard_does_not_close() -> None:
+    engine = DialogueEngine(call_id="closing-not-heard")
+    engine.start()
+    _deliver(engine)
+    _reply(engine, "Хорошо.", "wellness-1")
+    turn = engine.build_rich_turn("Нет, ничего важного.", utterance_id="its-1")
+    engine.on_user_turn("its-1", turn.raw_text, rich_turn=turn)
+    assert engine.state.summary_spoken and not engine.state.summary_delivered
+    turn = engine.build_rich_turn("Нет, больше ничего.", utterance_id="completion-1")
+    engine.on_user_turn("completion-1", turn.raw_text, rich_turn=turn)
+    assert not engine.state.call_closed
+
+
+def test_new_symptom_after_summary_keeps_evidence_and_does_not_close() -> None:
+    engine = DialogueEngine(call_id="closing-new-symptom")
+    engine.start()
+    _deliver(engine)
+    _reply(engine, "Хорошо.", "wellness-1")
+    _reply(engine, "Нет, ничего важного.", "its-1")
+    speech = _reply(engine, "Нет, ещё голова болит.", "new-issue-1")
+    assert not engine.state.call_closed
+    assert speech[-1].intent != "goodbye_final"
+    assert any(ep.body_site == "голова" for ep in engine.state.issue_episodes.values())
+
+
+@pytest.mark.parametrize("legacy_status", [None, "GREEN", "YELLOW"])
+def test_urgent_report_after_summary_precedes_completion(legacy_status: str | None) -> None:
+    engine = DialogueEngine(call_id="closing-new-danger")
+    engine.start()
+    _deliver(engine)
+    _reply(engine, "Хорошо.", "wellness-1")
+    _reply(engine, "Нет, ничего важного.", "its-1")
+    speech = _reply(engine, "Нет, больше ничего. Не могу дышать.", "danger-1")
+    assert speech[-1].intent == "urgent_close"
+    assert build_call_outcomes(
+        engine.state, legacy_public_status=legacy_status,
+    ).candidate_family_status == "RED"
+
+
 def test_safety_still_precedes_farewell_and_refusal() -> None:
     engine = DialogueEngine(call_id="closing-refusal-safety")
     engine.start()

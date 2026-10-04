@@ -48,6 +48,7 @@ def main():
     }
     os.environ.update(flags)
     from packages.dialogue_engine.events import CallStarted
+    from packages.dialogue_engine.mission_result import build_call_outcomes
     from packages.dialogue_engine.scenario_runner import ScenarioRunner
 
     timings = []
@@ -71,6 +72,20 @@ def main():
                     "thread_statement": runner.state.thread_last_statement,
                     "thread_finished": runner.state.thread_reply_finished,
                     "closed": runner.state.call_closed,
+                    "outcomes": build_call_outcomes(runner.state).model_dump(mode="json"),
+                    "pending_episode_attribute": runner.state.pending_episode_attribute,
+                    "episodes": [{"label": ep.primary_label, "site": ep.body_site,
+                                  "subject": ep.subject, "known": ep.known_attributes,
+                                  "unanswered": ep.unanswered_attributes, "status": ep.status}
+                                 for ep in runner.state.issue_episodes.values()],
+                    "observations": [{"attribute": obs.attribute, "value": obs.value,
+                                      "site": obs.body_site, "subject": obs.subject.value,
+                                      "evidence": obs.evidence,
+                                      "source_turn_id": obs.source_turn_id,
+                                      "current": obs.temporal.current}
+                                     for obs in runner.state.observations.values()
+                                     if hasattr(obs, "source_turn_id")
+                                     and obs.status == "confirmed"],
                     "personal_context": [item.model_dump(mode="json") for item in
                                          getattr(runner.state, "thread_statements", ())],
                 })

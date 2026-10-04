@@ -1,5 +1,30 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## Volunteered facts / pending / closing integration — 2026-10-04
+
+[Evidence and actual gates](evaluation/volunteered-needs-2026-10-04/README.md),
+[source/CI provenance](evaluation/volunteered-needs-2026-10-04/checks.json).
+Fetch m5 and verify deployed SHA/provider/profile/flags; this workspace has not
+restarted the target stack. Default-live meaning/closing/outcome fixes require
+no new flag or generator. Never duplicate symptom parsing in CallActor: reuse
+the prepared kernel and one shared SDK producer/reducer/renderer.
+
+Keep canonical pending needs inside the existing ActionPolicy legal/utility
+set and bind heard QuestionNeed to its question identity. Do not globally promote
+medical authority yet: fresh product needs outside the generic optional set
+remain unaccepted. Historical v9/v10 manifests remain evidence; the active
+correctness candidate receives an actual exact-CI source pin after verification.
+
+Test real audio: `Голова болит со вчера, довольно сильно` (no repeated severity),
+`Голова болела, но сейчас всё прошло` (no probe of resolved complaint),
+`Я потеряла ключи` (no medical episode), head heaviness (no invented pain),
+no-more after actually heard summary (no restarted questionnaire), then urgent
+report after positive wellness (urgent speech and RED candidate, Core final).
+Include unknown/new symptoms/questions/refusal/stop, slow speech and interruption.
+Capture raw trace and recording with actual heard question/generation identities;
+measure real stage latency/provider counts and warmth. Text gates alone do not
+accept human conversation, deployment or capacity.
+
 ## Personal context integration — 2026-10-04
 
 [Product plan](conversation-product-plan-2026-10-04.md),

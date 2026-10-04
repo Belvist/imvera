@@ -1,0 +1,108 @@
+{
+  "branch": "feature/voice-zoiper-m5",
+  "baseline_sha": "d0bfac667f6a97426d42974c60127b1958a673d5",
+  "initial_clinical": {
+    "failed": 9,
+    "passed": 8
+  },
+  "initial_pending": {
+    "failed": 18,
+    "passed": 8
+  },
+  "rich": {
+    "passed": 807,
+    "duration_s": 11.47
+  },
+  "runtime": {
+    "passed": 316,
+    "duration_s": 20.02
+  },
+  "policy": {
+    "passed": 266,
+    "duration_s": 6.14
+  },
+  "corpus": {
+    "passed": 500,
+    "total": 500,
+    "duration_s": 5.86
+  },
+  "policy_diff": {
+    "changed": 12,
+    "expected": 12,
+    "unexplained": 0
+  },
+  "ruff": "PASS",
+  "whitespace": "PASS",
+  "local_full": {
+    "passed": 3354,
+    "failed": 2,
+    "skipped": 9,
+    "duration_s": 150.34,
+    "failures": [
+      "test_media_bridge_readiness_green_without_llm: genuine relation LFS unavailable locally",
+      "test_warmup_all_hot: genuine relation LFS unavailable locally"
+    ]
+  },
+  "ci": null,
+  "sdk_replay": {
+    "before": {
+      "checkout": "/tmp/imvera-volunteered-baseline-d0",
+      "head": "d0bfac667f6a97426d42974c60127b1958a673d5",
+      "dirty": false,
+      "flags": {
+        "IMVERA_DIALOGUE_ENGINE": "1",
+        "IMVERA_COVERAGE_LADDER": "1",
+        "IMVERA_ACTION_POLICY_MODE": "off",
+        "IMVERA_LLM_INTERPRET": "0",
+        "IMVERA_MISSION_LLM_INTERPRET": "0",
+        "IMVERA_SPEECH_DAY": "102",
+        "IMVERA_SPEECH_HOUR": "14"
+      },
+      "scope": "synthetic canonical SDK; simulated audible completion",
+      "repeats": 10,
+      "text_turns": 300,
+      "sdk_turn_ms_p50": 2.4317980005434947,
+      "sdk_turn_ms_p95": 5.446789999041357,
+      "end_of_speech_to_PCM": "NOT_RUN",
+      "provider_model_invocations": "NOT_MEASURED"
+    },
+    "after": {
+      "checkout": "/workspace/imvera-live-review",
+      "head": "d0bfac667f6a97426d42974c60127b1958a673d5",
+      "dirty": true,
+      "flags": {
+        "IMVERA_DIALOGUE_ENGINE": "1",
+        "IMVERA_COVERAGE_LADDER": "1",
+        "IMVERA_ACTION_POLICY_MODE": "off",
+        "IMVERA_LLM_INTERPRET": "0",
+        "IMVERA_MISSION_LLM_INTERPRET": "0",
+        "IMVERA_SPEECH_DAY": "102",
+        "IMVERA_SPEECH_HOUR": "14"
+      },
+      "scope": "synthetic canonical SDK; simulated audible completion",
+      "repeats": 10,
+      "text_turns": 300,
+      "sdk_turn_ms_p50": 1.9259334994785604,
+      "sdk_turn_ms_p95": 4.048026999953436,
+      "end_of_speech_to_PCM": "NOT_RUN",
+      "provider_model_invocations": "NOT_MEASURED"
+    }
+  },
+  "model_invocations": {
+    "added_stages_source_review": 0,
+    "controlled_actor_per_turn": {
+      "kernel": 1,
+      "mission_attachment": 1,
+      "act_proposal": 1
+    },
+    "actual_provider_counts": "NOT_MEASURED"
+  },
+  "not_verified": [
+    "target deployment, SIP audio/warmth/interruptions",
+    "neural provider counts, end-of-speech to PCM latency",
+    "4165ms reported engine turn cause",
+    "arbitrary semantic paraphrases and post-episode bare resolution",
+    "load/RAM/concurrency/competitor comparison",
+    "fresh product need completeness and global medical policy cutover"
+  ]
+}

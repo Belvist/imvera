@@ -182,7 +182,7 @@ def parse_relations(
             if (
                 len(owners) == 1 and (degrees or status_continuation)
                 and all(w in {"я", "у", "меня", "мне", "с", "со", "уже", "и", "а",
-                              "ещё", "еще", "это", "но", "пока", "очень", "вполне"}
+                              "ещё", "еще", "это", "но", "пока", "очень", "вполне", "довольно"}
                         for w in owner_words)
                 and not any(s.type == SpanType.ACTIVITY and pstart <= s.start < pend
                             for s in spans)
@@ -193,7 +193,8 @@ def parse_relations(
                     len(owner_bodies) == 1
                     and clinical_issue_concept(owners[0].text, owners[0].normalized) == "pain"
                 ))
-                and all(w in {"но", "однако", "пока", "уже", "вполне", "это", "ещё", "еще"}
+                and all(w in ({"но", "однако", "пока", "уже", "вполне", "это", "ещё", "еще",
+                               "довольно"} | ({"всё", "все"} if status_continuation else set()))
                         for w in words)
                 and not re.search(r"[.!?]", raw_text[pend:start])
                 and _subject_for_clause(pclause, has_issue=True).value == "speaker"
