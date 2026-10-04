@@ -1,0 +1,1185 @@
+{
+  "checkout": "/workspace/imvera-live-review",
+  "head": "2f18791c155079efde6c967d7292e488ecc74bac",
+  "dirty": true,
+  "flags": {
+    "IMVERA_DIALOGUE_ENGINE": "1",
+    "IMVERA_COVERAGE_LADDER": "1",
+    "IMVERA_ACTION_POLICY_MODE": "off",
+    "IMVERA_LLM_INTERPRET": "0",
+    "IMVERA_MISSION_LLM_INTERPRET": "0",
+    "IMVERA_SPEECH_DAY": "102",
+    "IMVERA_SPEECH_HOUR": "14"
+  },
+  "scope": "synthetic canonical SDK; simulated audible completion",
+  "repeats": 10,
+  "text_turns": 390,
+  "sdk_turn_ms_p50": 1.9672835001074418,
+  "sdk_turn_ms_p95": 3.07631600003333,
+  "end_of_speech_to_PCM": "NOT_RUN",
+  "provider_model_invocations": "NOT_MEASURED",
+  "transcripts": {
+    "topic_return": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-topic_return",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Потом вспоминали нашу деревню и соседей.",
+        "vera": "Поняла про деревню.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-topic_return",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-topic_return",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Что я рассказывала про дочь?",
+        "vera": "В этом разговоре вы сказали: «Вчера дочь приезжала, мы смотрели старые фотографии.».",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-topic_return",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-topic_return",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "А что я говорила про деревню?",
+        "vera": "В этом разговоре вы сказали: «Потом вспоминали нашу деревню и соседей.».",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-topic_return",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-topic_return",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ],
+    "feedback": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-feedback",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Потом вспоминали нашу деревню и соседей.",
+        "vera": "Поняла про деревню.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-feedback",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-feedback",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Да.",
+        "vera": "Я вас слушаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-feedback",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-feedback",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Я вас слушаю.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-feedback",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-feedback",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Что я рассказывала про дочь?",
+        "vera": "В этом разговоре вы сказали: «Вчера дочь приезжала, мы смотрели старые фотографии.».",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-feedback",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-feedback",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ],
+    "unscoped": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-unscoped",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Потом вспоминали нашу деревню и соседей.",
+        "vera": "Поняла про деревню.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-unscoped",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-unscoped",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "А что я рассказала?",
+        "vera": "В этом разговоре вы сказали: «Потом вспоминали нашу деревню и соседей.».",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-unscoped",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-unscoped",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ],
+    "foreign_time": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-foreign_time",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Потом вспоминали нашу деревню и соседей.",
+        "vera": "Поняла про деревню.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-foreign_time",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-foreign_time",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Что я вчера рассказывала про дочь?",
+        "vera": "В этом разговоре у меня нет подтверждённого ответа об этом.",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-foreign_time",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-foreign_time",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ],
+    "medical_question": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-medical_question",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Потом вспоминали нашу деревню и соседей.",
+        "vera": "Поняла про деревню.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-medical_question",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-medical_question",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Что я говорила про сон?",
+        "vera": "В этом разговоре у меня нет подтверждённого ответа об этом.",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-medical_question",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-medical_question",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ],
+    "clinical_interruption": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-clinical_interruption",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Потом вспоминали нашу деревню и соседей.",
+        "vera": "Поняла про деревню.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-clinical_interruption",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-clinical_interruption",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Голова болит.",
+        "vera": "Жаль, что голова болит. Когда начала болеть голова — сегодня или раньше?",
+        "intent": "episode_headache_duration",
+        "slot": "episode_headache_duration",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-clinical_interruption",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-clinical_interruption",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Что я рассказывала про дочь?",
+        "vera": "В этом разговоре вы сказали: «Вчера дочь приезжала, мы смотрели старые фотографии.».",
+        "intent": "answer_user_question",
+        "slot": "probe_duration",
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "Что я рассказывала про дочь?",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-clinical_interruption",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-clinical_interruption",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ],
+    "eviction": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Потом вспоминали нашу деревню и соседей.",
+        "vera": "Поняла про деревню.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Потом смотрели старые фотографии, снимок номер 0.",
+        "vera": "Спасибо, что рассказали про номер.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом смотрели старые фотографии, снимок номер 0.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-3",
+            "text": "Потом смотрели старые фотографии, снимок номер 0.",
+            "turn_number": 3
+          }
+        ]
+      },
+      {
+        "user": "Потом смотрели старые фотографии, снимок номер 1.",
+        "vera": "Я вас слушаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом смотрели старые фотографии, снимок номер 1.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-3",
+            "text": "Потом смотрели старые фотографии, снимок номер 0.",
+            "turn_number": 3
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-4",
+            "text": "Потом смотрели старые фотографии, снимок номер 1.",
+            "turn_number": 4
+          }
+        ]
+      },
+      {
+        "user": "Потом смотрели старые фотографии, снимок номер 2.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом смотрели старые фотографии, снимок номер 2.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-3",
+            "text": "Потом смотрели старые фотографии, снимок номер 0.",
+            "turn_number": 3
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-4",
+            "text": "Потом смотрели старые фотографии, снимок номер 1.",
+            "turn_number": 4
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-5",
+            "text": "Потом смотрели старые фотографии, снимок номер 2.",
+            "turn_number": 5
+          }
+        ]
+      },
+      {
+        "user": "Потом смотрели старые фотографии, снимок номер 3.",
+        "vera": "Я вас слушаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом смотрели старые фотографии, снимок номер 3.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-3",
+            "text": "Потом смотрели старые фотографии, снимок номер 0.",
+            "turn_number": 3
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-4",
+            "text": "Потом смотрели старые фотографии, снимок номер 1.",
+            "turn_number": 4
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-5",
+            "text": "Потом смотрели старые фотографии, снимок номер 2.",
+            "turn_number": 5
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-6",
+            "text": "Потом смотрели старые фотографии, снимок номер 3.",
+            "turn_number": 6
+          }
+        ]
+      },
+      {
+        "user": "Потом смотрели старые фотографии, снимок номер 4.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом смотрели старые фотографии, снимок номер 4.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-3",
+            "text": "Потом смотрели старые фотографии, снимок номер 0.",
+            "turn_number": 3
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-4",
+            "text": "Потом смотрели старые фотографии, снимок номер 1.",
+            "turn_number": 4
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-5",
+            "text": "Потом смотрели старые фотографии, снимок номер 2.",
+            "turn_number": 5
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-6",
+            "text": "Потом смотрели старые фотографии, снимок номер 3.",
+            "turn_number": 6
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-7",
+            "text": "Потом смотрели старые фотографии, снимок номер 4.",
+            "turn_number": 7
+          }
+        ]
+      },
+      {
+        "user": "Потом смотрели старые фотографии, снимок номер 5.",
+        "vera": "Я вас слушаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом смотрели старые фотографии, снимок номер 5.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-3",
+            "text": "Потом смотрели старые фотографии, снимок номер 0.",
+            "turn_number": 3
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-4",
+            "text": "Потом смотрели старые фотографии, снимок номер 1.",
+            "turn_number": 4
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-5",
+            "text": "Потом смотрели старые фотографии, снимок номер 2.",
+            "turn_number": 5
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-6",
+            "text": "Потом смотрели старые фотографии, снимок номер 3.",
+            "turn_number": 6
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-7",
+            "text": "Потом смотрели старые фотографии, снимок номер 4.",
+            "turn_number": 7
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-8",
+            "text": "Потом смотрели старые фотографии, снимок номер 5.",
+            "turn_number": 8
+          }
+        ]
+      },
+      {
+        "user": "Потом смотрели старые фотографии, снимок номер 6.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом смотрели старые фотографии, снимок номер 6.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-4",
+            "text": "Потом смотрели старые фотографии, снимок номер 1.",
+            "turn_number": 4
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-5",
+            "text": "Потом смотрели старые фотографии, снимок номер 2.",
+            "turn_number": 5
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-6",
+            "text": "Потом смотрели старые фотографии, снимок номер 3.",
+            "turn_number": 6
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-7",
+            "text": "Потом смотрели старые фотографии, снимок номер 4.",
+            "turn_number": 7
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-8",
+            "text": "Потом смотрели старые фотографии, снимок номер 5.",
+            "turn_number": 8
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-9",
+            "text": "Потом смотрели старые фотографии, снимок номер 6.",
+            "turn_number": 9
+          }
+        ]
+      },
+      {
+        "user": "Потом смотрели старые фотографии, снимок номер 7.",
+        "vera": "Про номер поняла.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом смотрели старые фотографии, снимок номер 7.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-5",
+            "text": "Потом смотрели старые фотографии, снимок номер 2.",
+            "turn_number": 5
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-6",
+            "text": "Потом смотрели старые фотографии, снимок номер 3.",
+            "turn_number": 6
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-7",
+            "text": "Потом смотрели старые фотографии, снимок номер 4.",
+            "turn_number": 7
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-8",
+            "text": "Потом смотрели старые фотографии, снимок номер 5.",
+            "turn_number": 8
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-9",
+            "text": "Потом смотрели старые фотографии, снимок номер 6.",
+            "turn_number": 9
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-10",
+            "text": "Потом смотрели старые фотографии, снимок номер 7.",
+            "turn_number": 10
+          }
+        ]
+      },
+      {
+        "user": "Что я говорила про дочь?",
+        "vera": "В этом разговоре у меня нет подтверждённого ответа об этом.",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом смотрели старые фотографии, снимок номер 7.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-5",
+            "text": "Потом смотрели старые фотографии, снимок номер 2.",
+            "turn_number": 5
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-6",
+            "text": "Потом смотрели старые фотографии, снимок номер 3.",
+            "turn_number": 6
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-7",
+            "text": "Потом смотрели старые фотографии, снимок номер 4.",
+            "turn_number": 7
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-8",
+            "text": "Потом смотрели старые фотографии, снимок номер 5.",
+            "turn_number": 8
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-9",
+            "text": "Потом смотрели старые фотографии, снимок номер 6.",
+            "turn_number": 9
+          },
+          {
+            "call_id": "floor-eviction",
+            "utterance_id": "u-10",
+            "text": "Потом смотрели старые фотографии, снимок номер 7.",
+            "turn_number": 10
+          }
+        ]
+      }
+    ],
+    "safety": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-safety",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Потом вспоминали нашу деревню и соседей.",
+        "vera": "Поняла про деревню.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-safety",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-safety",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "Не могу дышать.",
+        "vera": "Понимаю, это важно. Я передам информацию близким. Спасибо за разговор. До свидания.",
+        "intent": "urgent_close",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": true,
+        "personal_context": [
+          {
+            "call_id": "floor-safety",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-safety",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ],
+    "stop": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-stop",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Потом вспоминали нашу деревню и соседей.",
+        "vera": "Поняла про деревню.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": false,
+        "personal_context": [
+          {
+            "call_id": "floor-stop",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-stop",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      },
+      {
+        "user": "До свидания.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали нашу деревню и соседей.",
+        "thread_finished": false,
+        "closed": true,
+        "personal_context": [
+          {
+            "call_id": "floor-stop",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-stop",
+            "utterance_id": "u-2",
+            "text": "Потом вспоминали нашу деревню и соседей.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,3 +1,36 @@
+# Personal conversation context and product plan (2026-10-04)
+
+Target **feature/voice-zoiper-m5**, baseline **2f18791c155079efde6c967d7292e488ecc74bac**.
+[Product audit/ordered cuts](conversation-product-plan-2026-10-04.md),
+[paired exchanges, commands and limits](evaluation/personal-context-2026-10-04/README.md).
+
+CHANGED: reproduce loss of daughter story after village topic; existing discourse
+retains6 source-scoped literal excerpts in EngineState. Existing grounded answer
+owner recalls a requested current-call topic without filling clinical/mission
+needs or exporting family facts. No second brain/writer, live generator, provider
+call or runtime flag. Audit actual coverage minima, fixed information score and
+ordered product plans; leave a staged acceptance plan rather than claim human quality.
+
+VERIFIED: initial11 cases7 FAIL/4 PASS; final rich759 PASS,11.49s,
+runtime316 PASS,20.17s; corpus500/500,5.79s; policy diff12 expected/0 unexplained;
+Ruff/whitespace PASS. Full local before final5 test additions3273 PASS/2 inherited
+genuine relation-LFS readiness FAIL/9 SKIP,151.92s. Exact published CI pending.
+Paired source-bound replays390 turns each; SDK p95 3.452→3.076ms, no phone-speed claim.
+
+NOT VERIFIED: target deployment, real neural/provider counts, audio warmth,
+interruptions, target latency/load and the4165ms engine-turn cause.
+
+REMAINING RISKS: literal topic lookup does not cover arbitrary paraphrases;
+bounded eviction and conservative correction invalidation. Routine question
+minima, ordered clinical needs and deterministic realization still constrain
+conversation. Optional generative surface is ADR028 research, not enabled.
+
+NEXT GATE: exact-source CI with genuine LFS, then actual CallActor/FreeSWITCH
+recording+trace of topic return/clinical interruption/safety/refusal/stop. Continue
+independent selection audit; live evidence remains necessary for product acceptance.
+
+---
+
 # Conversation floor correction (2026-10-04)
 
 Target **feature/voice-zoiper-m5**, latest peer baseline

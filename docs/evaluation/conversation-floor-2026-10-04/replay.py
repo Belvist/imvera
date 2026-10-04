@@ -35,7 +35,9 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--checkout", type=Path, default=Path(__file__).resolve().parents[3])
     parser.add_argument("--repeats", type=int, default=10)
+    parser.add_argument("--cases", type=Path)
     args = parser.parse_args()
+    cases = json.loads(args.cases.read_text()) if args.cases else CASES
     root = args.checkout.resolve()
     sys.path.insert(0, str(root))
     flags = {
@@ -51,7 +53,7 @@ def main():
     timings = []
     transcripts = {}
     for repetition in range(args.repeats):
-        for name, turns in CASES.items():
+        for name, turns in cases.items():
             runner = ScenarioRunner(call_id="floor-" + name, elder_display_name="Тамара Юрьевна")
             runner.run([CallStarted()])
             rows = []
@@ -69,6 +71,8 @@ def main():
                     "thread_statement": runner.state.thread_last_statement,
                     "thread_finished": runner.state.thread_reply_finished,
                     "closed": runner.state.call_closed,
+                    "personal_context": [item.model_dump(mode="json") for item in
+                                         getattr(runner.state, "thread_statements", ())],
                 })
             if repetition == 0:
                 transcripts[name] = rows

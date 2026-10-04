@@ -228,6 +228,86 @@ def _story_after_coverage_answer(state, turn, raw: str) -> str:
 
 
 def update_discourse(state, turn) -> None:
+    """Single reducer-invoked discourse writer, including bounded context."""
+    _update_discourse(state, turn)
+    _remember_personal_statement(state, turn)
+
+
+def _remember_personal_statement(state, turn) -> None:
+    from packages.dialogue_engine.state import DiscourseStatement
+
+    if getattr(turn, "correction", False):
+        # Until corrected narrative references have their own grounded binding,
+        # never retrieve an older statement as the corrected version.
+        state.thread_statements.clear()
+        return
+    raw = (getattr(turn, "raw_text", "") or "").strip()
+    uid = getattr(turn, "utterance_id", "") or ""
+    quote = state.thread_last_statement.strip()
+    if (
+        state.current_thread_label != "рассказ" or state.thread_last_utterance_id != uid
+        or not raw or not uid or not state.call_id
+        or len(uid) > 128 or len(state.call_id) > 128
+        or not quote or quote not in raw
+        or getattr(turn, "control", "none") not in ("none", "")
+        or getattr(turn, "user_question", None) or getattr(turn, "not_recalled", False)
+        or getattr(turn, "issue_mentions", ()) or getattr(turn, "risk_candidates", ())
+        or _floor_feedback(raw) or _floor_handoff(raw)
+    ):
+        return
+    from packages.dialogue_engine.semantic_kernel.controls import is_local_question_refusal
+
+    if is_local_question_refusal(raw):
+        return
+    end = raw.find(quote) + len(quote)
+    if end < len(raw) and raw[end].isalnum() and quote[-1].isalnum():
+        # Keep an exact excerpt but never cut the spoken quote inside a word.
+        quote = quote.rsplit(" ", 1)[0] if " " in quote else ""
+    if not quote:
+        return
+    record = DiscourseStatement(call_id=state.call_id, utterance_id=uid,
+                               text=quote, turn_number=state.turn_seq)
+    previous = [item for item in state.thread_statements
+                if item.call_id == state.call_id and item.utterance_id != uid]
+    state.thread_statements = (previous + [record])[-6:]
+
+
+def recall_personal_statement(state, question_words: frozenset[str]) -> str | None:
+    """Read-only topical literal recall; never rescue clinical/mission facts."""
+    from packages.dialogue_engine.semantic_kernel.lexicon import (
+        BODY_SITE_LEMMAS,
+        ISSUE_VERB_LEMMAS,
+        MEDICATION_WORDS,
+        SENSATION_NOUNS,
+    )
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+
+    if question_words & (BODY_SITE_LEMMAS | ISSUE_VERB_LEMMAS
+                         | MEDICATION_WORDS | SENSATION_NOUNS):
+        return None
+    functional = {
+        "а", "и", "ну", "как", "какой", "что", "вы", "ты", "я", "мой", "наш", "у", "в",
+        "про", "об", "о", "на", "сегодня", "сейчас", "себя", "дело", "это", "этот",
+        "говорить", "рассказывать", "рассказать", "сказать", "сообщать", "помнить", "разговор",
+        "же", "вот", "ли", "мочь",
+    }
+    anchors = question_words - functional
+    entries = [item for item in state.thread_statements
+               if item.call_id == state.call_id and item.utterance_id and item.text.strip()]
+    if not anchors:
+        # A retained old story must not masquerade as the latest medical answer.
+        if state.current_thread_label != "рассказ" or not entries:
+            return None
+        last = entries[-1]
+        return last.text if state.thread_last_statement.startswith(last.text) else None
+    for item in reversed(entries):
+        words = frozenset(normalize_text(item.text).split())
+        if anchors <= words:
+            return item.text
+    return None
+
+
+def _update_discourse(state, turn) -> None:
     """Single writer of thread/hook fields. Never raises; never writes
     from garbage — a turn with no mentions, facts, or question only ages
     the thread."""

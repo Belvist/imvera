@@ -167,6 +167,7 @@ def _grounded_answer_recall(question_words: frozenset[str], state: EngineState) 
     neutral = {"как", "какой", "что", "вы", "ты", "я", "мой", "у", "в", "про",
                "об", "о", "на", "сегодня", "сейчас", "человек", "себя", "дело"}
     quotes = []
+    matched_goal = False
     for definition in state.mission_catalog:
         gid = definition.goal_id
         label = _FACT_THREAD_LABELS.get(gid, "")
@@ -176,6 +177,7 @@ def _grounded_answer_recall(question_words: frozenset[str], state: EngineState) 
         ))).split()) - neutral
         if not anchors.intersection(question_words):
             continue
+        matched_goal = True
         record = state.slot_records.get(gid)
         if (
             state.slots.get(gid) == SlotStatus.FILLED and record is not None
@@ -192,6 +194,12 @@ def _grounded_answer_recall(question_words: frozenset[str], state: EngineState) 
             ):
                 quotes.append(observation.evidence.strip())
     unique = list(dict.fromkeys(quote for quote in quotes if len(quote) <= 300))
+    if not matched_goal:
+        from packages.dialogue_engine.discourse import recall_personal_statement
+
+        quote = recall_personal_statement(state, question_words)
+        if quote:
+            return f"В этом разговоре вы сказали: «{quote}»."
     if len(unique) != 1:
         return None
     return f"В этом разговоре вы сказали: «{unique[0]}»."
@@ -234,7 +242,9 @@ def answer_user_question_text(question: str, *, state: EngineState | None = None
         return _IDENTITY
     if addressee and words & {"любить", "нравиться", "предпочитать"}:
         return "У меня нет личных предпочтений. Но я могу выслушать ваш рассказ."
-    recall = bool(words & {"говорить", "рассказывать", "сказать", "сообщать", "помнить"})
+    recall = bool(words & {
+        "говорить", "рассказывать", "рассказать", "сказать", "сообщать", "помнить",
+    })
     if recall and words & {"что", "помнить"} and "я" in words:
         # Current-call evidence cannot answer a request about another day/call.
         earlier_context = bool(words & {"вчера", "раньше", "прошлый", "предыдущий"})

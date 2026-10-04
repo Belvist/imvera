@@ -1,5 +1,24 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## Personal context integration — 2026-10-04
+
+[Product plan](conversation-product-plan-2026-10-04.md),
+[paired evidence](evaluation/personal-context-2026-10-04/README.md).
+Use the exact verified source recorded there after CI, rather than assuming
+the deployed bridge matches the branch. No new flag or provider is required.
+Keep the one Reducer/discourse writer and shared grounded answer owner; do not
+copy narrative retrieval into CallActor or rewrite the canonical quote for TTS.
+Old serialized EngineState without `thread_statements` remains valid. Never
+project these excerpts into health fields, family facts or cross-call memory.
+
+Phone acceptance: tell a story about daughter/photos, switch to village/neighbours,
+ask what was said about daughter, give feedback, then ask about village. Verify
+quoted text and call/utterance identity in state/trace. Repeat with a clinical
+need pending, explicit correction, symptom, refusal and stop; an answered personal
+question must not satisfy the clinical need. Capture exact source/providers/flags,
+raw trace and recording. Literal recall is not free-form answering or warmth;
+real audio, stage latency and workload acceptance remain OPEN.
+
 ## Conversation floor integration — 2026-10-04
 
 [Evidence and complete replays](evaluation/conversation-floor-2026-10-04/README.md).

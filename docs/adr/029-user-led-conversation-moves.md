@@ -74,3 +74,18 @@ remain unresolved until actual evidence arrives. The existing selector chooses
 one next move after navigation is resolved. Renderer realizes semantic needs
 before composing an answer, preserving question binding and retry idempotence.
 See [reproduction and limits](../evaluation/conversation-floor-2026-10-04/README.md).
+
+## Source-scoped narrative context (2026-10-04)
+
+The same reducer-invoked discourse writer retains up to6 accepted personal
+excerpts of200 characters, with call/utterance identity. The existing grounded
+answer owner may quote a matching current-call topic. Clinical/mission recall
+keeps its own evidence and ambiguity rules. A narrative quote is not a new
+family/medical fact, a satisfied need or cross-call memory. Read-only lookup
+adds no generative/model call; absent context remains unknown.
+
+Correction conservatively invalidates the ring; eviction and literal-topic
+retrieval limits remain explicit. This repairs topic return, not unrestricted
+conversation or global ActionPolicy authority. See the
+[product plan](../conversation-product-plan-2026-10-04.md) and
+[attributable SDK evidence](../evaluation/personal-context-2026-10-04/README.md).

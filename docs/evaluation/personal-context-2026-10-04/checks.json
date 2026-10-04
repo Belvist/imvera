@@ -1,0 +1,44 @@
+{
+  "branch": "feature/voice-zoiper-m5",
+  "baseline_sha": "2f18791c155079efde6c967d7292e488ecc74bac",
+  "initial_regressions": {"failed": 7, "passed": 4, "duration_s": 0.52},
+  "initial_rich_test_errors": [
+    "new test omitted required RichUserTurn fields; corrected typed construction",
+    "new test referenced nonexistent SuspendedObligation.semantic_need; corrected to actual attribute"
+  ],
+  "final_rich": {"passed": 759, "duration_s": 11.49},
+  "runtime": {"passed": 316, "duration_s": 20.17},
+  "local_full_before_final_five_test_additions": {
+    "passed": 3273, "failed": 2, "skipped": 9, "duration_s": 151.92,
+    "failures": [
+      "test_media_bridge_readiness_green_without_llm: genuine relation LFS weights unavailable locally",
+      "test_warmup_all_hot: genuine relation LFS weights unavailable locally"
+    ]
+  },
+  "corpus": {"passed": 500, "total": 500, "duration_s": 5.79},
+  "policy_diff": {"changed": 12, "expected": 12, "unexplained": 0},
+  "ruff": "PASS",
+  "whitespace": "PASS",
+  "ci": "PENDING exact published source with genuine LFS",
+  "sdk_replay": {
+    "cases": 9, "repeats": 10, "turns_per_run": 390,
+    "before_p50_ms": 2.215455999930782,
+    "before_p95_ms": 3.4524130001045705,
+    "after_p50_ms": 1.9672835001074418,
+    "after_p95_ms": 3.07631600003333,
+    "max_entries_observed": 6, "max_quote_characters_observed": 294,
+    "scope": "SDK only; source-bound imports; simulated heard completion"
+  },
+  "model_invocations": {
+    "added_stages_source_review": 0,
+    "controlled_actor_per_turn": {"kernel": 1, "mission_attachment": 1, "act_proposal": 1},
+    "real_provider_counts": "NOT_MEASURED"
+  },
+  "not_verified": [
+    "target deployment and actual neural providers",
+    "phone audio, warmth, interruption, end-of-speech to PCM",
+    "arbitrary semantic paraphrases and correction-model accuracy",
+    "4165ms engine-turn cause",
+    "load, RAM, concurrency, competitor comparison"
+  ]
+}

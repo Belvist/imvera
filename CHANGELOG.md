@@ -2,6 +2,9 @@
 
 ## Unreleased — 2026-10-04
 
+- Retain bounded, source-scoped personal statements in existing discourse; answer current-call topic recall through the shared grounded answer owner without filling health fields or projecting family facts into later calls.
+- Document actual conversation owners, remaining coverage/ordered-plan constraints and the staged product acceptance plan; add dialogue-level recall and controlled CallActor parity regressions.
+
 - Separate conversational feedback from substantive stories and explicit floor handoff; preserve story anchors, accept heard hedged wellness answers and answer requests for the next call move through the existing selector.
 - Recognize speech-form call navigation without punctuation before CallActor fragment admission, sharing the SDK producer and preserving control/repair precedence.
 - Realize semantic questions before answer composition without creating questions from context-only slots; restore the active opening prerender script removed by cleanup.

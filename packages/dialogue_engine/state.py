@@ -65,6 +65,17 @@ class GoalLifecycle(StrEnum):
     UNCLEAR = "UNCLEAR"
 
 
+class DiscourseStatement(BaseModel):
+    """Literal current-call narrative context, never a health/family fact."""
+
+    call_id: str = Field(min_length=1, max_length=128)
+    utterance_id: str = Field(min_length=1, max_length=128)
+    text: str = Field(min_length=1, max_length=200)
+    turn_number: int = Field(ge=0)
+
+    model_config = {"frozen": True}
+
+
 class Question(BaseModel):
     question_id: str
     slot: str
@@ -287,6 +298,9 @@ class EngineState(BaseModel):
     # Bounded, verbatim discourse evidence; never a clinical/family fact.
     thread_last_statement: str = ""
     thread_last_utterance_id: str = ""
+    # Source-scoped narrative excerpts for topic return/recall. Discourse is
+    # the sole writer through Reducer; no cross-call or clinical projection.
+    thread_statements: list[DiscourseStatement] = Field(default_factory=list, max_length=6)
     # What the person actually said in the current turn (bounded verbatim).
     # The renderer may reflect it back; it is never a clinical or family fact
     # and it never fills a slot. Written once per accepted turn.
