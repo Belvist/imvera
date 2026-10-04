@@ -826,18 +826,12 @@ def _grounded_ack_for_mentions(
     if has_belly and has_nausea:
         tail = ", давайте уточним по порядку." if clarifying else "."
         return "Поняла вас. Живот и тошнота — это неприятно" + tail
-    _sited = [
-        m
-        for m in speaker_mentions
-        if m.role in ("primary", "independent", "unknown")
-        and (m.body_site or "").strip()
-    ]
     _any_primary = [
         m
         for m in speaker_mentions
         if m.role in ("primary", "independent", "unknown")
     ]
-    candidates = list(_sited or _any_primary or speaker_mentions)
+    candidates = list(_any_primary or speaker_mentions)
     if not candidates:
         return ""
     # Prefer a speakable label: skip bare verbs and broken glue when a
@@ -849,7 +843,8 @@ def _grounded_ack_for_mentions(
         if not _is_bare_verb_label(m.label or "")
         and not _is_broken_glue_label(m.label or "")
     ]
-    primary = next(iter(speakable or candidates))
+    primary = next((m for m in speakable if (m.body_site or "").strip()),
+                   next(iter(speakable or candidates)))
     label = (primary.label or "").strip().rstrip(".")
     if (
         label
@@ -1389,6 +1384,21 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 # Exhausted episode probe — skip attribute, never hang up mid-call.
                 # Never fabricate values ("unknown" is not an answer).
                 ep = get_active_episode(state)
+                if (ep is not None and next_q.question_needs
+                        and any(state.issue_episodes.get(eid) is not None
+                                and state.issue_episodes[eid].subject != "other_person"
+                                and state.issue_episodes[eid].status != "resolved"
+                                for eid in state.pending_episode_ids)):
+                    # Confusion about one need must not abandon the other
+                    # complaints. Discharge this exhausted question with the
+                    # person's actual quote, never a fabricated clinical value.
+                    need = next_q.question_needs[0]
+                    answer_quote = turn.raw_text if turn else turn_context.user_text
+                    if not need.is_compound and answer_quote.strip():
+                        ep.unanswered_attributes[need.attribute] = answer_quote
+                        state.pending_episode_attribute = None
+                        next_q = None
+                        continue
                 if ep is not None:
                     finalize_episode_if_complete(ep)
                 state.pending_episode_attribute = None

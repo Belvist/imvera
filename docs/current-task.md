@@ -1,3 +1,34 @@
+# Несколько жалоб: ownership/память и измеренная нагрузка — 2026-10-04 UTC
+
+Цель **feature/voice-zoiper-m5**, baseline **ad5aad75037ac7b2df048b8cd190cafbd5c754bc**.
+[Отчёт/actual transcripts](evaluation/multi-complaint-2026-10-04/README.md),
+[checks/source/CI](evaluation/multi-complaint-2026-10-04/checks.json).
+
+CHANGED: acknowledge всех grounded жалоб; hedged clock ownership без borrowing
+из medication/plans; episode-scoped temporal loop identity и snapshot type;
+продолжение queued speaker complaints после exhausted question с honest unanswered;
+digest6 вместо2. Truthful HTTP/SDK capacity probe без scripted STT/TTS и consent
+mutations; isolated real GigaAM capacity curve, исправлена старая scaling claim.
+Startup checksum bounded stream: actual Python peak428MiB→261KiB, intact integrity.
+No new brain/flags/model stage/global medical promotion. Past morning current
+восстановлен после пойманной проверки, existing assertions не ослаблены.
+
+VERIFIED: команды и outputs в checks; raw real STT load artifact с image/profile,
+24requests/level1/2/4/8; steady working-set1.455→1.461GiB, quota2CPU/4GiB.
+Paired source-bound SDK7cases/260turns per side; delivery simulated, не audio.
+
+NOT VERIFIED: actual M5 SHA/profile/provider flags, raw fs-fd317c1c audio/STT
+качество, full live speech/human acceptance, bridge/Qwen/FS/PG RSS и capacity.
+REMAINING RISKS: ordered deterministic product packs/minima/общие caps остаются;
+swelling не доказан отдельным structured атрибутом; неизвестные факты сохраняются
+unknown. Локальный LFS relation file — pointer; exact-source CI должен проверять
+настоящие weights. Existing question limits не повышены.
+NEXT GATE: реальный repeated multi-complaint CallActor/FreeSWITCH звонок на exact
+revision с audio+raw trace/stage latency/hardware memory; затем compute load soak.
+Target M5/FreeSWITCH/БД здесь не перезапускались.
+
+---
+
 # Volunteered meaning, pending selection and closing (2026-10-04)
 
 Target **feature/voice-zoiper-m5**, baseline **d0bfac667f6a97426d42974c60127b1958a673d5**.

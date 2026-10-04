@@ -183,6 +183,8 @@ _CLOCK_COMPLEMENTS = _TEMPORAL_COMPLEMENTS | frozenset({
     "в", "во", "к", "с", "со", "у", "я", "час", "быть", "начаться", "начинаться",
     "появиться", "начало", "один", "два", "три", "четыре", "пять", "шесть", "семь",
     "восемь", "девять", "десять", "одиннадцать", "двенадцать",
+    "как", "будто", "бы", "понятно", "на", "что", "то", "чувствовать",
+    "подняться", "подниматься", "повыситься", "повышаться",
 })
 
 
@@ -198,7 +200,8 @@ def _clock_answer_has_episode_owner(text: str, spans) -> bool:
 
     ranges = [(m.start(), m.end()) for m in _CLOCK_TIME.finditer(text)]
     ranges.extend((s.start, s.end) for s in spans
-                  if s.type in (SpanType.TIME, SpanType.DURATION))
+                  if s.type in (SpanType.TIME, SpanType.DURATION, SpanType.UNCERTAINTY,
+                                SpanType.ISSUE, SpanType.BODY_SITE))
     rest = "".join(char if not any(start <= i < end for start, end in ranges) else " "
                    for i, char in enumerate(text))
     return all(normalize_token(token) in _CLOCK_COMPLEMENTS
@@ -259,7 +262,7 @@ def extract_grounded_onset_value(
 
             spans = parse_spans(text)
             has_issue = any(s.type == SpanType.ISSUE for s in spans)
-            if (_has_clock_time and not has_issue and not _AFTER_EVENT_ANCHOR.search(n)
+            if (_has_clock_time and not _AFTER_EVENT_ANCHOR.search(n)
                     and not _clock_answer_has_episode_owner(text, spans)):
                 continue
             if (not _has_clock_time

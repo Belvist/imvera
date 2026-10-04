@@ -2,6 +2,10 @@
 
 ## Unreleased — 2026-10-04
 
+- Preserve all grounded multi-complaint labels; accept episode-owned hedged clocks, scope temporal repeats to episode identity and continue queued complaints after exhausted clarification. Existing digest retains up to6 complaints.
+- Bound genuine GigaAM startup checksum allocation: measured Python peak428MiB→261KiB without weakening integrity validation.
+- Correct capacity probe to use actual STT output and canonical validated speech without forcing consent; distinguish firstPCM, completePCM and failure. Real isolated Linux GigaAM2CPU load curve and RAM evidence replace unsupported full-call capacity claims.
+
 - Preserve volunteered symptom degree/resolution and literal nominal sensations; remove unsafe spelling-prefix anatomy/verb guesses and retain legacy diminutive evidence.
 - Share ActionPolicy's canonical pending-need candidate/utility set; read actually delivered semantic question meaning instead of intent-name guesses. Global medical promotion remains gated.
 - Close a whole no-more acknowledgment after heard summary without restarting coverage; keep unknown/new content separate. Accepted urgent close takes precedence over earlier positive wellness and stale status in candidate outcomes.

@@ -379,14 +379,19 @@ def _note_temporal_emit(state: EngineState, slot: str | None, intent: str) -> bo
         state.slot_unclear_counts.pop("emit_temporal_onset_run", None)
         state.slot_unclear_counts.pop("emit_temporal_duration_run", None)
         return False
+    # Three different complaints are not three repetitions of one question.
+    # Keep the existing counter, scoped to the canonical active episode.
+    identity = f"{tkey}@{state.active_episode_id}" if (
+        slot and slot.startswith("episode_") and state.active_episode_id
+    ) else tkey
     last = state.last_temporal_probe
-    if last == tkey:
+    if last == identity:
         run = state.slot_unclear_counts.get(f"emit_{tkey}_run", 0) + 1
     else:
         other = "temporal_duration" if tkey == "temporal_onset" else "temporal_onset"
         state.slot_unclear_counts.pop(f"emit_{other}_run", None)
         run = 1
-    state.last_temporal_probe = tkey
+    state.last_temporal_probe = identity
     state.slot_unclear_counts[f"emit_{tkey}_run"] = run
     if run < 3:
         return False

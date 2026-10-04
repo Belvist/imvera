@@ -425,7 +425,8 @@ def episode_ack(
             # has no grammar projection. Never rename dizziness as pain.
             labels = list(dict.fromkeys(item.lower() for item in (label, *additional_labels)))
             tail = " Давайте по порядку." if clarifying else ""
-            return f"Слышу вас: {' и '.join(labels)}.{tail}"
+            joined = ", ".join(labels[:-1]) + " и " + labels[-1]
+            return f"Слышу вас: {joined}.{tail}"
         if all(clauses):
             unique = list(dict.fromkeys(clauses))
             if len(unique) > 1:

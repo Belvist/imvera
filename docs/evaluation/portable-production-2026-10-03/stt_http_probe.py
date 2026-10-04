@@ -8,9 +8,12 @@ import hashlib
 import json
 import math
 import os
+import statistics
 import subprocess
 import time
 import wave
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import httpx
@@ -20,7 +23,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--container", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--levels", type=int, nargs="+", default=[])
+    parser.add_argument("--requests-per-level", type=int, default=24)
     args = parser.parse_args()
+    if any(level < 1 for level in args.levels) or args.requests_per_level < 1:
+        parser.error("positive levels and request count required")
     env = dict(os.environ)
     for key in (
         "DOCKER_HOST",
@@ -45,7 +52,12 @@ def main() -> None:
         "image_id": info["Image"],
         "boundary": "real GigaAM + Linux HTTP worker; repository WAVs, no SIP/TTS",
         "cases": [],
+        "host": json.loads(docker("info", "--format", "{{json .}}")),
+        "cpu_quota_nanocpus": info["HostConfig"]["NanoCpus"],
+        "memory_limit_bytes": info["HostConfig"]["Memory"],
     }
+    # Restrict metadata to capacity evidence; daemon info can contain private names.
+    record["host"] = {k: record["host"][k] for k in ("NCPU", "MemTotal", "Driver")}
     end = time.monotonic() + 240
     with httpx.Client(timeout=15) as client:
         while time.monotonic() < end:
@@ -99,8 +111,57 @@ def main() -> None:
         record["http_p50_ms"] = (times[1] + times[2]) / 2
         record["http_p95_nearest_rank_ms"] = times[math.ceil(0.95 * len(times)) - 1]
         record["after"] = client.get(url + "/health/ready").json()
+    record["docker_stats_idle"] = json.loads(docker(
+        "stats", "--no-stream", "--format", "{{json .}}", args.container))
+    if args.levels:
+        # Longest committed WAV: same attributable four-second workload per request.
+        path = Path("tests/assets/blackbox_voice/wav/multi_slot_so_so_sleep_plans.wav")
+        with wave.open(str(path), "rb") as audio:
+            assert audio.getnchannels() == 1 and audio.getsampwidth() == 2
+            rate = audio.getframerate()
+            pcm = audio.readframes(audio.getnframes())
+        record["load_fixture"] = {
+            "path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "duration_s": len(pcm) / (2 * rate), "rate": rate,
+        }
+        record["load_levels"] = {}
+        for level in args.levels:
+            def request(index):
+                payload = {"request_id": f"capacity-{level}-{index}",
+                           "call_id": f"capacity-client-{index}", "turn_id": 0,
+                           "sample_rate": rate, "pcm_b64": base64.b64encode(pcm).decode(),
+                           "timeout_s": 12}
+                started = time.monotonic()
+                try:
+                    with httpx.Client(timeout=15) as client:
+                        response = client.post(url + "/v1/transcribe", json=payload)
+                    return {"status": response.status_code,
+                            "http_latency_ms": (time.monotonic() - started) * 1000,
+                            "response": response.json()}
+                except httpx.HTTPError as exc:
+                    return {"status": type(exc).__name__,
+                            "http_latency_ms": (time.monotonic() - started) * 1000}
+            started = time.monotonic()
+            with ThreadPoolExecutor(max_workers=level) as pool:
+                rows = list(pool.map(request, range(args.requests_per_level)))
+            elapsed = time.monotonic() - started
+            times = sorted(row["http_latency_ms"] for row in rows if row["status"] == 200)
+            result = {
+                "requests": len(rows), "status_counts": dict(Counter(
+                    str(row["status"]) for row in rows)), "elapsed_s": elapsed,
+                "success_per_s": len(times) / elapsed,
+                "http_p50_ms": statistics.median(times) if times else None,
+                "http_p95_ms": times[math.ceil(.95 * len(times)) - 1] if times else None,
+                "rows": rows,
+            }
+            record["load_levels"][str(level)] = result
+            print(json.dumps({"level": level, **{k: v for k, v in result.items()
+                                                if k != "rows"}}), flush=True)
+        record["docker_stats_after_load"] = json.loads(docker(
+            "stats", "--no-stream", "--format", "{{json .}}", args.container))
     args.output.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
-    print(json.dumps(record, ensure_ascii=False, indent=2))
+    print(json.dumps({k: v for k, v in record.items() if k not in ("cases", "load_levels")},
+                     ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

@@ -63,10 +63,12 @@ def main():
                 result = runner.run([text])
                 elapsed = (time.perf_counter() - started) * 1000
                 timings.append(elapsed)
-                speech = result.speak_effects[-1]
+                speech = result.speak_effects[-1] if result.speak_effects else None
                 rows.append({
-                    "user": text, "vera": speech.text, "intent": speech.intent,
-                    "slot": speech.slot, "marks_question": speech.marks_question,
+                    "user": text, "vera": speech.text if speech else None,
+                    "intent": speech.intent if speech else None,
+                    "slot": speech.slot if speech else None,
+                    "marks_question": speech.marks_question if speech else False,
                     "wellness": str(runner.state.slots["wellness"]),
                     "facts": dict(runner.state.slot_values),
                     "thread_statement": runner.state.thread_last_statement,

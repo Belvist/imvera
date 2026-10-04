@@ -1,0 +1,71 @@
+{
+  "branch": "feature/voice-zoiper-m5",
+  "baseline_sha": "ad5aad75037ac7b2df048b8cd190cafbd5c754bc",
+  "tested_source_sha": null,
+  "exact_source_ci": {
+    "status": "PENDING"
+  },
+  "implementation_sha256": {
+    "packages/dialogue_engine/check_path.py": "ac6e58c4b4880aeacc10a7aa68192c6ded7e256c99cba18dc2824d2c685d5882",
+    "packages/dialogue_engine/conversation_policy.py": "236eade1a88d0225e5e622ad9ebefae0dc6a200f2dc73a50edaed95ed2a72efc",
+    "packages/dialogue_engine/issue_memory.py": "04bb2ac08f9af8cc3953894cf9e860a12b3dafa9c4e36f730c33c3483118b4fa",
+    "packages/dialogue_engine/questions.py": "45d6551baabbb374e94293d6e6fed9b0a91383cfb239fa6902208c9f0c265893",
+    "packages/dialogue_engine/reducer.py": "01271ad1da454d8f36dcc996e910f364cbcf0a14ff582ccb4a38ac4ad2d75b70",
+    "packages/dialogue_engine/state.py": "1d7574692195a79cbd20f0119db2b3cecf6cf9a2a7c891a9450a9b8826f32550",
+    "services/stt/gigaam_engine.py": "034133882df3b5d8b141ea802f958fd175de19b1b0fe9daa785414ca98adb99f",
+    "scripts/capacity_probe.py": "510c9f0f61a2a7a3b7aeaae496d078d69ed5701b1e73e943915a185b89e48e67"
+  },
+  "gates": [
+    {
+      "command": "pytest tests/test_multi_complaint_progression.py tests/test_capacity_probe_integrity.py -q",
+      "result": "29 PASS/1.38s; controlled providers are plumbing, not capacity"
+    },
+    {
+      "command": "make test-dialogue-rich",
+      "result": "831 PASS/10.77s"
+    },
+    {
+      "command": "make test-dialogue-runtime",
+      "result": "316 PASS/19.31s"
+    },
+    {
+      "command": "pytest tests/ -q",
+      "result": "3383 PASS/2 inherited relation-LFS readiness FAIL/9 SKIP/145.43s; before final standalone checksum change"
+    },
+    {
+      "command": "pytest tests/test_gigaam_engine.py tests/test_production_inference.py -q",
+      "result": "44 PASS/1.18s; final checksum change"
+    },
+    {
+      "command": "python scripts/dialogue_corpus_gate.py",
+      "result": "500/500 PASS/6.00s"
+    },
+    {
+      "command": "python tools/voice_lab/policy_diff_v8_v9.py",
+      "result": "12 expected/0 unexplained/PASS"
+    },
+    {
+      "command": "ruff check touched Python and dialogue package; git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "initial_regressions": {
+    "new_original_16": "10 FAIL/6 PASS at clean baseline",
+    "full_first": "3377 PASS/5 FAIL/9 SKIP:3 introduced morning-context regressions +2 inherited LFS; fixed without assertion weakening"
+  },
+  "sdk_replay": {
+    "cases": 7,
+    "text_turns_each": 260,
+    "boundary": "canonical SDK/simulated hearing; no ASR/TTS/CallActor"
+  },
+  "real_stt": "stt-load.json, official GigaAM source image2e78b54, CPU2/RAM4GiB, isolated Linux, no SIP/TTS",
+  "checksum_probe": "checksum-memory.json: real official checkpoint/Python traced allocations, not RSS",
+  "not_verified": [
+    "target deployment/SHA",
+    "raw reported call audio/STT accuracy",
+    "full live speech latency/warmth/interruption",
+    "whole stack RSS/Qwen capacity",
+    "full-call admission throughput"
+  ],
+  "next_gate": "real multi-complaint CallActor/FreeSWITCH call with verified source/providers/profile/audio/raw trace"
+}

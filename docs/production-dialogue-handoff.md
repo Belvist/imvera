@@ -1,5 +1,37 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## Несколько жалоб и capacity — 2026-10-04 UTC
+
+[Причины, before/after, реальные STT измерения и ограничения](evaluation/multi-complaint-2026-10-04/README.md).
+[Точная source/CI revision](evaluation/multi-complaint-2026-10-04/checks.json).
+Новые flags, generator, endpoint или второй dialogue brain не нужны. Fetch целевой
+m5 и проверь **actual** bridge SHA, runtime mode/profile SHA, STT/TTS/backend
+revision. Source checkout не доказывает, что живой мост обновился. Этот workspace
+не перезапускал M5/FreeSWITCH/БД. Не смешивать состояние активного звонка между
+двумя версиями кода; обновлять после drain.
+
+Replay запись fs-fd317c1c: три жалобы → `Понятно. В12 вроде` → ответ о силе;
+затем отдельно давление/сахар, без заимствования времени между эпизодами.
+Повторить неизвестное время/отказ одного вопроса, complaint другого человека,
+explicit stop и urgent. Capture actual audio/raw trace: user STT.raw_text/text,
+question_id/semantic_need/episode_id, delivered generation, known/unanswered,
+pending queue, digest. Не считать итоговый concern-list доказательством уточнения
+всех жалоб; unanswered metadata не превращать в клинические facts.
+
+У existing EngineState.last_temporal_probe identity теперь может включать
+`@episode_id`; старые values читаются, snapshot roundtrip проверен. Digest до6,
+старый строковый формат сохранён. Carryover не самостоятельный источник текущей
+болезни. Не дублировать parser/episode очередь в CallActor/TTS.
+
+Для ресурсов снимай отдельно bridge/STT/TTS-adapter/Qwen resident RSS/VRAM и CPU
+под реальным workload. Docker limits9GiB/5CPU — не общий RSS. HTTP replicas с
+общим Qwen backend — одна compute lane. В production mode profile cap1 оставить
+до полного hardware capacity gate; lab runtime actual admission нужно проверить.
+STT-only curve из Linux не принимает телефонную ёмкость Mac. Corrected
+`capacity_probe.py` требует explicit isolated endpoints/ordered WAVs, передаёт
+реальный STT output и canonical validated speech, consent не устанавливает.
+FirstPCM/completePCM и failures разделены; это simulated delivery, не SIP gate.
+
 ## Volunteered facts / pending / closing integration — 2026-10-04
 
 [Evidence and actual gates](evaluation/volunteered-needs-2026-10-04/README.md),
