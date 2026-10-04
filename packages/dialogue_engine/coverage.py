@@ -371,11 +371,11 @@ def domain_question(domain: str, *, variant: int = 0) -> tuple[str, str, str]:
     «сегодня приняли?» only for those who do — never for the rest.
     """
     if domain == "mood":
-        texts = (
-            "А настроение сегодня как — ничего не тревожит?",
-            "Как настроение? Ничего не беспокоит?",
-        )
-        return (texts[variant % len(texts)], "background_mood", "mood")
+        from packages.dialogue_engine.questions import slot_question
+
+        # One semantic need and one speech owner: a mood description must not
+        # also ask a negated anxiety/health screen with a different yes/no meaning.
+        return (slot_question("mood"), "background_mood", "mood")
     if domain == "sleep":
         texts = (
             "А спалось сегодня нормально?",

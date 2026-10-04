@@ -3,6 +3,12 @@
 import json
 import os
 import sys
+from pathlib import Path
+
+# Direct-script execution can otherwise import an editable SDK installed from
+# another checkout. Evidence must exercise the code beside this replay file.
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
 
 
 def main():
