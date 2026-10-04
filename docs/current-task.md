@@ -15,8 +15,14 @@ One state/writer/selector, unchanged medical authority and zero added model stag
 VERIFIED: rich807 PASS/11.47s, runtime316 PASS/20.02s, policy266 PASS/6.14s;
 corpus500/500/5.86s; isolated policy diff12 expected/0 unexplained; Ruff/whitespace
 PASS. Final local full3354 PASS/2 inherited genuine relation-LFS readiness FAIL/
-9 SKIP/150.34s. Exact source CI with actual weights pending publication. Paired
+9 SKIP/150.34s. Exact source **dc72d6edaca212dbe3f0dde91bffe631fff98b36**:
+[CI37217257786](https://github.com/Belvist/imvera/actions/runs/37217257786),
+**all11 PASS; full3362 PASS/0 FAIL/3 SKIP/192.75s**; rich807 PASS/12.30s,
+runtime316 PASS/21.22s. Genuine LFS checkout verified in log. Paired
 11-case SDK exchanges300 turns each; speech/model/target latency outside scope.
+Metadata freeze follow-up: actual tested source pinned; all ten core and other
+implementation/test/workflow bytes identical. Strict frozen policy/history/hash
+gate plus policy tests266 PASS/5.99s; historical v9/v10 manifests unchanged.
 
 NOT VERIFIED: target deployment, actual phone/neural provider counts, warmth,
 interruptions, target latency/load and reported4165ms engine-turn cause.
@@ -26,7 +32,7 @@ gated; protocol minima, ordered plans and deterministic surface still constrain
 conversation. Bare resolution after leaving an episode lacks safe reference binding.
 No claim of unrestricted human/product dialogue or million-user capacity.
 
-NEXT GATE: exact candidate CI then truthful policy metadata pin; actual
+NEXT GATE: actual
 CallActor/FreeSWITCH recordings+trace and stage/load/human ratings. No target stack
 restart was performed. The source-compatible corrections need no new runtime flag.
 

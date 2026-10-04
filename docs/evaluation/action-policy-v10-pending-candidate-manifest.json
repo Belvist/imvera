@@ -1,7 +1,7 @@
 {
-  "status": "candidate",
+  "status": "frozen",
   "policy_version": "action-policy-phase1-v10",
-  "tested_sha": null,
+  "tested_sha": "dc72d6edaca212dbe3f0dde91bffe631fff98b36",
   "historical_baseline_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
   "historical_baseline_manifest": "docs/evaluation/action-policy-phase1-v9-freeze-manifest.json",
   "prior_v10_sha": "6705f7651b3f0be1194344bf1e777da8a9a195a2",
@@ -23,9 +23,37 @@
   "hash_construction": "sha256 per core blob; concatenated ten files sorted by filename",
   "authority_scope": "same scoped personal authority; full medical cutover stays gated",
   "change": "v10 correctness patch: canonical pending candidate completeness and heard semantic-need projection; unchanged actions, weights and mandatory precedence",
-  "pin_workflow": "Publish candidate, verify exact source CI, then pin actual tested_sha in metadata follow-up.",
+  "pin_workflow": "Exact published candidate CI observed PASS before this metadata pin; all ten core blobs identical to tested source.",
   "not_verified": [
     "actual SIP/audio, warmth, target latency/load",
     "fresh product needs outside generic optional set; pending support alone does not accept global cutover"
-  ]
+  ],
+  "verified_ci": {
+    "source_sha": "dc72d6edaca212dbe3f0dde91bffe631fff98b36",
+    "run_id": 37217257786,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37217257786",
+    "conclusion": "success",
+    "jobs_passed": 11,
+    "genuine_lfs_checkout": true,
+    "full": {
+      "passed": 3362,
+      "failed": 0,
+      "skipped": 3,
+      "duration_s": 192.75
+    },
+    "rich": {
+      "passed": 807,
+      "duration_s": 12.3
+    },
+    "runtime": {
+      "passed": 316,
+      "duration_s": 21.22
+    },
+    "logs_checked": [
+      111480240263,
+      111480184126,
+      111480184005,
+      111480184147
+    ]
+  }
 }

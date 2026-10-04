@@ -8,11 +8,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-# Historical baselines remain immutable. This v10 correctness candidate keeps
-# the same move/weight schema; pin its exact source only after observed CI.
+# Historical baselines remain immutable. The v10 correctness source below
+# passed every exact-source CI job before this metadata-only pin.
 HISTORICAL_BASELINE_SHA = "254f0baed11ba7913d276c50ca7bd574778f19a5"
-FROZEN_POLICY_SHA: str | None = None
-POLICY_STATUS = "candidate"
+FROZEN_POLICY_SHA: str | None = "dc72d6edaca212dbe3f0dde91bffe631fff98b36"
+POLICY_STATUS = "frozen"
 POLICY_VERSION = "action-policy-phase1-v10"
 ACTIVE_POLICY_MANIFEST = "docs/evaluation/action-policy-v10-pending-candidate-manifest.json"
 

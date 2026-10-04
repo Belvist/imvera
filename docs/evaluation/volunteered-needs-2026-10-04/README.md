@@ -4,6 +4,10 @@ Branch: `feature/voice-zoiper-m5`; clean baseline
 `d0bfac667f6a97426d42974c60127b1958a673d5`.
 Implementation replay was captured on the dirty baseline before its source
 commit; exact published-source checks are recorded in [checks.json](checks.json).
+Verified source **dc72d6edaca212dbe3f0dde91bffe631fff98b36**,
+[CI37217257786](https://github.com/Belvist/imvera/actions/runs/37217257786):
+all11 jobs PASS; full3362 PASS/0 FAIL/3 SKIP/192.75s. The following metadata pin
+references this actual source; ten core and other implementation bytes stay identical.
 This is SDK/state and controlled Actor evidence, not phone/audio acceptance.
 
 ## Root causes and replaced behavior
@@ -112,6 +116,16 @@ Local checks: rich807 PASS,11.47s; runtime316 PASS,20.02s; policy266 PASS,6.14s;
 isolated historical-v9/current-v10 diff12 expected/0 unexplained; corpus500/500,
 5.86s. Ruff and whitespace PASS. Full local and exact source CI details/limitations
 are recorded in checks.json; genuine relation-LFS readiness is never substituted.
+Exact remote rich807 PASS/12.30s, runtime316 PASS/21.22s; full log verifies actual
+LFS fetching and3362 PASS/0 FAIL/3 SKIP. Local full3354 PASS/2 inherited genuine
+relation-LFS readiness FAIL/9 SKIP/150.34s; no local skip/waiver was added.
+Metadata freeze: strict frozen history/hash and policy checks266 PASS/5.99s.
+All ten core blobs equal the actual tested source, as do other implementation,
+tests and workflow bytes. Only provenance configuration and reports change.
+
+Across30 representative turns, total question moves16→14; severity questions4→0,
+resolved-episode probes2→0, false world-event medical episodes1→0. These are
+fixture counts, not population burden, quality or clinical accuracy estimates.
 
 ```sh
 OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 \

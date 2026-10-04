@@ -4,6 +4,10 @@
 
 [Evidence and actual gates](evaluation/volunteered-needs-2026-10-04/README.md),
 [source/CI provenance](evaluation/volunteered-needs-2026-10-04/checks.json).
+Verified implementation **dc72d6edaca212dbe3f0dde91bffe631fff98b36**,
+[CI37217257786](https://github.com/Belvist/imvera/actions/runs/37217257786):
+all11 PASS, full3362 PASS/0 FAIL/3 SKIP. Active correctness manifest pins this
+actual source; the follow-up changes provenance/report metadata, not core bytes.
 Fetch m5 and verify deployed SHA/provider/profile/flags; this workspace has not
 restarted the target stack. Default-live meaning/closing/outcome fixes require
 no new flag or generator. Never duplicate symptom parsing in CallActor: reuse
@@ -13,7 +17,7 @@ Keep canonical pending needs inside the existing ActionPolicy legal/utility
 set and bind heard QuestionNeed to its question identity. Do not globally promote
 medical authority yet: fresh product needs outside the generic optional set
 remain unaccepted. Historical v9/v10 manifests remain evidence; the active
-correctness candidate receives an actual exact-CI source pin after verification.
+correctness manifest retains the actual exact-CI source pin after verification.
 
 Test real audio: `Голова болит со вчера, довольно сильно` (no repeated severity),
 `Голова болела, но сейчас всё прошло` (no probe of resolved complaint),
