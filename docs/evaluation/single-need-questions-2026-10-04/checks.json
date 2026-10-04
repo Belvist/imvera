@@ -1,0 +1,104 @@
+{
+  "branch": "feature/voice-zoiper-m5",
+  "baseline_sha": "3957f625e17204e0d11ef698b53045046fd5b047",
+  "verified_source_sha": "03c8e26f4d174e18675a2d52c37eb08fe332290c",
+  "ci": {
+    "run_id": 37164021083,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37164021083",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "legacy-lint",
+        "databaseId": 111323142877,
+        "conclusion": "success"
+      },
+      {
+        "name": "dialogue-runtime",
+        "databaseId": 111323142963,
+        "conclusion": "success"
+      },
+      {
+        "name": "production-workers",
+        "databaseId": 111323142985,
+        "conclusion": "success"
+      },
+      {
+        "name": "contracts",
+        "databaseId": 111323143011,
+        "conclusion": "success"
+      },
+      {
+        "name": "dialogue-rich",
+        "databaseId": 111323143015,
+        "conclusion": "success"
+      },
+      {
+        "name": "policy-diff",
+        "databaseId": 111323143017,
+        "conclusion": "success"
+      },
+      {
+        "name": "lint-dialogue",
+        "databaseId": 111323143033,
+        "conclusion": "success"
+      },
+      {
+        "name": "action-policy-shadow",
+        "databaseId": 111323143056,
+        "conclusion": "success"
+      },
+      {
+        "name": "semantic-kernel",
+        "databaseId": 111323143060,
+        "conclusion": "success"
+      },
+      {
+        "name": "dialogue-corpus-gate",
+        "databaseId": 111323143077,
+        "conclusion": "success"
+      },
+      {
+        "name": "test",
+        "databaseId": 111323207630,
+        "conclusion": "success"
+      }
+    ],
+    "full_suite": {
+      "passed": 3206,
+      "failed": 0,
+      "skipped": 3,
+      "duration_s": 226.55
+    },
+    "rich_gate": {
+      "passed": 679,
+      "duration_s": 14.34
+    }
+  },
+  "local_final": {
+    "focused": {
+      "passed": 121,
+      "duration_s": 9.44
+    },
+    "rich": {
+      "passed": 679,
+      "duration_s": 10.2
+    },
+    "ruff": "pass",
+    "whitespace": "pass"
+  },
+  "reproductions_before": {
+    "new_cases_failed": 13,
+    "foreign_import_and_ambiguous_question": true
+  },
+  "intermediate_failure": {
+    "failed": 2,
+    "passed": 119,
+    "cause": "initial six-to-four bank reduction violated original depth and canonical rotation; assertions unchanged"
+  },
+  "question_bank_count_before": 6,
+  "question_bank_count_after": 6,
+  "new_neural_model_calls": 0,
+  "new_dialogue_state_writers": 0,
+  "live_acceptance": false,
+  "goal_blocker": "No supplied target M5/server access and accepted neural voice/CallActor/FreeSWITCH audio+trace; live warmth/latency/load and Core handoff remain unverified"
+}

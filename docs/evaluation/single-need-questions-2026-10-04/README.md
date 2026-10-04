@@ -43,8 +43,11 @@ The replay regression also verifies story→invite→two listening acknowledgmen
 ## Verification / acceptance boundary
 
 Focused single-need/variety/grounding/conversation tests121 PASS,9.44s;
-full rich gate679 PASS,10.20s. Ruff and whitespace PASS. Exact source CI with
-genuine LFS artifacts is recorded in current-task after publication.
+full rich gate679 PASS,10.20s. Ruff and whitespace PASS. Exact verified source
+**03c8e26f4d174e18675a2d52c37eb08fe332290c**,
+[CI37164021083](https://github.com/Belvist/imvera/actions/runs/37164021083):
+**11/11 jobs PASS**, full3206 passed/0 failed/3 skipped,226.55s, genuine LFS
+artifacts; rich679 passed,14.34s. [Machine-readable results](checks.json).
 
 No live generator is enabled; no model/provider choice changes. Existing SDK
 delivery invariants, clinical/control/consent, canonical text and Core ownership
