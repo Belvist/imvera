@@ -1,9 +1,27 @@
 {
   "branch": "feature/voice-zoiper-m5",
   "baseline_sha": "ad5aad75037ac7b2df048b8cd190cafbd5c754bc",
-  "tested_source_sha": null,
+  "tested_source_sha": "c11674ef97382570f1e5ef544f2380b8c612b3de",
   "exact_source_ci": {
-    "status": "PENDING"
+    "run_id": 37244559679,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37244559679",
+    "head_sha": "c11674ef97382570f1e5ef544f2380b8c612b3de",
+    "status": "PASS",
+    "jobs": {
+      "contracts": "success",
+      "policy-diff": "success",
+      "dialogue-rich": "success",
+      "production-workers": "success",
+      "semantic-kernel": "success",
+      "legacy-lint": "success",
+      "dialogue-runtime": "success",
+      "action-policy-shadow": "success",
+      "dialogue-corpus-gate": "success",
+      "lint-dialogue": "success",
+      "test": "success"
+    },
+    "full_suite": "3392 PASS/0 FAIL/3 SKIP/208.77s",
+    "genuine_weights": "git lfs fetch/checkout seen; actual model readiness tests PASS"
   },
   "implementation_sha256": {
     "packages/dialogue_engine/check_path.py": "ac6e58c4b4880aeacc10a7aa68192c6ded7e256c99cba18dc2824d2c685d5882",
@@ -67,5 +85,6 @@
     "whole stack RSS/Qwen capacity",
     "full-call admission throughput"
   ],
-  "next_gate": "real multi-complaint CallActor/FreeSWITCH call with verified source/providers/profile/audio/raw trace"
+  "next_gate": "real multi-complaint CallActor/FreeSWITCH call with verified source/providers/profile/audio/raw trace",
+  "metadata_followup": "Reports only; implementation/test/config/workflow bytes unchanged from tested source."
 }

@@ -2,7 +2,11 @@
 
 Целевая ветка **feature/voice-zoiper-m5**. Baseline
 `ad5aad75037ac7b2df048b8cd190cafbd5c754bc`; изменения применяются к нему,
-main не изменяется. Проверки и точная CI revision: [checks.json](checks.json).
+main не изменяется. Verified source **c11674ef97382570f1e5ef544f2380b8c612b3de**:
+[CI37244559679](https://github.com/Belvist/imvera/actions/runs/37244559679), **all11 PASS;
+3392 PASS/0 FAIL/3 SKIP/208.77s**, genuine LFS checkout/model readiness подтверждены.
+[Команды и provenance](checks.json). Follow-up меняет только reports/provenance;
+implementation/test/config/workflow bytes идентичны этому exact-CI source.
 
 ## Что воспроизведено
 
@@ -150,6 +154,8 @@ lab configuration/running flags на M5 нужно установить отде
    STT.text/asr_quality → canonical SDK → actual validated TTS, без consent hacks.
    FirstPCM/completePCM разделены; errors и missing measurements не скрыты.
    Controlled provider tests доказывают plumbing, не производительность.
+`stt_calls`/`tts_calls` полного probe — logical adapter invocations, не количество
+HTTP retries/физических model executions; для последних нужен worker trace.
 7. Принять worker-level firstPCM/service/RSS, затем полный звонок, затем soak с
    mix медленных длинных историй/перебиваний/clinical urgency. До этого caps1.
 

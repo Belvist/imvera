@@ -13,7 +13,14 @@ Startup checksum bounded stream: actual Python peak428MiB→261KiB, intact integ
 No new brain/flags/model stage/global medical promotion. Past morning current
 восстановлен после пойманной проверки, existing assertions не ослаблены.
 
-VERIFIED: команды и outputs в checks; raw real STT load artifact с image/profile,
+VERIFIED: exact source **c11674ef97382570f1e5ef544f2380b8c612b3de**,
+[CI37244559679](https://github.com/Belvist/imvera/actions/runs/37244559679), all11 PASS;
+**3392 PASS/0 FAIL/3 SKIP/208.77s**, genuine LFS/model readiness PASS.
+Rich831 PASS/10.77s, runtime316 PASS/19.31s, corpus500/500/6.00s,
+policy diff12 expected/0 unexplained, Ruff/whitespace PASS. Local full before
+final checksum:3383 PASS/2 inherited LFS FAIL/9 SKIP/145.43s; final checksum
+focused44 PASS/1.18s. Follow-up reports/provenance only; all runtime/test/config/
+workflow bytes identical to exact-CI source. Raw real STT load artifact с image/profile,
 24requests/level1/2/4/8; steady working-set1.455→1.461GiB, quota2CPU/4GiB.
 Paired source-bound SDK7cases/260turns per side; delivery simulated, не audio.
 
@@ -21,7 +28,7 @@ NOT VERIFIED: actual M5 SHA/profile/provider flags, raw fs-fd317c1c audio/STT
 качество, full live speech/human acceptance, bridge/Qwen/FS/PG RSS и capacity.
 REMAINING RISKS: ordered deterministic product packs/minima/общие caps остаются;
 swelling не доказан отдельным structured атрибутом; неизвестные факты сохраняются
-unknown. Локальный LFS relation file — pointer; exact-source CI должен проверять
+unknown. Локальный LFS relation file — pointer; exact-source CI проверил
 настоящие weights. Existing question limits не повышены.
 NEXT GATE: реальный repeated multi-complaint CallActor/FreeSWITCH звонок на exact
 revision с audio+raw trace/stage latency/hardware memory; затем compute load soak.

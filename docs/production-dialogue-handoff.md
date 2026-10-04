@@ -4,6 +4,9 @@
 
 [Причины, before/after, реальные STT измерения и ограничения](evaluation/multi-complaint-2026-10-04/README.md).
 [Точная source/CI revision](evaluation/multi-complaint-2026-10-04/checks.json).
+Verified source **c11674ef97382570f1e5ef544f2380b8c612b3de**,
+[CI37244559679](https://github.com/Belvist/imvera/actions/runs/37244559679):
+all11 PASS,3392 PASS/0 FAIL/3 SKIP,208.77s; actual LFS weights verified.
 Новые flags, generator, endpoint или второй dialogue brain не нужны. Fetch целевой
 m5 и проверь **actual** bridge SHA, runtime mode/profile SHA, STT/TTS/backend
 revision. Source checkout не доказывает, что живой мост обновился. Этот workspace
