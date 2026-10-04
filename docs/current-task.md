@@ -1225,6 +1225,20 @@ canonical == TTS == delivered speech, and a single farewell.
 
 ---
 
+# Fast-forward to 3957f62: production hardening batch (2026-10-03)
+
+- His 15 (bridge/runtime admission, Linux inference, TTS bounds, grounding
+  + replay evidence, fault review). Fast-forward, no conflicts. Thread
+  branch intact (43+45 green).
+- Gates: 3186/2(known origin-reds), corpus 500/500, diff 12/12, agent+
+  dream PASS. Remote CI green on his commits.
+- Restarted all whose code changed (STT/TTS x2 + bridge -> 3957f62).
+  Split-brain caught: tts2 fell back to silero on qwen ReadTimeout while
+  server was busy — restarted into qwen. Both TTS on clone now.
+  Watch OK.
+
+---
+
 # Fast-forward to 49f99f4: v10 policy + yield-the-floor (2026-10-03)
 
 - His 3 (selected-question commit, yield-the-floor + v10, CI pin).
