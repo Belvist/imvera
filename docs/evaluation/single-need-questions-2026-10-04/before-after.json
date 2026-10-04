@@ -1,0 +1,101 @@
+{
+  "baseline_sha": "3957f625e17204e0d11ef698b53045046fd5b047",
+  "scope": "synthetic canonical SDK replay; no STT, TTS, phone or human acceptance",
+  "source": "docs/evaluation/conversational-grounding-2026-10-03/replay.py",
+  "before_sha256": "07b7b1ef053ffab2c28cef2ef0f009120a40cbddd1ab14820b426b4fc8229d58",
+  "after_sha256": "fa2426fc6a101dcbf77b098ad9ec9883ea696cd20bfc5111a5343d5707a65557",
+  "cases": {
+    "meds_unknown": {
+      "before": {
+        "user": "Не помню.",
+        "vera": "Понимаю, не будем угадывать. Как настроение? Ничего не беспокоит?",
+        "intent": "background_mood",
+        "question": true,
+        "coverage": {
+          "coverage_nutrition": "поела.",
+          "coverage_medication_unknown": "Не помню."
+        },
+        "pending": "mood",
+        "closed": false,
+        "slots": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "meds_unknown-0",
+            "source_text": "Чувствую себя хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          }
+        }
+      },
+      "after": {
+        "user": "Не помню.",
+        "vera": "Понимаю, не будем угадывать. А какое у вас сегодня настроение?",
+        "intent": "background_mood",
+        "question": true,
+        "coverage": {
+          "coverage_nutrition": "поела.",
+          "coverage_medication_unknown": "Не помню."
+        },
+        "pending": "mood",
+        "closed": false,
+        "slots": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "meds_unknown-0",
+            "source_text": "Чувствую себя хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          }
+        }
+      }
+    },
+    "meds_no": {
+      "before": {
+        "user": "Нет, не принимаю.",
+        "vera": "Хорошо, что сказали про лекарства. А настроение сегодня как — ничего не тревожит?",
+        "intent": "background_mood",
+        "question": true,
+        "coverage": {
+          "coverage_nutrition": "поела.",
+          "coverage_medication": "не принимаю."
+        },
+        "pending": "mood",
+        "closed": false,
+        "slots": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "meds_no-0",
+            "source_text": "Чувствую себя хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          }
+        }
+      },
+      "after": {
+        "user": "Нет, не принимаю.",
+        "vera": "Хорошо, что сказали про лекарства. А какое у вас сегодня настроение?",
+        "intent": "background_mood",
+        "question": true,
+        "coverage": {
+          "coverage_nutrition": "поела.",
+          "coverage_medication": "не принимаю."
+        },
+        "pending": "mood",
+        "closed": false,
+        "slots": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "meds_no-0",
+            "source_text": "Чувствую себя хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          }
+        }
+      }
+    }
+  }
+}

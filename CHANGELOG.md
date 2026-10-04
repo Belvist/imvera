@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — 2026-10-04
+
+- Ask one mood need through the shared renderer; remove duplicate coverage phrasing and ambiguous combined mood/anxiety questions while retaining existing six-entry rotation.
+- Bind the canonical SDK replay to its own checkout; add13 fault regressions without changing safety/state or enabling a live generator.
+
 ## Unreleased — 2026-10-03
 
 - Enforce production call admission and real product bindings; release reservations on setup/disconnect errors and count actual duplex sessions.

@@ -1,3 +1,39 @@
+# Single-need SDK questions (2026-10-04)
+
+Branch: **feature/voice-zoiper-m5**; baseline **3957f625e17204e0d11ef698b53045046fd5b047**.
+[Reproductions and owners](evaluation/single-need-questions-2026-10-04/README.md),
+[actual canonical speech/state](evaluation/single-need-questions-2026-10-04/before-after.json).
+
+CHANGED: coverage mood now uses the existing slot renderer; duplicate mood
+phrasing removed. Keep the six-entry rotation/canonical default, correct the two
+ambiguous mood-plus-negated-anxiety entries; one move asks one need. Replay binds
+to its own checkout instead of an unrelated editable SDK/main. No new brain,
+state writer, neural call, bank growth or changed safety/control/consent owner.
+
+VERIFIED:13 new regressions failed before fixes. The initial bank reduction
+failed2 existing tests; canonical/depth assertions retained and implementation
+corrected. Final focused121 PASS,9.44s; final rich679 PASS,10.20s; Ruff and
+whitespace PASS. Before/after SDK traces preserve medication disposition and
+next mood intent, replacing two independent questions with one. The isolated
+replay also verifies story/listen/resume and explicit stop. Exact source CI is
+pending publication; source replay is not a phone or human-quality benchmark.
+
+NOT VERIFIED: actual target M5/server/worker deployment and accepted neural
+voice, audible interruption, end-of-speech latency, live Core/consent and load.
+No server address/hardware or live access supplied; no target services restarted.
+
+REMAINING RISKS: naturalness/prosody and model responsiveness under real load
+cannot be accepted from SDK transcripts. Admission/FreeSWITCH ownership remains
+per process/shard; shared-shard scaling is unaccepted. Live free-form generation
+remains the conditional measured architecture proposal, not an enabled feature.
+
+NEXT GATE: accepted target access/configuration and genuine CallActor/FreeSWITCH
+recording+trace; measure warmth, latency, interruption and soak before capacity
+increases. The broad production/human-dialogue goal cannot be accepted without
+these live inputs; avoid extending phrase banks in place of that gate.
+
+---
+
 # Production fault re-review (2026-10-03)
 
 Branch: **feature/voice-zoiper-m5**; audit baseline **55f38a5bdfb6d1ec5ceefcf4b4779a073b79628d**.
