@@ -3,6 +3,10 @@
 ## Conversation floor integration — 2026-10-04
 
 [Evidence and complete replays](evaluation/conversation-floor-2026-10-04/README.md).
+Verified source `a15dc36096485fb47eecbd7f099eb2dafb800681`,
+[CI37167925199](https://github.com/Belvist/imvera/actions/runs/37167925199):
+all11 PASS,3259 PASS/0 FAIL/3 SKIP,176.67s. Deploy this source or a later reviewed
+revision, then verify actual bridge SHA; report fs-145617fc used old `2d8315c`.
 STT may omit punctuation: bounded navigation is recognized in shared
 prepare_kernel before post-STT admission, not patched after the fragment gate.
 Do not bypass admission or call the kernel twice.

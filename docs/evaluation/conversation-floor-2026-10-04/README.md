@@ -133,4 +133,9 @@ cases and twelve unpunctuated exchanges. Runtime **316 PASS**,19.43s.
 [after voice-text replay](after-voice-text.json) contain eight complete exchanges,
 240 turns each. Baseline `и что дальше` → `Понимаю`; after → answer + wellness
 question with correct delivery binding. Original seven-case evidence is retained.
-Exact final voice-text source CI is pending; see checks.json for final updates.
+Exact final source **a15dc36096485fb47eecbd7f099eb2dafb800681**,
+[CI37167925199](https://github.com/Belvist/imvera/actions/runs/37167925199):
+**all11 jobs PASS**, full **3259 PASS/0 FAIL/3 SKIP**,176.67s;
+rich732 PASS,15.97s; runtime316 PASS,22.73s. Genuine-model readiness is not
+waived; both inherited local LFS failures pass in CI. This supersedes pending
+publication status; actual deployment/audio/human acceptance remain NOT VERIFIED.

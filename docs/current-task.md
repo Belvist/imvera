@@ -24,7 +24,10 @@ found punctuation dependence and post-STT fragment admission before final
 understanding. Existing prepare_kernel now recognizes bounded navigation before
 admission; no fragment-filter weakening. Final rich732 PASS,10.65s, including
 controlled Actor parity with one kernel/mission/act call; runtime316 PASS,19.43s.
-Final voice-text source CI pending publication. Seven complete before/after SDK exchanges,220 turns each;
+Exact final source **a15dc36096485fb47eecbd7f099eb2dafb800681**,
+[CI37167925199](https://github.com/Belvist/imvera/actions/runs/37167925199):
+**all11 jobs PASS**, full **3259 PASS/0 FAIL/3 SKIP**,176.67s;
+rich732 PASS,15.97s; runtime316 PASS,22.73s. Genuine readiness remains required. Seven complete before/after SDK exchanges,220 turns each;
 synthetic p95 3.711→3.730ms, not phone or neural model latency.
 
 NOT VERIFIED: deployment/actual audio/providers/flags, warmth, phone latency,
@@ -36,7 +39,7 @@ personal realization still limits free conversation, and routine coverage can
 still feel like an interview. Do not claim human/product acceptance or million-user
 capacity from this replay. Conditional natural generation remains ADR-028 research.
 
-NEXT GATE: exact-source CI, then actual CallActor/FreeSWITCH repeat of the saved
+NEXT GATE: actual CallActor/FreeSWITCH repeat of the saved
 exchange plus substantive story/feedback/handoff/navigation, with recording and
 raw trace. Keep factual correctness, conversational quality and latency separate.
 

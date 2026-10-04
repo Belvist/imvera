@@ -56,7 +56,82 @@
   },
   "ruff": "PASS",
   "whitespace": "PASS",
-  "ci": "PENDING_EXACT_SOURCE",
+  "ci": {
+    "run_id": 37167925199,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37167925199",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "semantic-kernel",
+        "id": 111334695178,
+        "conclusion": "success"
+      },
+      {
+        "name": "action-policy-shadow",
+        "id": 111334695258,
+        "conclusion": "success"
+      },
+      {
+        "name": "dialogue-rich",
+        "id": 111334695275,
+        "conclusion": "success"
+      },
+      {
+        "name": "legacy-lint",
+        "id": 111334695298,
+        "conclusion": "success"
+      },
+      {
+        "name": "production-workers",
+        "id": 111334695301,
+        "conclusion": "success"
+      },
+      {
+        "name": "dialogue-runtime",
+        "id": 111334695304,
+        "conclusion": "success"
+      },
+      {
+        "name": "policy-diff",
+        "id": 111334695305,
+        "conclusion": "success"
+      },
+      {
+        "name": "dialogue-corpus-gate",
+        "id": 111334695351,
+        "conclusion": "success"
+      },
+      {
+        "name": "contracts",
+        "id": 111334695354,
+        "conclusion": "success"
+      },
+      {
+        "name": "lint-dialogue",
+        "id": 111334695385,
+        "conclusion": "success"
+      },
+      {
+        "name": "test",
+        "id": 111334743142,
+        "conclusion": "success"
+      }
+    ],
+    "full_suite": {
+      "passed": 3259,
+      "failed": 0,
+      "skipped": 3,
+      "duration_s": 176.67
+    },
+    "rich": {
+      "passed": 732,
+      "duration_s": 15.97
+    },
+    "runtime": {
+      "passed": 316,
+      "duration_s": 22.73
+    }
+  },
   "actual_phone_and_target_load": "NOT_RUN",
   "live_4165ms_engine_turn": "UNRESOLVED",
   "new_generative_live_calls": "none added by source; provider counters not measured by replay",
@@ -152,5 +227,5 @@
     "passed": 316,
     "duration_s": 19.43
   },
-  "final_ci": "PENDING_EXACT_VOICE_TEXT_SOURCE"
+  "verified_source_sha": "a15dc36096485fb47eecbd7f099eb2dafb800681"
 }
