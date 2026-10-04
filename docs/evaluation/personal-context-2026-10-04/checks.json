@@ -19,7 +19,24 @@
   "policy_diff": {"changed": 12, "expected": 12, "unexplained": 0},
   "ruff": "PASS",
   "whitespace": "PASS",
-  "ci": "PENDING exact published source with genuine LFS",
+  "ci": {
+    "source_sha": "af8df7b3efbca0a3a301fcb8ad6f4322cf1031b1",
+    "run_id": 37210181103,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37210181103",
+    "conclusion": "success",
+    "jobs_passed": 11,
+    "genuine_lfs_checkout": true,
+    "full": {"passed": 3286, "failed": 0, "skipped": 3, "duration_s": 227.72},
+    "rich": {"passed": 759, "duration_s": 16.19},
+    "runtime": {"passed": 316, "duration_s": 23.11},
+    "logs_checked": [111459655327, 111459594039, 111459594024]
+  },
+  "representative_replay_comparison": {
+    "turns": 39,
+    "facts_wellness_intent_slot_question_close_parity": "PASS",
+    "changed_responses": 5,
+    "changed_response_intent": "answer_user_question"
+  },
   "sdk_replay": {
     "cases": 9, "repeats": 10, "turns_per_run": 390,
     "before_p50_ms": 2.215455999930782,

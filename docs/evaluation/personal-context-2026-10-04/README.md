@@ -2,8 +2,10 @@
 
 Branch: `feature/voice-zoiper-m5`. Baseline
 `2f18791c155079efde6c967d7292e488ecc74bac` (clean detached checkout).
-Implementation source and exact CI are recorded in [checks.json](checks.json)
-after publication. [Product architecture/next cuts](../../conversation-product-plan-2026-10-04.md).
+Exact implementation source **af8df7b3efbca0a3a301fcb8ad6f4322cf1031b1**:
+[CI37210181103](https://github.com/Belvist/imvera/actions/runs/37210181103),
+all11 jobs PASS; details in [checks.json](checks.json).
+[Product architecture/next cuts](../../conversation-product-plan-2026-10-04.md).
 
 ## Reproduction and changed ownership
 
@@ -56,7 +58,15 @@ Corpus500/500 PASS,5.79s; policy diff12 changed/12 expected/0 unexplained.
 Ruff and whitespace PASS. Full local suite before the final5 test additions:
 3273 PASS/2 FAIL/9 SKIP,151.92s. Both failures are inherited genuine relation-LFS
 readiness checks; no waiver, model substitution or fake readiness was introduced.
-Exact published-source CI with genuine LFS is a separate required gate.
+Exact published-source CI fetched genuine LFS weights: full3286 PASS/0 FAIL/3 SKIP,
+227.72s; rich759 PASS,16.19s; runtime316 PASS,23.11s. All11 jobs PASS.
+After replay was captured on the dirty baseline checkout before its source
+commit; the implementation bytes are those published in `af8df7b`. Later report
+edits and the offline audit do not change runtime/tests/configuration/workflows.
+
+Across39 representative paired turns, facts/wellness/intents/slots/question
+markers/close decisions match. Five responses change, all grounded user-question
+answers. This establishes the intended delta on these cases, not broad quality.
 
 The existing canonical-understanding parity fixture exercises actual CallActor
 admission with controlled STT/act outputs, requiring one kernel, one mission
@@ -88,6 +98,11 @@ cases reached6 entries/294 quote characters. Morphology/topic lookup reuses the
 existing normalization and adds no model stage by source inspection. Actual
 provider counts, RAM and concurrent throughput require runtime measurement.
 
+Privacy review: one bounded current-call field in the existing state lifecycle;
+no added network route, raw-transcript metric, consent writer or cross-call
+projection. Evidence files use constructed fixtures, not new real recordings.
+Actual deployed storage/access/retention controls are outside this source proof.
+
 ## Remaining limits and next gate
 
 Lookup matches inflected literal topic words, not arbitrary paraphrases or
@@ -103,3 +118,21 @@ CallActor/FreeSWITCH with exact SHA/providers/flags, recording and raw trace,
 including symptoms/correction/refusal/stop. Investigate the earlier4165ms
 engine turn. Warmth, interruption, target latency, competitor comparison and
 million-user/concurrent capacity remain NOT VERIFIED.
+
+## Next-cut audit while source CI runs
+
+```sh
+/workspace/imvera-review-venv/bin/python \
+  docs/evaluation/personal-context-2026-10-04/audit-policy-needs.py \
+  docs/evaluation/personal-context-2026-10-04/policy-need-audit.json
+```
+
+The [observed report](policy-need-audit.json) maps actual family-plan steps
+against the current generic policy need set. Nine product dimensions are outside
+that set. A synthetic snapshot with four generic needs known, but a pending
+`associated` obligation, produces no episode-question candidate and selects
+ACK_ONLY despite `outstanding_pending_obligation=True`. This is a compatibility
+blocker for global policy promotion, not a reproduced deployed failure: default
+medical ownership remains legacy. No cutover/scorer change was made. Next source
+gate must reproduce the real reducer/selector path and reconcile pending needs
+in the existing candidate/constraint contract without a duplicate need registry.

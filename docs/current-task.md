@@ -14,7 +14,11 @@ ordered product plans; leave a staged acceptance plan rather than claim human qu
 VERIFIED: initial11 cases7 FAIL/4 PASS; final rich759 PASS,11.49s,
 runtime316 PASS,20.17s; corpus500/500,5.79s; policy diff12 expected/0 unexplained;
 Ruff/whitespace PASS. Full local before final5 test additions3273 PASS/2 inherited
-genuine relation-LFS readiness FAIL/9 SKIP,151.92s. Exact published CI pending.
+genuine relation-LFS readiness FAIL/9 SKIP,151.92s. Exact source
+**af8df7b3efbca0a3a301fcb8ad6f4322cf1031b1**:
+[CI37210181103](https://github.com/Belvist/imvera/actions/runs/37210181103),
+**all11 jobs PASS; full3286 PASS/0 FAIL/3 SKIP,227.72s**;
+rich759 PASS,16.19s; runtime316 PASS,23.11s. Actual LFS checkout verified in log.
 Paired source-bound replays390 turns each; SDK p95 3.452→3.076ms, no phone-speed claim.
 
 NOT VERIFIED: target deployment, real neural/provider counts, audio warmth,
@@ -24,10 +28,15 @@ REMAINING RISKS: literal topic lookup does not cover arbitrary paraphrases;
 bounded eviction and conservative correction invalidation. Routine question
 minima, ordered clinical needs and deterministic realization still constrain
 conversation. Optional generative surface is ADR028 research, not enabled.
+Next-cut audit found9 product needs outside generic policy candidates; synthetic
+pending-associated snapshot selects ACK_ONLY despite outstanding obligation.
+This blocks global promotion; default medical owner remains legacy. Real
+reducer/selector reproduction remains required before that next source cut.
 
-NEXT GATE: exact-source CI with genuine LFS, then actual CallActor/FreeSWITCH
-recording+trace of topic return/clinical interruption/safety/refusal/stop. Continue
-independent selection audit; live evidence remains necessary for product acceptance.
+NEXT GATE: actual CallActor/FreeSWITCH recording+trace of topic return/clinical
+interruption/safety/refusal/stop. Continue independent need-compatibility audit;
+live evidence remains necessary for product acceptance. Report-only follow-up
+does not alter the verified runtime/tests/configuration/workflow bytes.
 
 ---
 

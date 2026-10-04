@@ -4,8 +4,10 @@
 
 [Product plan](conversation-product-plan-2026-10-04.md),
 [paired evidence](evaluation/personal-context-2026-10-04/README.md).
-Use the exact verified source recorded there after CI, rather than assuming
-the deployed bridge matches the branch. No new flag or provider is required.
+Verified source **af8df7b3efbca0a3a301fcb8ad6f4322cf1031b1**:
+[CI37210181103](https://github.com/Belvist/imvera/actions/runs/37210181103),
+all11 PASS,3286 PASS/0 FAIL/3 SKIP. Check the actual bridge SHA; do not assume
+it matches the branch. No new flag or provider is required.
 Keep the one Reducer/discourse writer and shared grounded answer owner; do not
 copy narrative retrieval into CallActor or rewrite the canonical quote for TTS.
 Old serialized EngineState without `thread_statements` remains valid. Never

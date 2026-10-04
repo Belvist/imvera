@@ -1,0 +1,123 @@
+{
+  "source_sha": "af8df7b3efbca0a3a301fcb8ad6f4322cf1031b1",
+  "scope": "static need mapping plus synthetic read-only policy snapshot; not actual engine/phone turn",
+  "policy_askable_needs": [
+    "temporal",
+    "current",
+    "severity",
+    "functional_impact"
+  ],
+  "families": {
+    "headache": {
+      "product_steps": [
+        "duration",
+        "severity",
+        "associated"
+      ],
+      "outside_policy_askable_set": [
+        "associated"
+      ]
+    },
+    "abdominal": {
+      "product_steps": [
+        "onset",
+        "current"
+      ],
+      "outside_policy_askable_set": []
+    },
+    "limb_pain": {
+      "product_steps": [
+        "onset",
+        "severity"
+      ],
+      "outside_policy_askable_set": []
+    },
+    "weakness": {
+      "product_steps": [
+        "onset",
+        "severity"
+      ],
+      "outside_policy_askable_set": []
+    },
+    "dizziness": {
+      "product_steps": [
+        "current",
+        "severity"
+      ],
+      "outside_policy_askable_set": []
+    },
+    "sleep": {
+      "product_steps": [
+        "pattern",
+        "daytime_impact"
+      ],
+      "outside_policy_askable_set": [
+        "pattern",
+        "daytime_impact"
+      ]
+    },
+    "nutrition": {
+      "product_steps": [
+        "intake",
+        "barrier"
+      ],
+      "outside_policy_askable_set": [
+        "intake",
+        "barrier"
+      ]
+    },
+    "mood": {
+      "product_steps": [
+        "intensity",
+        "social_context"
+      ],
+      "outside_policy_askable_set": [
+        "intensity",
+        "social_context"
+      ]
+    },
+    "medication": {
+      "product_steps": [
+        "status_today"
+      ],
+      "outside_policy_askable_set": [
+        "status_today"
+      ]
+    },
+    "other": {
+      "product_steps": [
+        "needs_help"
+      ],
+      "outside_policy_askable_set": [
+        "needs_help"
+      ]
+    },
+    "generic_symptom": {
+      "product_steps": [
+        "onset",
+        "current"
+      ],
+      "outside_policy_askable_set": []
+    }
+  },
+  "synthetic_pending_associated": {
+    "snapshot": {
+      "known_attributes": {
+        "duration": "со вчера",
+        "current": "active",
+        "severity": "moderate",
+        "functional_impact": "none"
+      },
+      "pending_episode_attribute": "associated",
+      "wellness_entry_covered": true
+    },
+    "outstanding_pending_obligation": true,
+    "candidates": [
+      "SAFETY",
+      "IMPORTANT_TO_SHARE",
+      "SUMMARY_CLOSE",
+      "ACK_ONLY"
+    ],
+    "chosen": "ACK_ONLY"
+  }
+}
