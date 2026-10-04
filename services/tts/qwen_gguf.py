@@ -167,7 +167,9 @@ def synthesize_stream(
     }
     got = 0
     carry = b""
-    try:
+
+    def _stream_once() -> None:
+        nonlocal got, carry
         timeout = httpx.Timeout(min(FIRST_BYTE_TIMEOUT_S, remaining()), connect=min(5, remaining()))
         with httpx.Client(timeout=timeout) as client:
             with client.stream(
@@ -202,6 +204,17 @@ def synthesize_stream(
                         got += len(chunk)
                         yield chunk
                 remaining()
+
+    try:
+        try:
+            yield from _stream_once()
+        except httpx.HTTPError:
+            # Single-batch server busy moment: retry once ONLY if nothing
+            # flowed yet. After the first chunk, partial audio stands.
+            if got > 0:
+                raise
+            time.sleep(2.0)
+            yield from _stream_once()
     except httpx.HTTPError as exc:
         raise RuntimeError(f"qwen-tts request failed: {type(exc).__name__}") from exc
     if carry:
