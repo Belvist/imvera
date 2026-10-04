@@ -64,3 +64,13 @@ Acceptance needs SDK/Actor parity, >2 substantive turns, ACK→USER continuation
 topic shift/return, user question, unknown, refusal, symptoms in a story,
 completed/early/cancelled/stale delivery and timeouts. Then actual
 CallActor/FreeSWITCH audio/trace and blinded human listening. No bare ready claim.
+
+## Floor-role correction (2026-10-04)
+
+A listening acknowledgment is feedback, not new substantive thread content.
+Preserve the story anchor across grammatical confirmations. Explicit completion
+or a request for the next conversation move yields the floor; unresolved needs
+remain unresolved until actual evidence arrives. The existing selector chooses
+one next move after navigation is resolved. Renderer realizes semantic needs
+before composing an answer, preserving question binding and retry idempotence.
+See [reproduction and limits](../evaluation/conversation-floor-2026-10-04/README.md).

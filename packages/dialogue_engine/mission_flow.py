@@ -197,6 +197,24 @@ def _grounded_answer_recall(question_words: frozenset[str], state: EngineState) 
     return f"В этом разговоре вы сказали: «{unique[0]}»."
 
 
+def is_conversation_navigation(question: str) -> bool:
+    """A request for the next conversational move, never a world prediction.
+
+    Closed grammatical roles exclude entities, symptoms and actions such as
+    medication. This is call navigation, not a general open-question classifier.
+    """
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+
+    words = frozenset(normalize_text(question or "").split())
+    return bool(
+        "что" in words and words & {"далёкий", "дальше", "теперь"}
+        and words <= {
+            "а", "и", "ну", "что", "далёкий", "дальше", "теперь", "быть",
+            "мы", "вы", "я", "делать", "ещё", "то",
+        }
+    )
+
+
 def answer_user_question_text(question: str, *, state: EngineState | None = None) -> str:
     """Bounded service answers or evidenced recall, with explicit abstention.
 
@@ -208,6 +226,8 @@ def answer_user_question_text(question: str, *, state: EngineState | None = None
     from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
 
     words = frozenset(normalize_text(question or "").split())
+    if is_conversation_navigation(question):
+        return "Можем продолжить. Я уточню то, чего вы ещё не рассказали."
     addressee = bool(words & {"ты", "вы", "вера", "помощник"})
     identity_request = "кто" in words and not words & {"знать", "помнить", "я"}
     if addressee and (identity_request or words & {"робот", "человек"}):

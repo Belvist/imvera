@@ -2,6 +2,9 @@
 
 ## Unreleased — 2026-10-04
 
+- Separate conversational feedback from substantive stories and explicit floor handoff; preserve story anchors, accept heard hedged wellness answers and answer requests for the next call move through the existing selector.
+- Realize semantic questions before answer composition without creating questions from context-only slots; restore the active opening prerender script removed by cleanup.
+
 - Ask one mood need through the shared renderer; remove duplicate coverage phrasing and ambiguous combined mood/anxiety questions while retaining existing six-entry rotation.
 - Bind the canonical SDK replay to its own checkout; add13 fault regressions without changing safety/state or enabling a live generator.
 

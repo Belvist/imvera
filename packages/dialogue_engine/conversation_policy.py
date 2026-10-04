@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from packages.contracts.enums import SlotStatus
@@ -1992,11 +1992,33 @@ def schedule_next_action(state: EngineState, turn_context: TurnContext) -> Respo
         return coverage
 
     answered_episode_id = state.active_episode_id
+    from packages.dialogue_engine.mission_flow import (
+        answer_user_question_text,
+        is_conversation_navigation,
+    )
+
+    turn = turn_context.turn
+    navigation = bool(
+        turn and turn.user_question and is_conversation_navigation(turn.user_question)
+        and turn.control in ("none", "") and not turn.correction
+        and not turn.issue_mentions and not turn.risk_candidates
+        and state.safety_mode != "red" and not state.risk_handling
+        and not state.red_state_pending and state.check_path != CheckPath.URGENT
+    )
+    selection_context = turn_context
+    if navigation:
+        # Resolve only the navigation obligation, then invoke the same owner
+        # exactly once. The original canonical turn/evidence remains intact.
+        selection_context = replace(turn_context, turn=turn.model_copy(update={
+            "user_question": None, "dialogue_act": "answer", "answers_pending_question": False,
+        }))
     plan = route_schedule_next_action(
         state,
-        turn_context,
+        selection_context,
         legacy=_schedule_next_action_legacy,
     )
+    if navigation and plan.action == "speak" and not plan.control and not plan.safety_class:
+        plan.answer_user_question = answer_user_question_text(turn.user_question, state=state)
     ordinary_response = (
         ((plan.action == "speak" and plan.marks_question)
          or (plan.action == "close_summary" and not state.summary_delivered))

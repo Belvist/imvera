@@ -1,0 +1,63 @@
+{
+  "branch": "feature/voice-zoiper-m5",
+  "baseline_sha": "0fc463c1a922fb40ecdb00979ac05b9ffe88bfc9",
+  "initial_new_regressions": {
+    "failed": 22,
+    "passed": 5,
+    "duration_s": 0.5
+  },
+  "initial_implementation": {
+    "failed": 12,
+    "passed": 15,
+    "duration_s": 0.5,
+    "cause": "semantic question lost before answer composition"
+  },
+  "initial_rich": {
+    "failed": 7,
+    "passed": 709,
+    "duration_s": 10.25,
+    "causes": [
+      "original positive aliases omitted; original grammar restored",
+      "new immutability assertion ignored existing first phrase rotation; retries and all other state stay immutable"
+    ]
+  },
+  "focused": {
+    "passed": 157,
+    "duration_s": 1.46
+  },
+  "final_rich": {
+    "passed": 716,
+    "duration_s": 10.45
+  },
+  "local_full_before_startup_restoration": {
+    "passed": 3234,
+    "failed": 3,
+    "skipped": 9,
+    "duration_s": 147.38,
+    "failures": [
+      "test_media_bridge_readiness_green_without_llm: genuine relation LFS weights unavailable",
+      "test_warmup_all_hot: genuine relation LFS weights unavailable",
+      "test_prerender_uses_selected_mlx_pcm_and_revision: active script archived, now restored"
+    ]
+  },
+  "final_startup_render_floor": {
+    "passed": 69,
+    "duration_s": 0.84
+  },
+  "corpus": {
+    "passed": 500,
+    "total": 500,
+    "duration_s": 5.65
+  },
+  "policy_diff": {
+    "changed": 12,
+    "expected": 12,
+    "unexplained": 0
+  },
+  "ruff": "PASS",
+  "whitespace": "PASS",
+  "ci": "PENDING_EXACT_SOURCE",
+  "actual_phone_and_target_load": "NOT_RUN",
+  "live_4165ms_engine_turn": "UNRESOLVED",
+  "new_generative_live_calls": "none added by source; provider counters not measured by replay"
+}

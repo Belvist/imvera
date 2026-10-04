@@ -1,5 +1,21 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## Conversation floor integration — 2026-10-04
+
+[Evidence and complete replays](evaluation/conversation-floor-2026-10-04/README.md).
+Fetch/fast-forward the m5 branch; do not copy templates into CallActor or TTS.
+The existing producer/discourse distinguish feedback, substantive continuation
+and explicit handoff. Call navigation resolves through the existing service-answer
+owner and the same selector; renderer composes the answer plus selected semantic
+need before delivery. No new flag, model or global ActionPolicy cutover.
+Keep the active `scripts/prerender_opening.py`: startup commands still invoke it.
+
+For live acceptance repeat `Нормально вроде бы → Нормально говорю → Да →
+Правильно, говорю, всё → И что дальше?`, plus a real story with `Да`, a further
+substantive continuation and `Я всё сказала`. Capture exact SHA, audio/raw trace,
+heard questions and stage timing; specifically investigate the reported 4165ms
+engine turn. No claim of free human conversation or capacity follows from SDK tests.
+
 ## SDK follow-up — 2026-10-04
 
 Verified source `03c8e26f4d174e18675a2d52c37eb08fe332290c` on m5:

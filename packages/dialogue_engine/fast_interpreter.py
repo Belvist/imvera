@@ -113,7 +113,7 @@ def _normalize_core(text: str) -> str:
         if not m:
             break
         core = core[m.end():].strip()
-    core = re.sub(r"\s+(вроде|наверное|кажется)\.?$", "", core, flags=re.I).strip()
+    core = re.sub(r"\s+(вроде(?:\s+бы)?|наверное|кажется)\.?$", "", core, flags=re.I).strip()
     return core
 
 

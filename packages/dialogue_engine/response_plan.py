@@ -146,6 +146,27 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
         plan.intent = "summary"
         plan.marks_question = False
         return plan
+    # Realize the selected semantic need before composing the answer. A plan
+    # with next_slot/question_needs must not lose its question to an early
+    # answer-only branch. Context slots alone do not authorize a new question.
+    if plan.question_needs and not question:
+        need = plan.question_needs[0]
+        question = _question_for_need(state, plan, need)
+    elif plan.next_slot and not question:
+        question = questions.slot_question(plan.next_slot, state=state)
+        plan.intent = plan.intent or f"check_{plan.next_slot}"
+        plan.slot = plan.slot or plan.next_slot
+        plan.marks_question = True
+    elif plan.slot and not question and (not plan.answer_user_question or plan.marks_question):
+        if plan.slot.startswith("probe_"):
+            phase = plan.slot.removeprefix("probe_")
+            question = questions.probe_question(
+                phase, clarification=plan.clarification, state=state
+            )
+            plan.intent = plan.intent or plan.slot
+        elif plan.slot in ("wellness", "mood", "sleep", "plans"):
+            question = questions.slot_question(plan.slot, state=state)
+            plan.intent = plan.intent or f"check_{plan.slot}"
     if plan.answer_user_question and question:
         answer = plan.answer_user_question.strip()
         question = f"{answer} {question.strip()}"
@@ -159,25 +180,6 @@ def render_response_plan(plan: ResponsePlan, state: EngineState) -> ResponsePlan
         plan._answer_render = (question, question)
         plan.intent = plan.intent or "answer_user_question"
         plan.marks_question = False
-    elif plan.question_needs and not question:
-        need = plan.question_needs[0]
-        question = _question_for_need(state, plan, need)
-    elif plan.next_slot and not question:
-        question = questions.slot_question(plan.next_slot, state=state)
-        plan.intent = plan.intent or f"check_{plan.next_slot}"
-        plan.slot = plan.slot or plan.next_slot
-        plan.marks_question = True
-    elif plan.slot and not question:
-        if plan.slot.startswith("probe_"):
-            phase = plan.slot.removeprefix("probe_")
-            question = questions.probe_question(
-                phase, clarification=plan.clarification, state=state
-            )
-            plan.intent = plan.intent or plan.slot
-        elif plan.slot in ("wellness", "mood", "sleep", "plans"):
-            question = questions.slot_question(plan.slot, state=state)
-            plan.intent = plan.intent or f"check_{plan.slot}"
-
     # Ordinary move with a real question: show first that the person was heard,
     # then ask. A content-free acknowledgement is replaced by the grounded
     # reaction; a meaningful one (severity, temporal, relief…) is kept, so the

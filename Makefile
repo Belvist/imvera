@@ -41,7 +41,8 @@ test-dialogue-rich:
 		tests/test_clinical_ellipsis_grounding.py tests/test_plan_fact_temporal_grounding.py \
 		tests/test_frequency_role_grounding.py \
 		tests/test_control_meaning_grounding.py tests/test_grounded_user_question_answer.py \
-		tests/test_question_report_grounding.py tests/test_single_need_questions.py -q
+		tests/test_question_report_grounding.py tests/test_single_need_questions.py \
+		tests/test_conversation_floor_navigation.py -q
 
 test-dialogue-runtime:
 	@echo "GATE: CallActor rich path + LLM worker contract"

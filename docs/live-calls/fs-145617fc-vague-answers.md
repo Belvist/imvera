@@ -17,7 +17,16 @@ Owner probing with evasive one-worders. Verbatim from
 10. USER: И что дальше?
 11. VERA: На этот вопрос у меня нет надёжного ответа.
 
-## Analysis
+## Correction after independent SDK reproduction (2026-10-04)
+
+The original “nothing to fix” conclusion below is superseded. The exact five-turn
+exchange reproduces on `0fc463c`: a hedged wellness answer is lost, grammatical
+feedback is promoted to a story, explicit floor handoff is missed, and call
+navigation receives an irrelevant abstention. These are behavioral defects,
+not only speech polish. See [cause, source changes and before/after](../evaluation/conversation-floor-2026-10-04/README.md).
+The actual deployed fix/audio and the reported 4165ms engine latency remain unverified.
+
+## Original analysis (historical, superseded)
 
 No loops, no lies, no dropped facts. Vague answers met with listening
 acks, never with re-asks of the same question. The open «И что дальше?»
@@ -28,7 +37,7 @@ contract. Two «Понимаю» in one short call is the remaining dryness
 Timings (stage_ms p50/p95): engine_decision 0/4165 ms — one slow turn,
 stt/interpret ~861/1112 ms. No errors, trace not truncated.
 
-## Verdict
+## Original verdict (superseded)
 
 Clean handling of an evasive caller. Nothing to fix here; dryness of
 repeated bare acks is tracked as speech polish, not a bug.

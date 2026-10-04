@@ -30,6 +30,37 @@ THREAD_QUESTION_INTENTS = frozenset({"thread_followup", "thread_continue"})
 _BARE_EVALUATIONS = frozenset({"хорошо", "плохо", "нормально", "неплохо", "так себе"})
 
 
+def _floor_feedback(text: str) -> bool:
+    """Feedback is not a new story anchor or an evidenced health assertion."""
+    from packages.dialogue_engine.fast_interpreter import _POSITIVE, _normalize_core
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+
+    core = _normalize_core(text)
+    if _POSITIVE.fullmatch(core) or core in _BARE_EVALUATIONS or core in {
+        "да", "ага", "угу", "понимаю", "правильно", "понятно", "ясно", "ладно", "конечно",
+    }:
+        return True
+    words = frozenset(normalize_text(core).split())
+    if words & {"слушать", "понимать"} and words <= {
+        "я", "вы", "ты", "слушать", "понимать", "да", "ну",
+    }:
+        return True
+    return bool(words & {"говорить", "сказать"} and words <= {
+        "я", "же", "уже", "говорить", "сказать", "нормально", "хорошо",
+        "правильно", "всё", "все", "это", "ну", "да",
+    })
+
+
+def _floor_handoff(text: str) -> bool:
+    from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+
+    words = frozenset(normalize_text(text).split())
+    return bool(words & {"всё", "все"} and words <= {
+        "всё", "все", "я", "говорить", "сказать", "уже", "правильно", "вот",
+        "и", "ну", "это", "пока", "на", "этот",
+    })
+
+
 def listening_question_pending(state) -> bool:
     delivered = getattr(state, "delivered_question", None)
     heard = bool(getattr(state, "thread_heard_listening_id", ""))
@@ -45,13 +76,9 @@ def listening_question_pending(state) -> bool:
 def is_listening_evaluation(state, text: str) -> bool:
     if not listening_question_pending(state):
         return False
-    from packages.dialogue_engine.fast_interpreter import _POSITIVE
-
-    core = text.lower().strip().rstrip(".!?…")
-    # Reuse the existing bare-positive grammar, without dropping domain
-    # predicates such as "настроение" or "чувствую себя". Urgent negatives
-    # stay on their unchanged safety path.
-    return core in _BARE_EVALUATIONS or bool(_POSITIVE.fullmatch(core))
+    # The same floor meaning must govern both fact admission and discourse.
+    # Explicit domain predicates still belong to their evidence owner.
+    return _floor_feedback(text)
 
 
 
@@ -70,7 +97,7 @@ def _listening_reply(state, turn, raw: str) -> bool:
     ):
         return False
     low = raw.lower().rstrip(".!?…")
-    finished = bool(getattr(turn, "not_recalled", False)) or low in (
+    finished = _floor_handoff(raw) or bool(getattr(turn, "not_recalled", False)) or low in (
         "нет", "неа", "не знаю", "не помню", "ничего", "больше нечего добавить",
     )
     if not finished and (
@@ -78,7 +105,7 @@ def _listening_reply(state, turn, raw: str) -> bool:
     ):
         return False
     state.thread_last_utterance_id = turn.utterance_id
-    if not finished:
+    if not finished and not _floor_feedback(raw):
         state.thread_last_statement = raw[:200]
     # A genuinely heard answer may also yield the floor. The next accepted
     # continuation becomes the person's thread, without inventing a fact.
@@ -214,6 +241,21 @@ def update_discourse(state, turn) -> None:
         user_question = (getattr(turn, "user_question", None) or "").strip()
         raw = (getattr(turn, "raw_text", None) or "").strip()
         raw_lower = raw.lower()
+        if (
+            user_question and listening_question_pending(state)
+            and getattr(turn, "control", "none") in ("none", "")
+            and not getattr(turn, "correction", False)
+            and not getattr(turn, "issue_mentions", ())
+            and not getattr(turn, "risk_candidates", ())
+        ):
+            from packages.dialogue_engine.mission_flow import is_conversation_navigation
+
+            if is_conversation_navigation(user_question):
+                # The user gives the floor back. No clinical/background fact
+                # is inferred, and the existing selector chooses the next need.
+                state.thread_reply_finished = True
+                state.thread_reply_turn_id = turn.utterance_id
+                state.thread_last_utterance_id = turn.utterance_id
         if _listening_reply(state, turn, raw):
             return
         from packages.dialogue_engine.semantic_kernel.controls import (
@@ -334,6 +376,7 @@ def update_discourse(state, turn) -> None:
             and not _other_health
             and not _easing
             and not _nohealth
+            and not _floor_feedback(raw)
             and len(words) >= 3
             and content
             and len(raw) <= 2048

@@ -1,3 +1,41 @@
+# Conversation floor correction (2026-10-04)
+
+Target **feature/voice-zoiper-m5**, latest peer baseline
+**0fc463c1a922fb40ecdb00979ac05b9ffe88bfc9**. Peer changes preserved by fast-forward.
+[Root causes, complete replays and limits](evaluation/conversation-floor-2026-10-04/README.md).
+
+CHANGED: correct the exact vague-answer live exchange reproduced independently
+in the canonical SDK. Heard hedged wellness answers retain their original evidence;
+grammatical feedback preserves story anchors; explicit completion yields the floor;
+call navigation answers and invokes the same selector for the next need. Renderer
+realizes semantic questions before composing answers. Restore the active opening
+prerender script incorrectly archived despite two startup callers. One EngineState,
+Reducer, selector and delivery owner; no neural/generative call or new flag.
+
+VERIFIED: initial27 regressions22 FAIL/5 PASS, then implementation12 FAIL/15 PASS
+exposed renderer order. Original positive-alias regressions retained and fixed.
+Final rich716 PASS,10.45s; final startup/render/floor69 PASS,.84s; corpus500/500,
+5.65s; policy diff12 expected/0 unexplained; Ruff/whitespace PASS. Full local before
+startup restoration3234 PASS/3 FAIL/9 SKIP,147.38s: two genuine LFS model readiness
+failures inherited, one peer archive failure restored and rechecked. Exact remote
+CI pending publication. Seven complete before/after SDK exchanges,220 turns each;
+synthetic p95 3.711→3.730ms, not phone or neural model latency.
+
+NOT VERIFIED: deployment/actual audio/providers/flags, warmth, phone latency,
+interruptions and load. Reported4165ms engine turn remains unresolved. The original
+“nothing to fix” report conclusion is explicitly superseded, not erased.
+
+REMAINING RISKS: this cut removes erroneous floor decisions; deterministic
+personal realization still limits free conversation, and routine coverage can
+still feel like an interview. Do not claim human/product acceptance or million-user
+capacity from this replay. Conditional natural generation remains ADR-028 research.
+
+NEXT GATE: exact-source CI, then actual CallActor/FreeSWITCH repeat of the saved
+exchange plus substantive story/feedback/handoff/navigation, with recording and
+raw trace. Keep factual correctness, conversational quality and latency separate.
+
+---
+
 # Single-need SDK questions (2026-10-04)
 
 Branch: **feature/voice-zoiper-m5**; baseline **3957f625e17204e0d11ef698b53045046fd5b047**.
