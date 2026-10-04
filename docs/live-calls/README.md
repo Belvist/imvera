@@ -1,6 +1,7 @@
 # Live-call evidence (newest on top)
 
 | Call | Date (MSK) | What it proved |
+| [fs-9de2dab3-borscht-thread](fs-9de2dab3-borscht-thread.md) | 2026-10-05 | Borscht thread, abrupt caller-side end |
 |------|-----------|----------------|
 | [fs-145617fc-vague-answers](fs-145617fc-vague-answers.md) | 2026-10-04 | Evasive answers: no loops, honest abstention |
 | [fs-2baf87ec](fs-2baf87ec-clarification-loop.md) | 2026-10-01 | Clarification loop, broken agreement, doubles, lost tremor |
