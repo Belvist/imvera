@@ -59,7 +59,10 @@ def test_explicit_floor_handoff_resumes_need_without_inventing_answer(monkeypatc
 
 
 @pytest.mark.parametrize("mode", ["off", "shadow", "soft", "policy"])
-@pytest.mark.parametrize("question", ["И что дальше?", "Что теперь?", "А дальше что будем делать?"])
+@pytest.mark.parametrize("question", [
+    "И что дальше?", "Что теперь?", "А дальше что будем делать?",
+    "и что дальше", "что теперь", "а дальше что будем делать",
+])
 def test_navigation_answers_then_uses_existing_next_need(monkeypatch, mode, question):
     runner = started(monkeypatch, mode)
     runner.run(["Вчера дочь приезжала, мы смотрели старые фотографии."])

@@ -3,6 +3,9 @@
 ## Conversation floor integration — 2026-10-04
 
 [Evidence and complete replays](evaluation/conversation-floor-2026-10-04/README.md).
+STT may omit punctuation: bounded navigation is recognized in shared
+prepare_kernel before post-STT admission, not patched after the fragment gate.
+Do not bypass admission or call the kernel twice.
 Fetch/fast-forward the m5 branch; do not copy templates into CallActor or TTS.
 The existing producer/discourse distinguish feedback, substantive continuation
 and explicit handoff. Call navigation resolves through the existing service-answer

@@ -255,6 +255,7 @@ class TurnUnderstandingV2:
         Deterministic repairs and controls retain their kernel precedence.
         """
         from packages.dialogue_engine.deterministic_mission import _is_user_question
+        from packages.dialogue_engine.mission_flow import is_conversation_navigation
         from packages.dialogue_engine.semantic_kernel.kernel import interpret
 
         if engine_state is not None and hasattr(engine_state, "answer_context_slot"):
@@ -265,7 +266,8 @@ class TurnUnderstandingV2:
         )
         if (
             result.level != 0 and not result.user_question and result.control in ("", "none")
-            and result.dialogue_act != "repair" and _is_user_question(text)
+            and result.dialogue_act != "repair"
+            and (_is_user_question(text) or is_conversation_navigation(text))
         ):
             updates = {"user_question": result.raw_text}
             asserted = _asserted_question_ranges(result.raw_text)

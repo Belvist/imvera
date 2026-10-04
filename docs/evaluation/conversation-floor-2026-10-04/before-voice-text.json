@@ -1,0 +1,327 @@
+{
+  "checkout": "/tmp/imvera-floor-baseline-0fc",
+  "head": "0fc463c1a922fb40ecdb00979ac05b9ffe88bfc9",
+  "dirty": false,
+  "flags": {
+    "IMVERA_DIALOGUE_ENGINE": "1",
+    "IMVERA_COVERAGE_LADDER": "1",
+    "IMVERA_ACTION_POLICY_MODE": "off",
+    "IMVERA_LLM_INTERPRET": "0",
+    "IMVERA_MISSION_LLM_INTERPRET": "0",
+    "IMVERA_SPEECH_DAY": "102",
+    "IMVERA_SPEECH_HOUR": "14"
+  },
+  "scope": "synthetic canonical SDK; simulated audible completion",
+  "repeats": 10,
+  "text_turns": 240,
+  "sdk_turn_ms_p50": 1.8408114847261459,
+  "sdk_turn_ms_p95": 3.9147089701145887,
+  "end_of_speech_to_PCM": "NOT_RUN",
+  "provider_model_invocations": "NOT_MEASURED",
+  "transcripts": {
+    "reported_live_vague": [
+      {
+        "user": "Нормально вроде бы.",
+        "vera": "Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Нормально вроде бы.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Нормально говорю.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Нормально говорю.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Да.",
+        "vera": "Я вас слушаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Да.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Правильно, говорю, всё.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Правильно, говорю, всё.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "И что дальше?",
+        "vera": "На этот вопрос у меня нет надёжного ответа.",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Правильно, говорю, всё.",
+        "thread_finished": false,
+        "closed": false
+      }
+    ],
+    "story_feedback_handoff": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Да.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Да.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Потом вспоминали деревню и соседей.",
+        "vera": "Поняла про деревню.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Потом вспоминали деревню и соседей.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Я вас слушаю.",
+        "vera": "Я вас слушаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Я вас слушаю.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Я всё сказала.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Я всё сказала.",
+        "thread_finished": false,
+        "closed": false
+      }
+    ],
+    "story_navigation": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "И что дальше?",
+        "vera": "На этот вопрос у меня нет надёжного ответа.",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false
+      }
+    ],
+    "story_navigation_unpunctuated": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "и что дальше",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "и что дальше",
+        "thread_finished": false,
+        "closed": false
+      }
+    ],
+    "substantive_continuation": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Всё нормально, вчера дочь приезжала.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Всё нормально, вчера дочь приезжала.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Я всё рассказала дочери, потом мы гуляли.",
+        "vera": "Я вас слушаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Я всё рассказала дочери, потом мы гуляли.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "А дальше мы пошли гулять в саду.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "А дальше мы пошли гулять в саду.",
+        "thread_finished": false,
+        "closed": false
+      }
+    ],
+    "external_question": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Что будет дальше с моей дочерью?",
+        "vera": "На этот вопрос у меня нет надёжного ответа.",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false
+      }
+    ],
+    "safety": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "Не могу дышать.",
+        "vera": "Понимаю, это важно. Я передам информацию близким. Спасибо за разговор. До свидания.",
+        "intent": "urgent_close",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": true
+      }
+    ],
+    "stop": [
+      {
+        "user": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": false
+      },
+      {
+        "user": "До свидания.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "thread_statement": "Вчера дочь приезжала, мы смотрели старые фотографии.",
+        "thread_finished": false,
+        "closed": true
+      }
+    ]
+  }
+}

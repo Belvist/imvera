@@ -106,3 +106,31 @@ retain audio + raw trace, exact SHA/providers/flags and every timing stage. Asse
 questionnaire feel separately from factual correctness. The shared call-navigation
 behavior is code-enabled in this branch; do not enable optional generation or
 promote global medical ActionPolicy authority as part of integrating this cut.
+
+## Voice-text follow-up and exact-source evidence
+
+First published source `0f82c9e4ee7ef857c0357165ba585c24c1027209`,
+[CI37167504976](https://github.com/Belvist/imvera/actions/runs/37167504976):
+all11 jobs PASS; full3243 PASS/0 FAIL/3 SKIP,181.30s; rich716 PASS,17.14s;
+runtime316 PASS,23.10s. Peer baseline CI37165552152 independently confirms
+`ImportError: cannot import name 'prerender_opening' from 'scripts'`.
+
+A further speech-form check found that plain STT `и что дальше` (no question
+mark) still became a listening response. Twelve regression variants failed.
+Late RichUserTurn recognition passed SDK tests but failed four real CallActor
+admission/parity checks: fragment admission occurs before final understanding.
+Move recognition into the existing `TurnUnderstandingV2.prepare_kernel`, which
+already owns question recognition before admission. The admission filter is
+unchanged. The original control/repair level-zero guard remains unchanged.
+Pure request semantics now survive SDK and Actor, with one kernel preparation,
+one mission attachment and one act proposal per controlled Actor utterance.
+No new model inference is inserted, and candidate repair votes cannot override
+this recognized question. Controlled ASR/act proposals are not neural accuracy.
+
+Final local rich gate **732 PASS**,10.65s, including four additional Actor parity
+cases and twelve unpunctuated exchanges. Runtime **316 PASS**,19.43s.
+[Before voice-text replay](before-voice-text.json) and
+[after voice-text replay](after-voice-text.json) contain eight complete exchanges,
+240 turns each. Baseline `и что дальше` → `Понимаю`; after → answer + wellness
+question with correct delivery binding. Original seven-case evidence is retained.
+Exact final voice-text source CI is pending; see checks.json for final updates.

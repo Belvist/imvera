@@ -17,8 +17,14 @@ exposed renderer order. Original positive-alias regressions retained and fixed.
 Final rich716 PASS,10.45s; final startup/render/floor69 PASS,.84s; corpus500/500,
 5.65s; policy diff12 expected/0 unexplained; Ruff/whitespace PASS. Full local before
 startup restoration3234 PASS/3 FAIL/9 SKIP,147.38s: two genuine LFS model readiness
-failures inherited, one peer archive failure restored and rechecked. Exact remote
-CI pending publication. Seven complete before/after SDK exchanges,220 turns each;
+failures inherited, one peer archive failure restored and rechecked. First exact published source **0f82c9e4ee7ef857c0357165ba585c24c1027209**,
+[CI37167504976](https://github.com/Belvist/imvera/actions/runs/37167504976):
+all11 PASS, full3243 PASS/0 FAIL/3 SKIP,181.30s. Additional voice-text regressions
+found punctuation dependence and post-STT fragment admission before final
+understanding. Existing prepare_kernel now recognizes bounded navigation before
+admission; no fragment-filter weakening. Final rich732 PASS,10.65s, including
+controlled Actor parity with one kernel/mission/act call; runtime316 PASS,19.43s.
+Final voice-text source CI pending publication. Seven complete before/after SDK exchanges,220 turns each;
 synthetic p95 3.711→3.730ms, not phone or neural model latency.
 
 NOT VERIFIED: deployment/actual audio/providers/flags, warmth, phone latency,
