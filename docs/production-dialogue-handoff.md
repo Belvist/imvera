@@ -1,5 +1,22 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## SDK follow-up — 2026-10-04
+
+Verified source `03c8e26f4d174e18675a2d52c37eb08fe332290c` on m5:
+[CI37164021083](https://github.com/Belvist/imvera/actions/runs/37164021083),
+all11 jobs PASS,3206 passed/0 failed/3 skipped.
+[Evidence](evaluation/single-need-questions-2026-10-04/README.md).
+Coverage mood now delegates to the existing slot renderer; one move asks mood,
+without an appended negated anxiety/health question. Preserve this one-need
+boundary when integrating; no changes to safety/consent/state ownership.
+
+The canonical replay now imports the SDK from its own checkout. For service
+launches, confirm the selected Python, working directory and actual module path;
+an editable installation from main/another checkout is not the m5 runtime.
+Use the source SHA, profile/model IDs and module location together. Real
+CallActor/FreeSWITCH audio+trace, accepted neural voice, latency/interruption,
+Core and capacity still need target access and remain NOT VERIFIED.
+
 Общий Mac/Linux worker contract и серверный запуск: [portable production handoff](production-server-handoff.md).
 
 Текущий dialogue cut (2026-10-02): [user-led conversation handoff](user-led-conversation-integration.md).

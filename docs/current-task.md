@@ -15,8 +15,11 @@ failed2 existing tests; canonical/depth assertions retained and implementation
 corrected. Final focused121 PASS,9.44s; final rich679 PASS,10.20s; Ruff and
 whitespace PASS. Before/after SDK traces preserve medication disposition and
 next mood intent, replacing two independent questions with one. The isolated
-replay also verifies story/listen/resume and explicit stop. Exact source CI is
-pending publication; source replay is not a phone or human-quality benchmark.
+replay also verifies story/listen/resume and explicit stop. Exact verified source **03c8e26f4d174e18675a2d52c37eb08fe332290c**,
+[CI37164021083](https://github.com/Belvist/imvera/actions/runs/37164021083):
+**all11 jobs PASS**, full **3206 passed /0 failed /3 skipped**,226.55s;
+rich679 PASS,14.34s. Source replay is not a phone or human-quality benchmark.
+[Machine-readable results](evaluation/single-need-questions-2026-10-04/checks.json) preserve initial failures.
 
 NOT VERIFIED: actual target M5/server/worker deployment and accepted neural
 voice, audible interruption, end-of-speech latency, live Core/consent and load.
