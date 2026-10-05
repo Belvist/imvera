@@ -15,7 +15,8 @@ Scheduler/ack/summary treated unknown as caller. SDK payload could bypass bindin
 
 Existing subject_resolver now binds issue positions in original clauses. After a
 relative's clause, ambiguous continuation is UNKNOWN; explicit own reports and
-contrastive returns remain. Additive return requires an earlier owned complaint.
+anatomical contrastive returns remain. A conjunction alone after a relative
+does not prove an implicit sleep complaint belongs to the caller. Additive return requires an earlier owned complaint.
 Literal quoted words do not establish self reports. Existing legacy/payload binder
 shares this owner; unique original quotes rebase filtered offsets, ambiguous
 duplicate quotes abstain. No second brain/interpreter/scheduler/state writer.
@@ -48,13 +49,13 @@ three clinical complaints, canonical urgent and goodbye retain meaning.
 
 ## Evidence and limits
 
-18 regressions assert ownership, original evidence, accepted facts, question need,
+20 regressions assert ownership, original evidence, accepted facts, question need,
 summary and correction. Previous existing assertions unchanged. On baseline:
-11 FAIL/7 PASS (four missing new resolver APIs, seven behavioral failures).
-Current18 PASS. Full/gates/CI results are recorded in checks and current-task.
+13 FAIL/7 PASS (four missing new resolver APIs, nine behavioral failures).
+Current20 PASS. Full/gates/CI results are recorded in checks and current-task.
 
 Identical13 scenarios,31 user turns ×10 =310 SDK turns each. All playback completion
-is simulated. Baseline p50/p95 2.397/4.854ms; after2.153/4.172ms on shared CPU while
+is simulated. Baseline p50/p95 2.397/4.854ms; after2.448/7.444ms on shared CPU while
 other tests ran. This is not STT/NLP/phone latency or an acceleration claim.
 Question-bearing turns21→20 in this small text set, solely a mechanical count;
 not questions/minute, topic jump, human questionnaire-feel or a quality score.

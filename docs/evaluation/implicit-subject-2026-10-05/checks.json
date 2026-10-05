@@ -7,15 +7,15 @@
     "packages/dialogue_engine/issue_mention_extract.py": "1142514367336d8bd0a817c3ee8150dc4a92b3e12081331b8da8dbabdd180985",
     "packages/dialogue_engine/questions.py": "f05da2b87df426d04acee0e5e2a6b6370041081b185a19461e9f14b71b83726b",
     "packages/dialogue_engine/semantic_kernel/kernel.py": "6e355269a95222a7867ce66de4e42b5a21e176650523d2d83a10dd09f9460338",
-    "packages/dialogue_engine/semantic_kernel/observation_memory.py": "7a8544432d41c55298d4dd9217a2ed551b9552257aeb615cf151192d9faccd48",
-    "packages/dialogue_engine/semantic_kernel/subject_resolver.py": "16f9a4d9b961190fb27e18f9ceb8c5b1a7d75ee863f91077faa312aed40ed009",
+    "packages/dialogue_engine/semantic_kernel/observation_memory.py": "654f97c1eb41791e6b5b84b23cbb3e8696fc44253a3c41435c07d7b8ce88ac36",
+    "packages/dialogue_engine/semantic_kernel/subject_resolver.py": "097453a26372a599d97baddca6fa6fe3133a90d1157762825bfd9f64bb590f36",
     "packages/dialogue_engine/turn_understanding.py": "4c05133ba7dc3df76877e0f49d279513a3bf853980ab91b88d62d21c3a6d488b",
-    "tests/test_implicit_subject_ownership.py": "40c81eaa38cdb2beb469702dcde9af3dcf922058452f11d5bb4d9f8ff6016eeb",
+    "tests/test_implicit_subject_ownership.py": "994943fee068a4bae3a5a3d0a1de491e2ea81c06be21c6932231ab670dd3cf0b",
     "Makefile": "13acf60b6bacd4c693fac9625d0f212bdbc11f8677a5faef03156f1dc94c7642"
   },
   "new_tests": {
-    "current": "18 PASS,0.80s; final targeted26 PASS including phrase discipline/subject/resume",
-    "baseline": "11 FAIL,7 PASS,0.37s; four new resolver API import failures, seven behavioral failures"
+    "current": "20 PASS; final focused352 PASS/1.24s",
+    "baseline": "13 FAIL/7 PASS/0.62s; four new resolver API absences, nine behavior failures"
   },
   "paired_sdk": {
     "before": {
@@ -41,7 +41,7 @@
     },
     "after": {
       "checkout": "/workspace/imvera-live-review",
-      "head": "0abdc460f892498a3f025be2a2e74ab7d3acf532",
+      "head": "80f7685169adc5b8432cb382137bd95c2772955b",
       "dirty": true,
       "flags": {
         "IMVERA_DIALOGUE_ENGINE": "1",
@@ -55,13 +55,13 @@
       "scope": "synthetic canonical SDK; simulated audible completion",
       "repeats": 10,
       "text_turns": 310,
-      "sdk_turn_ms_p50": 2.1533519999366035,
-      "sdk_turn_ms_p95": 4.171855000095093,
+      "sdk_turn_ms_p50": 2.4483974999611746,
+      "sdk_turn_ms_p95": 7.444127000098888,
       "end_of_speech_to_PCM": "NOT_RUN",
       "provider_model_invocations": "NOT_MEASURED"
     }
   },
-  "local_full": "Final source RUNNING. Intermediate3418 PASS/3 FAIL/9 SKIP/154.39s:2 inherited LFS readiness,1 added policy literal caught by phrase gate; literal removed, existing shared_information_ack reused, focused26 PASS. No existing assertion weakened.",
+  "local_full": "Final pivot source RUNNING; published parent80f7685 exact local full3419 PASS/2 inherited LFS FAIL/9 SKIP/149.85s. Current352 focused PASS; existing assertions unchanged.",
   "ci": "NOT_RUN until exact-source publication",
   "live_audio_latency_capacity": "NOT_RUN",
   "known_gaps": [
@@ -75,9 +75,9 @@
   "no_new_model_stage": true,
   "live_model_invocations": "NOT_MEASURED",
   "gates": {
-    "rich": "860 PASS/13.30s",
+    "rich": "862 PASS (final pivot log)",
     "kernel": "294 PASS/1.51s",
-    "runtime": "322 PASS (see log duration)",
+    "runtime": "322 PASS/20.88s on parent80f7685; runtime bytes unchanged",
     "corpus": "500/500 PASS/6.54s;8 gate tests PASS/30.89s",
     "policy_diff": "12 expected/0 unexplained",
     "lint": "make lint: PASS; git diff --check: PASS"

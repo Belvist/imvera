@@ -62,7 +62,10 @@ def resolve_subject(
         clause = clauses[0][2] if clauses else text
         return _subject_for_clause(clause, has_issue=False), ()
 
-    subjects_by_position = resolve_issue_subjects(text, tuple(s.start for s in issues))
+    subjects_by_position = resolve_issue_subjects(
+        text, tuple(s.start for s in issues),
+        body_positions=tuple(s.start for s in spans if s.type == SpanType.BODY_SITE),
+    )
     relations: list[SemanticRelation] = []
     subjects: list[SubjectKind] = []
 
@@ -97,7 +100,9 @@ def resolve_subject(
     return SubjectKind.SPEAKER, tuple(relations)
 
 
-def resolve_issue_subjects(text: str, positions: tuple[int, ...]) -> dict[int, SubjectKind]:
+def resolve_issue_subjects(
+    text: str, positions: tuple[int, ...], *, body_positions: tuple[int, ...] = (),
+) -> dict[int, SubjectKind]:
     """Resolve implicit reports in their discourse, without assigning ambiguity.
 
     A relative's preceding clause removes the implicit-speaker default. Explicit
@@ -124,14 +129,16 @@ def resolve_issue_subjects(text: str, positions: tuple[int, ...]) -> dict[int, S
         contrast = bool(words and words[0] in {"а", "но", "однако"})
         additive = "ещё" in words[:3] or "еще" in words[:3] or "также" in words[:3]
         connective_only = clause.lower() in {"а", "но", "однако"}
+        body_pivot = any(start <= position < end for position in body_positions)
         for position in clause_positions:
             if any(left <= position < right for left, right in quoted):
                 subject = SubjectKind.UNKNOWN
             elif explicit != SubjectKind.UNKNOWN:
                 subject = explicit
             elif previous_explicit == SubjectKind.OTHER_PERSON:
-                subject = (SubjectKind.SPEAKER if contrast and (not additive or owned_issue)
-                           and (not connective_only or owned_issue)
+                subject = (SubjectKind.SPEAKER if contrast and (
+                    (body_pivot and not additive) or (owned_issue and (additive or connective_only))
+                )
                            else SubjectKind.UNKNOWN)
             else:
                 subject = _subject_for_clause(clause, has_issue=True)

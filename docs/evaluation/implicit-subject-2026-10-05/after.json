@@ -1,6 +1,6 @@
 {
   "checkout": "/workspace/imvera-live-review",
-  "head": "0abdc460f892498a3f025be2a2e74ab7d3acf532",
+  "head": "80f7685169adc5b8432cb382137bd95c2772955b",
   "dirty": true,
   "flags": {
     "IMVERA_DIALOGUE_ENGINE": "1",
@@ -14,8 +14,8 @@
   "scope": "synthetic canonical SDK; simulated audible completion",
   "repeats": 10,
   "text_turns": 310,
-  "sdk_turn_ms_p50": 2.1533519999366035,
-  "sdk_turn_ms_p95": 4.171855000095093,
+  "sdk_turn_ms_p50": 2.4483974999611746,
+  "sdk_turn_ms_p95": 7.444127000098888,
   "end_of_speech_to_PCM": "NOT_RUN",
   "provider_model_invocations": "NOT_MEASURED",
   "transcripts": {
@@ -457,8 +457,8 @@
       {
         "user": "Живот болит. Внук приезжал. А ещё спина.",
         "vera": "Понимаю, живот болит и спина болит. Давайте по порядку. Когда это началось — сегодня или раньше?",
-        "intent": "episode_ep-6b52088e_onset",
-        "slot": "episode_ep-6b52088e_onset",
+        "intent": "episode_ep-abb3feda_onset",
+        "slot": "episode_ep-abb3feda_onset",
         "marks_question": true,
         "wellness": "FILLED",
         "facts": {
@@ -520,8 +520,8 @@
       {
         "user": "Со вчера.",
         "vera": "А живот сейчас ещё беспокоит или уже стало лучше?",
-        "intent": "episode_ep-6b52088e_current",
-        "slot": "episode_ep-6b52088e_current",
+        "intent": "episode_ep-abb3feda_current",
+        "slot": "episode_ep-abb3feda_current",
         "marks_question": true,
         "wellness": "FILLED",
         "facts": {
@@ -593,8 +593,8 @@
       {
         "user": "Сильно.",
         "vera": "Понимаю, сильная боль — это тяжело. Спина болит — давайте уточним. Когда появилась эта боль — сегодня или раньше?",
-        "intent": "episode_ep-e1fac6b2_onset",
-        "slot": "episode_ep-e1fac6b2_onset",
+        "intent": "episode_ep-e406a1a4_onset",
+        "slot": "episode_ep-e406a1a4_onset",
         "marks_question": true,
         "wellness": "FILLED",
         "facts": {
@@ -666,8 +666,8 @@
       {
         "user": "Сейчас тоже болит.",
         "vera": "Поняла вас. Сейчас боль сильнее или уже становится легче?",
-        "intent": "episode_ep-e1fac6b2_severity",
-        "slot": "episode_ep-e1fac6b2_severity",
+        "intent": "episode_ep-e406a1a4_severity",
+        "slot": "episode_ep-e406a1a4_severity",
         "marks_question": true,
         "wellness": "FILLED",
         "facts": {
@@ -1159,8 +1159,8 @@
       {
         "user": "Рука болит опухла, давление высокое и сахар поднялся.",
         "vera": "Слышу вас: рука болит, давление и сахар. Давайте по порядку. Когда появилась эта боль — сегодня или раньше?",
-        "intent": "episode_ep-d68b0ff5_onset",
-        "slot": "episode_ep-d68b0ff5_onset",
+        "intent": "episode_ep-446d0ae0_onset",
+        "slot": "episode_ep-446d0ae0_onset",
         "marks_question": true,
         "wellness": "FILLED",
         "facts": {
@@ -1258,8 +1258,8 @@
       {
         "user": "Рука со вчера болит сильно, а давление сегодня поднялось.",
         "vera": "Сахар — давайте уточним. Когда это началось — сегодня или раньше?",
-        "intent": "episode_ep-0a52f02c_onset",
-        "slot": "episode_ep-0a52f02c_onset",
+        "intent": "episode_ep-b29ba3e1_onset",
+        "slot": "episode_ep-b29ba3e1_onset",
         "marks_question": true,
         "wellness": "FILLED",
         "facts": {

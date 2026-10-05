@@ -1152,6 +1152,10 @@ def resolve_mention_subjects(
     subjects = resolve_issue_subjects(raw_text, tuple(
         [s.start for s in issue_spans if s.type == SpanType.ISSUE]
         + [p for p in positions.values() if p is not None]
+    ), body_positions=tuple(
+        [s.start for s in issue_spans if s.type == SpanType.BODY_SITE]
+        + [positions[m.mention_id] for m in legacy_mentions
+           if m.body_site and positions[m.mention_id] is not None]
     )) if raw_text else {}
 
     def _legacy_subject(m: IssueMention) -> str:

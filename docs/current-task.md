@@ -11,8 +11,8 @@ ack and summary require own subject; unknown reports retained. A unique inactive
 report accepts explicit family correction, acknowledged without another question.
 No new model/brain/writer/flag/global policy cutover; safety/control bytes unchanged.
 
-VERIFIED: new18 PASS; baseline11 FAIL/7 PASS (four missing newly exposed APIs);
-paired13-case/310-turn SDK exchanges each, simulated delivery. Rich860, kernel294, runtime322, corpus500/500, policy diff12expected/0unexplained,
+VERIFIED: new20 PASS; baseline13 FAIL/7 PASS (four missing newly exposed APIs);
+paired13-case/310-turn SDK exchanges each, simulated delivery. Rich862, kernel294, runtime322, corpus500/500, policy diff12expected/0unexplained,
 make lint and whitespace PASS. Final full/CI remain pending in checks. No existing assertion weakened.
 NOT VERIFIED: deployed M5/image/provider profile, real phone/audio hearing and
 end-of-speech→PCM, full-system RAM/VRAM and100 actual calls.

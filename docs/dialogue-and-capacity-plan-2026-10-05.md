@@ -194,3 +194,9 @@ ActionPolicy authority, live hearing and100-call soak remain separate gates.
   runtime322, corpus500/500, policy diff12expected/0unexplained and lint PASS.
   SDK13 cases/310 turns each, simulated delivery; actual phone/capacity NOT_RUN.
   Final source full and exact CI results recorded in the evidence checks.
+
+- Self-review narrowed the existing contrastive pivot to grounded anatomy or
+  established own additive return. `Дочь приехала, а/но плохо спала` remains
+  UNKNOWN. Final20 regressions pass; baseline13 fail/7 pass (four API absences).
+  Source parent80f7685 local full3419/2 inherited LFS/9 skip. Final source full
+  and exact CI still being recorded; no deployment/flag promotion.
