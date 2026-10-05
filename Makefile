@@ -43,7 +43,8 @@ test-dialogue-rich:
 		tests/test_control_meaning_grounding.py tests/test_grounded_user_question_answer.py \
 		tests/test_question_report_grounding.py tests/test_single_need_questions.py \
 		tests/test_conversation_floor_navigation.py tests/test_personal_context_recall.py \
-		tests/test_volunteered_clinical_facts.py tests/test_multi_complaint_progression.py -q
+		tests/test_volunteered_clinical_facts.py tests/test_multi_complaint_progression.py \
+		tests/test_mixed_subject_routine_facts.py -q
 
 test-dialogue-runtime:
 	@echo "GATE: CallActor rich path + LLM worker contract"
@@ -59,7 +60,7 @@ test-dialogue-runtime:
 		tests/test_qwen_gguf_provider.py tests/test_qwen_tts_failure_integrity.py \
 		tests/test_tts_warmup.py tests/test_bounded_tts_streaming.py \
 		tests/test_production_inference.py tests/test_qwen_http_streaming.py \
-		tests/test_production_review_boundaries.py -q
+		tests/test_production_review_boundaries.py tests/test_replica_start_distribution.py -q
 
 test-action-policy-shadow:
 	@echo "GATE: ActionPolicy Shadow M1 (fail-open, pre-legacy, no cutover)"

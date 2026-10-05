@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — 2026-10-05
+
+- Bind explicit mixed-subject routine facts and mission wellness to original caller-owned clauses; prevent contextual whole-turn overwrites and foreign-sleep topic transitions. Preserve existing plans and non-mixed clinical compatibility.
+- Share bounded-lifetime replica rotation across live STT/TTS clients with identical endpoint membership; rotate optional STT prefixes without retries. Verify100 controlled client requests50/50 without claiming model or phone capacity.
+- Record paired SDK exchanges, remaining semantic ownership/safety-wording/coverage counterexamples and measured-STT-based100-call resource assumptions with separate burst and TTS gates.
+
 ## Unreleased — 2026-10-04
 
 - Preserve all grounded multi-complaint labels; accept episode-owned hedged clocks, scope temporal repeats to episode identity and continue queued complaints after exhausted clarification. Existing digest retains up to6 complaints.

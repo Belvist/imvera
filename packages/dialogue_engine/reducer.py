@@ -1549,20 +1549,28 @@ def _apply_rich_turn(
                 thread_mode=decision.thread_mode,
             )
 
+    speaker_mentions = tuple(m for m in turn.issue_mentions if m.subject == "speaker")
     if turn.issue_mentions and answer_slot in ("wellness", "mood", "sleep", "plans"):
-        if answer_slot == "wellness" and not state.wellness_concern:
-            state.wellness_concern = user_text
+        from packages.dialogue_engine.issue_mention_extract import requires_scoped_goal_evidence
+
+        scoped = requires_scoped_goal_evidence(user_text)
+        if (answer_slot == "wellness" and not state.wellness_concern
+                and (not scoped or speaker_mentions)):
+            concern_text = speaker_mentions[0].evidence.quote if scoped else user_text
+            state.wellness_concern = concern_text
             rec = state.slot_records.get("wellness")
-            if rec is None or rec.value in ("", "negative", "positive", "neutral"):
+            if (rec is None or rec.value in ("", "negative", "positive", "neutral")) and (
+                not scoped or not any(fact.field == "wellness" for fact in turn.goal_facts)
+            ):
                 from packages.dialogue_engine.fast_interpreter import _detect_polarity
 
                 apply_slot_answer(
                     state,
                     "wellness",
-                    user_text,
+                    concern_text,
                     turn_id=turn.utterance_id,
-                    source_text=user_text,
-                    polarity=_detect_polarity(user_text),
+                    source_text=concern_text,
+                    polarity=_detect_polarity(concern_text),
                 )
         slot_filled = _apply_goal_facts(state, turn)
         if slot_filled and turn.answers_pending_question:
@@ -2817,12 +2825,18 @@ def _advance_after_fills(
             user_text = (
                 (rec.source_text if rec else "") or state.slot_values.get("wellness", "")
             )
+        from packages.dialogue_engine.issue_mention_extract import requires_scoped_goal_evidence
+
+        wellness_text = user_text
+        if requires_scoped_goal_evidence(user_text):
+            rec = state.slot_records.get("wellness")
+            wellness_text = rec.source_text if rec is not None else ""
         state.set_background_goal_coverage("wellness", BackgroundGoalCoverage.ANSWERED)
-        if should_start_topic_flow(state, user_text, answer_slot="wellness"):
+        if should_start_topic_flow(state, wellness_text, answer_slot="wellness"):
             state.probe_phase = None
-            prime_topics(state, user_text)
+            prime_topics(state, wellness_text)
         else:
-            _apply_wellness_branch_state(state, user_text)
+            _apply_wellness_branch_state(state, wellness_text)
         for slot in filled_slots:
             if slot != "wellness":
                 state.set_background_goal_coverage(slot, BackgroundGoalCoverage.ANSWERED)

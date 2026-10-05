@@ -1,0 +1,106 @@
+{
+  "branch": "feature/voice-zoiper-m5",
+  "baseline_sha": "0b87de7285a59f62ceb3b2e45498d71d2a0833aa",
+  "tested_source_sha": "PENDING_SOURCE_COMMIT",
+  "exact_source_ci": {
+    "status": "PENDING"
+  },
+  "implementation_sha256": {
+    "Makefile": "80acb59f3b80c684a51e3ec3a7f080beee7ae9b232dcaecceecc2dfcf252e690",
+    "packages/dialogue_engine/deterministic_mission.py": "504c4fcc7db0187d4d068529207ba9c0dbaf27987e1ad923c93a5288fa4aefc0",
+    "packages/dialogue_engine/issue_mention_extract.py": "98b1e02628722f5564b10ab52a515c791b507539e15e869d46ec76f90e382d50",
+    "packages/dialogue_engine/reducer.py": "553e4ff12ec1c4d723766837f5ff17a4923dd992f5a90629622926976651b38b",
+    "packages/dialogue_engine/turn_understanding.py": "df89cd655d7429a47bc27b5881e0d04c3890c51cd3a10f60234ba7d53296b276",
+    "services/providers/replica_pool.py": "2ede1ad860ab49b26b86891bf8c27936586bf3e6765298434c39a533a2de8a18",
+    "services/stt/http_provider.py": "1a1ef295e04b38c05f1fc394c86dbf8415a8d8d3e80b4ce106e1e18ef88b730f",
+    "tests/test_mixed_subject_routine_facts.py": "c9530fba2c126ce73add889b85732e786a2f33b176f174df2b5abefba9f1d7ec",
+    "tests/test_replica_start_distribution.py": "10b190a71b376f40e18f427009749732e5503b30acbc750f8837d5f879c04dcd"
+  },
+  "gates": [
+    {
+      "command": "pytest tests/test_mixed_subject_routine_facts.py tests/test_replica_start_distribution.py -q",
+      "result": "17 passed in 0.45s; same final tests on original baseline16 FAIL/1 PASS/2.71s"
+    },
+    {
+      "command": "pytest tests/test_mixed_subject_routine_facts.py tests/test_replica_start_distribution.py tests/test_plan_fact_temporal_grounding.py tests/test_wellness_grounding.py -q",
+      "result": "94 PASS/6.41s; before final mixed-only compatibility/topic fix"
+    },
+    {
+      "command": "pytest tests/test_mixed_subject_routine_facts.py tests/test_clinical_ellipsis_grounding.py tests/test_dialogue_free_speech_regression.py tests/test_dialogue_question_quality.py tests/test_free_speech_corpus.py tests/test_issue_first_flows.py tests/test_live_clarification_loop.py tests/test_product_dialogue_pack.py tests/test_responsive_dialogue.py tests/test_topic_live_regression.py tests/test_topic_tracker.py -q",
+      "result": "265 PASS/2.22s; final source"
+    },
+    {
+      "command": "pytest tests/ -q",
+      "result": "3401 PASS/2 inherited genuine relation-LFS readiness FAIL/9 SKIP/145.89s"
+    },
+    {
+      "command": "make test-dialogue-rich",
+      "result": "842 PASS/10.99s"
+    },
+    {
+      "command": "make test-dialogue-runtime",
+      "result": "322 PASS/19.34s"
+    },
+    {
+      "command": "make dialogue-corpus-gate",
+      "result": "500/500 PASS/5.53s; gate tests8 PASS/28.49s"
+    },
+    {
+      "command": "python tools/voice_lab/policy_diff_v8_v9.py",
+      "result": "12 expected/0 unexplained/PASS"
+    },
+    {
+      "command": "make lint; git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "initial_regressions": {
+    "baseline_original_new_tests": "10 FAIL/1 PASS; initial assertions additionally assumed sleep valence and punctuation not promised by the SDK",
+    "first_full": "3386 PASS/17 FAIL/9 SKIP;15 introduced clinical/topic compatibility regressions +2 inherited LFS; all15 fixed without changing existing tests",
+    "test_contract_correction": "New tests now assert own exact original source offsets and actual reaction/next move, not inferred sleep polarity or one rotated phrase. Existing assertions unchanged.",
+    "final_tests_on_baseline": "16 FAIL/1 PASS/2.71s; final17 tests copied to detached0b87 worktree, original runtime bytes unchanged"
+  },
+  "sdk_replay": {
+    "cases": 12,
+    "text_turns_each": 380,
+    "scope": "canonical SDK; simulated heard completion; no STT/TTS/SIP",
+    "before_sdk_ms_p50": 2.7062145018135197,
+    "before_sdk_ms_p95": 6.036330996721517,
+    "after_sdk_ms_p50": 2.5243045020033605,
+    "after_sdk_ms_p95": 7.294814997294452,
+    "limitations": "Shared CPU while full suite running; no speed/quality/speech acceptance claim",
+    "provider_invocations": "NOT_MEASURED; no new model/provider stage introduced"
+  },
+  "routing_proof": {
+    "clients": 100,
+    "endpoint_first_hits": [
+      50,
+      50
+    ],
+    "level": "controlled real HttpSTT adapter requests/MockTransport; concurrent pool creation and first selections; no model/phone capacity",
+    "other_contracts": "weak cursor expiry, one URL, identical-config TTS retry order, optional-prefix no retries; existing failover/deadline/cancel tests in full suite"
+  },
+  "capacity_plan": {
+    "C": 100,
+    "T_per_call_per_min_assumed": 4,
+    "P_extra_preview_per_final_assumed": 0,
+    "target_utilization_assumed": 0.6,
+    "prior_measured_service_req_per_s": 1.889,
+    "measured_input_wav_s": 4.088,
+    "estimated_STT_replicas": 6,
+    "measured_service_source": "../multi-complaint-2026-10-04/stt-load.json",
+    "scope": "average-load sizing illustration, not accepted100calls; TTS/NLP/bursts/hardware unknown"
+  },
+  "not_verified": [
+    "target M5 deployment/profile/provider/backend revisions",
+    "actual phone warmth/end-to-end latency/recognition",
+    "whole-stack RAM/VRAM/throughput",
+    "100 concurrent admitted CallActor/SIP calls"
+  ],
+  "remaining_known_sdk_cases": [
+    "subjectless continuation after daughter may still become own clinical episode; routine fact now abstains",
+    "urgent wording \"трудно дышать\" not recognized in baseline or current replay; canonical \"Не могу дышать\" remains urgent_close/RED candidate",
+    "lexical coverage can treat clinical sugar as nutrition; ordered plans/minima still constrain conversation"
+  ],
+  "next_gate": "Resolve documented kernel subject/safety-wording and coverage counterexamples before product acceptance; then real CallActor/FreeSWITCH/audio/trace and10→100 model load soak"
+}

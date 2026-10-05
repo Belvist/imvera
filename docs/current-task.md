@@ -1,3 +1,36 @@
+# Собственные факты и100 клиентов — 2026-10-05 UTC
+
+Target **feature/voice-zoiper-m5**, baseline **0b87de7**; main untouched.
+[Plan/journal/resource formula](dialogue-and-capacity-plan-2026-10-05.md),
+[actual paired SDK exchanges and limits](evaluation/subject-and-replicas-2026-10-05/README.md),
+[source/CI/checks](evaluation/subject-and-replicas-2026-10-05/checks.json).
+
+CHANGED: original speaker-owned routine fact clauses; shared mission wellness
+boundary; no whole-turn contextual resurrection; mixed-only compatibility/source
+and first-topic ownership. Plans and non-mixed clinical paths preserved. Locked
+weak shared replica cursor and one-attempt optional prefixes. No new brain/model/
+generator/flag; production profile admission1 unchanged.
+
+VERIFIED: local full3401 PASS/2 inherited relation-LFS readiness FAIL/9 SKIP/145.89s;
+rich842 PASS/10.99s; runtime322 PASS/19.34s; corpus500/500/5.53s; policy diff12expected/
+0unexplained; Ruff/whitespace PASS. Routing100 controlled independent adapter
+requests50/50, identities distinct and intact; not100 model/phone capacity. Existing
+15 clinical/topic regressions corrected without changing existing assertions.
+Paired SDK12cases/380turns each; simulated delivery. Exact sourceCI recorded after run.
+
+NOT VERIFIED: actual M5 deployed SHA/profile/providers, phone warmth/recognition,
+end-of-speech→PCM latency, whole-stack RAM/VRAM and100 admitted calls.
+REMAINING RISKS: subjectless family continuation may still become an own kernel
+clinical episode; source replay «трудно дышать» lacks urgent handling in baseline
+and current code; canonical «Не могу дышать» remains urgent. These block product
+acceptance. Lexical coverage/ordered minima remain, CPU-STT6 replicas is only an
+average-workload estimate; real TTS and burst capacity unmeasured.
+NEXT GATE: close documented semantic ownership/safety-wording/coverage counterexamples,
+then target CallActor/FreeSWITCH/audio/raw trace and staged compute load acceptance.
+No target M5/FreeSWITCH/DB restart/deployment performed.
+
+---
+
 # Несколько жалоб: ownership/память и измеренная нагрузка — 2026-10-04 UTC
 
 Цель **feature/voice-zoiper-m5**, baseline **ad5aad75037ac7b2df048b8cd190cafbd5c754bc**.

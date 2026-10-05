@@ -1,5 +1,29 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## Собственные факты и replica routing — 2026-10-05
+
+[Plan/resource model](dialogue-and-capacity-plan-2026-10-05.md),
+[evidence and known counterexamples](evaluation/subject-and-replicas-2026-10-05/README.md),
+[exact source/CI](evaluation/subject-and-replicas-2026-10-05/checks.json).
+Keep one Understand/Reducer/state/selector/renderer. Do not repeat a mixed-story
+fact harvester or turn foreign symptoms into own wellness in CallActor. Plans keep
+original tense/span owner. No new flag/generative speech/global policy promotion.
+
+Configured independent replicas now rotate across concurrently live adapters in
+one process; URL ordering defines the pool. STT prefixes rotate once/no retry.
+Do not count repeated HTTP aliases pointing to one resident voice model as capacity.
+Production profile cap1 unchanged. Six CPU-STT replicas is only an assumed average
+T4/min,C100 estimate on prior4.088s WAV service curve, not accepted full calls.
+
+Before accepting deployment verify actual bridge/image/SHA/profile/provider/backend
+revision, drain active calls and repeat own sleep vs daughter's opposite sleep,
+three complaints, question/stop/canonical urgent. Record STT.raw_text/text, accepted
+source offsets, heard need/episode and first PCM. Workspace did not restart target.
+Known semantic continuation and «трудно дышать» cases remain OPEN in SDK replays;
+close them before claiming product safety/human dialogue. Real phone and100-call
+model load acceptance remain NOT VERIFIED; see evidence for exact commands/limits.
+
+
 ## Несколько жалоб и capacity — 2026-10-04 UTC
 
 [Причины, before/after, реальные STT измерения и ограничения](evaluation/multi-complaint-2026-10-04/README.md).

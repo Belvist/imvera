@@ -548,6 +548,16 @@ def _wellness_speaker_text(text: str) -> str | None:
     raw = (text or "").strip()
     if not raw:
         return None
+    from packages.dialogue_engine.issue_mention_extract import (
+        requires_scoped_goal_evidence,
+        speaker_goal_clauses,
+    )
+
+    if requires_scoped_goal_evidence(raw):
+        # Use the same subject boundary as check-slot facts. A joined story
+        # is neither a contiguous quote nor the caller's wellness evidence.
+        return next((clause.text for clause in speaker_goal_clauses(raw)
+                     if _wellness_grounded(clause.text)), None)
     try:
         from packages.dialogue_engine.policy import _is_other_person_only
     except Exception:  # noqa: BLE001

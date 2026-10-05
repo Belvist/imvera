@@ -11,6 +11,22 @@ single URL keeps the exact old behavior (one-element pool, no failover).
 from __future__ import annotations
 
 import threading
+import weakref
+
+
+class _ReplicaCursor:
+    def __init__(self) -> None:
+        self.index = 0
+        self.lock = threading.Lock()
+
+
+# Concurrent CallActors construct independent adapters. Share only routing
+# rotation, never call/request/cancellation state. Obsolete configs expire
+# when their last pool disappears; this is not a distributed load balancer.
+_cursors: weakref.WeakValueDictionary[tuple[str, ...], _ReplicaCursor] = (
+    weakref.WeakValueDictionary()
+)
+_cursors_lock = threading.Lock()
 
 
 class FatalProviderError(Exception):
@@ -39,8 +55,13 @@ class ReplicaPool:
         if not base_urls:
             raise ValueError("replica pool needs at least one URL")
         self._urls = [u.rstrip("/") for u in base_urls]
-        self._idx = 0
-        self._lock = threading.Lock()
+        key = tuple(self._urls)
+        with _cursors_lock:
+            cursor = _cursors.get(key)
+            if cursor is None:
+                cursor = _ReplicaCursor()
+                _cursors[key] = cursor
+            self._cursor = cursor
 
     def __len__(self) -> int:
         return len(self._urls)
@@ -50,8 +71,8 @@ class ReplicaPool:
         return list(self._urls)
 
     def order(self) -> list[str]:
-        """URLs to try in order, starting point rotated per call."""
-        with self._lock:
-            start = self._idx % len(self._urls)
-            self._idx += 1
+        """Rotate first choice across live clients with the same configuration."""
+        with self._cursor.lock:
+            start = self._cursor.index % len(self._urls)
+            self._cursor.index = (start + 1) % len(self._urls)
         return self._urls[start:] + self._urls[:start]
