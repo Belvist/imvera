@@ -16,7 +16,10 @@ rich842 PASS/10.99s; runtime322 PASS/19.34s; corpus500/500/5.53s; policy diff12e
 0unexplained; Ruff/whitespace PASS. Routing100 controlled independent adapter
 requests50/50, identities distinct and intact; not100 model/phone capacity. Existing
 15 clinical/topic regressions corrected without changing existing assertions.
-Paired SDK12cases/380turns each; simulated delivery. Exact sourceCI recorded after run.
+Paired SDK12cases/380turns each; simulated delivery. Exact source **d3224982996dd418682926edfa27f482683f83ae**:
+[CI37248532450](https://github.com/Belvist/imvera/actions/runs/37248532450), all11 PASS;
+**3409 PASS/0 FAIL/3 SKIP/206.11s** with genuine LFS/model readiness. Follow-up
+metadata only; runtime/test/config/workflow bytes unchanged from tested source.
 
 NOT VERIFIED: actual M5 deployed SHA/profile/providers, phone warmth/recognition,
 end-of-speech→PCM latency, whole-stack RAM/VRAM and100 admitted calls.

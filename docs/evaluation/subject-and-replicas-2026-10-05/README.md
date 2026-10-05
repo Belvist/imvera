@@ -48,6 +48,14 @@ STT/TTS/phone first audio or human rating measured. Total model invocations unme
 
 ## VERIFIED
 
+Exact source **d3224982996dd418682926edfa27f482683f83ae**:
+[CI37248532450](https://github.com/Belvist/imvera/actions/runs/37248532450), all11
+jobs PASS; **3409 PASS/0 FAIL/3 SKIP/206.11s**. Actual LFS objects fetched;
+model readiness tests passed, including both local failures. Follow-up changes
+report/provenance/resource arithmetic only; runtime/test/config/workflow bytes
+are identical to tested source. [Capacity arithmetic](capacity-sizing.json)
+labels assumptions, average load, separate bursts and unknown TTS/whole-stack.
+
 - Same final17 regression tests: baseline16 FAIL/1 PASS/2.71s; changed source17 PASS.
 - Final local suite3401 PASS/2 inherited relation-LFS readiness FAIL/9 SKIP/145.89s.
 - Rich842 PASS/10.99s, runtime322 PASS/19.34s.

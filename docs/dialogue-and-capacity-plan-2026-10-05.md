@@ -156,3 +156,10 @@ explicit mixed-subject reproduction; it does not claim free human conversation.
   subjectless foreign-story sleep episode and urgent wording «трудно дышать».
   These block product acceptance; canonical urgent handling remains intact.
   Replays do not establish phone warmth/recognition, target latency or100-call load.
+
+- Published source **d3224982996dd418682926edfa27f482683f83ae** to m5.
+  [CI37248532450](https://github.com/Belvist/imvera/actions/runs/37248532450):
+  all11 PASS; full3409/0/3,206.11s, genuine LFS/model readiness PASS.
+  Follow-up changes docs/resource arithmetic only, preserving tested runtime,
+  test/config/workflow bytes. Production/human/100-call acceptance remains OPEN.
+  [Explicit capacity arithmetic](evaluation/subject-and-replicas-2026-10-05/capacity-sizing.json).

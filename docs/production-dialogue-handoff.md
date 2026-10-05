@@ -5,6 +5,10 @@
 [Plan/resource model](dialogue-and-capacity-plan-2026-10-05.md),
 [evidence and known counterexamples](evaluation/subject-and-replicas-2026-10-05/README.md),
 [exact source/CI](evaluation/subject-and-replicas-2026-10-05/checks.json).
+Verified source **d3224982996dd418682926edfa27f482683f83ae**,
+[CI37248532450](https://github.com/Belvist/imvera/actions/runs/37248532450): all11 PASS,
+3409 PASS/0 FAIL/3 SKIP/206.11s; genuine LFS/model readiness PASS. Metadata-only
+follow-up leaves runtime/test/config/workflow identical to this tested source.
 Keep one Understand/Reducer/state/selector/renderer. Do not repeat a mixed-story
 fact harvester or turn foreign symptoms into own wellness in CallActor. Plans keep
 original tense/span owner. No new flag/generative speech/global policy promotion.

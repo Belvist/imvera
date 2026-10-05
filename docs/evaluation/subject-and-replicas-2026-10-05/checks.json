@@ -1,9 +1,27 @@
 {
   "branch": "feature/voice-zoiper-m5",
   "baseline_sha": "0b87de7285a59f62ceb3b2e45498d71d2a0833aa",
-  "tested_source_sha": "PENDING_SOURCE_COMMIT",
+  "tested_source_sha": "d3224982996dd418682926edfa27f482683f83ae",
   "exact_source_ci": {
-    "status": "PENDING"
+    "run_id": 37248532450,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37248532450",
+    "head_sha": "d3224982996dd418682926edfa27f482683f83ae",
+    "status": "PASS",
+    "jobs": {
+      "contracts": "success",
+      "policy-diff": "success",
+      "dialogue-rich": "success",
+      "production-workers": "success",
+      "semantic-kernel": "success",
+      "legacy-lint": "success",
+      "dialogue-runtime": "success",
+      "action-policy-shadow": "success",
+      "dialogue-corpus-gate": "success",
+      "lint-dialogue": "success",
+      "test": "success"
+    },
+    "full_suite": "3409 PASS/0 FAIL/3 SKIP/206.11s",
+    "genuine_weights": "Actual git lfs fetch seen; full model readiness tests passed; pre-full63 PASS/7.41s"
   },
   "implementation_sha256": {
     "Makefile": "80acb59f3b80c684a51e3ec3a7f080beee7ae9b232dcaecceecc2dfcf252e690",
@@ -89,7 +107,8 @@
     "measured_input_wav_s": 4.088,
     "estimated_STT_replicas": 6,
     "measured_service_source": "../multi-complaint-2026-10-04/stt-load.json",
-    "scope": "average-load sizing illustration, not accepted100calls; TTS/NLP/bursts/hardware unknown"
+    "scope": "average-load sizing illustration, not accepted100calls; TTS/NLP/bursts/hardware unknown",
+    "arithmetic_artifact": "capacity-sizing.json"
   },
   "not_verified": [
     "target M5 deployment/profile/provider/backend revisions",
@@ -102,5 +121,6 @@
     "urgent wording \"трудно дышать\" not recognized in baseline or current replay; canonical \"Не могу дышать\" remains urgent_close/RED candidate",
     "lexical coverage can treat clinical sugar as nutrition; ordered plans/minima still constrain conversation"
   ],
-  "next_gate": "Resolve documented kernel subject/safety-wording and coverage counterexamples before product acceptance; then real CallActor/FreeSWITCH/audio/trace and10→100 model load soak"
+  "next_gate": "Resolve documented kernel subject/safety-wording and coverage counterexamples before product acceptance; then real CallActor/FreeSWITCH/audio/trace and10→100 model load soak",
+  "metadata_followup": "Documentation/resource arithmetic only; runtime/test/config/workflow bytes identical to exact-CI source"
 }
