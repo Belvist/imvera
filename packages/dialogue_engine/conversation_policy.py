@@ -253,8 +253,8 @@ def _missing_question_need(state: EngineState, ep) -> QuestionNeed | None:
     """Product pack owns next step — not information_gain scoring."""
     from packages.dialogue_engine.product import next_product_need
 
-    # Other person's episode: no speaker-directed probes from ANY path.
-    if getattr(ep, "subject", "unknown") == "other_person":
+    # A personal probe requires an established speaker subject.
+    if getattr(ep, "subject", "unknown") != "speaker":
         return None
     return next_product_need(state, ep)
 
@@ -279,11 +279,11 @@ def _all_episodes_resolved(state: EngineState) -> bool:
 
 
 def _has_open_episodes(state: EngineState) -> bool:
-    # Other person's episodes never block the speaker's flow (recorded only).
+    # Unowned/foreign reports stay recorded without blocking personal probes.
     def _open(eid: str | None) -> bool:
         ep = state.issue_episodes.get(eid or "")
         return bool(
-            ep and ep.status != "resolved" and ep.subject != "other_person"
+            ep and ep.status != "resolved" and ep.subject == "speaker"
         )
 
     if _open(state.active_episode_id):
@@ -521,9 +521,8 @@ def _next_episode_plan(state: EngineState) -> ResponsePlan | None:
             return None
         # Pack owns completion. Legacy episode_complete alone must not skip pack steps
         # (e.g. sleep «плохо спал» used to jump to ITS without pattern/daytime).
-        # Other person's complaint: recorded, never interrogated — advance
-        # past it without speaker-directed probes (reviewer item 2).
-        if ep.subject == "other_person":
+        # Unowned/foreign reports cannot authorize a speaker-directed probe.
+        if ep.subject != "speaker":
             activate_next_pending_episode(state)
             bridge_next = True
             continue
@@ -762,6 +761,12 @@ def _correction_plan(state: EngineState, turn: RichUserTurn) -> ResponsePlan:
         if ep_id:
             state.active_episode_id = ep_id
             ep = state.issue_episodes[ep_id]
+    if ep is not None and ep.subject != "speaker":
+        return ResponsePlan(
+            obligation=ConversationObligation.HANDLE_CORRECTION,
+            action="speak", acknowledge=questions.shared_information_ack(),
+            intent="episode_correction_ack", marks_question=False,
+        )
     label = ep.primary_label if ep else ""
     ack = f"Да, вы говорили, что {label}." if ep else "Понимаю."
     need = None
@@ -794,7 +799,7 @@ def _grounded_ack_for_mentions(
     if not turn.issue_mentions:
         return ""
     speaker_mentions = [
-        m for m in turn.issue_mentions if getattr(m, "subject", "unknown") != "other_person"
+        m for m in turn.issue_mentions if getattr(m, "subject", "speaker") == "speaker"
     ]
     labels = [(m.label or "").strip().lower() for m in speaker_mentions if m.label]
     from packages.dialogue_engine.issue_memory import clinical_issue_concept

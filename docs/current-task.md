@@ -1,3 +1,28 @@
+# Implicit clinical subject ownership — 2026-10-05 UTC
+
+Target **feature/voice-zoiper-m5**, baseline **0abdc46**; main untouched.
+[Evidence, actual exchanges and handoff](evaluation/implicit-subject-2026-10-05/README.md),
+[checks/source fingerprints](evaluation/implicit-subject-2026-10-05/checks.json).
+
+CHANGED: kernel/legacy/SDK share original-clause clinical subject binding; quoted
+and ambiguous family continuations cannot become own reports. Routine facts stay
+scoped, including family-only turns and proposed payload facts. Existing scheduler,
+ack and summary require own subject; unknown reports retained. A unique inactive
+report accepts explicit family correction, acknowledged without another question.
+No new model/brain/writer/flag/global policy cutover; safety/control bytes unchanged.
+
+VERIFIED: new18 PASS; baseline11 FAIL/7 PASS (four missing newly exposed APIs);
+paired13-case/310-turn SDK exchanges each, simulated delivery. Rich860, kernel294, runtime322, corpus500/500, policy diff12expected/0unexplained,
+make lint and whitespace PASS. Final full/CI remain pending in checks. No existing assertion weakened.
+NOT VERIFIED: deployed M5/image/provider profile, real phone/audio hearing and
+end-of-speech→PCM, full-system RAM/VRAM and100 actual calls.
+REMAINING RISKS: family-only→`А у меня всё нормально` repair; breathing wording;
+lexical coverage and ordered minima; arbitrary unpunctuated references/quotes.
+NEXT GATE: grounded coverage/breathing meaning with preserved hard safety; then
+target full phone/audio/raw-trace acceptance. No target restart/deployment.
+
+---
+
 # Собственные факты и100 клиентов — 2026-10-05 UTC
 
 Target **feature/voice-zoiper-m5**, baseline **0b87de7**; main untouched.

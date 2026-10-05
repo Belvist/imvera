@@ -1125,57 +1125,73 @@ def observations_to_issue_mentions(
     return tuple(mentions)
 
 
-def merge_legacy_mentions(
-    kernel_mentions: tuple[IssueMention, ...],
+def resolve_mention_subjects(
     legacy_mentions: tuple[IssueMention, ...],
     raw_text: str = "",
+    *,
+    issue_spans: tuple[SemanticSpan, ...] = (),
 ) -> tuple[IssueMention, ...]:
-    """Legacy may only fill gaps — kernel meaning always wins.
-
-    Legacy mentions are subject-BLIND: resolve each one's clause and drop
-    OTHER_PERSON symptoms (a husband's complaint must never become the
-    speaker's episode). unknown is preserved, never defaulted.
-    """
+    """Canonical subject/evidence binding for legacy and SDK payload mentions."""
     from packages.dialogue_engine.semantic_kernel.subject_resolver import (
         _subject_for_clause,
+        resolve_issue_subjects,
     )
 
+    def _source_position(m: IssueMention) -> int | None:
+        evidence = m.evidence
+        if not raw_text or not evidence:
+            return None
+        if raw_text[evidence.start:evidence.end] == evidence.quote:
+            return evidence.start
+        # Some old extractors return offsets in a filtered sentence. Recover
+        # only an unambiguous exact original quote; never borrow a nearby owner.
+        positions = [match.start() for match in re.finditer(re.escape(evidence.quote), raw_text)]
+        return positions[0] if len(positions) == 1 else None
+
+    positions = {m.mention_id: _source_position(m) for m in legacy_mentions}
+    subjects = resolve_issue_subjects(raw_text, tuple(
+        [s.start for s in issue_spans if s.type == SpanType.ISSUE]
+        + [p for p in positions.values() if p is not None]
+    )) if raw_text else {}
+
     def _legacy_subject(m: IssueMention) -> str:
+        position = positions[m.mention_id]
+        if position is not None and position in subjects:
+            return subjects[position].value
+        if raw_text:
+            return "unknown"
         existing = (getattr(m, "subject", "") or "").strip().lower()
         if existing and existing != "unknown":
             return existing
-        quote = ""
-        try:
-            quote = (m.evidence.quote or "") if m.evidence else ""
-        except Exception:  # noqa: BLE001
-            quote = ""
-        anchor = quote.strip().lower() or (m.label or "").strip().lower()
-        # Resolve the subject from the mention's OWN evidence clause. A wide
-        # window bled across clauses: «Живот болит. Внук приезжал. А ещё
-        # спина.» resolved both speaker complaints as other-person because
-        # «внук» sat inside the window. Window only when the quote is
-        # missing entirely.
-        if anchor:
-            clause = anchor
-        elif raw_text:
-            clause = raw_text.lower()
-        else:
-            clause = anchor
-        try:
-            return str(_subject_for_clause(clause, has_issue=True).value)
-        except Exception:  # noqa: BLE001
-            return "unknown"
+        # Compatibility callers without original text can only resolve their
+        # own quote. Live and SDK callers above always supply original text.
+        anchor = m.evidence.quote.strip().lower() or (m.label or "").strip().lower()
+        return _subject_for_clause(anchor, has_issue=True).value
 
     resolved_legacy: list[IssueMention] = []
     for legacy in legacy_mentions:
         subj = _legacy_subject(legacy)
-        try:
-            legacy = legacy.model_copy(update={"subject": subj})
-        except Exception:  # noqa: BLE001
-            pass
-        if subj == "other_person" and legacy.kind == "symptom":
-            continue
+        legacy = legacy.model_copy(update={"subject": subj})
+        position = positions[legacy.mention_id]
+        if position is not None and raw_text:
+            legacy = legacy.model_copy(update={"evidence": legacy.evidence.model_copy(update={
+                "start": position, "end": position + len(legacy.evidence.quote),
+            })})
         resolved_legacy.append(legacy)
+    return tuple(resolved_legacy)
+
+
+def merge_legacy_mentions(
+    kernel_mentions: tuple[IssueMention, ...],
+    legacy_mentions: tuple[IssueMention, ...],
+    raw_text: str = "",
+    *,
+    issue_spans: tuple[SemanticSpan, ...] = (),
+) -> tuple[IssueMention, ...]:
+    """Legacy fills gaps; the shared resolver owns subject and original evidence."""
+    resolved_legacy = [m for m in resolve_mention_subjects(
+        legacy_mentions, raw_text, issue_spans=issue_spans,
+    ) if not (m.subject == "other_person" and m.kind == "symptom")]
     legacy_mentions = tuple(resolved_legacy)
     if not legacy_mentions:
         return kernel_mentions

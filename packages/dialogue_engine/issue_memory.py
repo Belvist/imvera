@@ -906,8 +906,18 @@ def _apply_correction(state: EngineState, turn: RichUserTurn) -> None:
         _low = (turn.raw_text or "").lower()
         if any(m in _low for m in OTHER_PERSON_MARKERS):
             _ep = get_active_episode(state)
+            if _ep is None:
+                # Unknown subjects cannot be probed, but a subsequent explicit
+                # correction can resolve their uniquely unresolved report.
+                candidates = [ep for ep in state.issue_episodes.values()
+                              if ep.subject == "unknown" and ep.status != "resolved"]
+                if len(candidates) == 1:
+                    _ep = candidates[0]
             if _ep is not None:
                 _ep.subject = "other_person"
+                state.active_episode_id = _ep.episode_id
+                if turn.utterance_id not in _ep.evidence_turn_ids:
+                    _ep.evidence_turn_ids.append(turn.utterance_id)
                 if state.pending_episode_attribute:
                     state.pending_episode_attribute = None
                 return

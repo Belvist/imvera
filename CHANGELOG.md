@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-05
 
+- Bind implicit clinical subjects through original discourse in the existing kernel/SDK owner; retain ambiguous foreign reports without caller-directed probing or recap. Scope family-only routine facts and structured proposals; rebase unique original evidence and acknowledge explicit family correction without another medical question.
+
 - Bind explicit mixed-subject routine facts and mission wellness to original caller-owned clauses; prevent contextual whole-turn overwrites and foreign-sleep topic transitions. Preserve existing plans and non-mixed clinical compatibility.
 - Share bounded-lifetime replica rotation across live STT/TTS clients with identical endpoint membership; rotate optional STT prefixes without retries. Verify100 controlled client requests50/50 without claiming model or phone capacity.
 - Record paired SDK exchanges, remaining semantic ownership/safety-wording/coverage counterexamples and measured-STT-based100-call resource assumptions with separate burst and TTS gates.

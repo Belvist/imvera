@@ -475,6 +475,8 @@ def enrich_payload_issue_mentions(
     raw_text: str,
 ) -> SemanticPayload:
     """Validate LLM mentions; emergency regex fallback only when field is empty."""
+    from packages.dialogue_engine.semantic_kernel.observation_memory import resolve_mention_subjects
+
     if payload.issue_mentions:
         validated = tuple(
             m
@@ -484,11 +486,15 @@ def enrich_payload_issue_mentions(
             )
             if m is not None
         )
-        return payload.model_copy(update={"issue_mentions": validated})
+        return payload.model_copy(update={
+            "issue_mentions": resolve_mention_subjects(validated, raw_text),
+        })
     extracted = extract_issue_mentions(raw_text)
     if not extracted:
         return payload
-    return payload.model_copy(update={"issue_mentions": extracted})
+    return payload.model_copy(update={
+        "issue_mentions": resolve_mention_subjects(extracted, raw_text),
+    })
 
 
 def payload_to_rich_turn(
@@ -500,7 +506,8 @@ def payload_to_rich_turn(
     from packages.dialogue_engine.mission import GoalAnswerCandidate, GoalDispositionCandidate
 
     enriched = enrich_payload_issue_mentions(payload, raw_text)
-    goal_facts = tuple(enriched.facts) or extract_goal_facts(raw_text)
+    goal_facts = (extract_goal_facts(raw_text) if requires_scoped_goal_evidence(raw_text)
+                  else tuple(enriched.facts) or extract_goal_facts(raw_text))
     correction = enriched.dialogue_act == "correction" or detect_correction(raw_text)
     user_q = enriched.user_question or detect_user_question(raw_text)
     goal_answers = tuple(

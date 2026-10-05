@@ -303,7 +303,7 @@ def concern_summary_phrase(state: EngineState) -> str:
     )
     for ep in eps:
         # Someone else's complaint is not the speaker's symptom list.
-        if (ep.subject or "unknown") == "other_person":
+        if (ep.subject or "unknown") != "speaker":
             continue
         label = (ep.primary_label or "").strip().lower()
         site = (ep.body_site or "").strip().lower()

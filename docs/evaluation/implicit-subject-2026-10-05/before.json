@@ -1,0 +1,1810 @@
+{
+  "checkout": "/tmp/imvera-implicit-subject-baseline",
+  "head": "0abdc460f892498a3f025be2a2e74ab7d3acf532",
+  "dirty": false,
+  "flags": {
+    "IMVERA_DIALOGUE_ENGINE": "1",
+    "IMVERA_COVERAGE_LADDER": "1",
+    "IMVERA_ACTION_POLICY_MODE": "off",
+    "IMVERA_LLM_INTERPRET": "0",
+    "IMVERA_MISSION_LLM_INTERPRET": "0",
+    "IMVERA_SPEECH_DAY": "102",
+    "IMVERA_SPEECH_HOUR": "14"
+  },
+  "scope": "synthetic canonical SDK; simulated audible completion",
+  "repeats": 10,
+  "text_turns": 310,
+  "sdk_turn_ms_p50": 2.3974169999974038,
+  "sdk_turn_ms_p95": 4.853840000009768,
+  "end_of_speech_to_PCM": "NOT_RUN",
+  "provider_model_invocations": "NOT_MEASURED",
+  "transcripts": {
+    "ambiguous_sleep": [
+      {
+        "user": "Я чувствую себя хорошо. Дочь приехала. Плохо спала.",
+        "vera": "Плохой сон — записала, спасибо. А покушать сегодня уже успели?",
+        "intent": "background_nutrition",
+        "slot": "background_nutrition",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Я чувствую себя хорошо",
+            "polarity": "positive",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Нет, я про дочь.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Я чувствую себя хорошо",
+            "polarity": "positive",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "я про дочь.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Я сама выспалась.",
+        "vera": "Спасибо, что сказали, как спалось. Есть ли у вас лекарства, которые вы обычно принимаете?",
+        "intent": "background_medication",
+        "slot": "background_medication",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive",
+          "sleep": "Я сама выспалась."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Я чувствую себя хорошо",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Я сама выспалась.",
+            "confidence": 0.9,
+            "source_turn_id": "u-3",
+            "source_text": "Я сама выспалась.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "thread_statement": "я про дочь.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      }
+    ],
+    "family_only": [
+      {
+        "user": "У дочери голова болит. Плохо спала.",
+        "vera": "Плохой сон — записала, спасибо. Подскажите, есть ли ещё что-то важное по здоровью или дома?",
+        "intent": "important_to_share",
+        "slot": "important_to_share",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "У дочери голова болит. Плохо спала.",
+          "sleep": "У дочери голова болит. Плохо спала."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "У дочери голова болит. Плохо спала.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "У дочери голова болит. Плохо спала.",
+            "polarity": "negative",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "У дочери голова болит. Плохо спала.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "У дочери голова болит. Плохо спала.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "А у меня всё нормально.",
+        "vera": "Я вас слушаю. Если хотите, можете сказать, что ещё для вас сейчас важно.",
+        "intent": "important_to_share_listen",
+        "slot": "important_to_share",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "У дочери голова болит. Плохо спала.",
+          "sleep": "У дочери голова болит. Плохо спала."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "У дочери голова болит. Плохо спала.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "У дочери голова болит. Плохо спала.",
+            "polarity": "negative",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "У дочери голова болит. Плохо спала.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "У дочери голова болит. Плохо спала.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "thread_statement": "А у меня всё нормально.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-family_only",
+            "utterance_id": "u-2",
+            "text": "А у меня всё нормально.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ],
+    "ambiguous_addition": [
+      {
+        "user": "Мне хорошо. Дочь приехала. А ещё плохо спала.",
+        "vera": "Плохой сон — записала, спасибо. Как сегодня с едой — нормально поели?",
+        "intent": "background_nutrition",
+        "slot": "background_nutrition",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Мне хорошо",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      }
+    ],
+    "explicit_self_return": [
+      {
+        "user": "Дочь выспалась, а я плохо спала.",
+        "vera": "Плохой сон — записала, спасибо. Что ночью мешало спать?",
+        "intent": "topic_sleep_pattern",
+        "slot": "topic_sleep",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "sleep": "а я плохо спала.",
+          "wellness": "positive"
+        },
+        "slot_records": {
+          "sleep": {
+            "value": "а я плохо спала.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "а я плохо спала.",
+            "polarity": null,
+            "confirmed": false
+          },
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "а я плохо спала.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Сегодня ночью.",
+        "vera": "А днём как — есть усталость?",
+        "intent": "topic_sleep_daytime_impact",
+        "slot": "topic_sleep",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "sleep": "а я плохо спала.",
+          "wellness": "positive"
+        },
+        "slot_records": {
+          "sleep": {
+            "value": "а я плохо спала.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "а я плохо спала.",
+            "polarity": null,
+            "confirmed": false
+          },
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "а я плохо спала.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Днём устала.",
+        "vera": "Поняла вас. Спасибо, что рассказали. Спасибо, Тамара Юрьевна. Я записала: плохой сон. На сегодня всё. Берегите себя.",
+        "intent": "summary",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "sleep": "а я плохо спала.",
+          "wellness": "negative"
+        },
+        "slot_records": {
+          "sleep": {
+            "value": "а я плохо спала.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "а я плохо спала.",
+            "polarity": null,
+            "confirmed": false
+          },
+          "wellness": {
+            "value": "negative",
+            "confidence": 0.9,
+            "source_turn_id": "u-3",
+            "source_text": "Днём устала.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      }
+    ],
+    "own_complaint_social_aside": [
+      {
+        "user": "Живот болит. Внук приезжал. А ещё спина.",
+        "vera": "Понимаю, живот болит и спина болит. Давайте по порядку. Когда это началось — сегодня или раньше?",
+        "intent": "episode_ep-362f8250_onset",
+        "slot": "episode_ep-362f8250_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Живот болит. Внук приезжал. А ещё спина."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "Живот болит. Внук приезжал. А ещё спина.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Живот болит. Внук приезжал. А ещё спина.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "боль в животе",
+            "site": "живот",
+            "subject": "speaker",
+            "known": {
+              "current": "Сильно.",
+              "_product_family": "abdominal",
+              "_product_asked:onset": "1",
+              "onset": "Со вчера.",
+              "_product_asked:current": "1",
+              "severity": "Сильно."
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "Спина болит",
+            "site": "спина",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "onset": "Сейчас тоже болит.",
+              "_product_asked:severity": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Со вчера.",
+        "vera": "А живот сейчас ещё беспокоит или уже стало лучше?",
+        "intent": "episode_ep-362f8250_current",
+        "slot": "episode_ep-362f8250_current",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Живот болит. Внук приезжал. А ещё спина."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "Живот болит. Внук приезжал. А ещё спина.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Живот болит. Внук приезжал. А ещё спина.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "current",
+        "episodes": [
+          {
+            "label": "боль в животе",
+            "site": "живот",
+            "subject": "speaker",
+            "known": {
+              "current": "Сильно.",
+              "_product_family": "abdominal",
+              "_product_asked:onset": "1",
+              "onset": "Со вчера.",
+              "_product_asked:current": "1",
+              "severity": "Сильно."
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "Спина болит",
+            "site": "спина",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "onset": "Сейчас тоже болит.",
+              "_product_asked:severity": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "onset",
+            "value": "Со вчера.",
+            "site": "живот",
+            "subject": "speaker",
+            "evidence": "Со вчера.",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Сильно.",
+        "vera": "Понимаю, сильная боль — это тяжело. Спина болит — давайте уточним. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-6ded88ce_onset",
+        "slot": "episode_ep-6ded88ce_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Живот болит. Внук приезжал. А ещё спина."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "Живот болит. Внук приезжал. А ещё спина.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Живот болит. Внук приезжал. А ещё спина.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "боль в животе",
+            "site": "живот",
+            "subject": "speaker",
+            "known": {
+              "current": "Сильно.",
+              "_product_family": "abdominal",
+              "_product_asked:onset": "1",
+              "onset": "Со вчера.",
+              "_product_asked:current": "1",
+              "severity": "Сильно."
+            },
+            "unanswered": {},
+            "status": "resolved"
+          },
+          {
+            "label": "Спина болит",
+            "site": "спина",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "onset": "Сейчас тоже болит.",
+              "_product_asked:severity": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "onset",
+            "value": "Со вчера.",
+            "site": "живот",
+            "subject": "speaker",
+            "evidence": "Со вчера.",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Сейчас тоже болит.",
+        "vera": "Поняла вас. Сейчас боль сильнее или уже становится легче?",
+        "intent": "episode_ep-6ded88ce_severity",
+        "slot": "episode_ep-6ded88ce_severity",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Живот болит. Внук приезжал. А ещё спина."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "Живот болит. Внук приезжал. А ещё спина.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Живот болит. Внук приезжал. А ещё спина.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "severity",
+        "episodes": [
+          {
+            "label": "боль в животе",
+            "site": "живот",
+            "subject": "speaker",
+            "known": {
+              "current": "Сильно.",
+              "_product_family": "abdominal",
+              "_product_asked:onset": "1",
+              "onset": "Со вчера.",
+              "_product_asked:current": "1",
+              "severity": "Сильно."
+            },
+            "unanswered": {},
+            "status": "resolved"
+          },
+          {
+            "label": "Спина болит",
+            "site": "спина",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "onset": "Сейчас тоже болит.",
+              "_product_asked:severity": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "onset",
+            "value": "Со вчера.",
+            "site": "живот",
+            "subject": "speaker",
+            "evidence": "Со вчера.",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "болит",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-4",
+            "current": true
+          },
+          {
+            "attribute": "onset",
+            "value": "Сейчас",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "Сейчас",
+            "source_turn_id": "u-4",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "Сейчас тоже болит.",
+            "site": "спина",
+            "subject": "speaker",
+            "evidence": "Сейчас тоже болит.",
+            "source_turn_id": "u-4",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "contrast": [
+      {
+        "user": "С дочерью чай пили, а голова болит.",
+        "vera": "Жаль, что голова болит. Когда начала болеть голова — сегодня или раньше?",
+        "intent": "episode_headache_duration",
+        "slot": "episode_headache_duration",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "С дочерью чай пили, а голова болит."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "С дочерью чай пили, а голова болит.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "С дочерью чай пили, а голова болит.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "duration",
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "current": "Сильно.",
+              "_product_family": "headache",
+              "_product_asked:duration": "1",
+              "duration": "Со вчера.",
+              "_product_asked:current": "1",
+              "severity": "Сильно."
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Со вчера.",
+        "vera": "А сейчас голова ещё болит или уже почти прошла?",
+        "intent": "episode_headache_current",
+        "slot": "episode_headache_current",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "С дочерью чай пили, а голова болит."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "С дочерью чай пили, а голова болит.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "С дочерью чай пили, а голова болит.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "current",
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "current": "Сильно.",
+              "_product_family": "headache",
+              "_product_asked:duration": "1",
+              "duration": "Со вчера.",
+              "_product_asked:current": "1",
+              "severity": "Сильно."
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "duration",
+            "value": "Со вчера.",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "Со вчера.",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Сильно.",
+        "vera": "Сочувствую, сильную боль тяжело переносить. А кроме этого — по самочувствию ничего не тревожит?",
+        "intent": "important_to_share",
+        "slot": "important_to_share",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "С дочерью чай пили, а голова болит."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "С дочерью чай пили, а голова болит.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "С дочерью чай пили, а голова болит.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "головная боль",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "current": "Сильно.",
+              "_product_family": "headache",
+              "_product_asked:duration": "1",
+              "duration": "Со вчера.",
+              "_product_asked:current": "1",
+              "severity": "Сильно."
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "duration",
+            "value": "Со вчера.",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "Со вчера.",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "quoted_multisentence": [
+      {
+        "user": "Дочь рассказала: «У меня живот болит. Голова тоже болит».",
+        "vera": "Поняла вас. Головная боль и боль в животе — это неприятно, давайте уточним по порядку. Когда это началось — сегодня или раньше?",
+        "intent": "episode_ep-39ffa951_onset",
+        "slot": "episode_ep-39ffa951_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "болит"
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "болит",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "болит",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "живот болит",
+            "site": "живот",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "abdominal",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "живот болит",
+            "site": "живот",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Я чувствую себя хорошо.",
+        "vera": "Спасибо, что сказали, как себя чувствуете. Когда это началось — сегодня или раньше?",
+        "intent": "episode_ep-39ffa951_onset",
+        "slot": "episode_ep-39ffa951_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-2",
+            "source_text": "Я чувствую себя хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "живот болит",
+            "site": "живот",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "abdominal",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "живот болит",
+            "site": "живот",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "голова болит",
+            "site": "голова",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "initial_implicit_wellness": [
+      {
+        "user": "Чувствую себя хорошо, внучка приезжала.",
+        "vera": "Про внучку поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "slot_records": {},
+        "thread_statement": "Чувствую себя хорошо, внучка приезжала.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-initial_implicit_wellness",
+            "utterance_id": "u-1",
+            "text": "Чувствую себя хорошо, внучка приезжала.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Да, нормально поела.",
+        "vera": "Хорошо, что поели.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "slot_records": {},
+        "thread_statement": "Да, нормально поела.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-initial_implicit_wellness",
+            "utterance_id": "u-1",
+            "text": "Чувствую себя хорошо, внучка приезжала.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-initial_implicit_wellness",
+            "utterance_id": "u-2",
+            "text": "Да, нормально поела.",
+            "turn_number": 2
+          }
+        ]
+      }
+    ],
+    "multi_complaint": [
+      {
+        "user": "Рука болит опухла, давление высокое и сахар поднялся.",
+        "vera": "Слышу вас: рука болит, давление и сахар. Давайте по порядку. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-4a456041_onset",
+        "slot": "episode_ep-4a456041_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Рука болит опухла, давление высокое и сахар поднялся."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "Рука болит опухла, давление высокое и сахар поднялся.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Рука болит опухла, давление высокое и сахар поднялся.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "onset": "Рука со вчера болит сильно",
+              "severity": "сильно"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "onset": "сегодня"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Рука со вчера болит сильно, а давление сегодня поднялось.",
+        "vera": "Сахар — давайте уточним. Когда это началось — сегодня или раньше?",
+        "intent": "episode_ep-7c724d8c_onset",
+        "slot": "episode_ep-7c724d8c_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Рука болит опухла, давление высокое и сахар поднялся."
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "Рука болит опухла, давление высокое и сахар поднялся.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Рука болит опухла, давление высокое и сахар поднялся.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "onset": "Рука со вчера болит сильно",
+              "severity": "сильно"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "onset": "сегодня"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": true
+          },
+          {
+            "attribute": "severity",
+            "value": "сильно",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "сильно",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "вчера",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "вчера",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "сегодня",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сегодня",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "Рука со вчера болит сильно",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "Рука со вчера болит сильно",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "urgent_unchanged": [
+      {
+        "user": "Мне хорошо. Дочь приехала.",
+        "vera": "Понимаю. Спасибо, что сказали. А покушать сегодня уже успели?",
+        "intent": "background_nutrition",
+        "slot": "background_nutrition",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Мне хорошо",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Не могу дышать.",
+        "vera": "Понимаю, это важно. Я передам информацию близким. Спасибо за разговор. До свидания.",
+        "intent": "urgent_close",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Мне хорошо",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "RED"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      }
+    ],
+    "urgent_wording_still_open": [
+      {
+        "user": "Дочь плохо спала, а мне сейчас трудно дышать.",
+        "vera": "Хорошо. Что-то ещё хотите сказать?",
+        "intent": "important_to_share",
+        "slot": "important_to_share",
+        "marks_question": true,
+        "wellness": "OPEN",
+        "facts": {},
+        "slot_records": {},
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "other_person",
+            "known": {
+              "current": "active",
+              "quality": "poor",
+              "onset": "а мне сейчас трудно дышать"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      }
+    ],
+    "stop": [
+      {
+        "user": "Я чувствую себя хорошо. Дочь приехала. Плохо спала.",
+        "vera": "Плохой сон — записала, спасибо. Как сегодня с едой — нормально поели?",
+        "intent": "background_nutrition",
+        "slot": "background_nutrition",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Я чувствую себя хорошо",
+            "polarity": "positive",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "До свидания.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "positive"
+        },
+        "slot_records": {
+          "wellness": {
+            "value": "positive",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Я чувствую себя хорошо",
+            "polarity": "positive",
+            "confirmed": false
+          }
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "плохой сон",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [],
+        "personal_context": []
+      }
+    ],
+    "question_first": [
+      {
+        "user": "Вчера дочь приезжала, смотрели фотографии.",
+        "vera": "Про дочь поняла. Расскажите, я слушаю.",
+        "intent": "thread_invite",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "slot_records": {},
+        "thread_statement": "Вчера дочь приезжала, смотрели фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-question_first",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, смотрели фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "А зачем вы звоните?",
+        "vera": "Звоню из сервиса Амвера, чтобы узнать, как у вас дела. Вы можете не отвечать на вопросы.",
+        "intent": "answer_user_question",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "slot_records": {},
+        "thread_statement": "Вчера дочь приезжала, смотрели фотографии.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-question_first",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, смотрели фотографии.",
+            "turn_number": 1
+          }
+        ]
+      },
+      {
+        "user": "Дочь привезла пирог, потом гуляли.",
+        "vera": "Я вас слушаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "slot_records": {},
+        "thread_statement": "Дочь привезла пирог, потом гуляли.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-question_first",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, смотрели фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-question_first",
+            "utterance_id": "u-3",
+            "text": "Дочь привезла пирог, потом гуляли.",
+            "turn_number": 3
+          }
+        ]
+      },
+      {
+        "user": "Я всё рассказала.",
+        "vera": "Понимаю.",
+        "intent": "thread_listening_ack",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "OPEN",
+        "facts": {},
+        "slot_records": {},
+        "thread_statement": "Я всё рассказала.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": [
+          {
+            "call_id": "floor-question_first",
+            "utterance_id": "u-1",
+            "text": "Вчера дочь приезжала, смотрели фотографии.",
+            "turn_number": 1
+          },
+          {
+            "call_id": "floor-question_first",
+            "utterance_id": "u-3",
+            "text": "Дочь привезла пирог, потом гуляли.",
+            "turn_number": 3
+          },
+          {
+            "call_id": "floor-question_first",
+            "utterance_id": "u-4",
+            "text": "Я всё рассказала.",
+            "turn_number": 4
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -831,13 +831,13 @@ def _plans_fact(raw: str, *, answer_slot: str | None) -> FactCandidate | None:
 
 
 def requires_scoped_goal_evidence(text: str) -> bool:
-    """Mixed subjects cannot use a whole-turn contextual fact fallback."""
-    from packages.dialogue_engine.semantic_kernel.lexicon import OTHER_PERSON_MARKERS
+    """A foreign subject cannot use a whole-turn caller-fact fallback."""
+    from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
+    from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
+    from packages.dialogue_engine.semantic_kernel.types import SubjectKind
 
-    low = text.lower().replace("ё", "е")
-    return any(marker in low for marker in OTHER_PERSON_MARKERS) and bool(
-        re.search(r"\b(я|мне|меня|мной|у\s+меня|мною|сам|сама)\b", low)
-    )
+    return any(_subject_for_clause(clause, has_issue=False) == SubjectKind.OTHER_PERSON
+               for _, _, clause in clause_bounds(text))
 
 
 def extract_goal_facts(
@@ -874,7 +874,9 @@ def speaker_goal_clauses(text: str) -> tuple:
     from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
     from packages.dialogue_engine.semantic_kernel.types import SubjectKind
 
-    subject = SubjectKind.UNKNOWN
+    # An initial implicit self report retains its existing interpretation;
+    # a later relative changes the owner until an explicit self return.
+    subject = SubjectKind.SPEAKER
     clauses = []
     for clause in split_mission_clauses(text):
         explicit = _subject_for_clause(clause.text, has_issue=False)

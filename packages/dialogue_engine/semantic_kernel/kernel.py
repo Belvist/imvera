@@ -185,7 +185,7 @@ def kernel_to_rich_turn(
 
     legacy = (() if result.route == "kernel_topic_request"
               else extract_issue_mentions(result.raw_text))
-    mentions = merge_legacy_mentions(mentions, legacy, result.raw_text)
+    mentions = merge_legacy_mentions(mentions, legacy, result.raw_text, issue_spans=result.spans)
     if engine_state is not None:
         mentions = filter_phantom_generic_issues(
             mentions,

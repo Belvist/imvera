@@ -1,5 +1,17 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## Implicit subject ownership — latest source cut
+
+See [actual SDK evidence and integration](evaluation/implicit-subject-2026-10-05/README.md)
+and [source/checks](evaluation/implicit-subject-2026-10-05/checks.json). The previous
+subjectless-family counterexample is fixed at source, not accepted on target phone.
+Unknown reports remain evidence and cannot authorize personal probes or summaries.
+SDK payloads share binding; explicit correction of a unique inactive report is
+acknowledged without interrogation. Do not duplicate this logic in adapters.
+No new flag/model/global policy promotion/admission increase. Breathing wording,
+grounded coverage, family-only positive return, audio/trace and actual load gates
+remain OPEN. Target bridge was not restarted here.
+
 ## Собственные факты и replica routing — 2026-10-05
 
 [Plan/resource model](dialogue-and-capacity-plan-2026-10-05.md),

@@ -163,3 +163,34 @@ explicit mixed-subject reproduction; it does not claim free human conversation.
   Follow-up changes docs/resource arithmetic only, preserving tested runtime,
   test/config/workflow bytes. Production/human/100-call acceptance remains OPEN.
   [Explicit capacity arithmetic](evaluation/subject-and-replicas-2026-10-05/capacity-sizing.json).
+
+## Next stage started: implicit clinical subject ownership
+
+Baseline0abdc46; fetched m5 equal, no peer changes. Source SDK reproduction:
+`Я чувствую себя хорошо. Дочь приехала. Плохо спала.` → speaker sleep
+episode + `Плохой сон — записала`. This is a source defect, not a new deployed
+call diagnosis (M5 profile/audio/image unavailable). First wrong owner:
+subject_resolver defaults every unowned ISSUE clause to speaker; legacy merge
+independently resolves only the quote, discarding preceding discourse.
+
+Replacement in the existing resolver: jointly bind issue positions in original
+clauses, preserve explicit subjects, abstain after a relative if ambiguous,
+exclude literal quoted speech. Contrastive self-topic return stays valid;
+additive return requires an earlier owned issue. Kernel relations and legacy
+merge consume the same owner and original offsets. No second interpreter,
+scheduler, model, state writer, safety/control change or phrase bank.
+
+Acceptance: original failing complete SDK exchange; explicit own return;
+`Живот болит. Внук приезжал. А ещё спина.` retains both complaints; social
+contrast; isolated/quoted/ambiguous/duplicate-source negatives; clinical
+corrections and multi-complaint suite. Full/rich/kernel/corpus/diff/lint gates.
+Clinical ownership is this cut only. Breathing wording, grounded coverage,
+ActionPolicy authority, live hearing and100-call soak remain separate gates.
+
+- Clinical ownership cut:18 new regressions PASS; baseline11 FAIL/7 PASS
+  (four new API absences, seven behavior failures). Existing suite caught a
+  misplaced policy acknowledgement literal; removed it and reused the existing
+  realization owner, no new phrases/phrase-pin changes. Rich860, kernel294,
+  runtime322, corpus500/500, policy diff12expected/0unexplained and lint PASS.
+  SDK13 cases/310 turns each, simulated delivery; actual phone/capacity NOT_RUN.
+  Final source full and exact CI results recorded in the evidence checks.
