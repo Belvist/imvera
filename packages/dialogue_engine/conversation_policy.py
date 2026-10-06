@@ -253,8 +253,8 @@ def _missing_question_need(state: EngineState, ep) -> QuestionNeed | None:
     """Product pack owns next step — not information_gain scoring."""
     from packages.dialogue_engine.product import next_product_need
 
-    # Other person's episode: no speaker-directed probes from ANY path.
-    if getattr(ep, "subject", "unknown") == "other_person":
+    # A personal probe requires an established speaker subject.
+    if getattr(ep, "subject", "unknown") != "speaker":
         return None
     return next_product_need(state, ep)
 
@@ -279,11 +279,11 @@ def _all_episodes_resolved(state: EngineState) -> bool:
 
 
 def _has_open_episodes(state: EngineState) -> bool:
-    # Other person's episodes never block the speaker's flow (recorded only).
+    # Unowned/foreign reports stay recorded without blocking personal probes.
     def _open(eid: str | None) -> bool:
         ep = state.issue_episodes.get(eid or "")
         return bool(
-            ep and ep.status != "resolved" and ep.subject != "other_person"
+            ep and ep.status != "resolved" and ep.subject == "speaker"
         )
 
     if _open(state.active_episode_id):
@@ -521,9 +521,8 @@ def _next_episode_plan(state: EngineState) -> ResponsePlan | None:
             return None
         # Pack owns completion. Legacy episode_complete alone must not skip pack steps
         # (e.g. sleep «плохо спал» used to jump to ITS without pattern/daytime).
-        # Other person's complaint: recorded, never interrogated — advance
-        # past it without speaker-directed probes (reviewer item 2).
-        if ep.subject == "other_person":
+        # Unowned/foreign reports cannot authorize a speaker-directed probe.
+        if ep.subject != "speaker":
             activate_next_pending_episode(state)
             bridge_next = True
             continue
@@ -762,6 +761,12 @@ def _correction_plan(state: EngineState, turn: RichUserTurn) -> ResponsePlan:
         if ep_id:
             state.active_episode_id = ep_id
             ep = state.issue_episodes[ep_id]
+    if ep is not None and ep.subject != "speaker":
+        return ResponsePlan(
+            obligation=ConversationObligation.HANDLE_CORRECTION,
+            action="speak", acknowledge=questions.shared_information_ack(),
+            intent="episode_correction_ack", marks_question=False,
+        )
     label = ep.primary_label if ep else ""
     ack = f"Да, вы говорили, что {label}." if ep else "Понимаю."
     need = None
@@ -794,7 +799,7 @@ def _grounded_ack_for_mentions(
     if not turn.issue_mentions:
         return ""
     speaker_mentions = [
-        m for m in turn.issue_mentions if getattr(m, "subject", "unknown") != "other_person"
+        m for m in turn.issue_mentions if getattr(m, "subject", "speaker") == "speaker"
     ]
     labels = [(m.label or "").strip().lower() for m in speaker_mentions if m.label]
     from packages.dialogue_engine.issue_memory import clinical_issue_concept
@@ -826,18 +831,12 @@ def _grounded_ack_for_mentions(
     if has_belly and has_nausea:
         tail = ", давайте уточним по порядку." if clarifying else "."
         return "Поняла вас. Живот и тошнота — это неприятно" + tail
-    _sited = [
-        m
-        for m in speaker_mentions
-        if m.role in ("primary", "independent", "unknown")
-        and (m.body_site or "").strip()
-    ]
     _any_primary = [
         m
         for m in speaker_mentions
         if m.role in ("primary", "independent", "unknown")
     ]
-    candidates = list(_sited or _any_primary or speaker_mentions)
+    candidates = list(_any_primary or speaker_mentions)
     if not candidates:
         return ""
     # Prefer a speakable label: skip bare verbs and broken glue when a
@@ -849,7 +848,8 @@ def _grounded_ack_for_mentions(
         if not _is_bare_verb_label(m.label or "")
         and not _is_broken_glue_label(m.label or "")
     ]
-    primary = next(iter(speakable or candidates))
+    primary = next((m for m in speakable if (m.body_site or "").strip()),
+                   next(iter(speakable or candidates)))
     label = (primary.label or "").strip().rstrip(".")
     if (
         label
@@ -1389,6 +1389,21 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 # Exhausted episode probe — skip attribute, never hang up mid-call.
                 # Never fabricate values ("unknown" is not an answer).
                 ep = get_active_episode(state)
+                if (ep is not None and next_q.question_needs
+                        and any(state.issue_episodes.get(eid) is not None
+                                and state.issue_episodes[eid].subject != "other_person"
+                                and state.issue_episodes[eid].status != "resolved"
+                                for eid in state.pending_episode_ids)):
+                    # Confusion about one need must not abandon the other
+                    # complaints. Discharge this exhausted question with the
+                    # person's actual quote, never a fabricated clinical value.
+                    need = next_q.question_needs[0]
+                    answer_quote = turn.raw_text if turn else turn_context.user_text
+                    if not need.is_compound and answer_quote.strip():
+                        ep.unanswered_attributes[need.attribute] = answer_quote
+                        state.pending_episode_attribute = None
+                        next_q = None
+                        continue
                 if ep is not None:
                     finalize_episode_if_complete(ep)
                 state.pending_episode_attribute = None

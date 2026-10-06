@@ -20,6 +20,7 @@ from packages.dialogue_engine.issue_mention_extract import (
     detect_user_question,
     extract_goal_facts,
     extract_issue_mentions,
+    requires_scoped_goal_evidence,
 )
 from packages.dialogue_engine.mission import GoalAnswerCandidate
 from packages.dialogue_engine.semantic import SemanticTurn
@@ -474,6 +475,8 @@ def enrich_payload_issue_mentions(
     raw_text: str,
 ) -> SemanticPayload:
     """Validate LLM mentions; emergency regex fallback only when field is empty."""
+    from packages.dialogue_engine.semantic_kernel.observation_memory import resolve_mention_subjects
+
     if payload.issue_mentions:
         validated = tuple(
             m
@@ -483,11 +486,15 @@ def enrich_payload_issue_mentions(
             )
             if m is not None
         )
-        return payload.model_copy(update={"issue_mentions": validated})
+        return payload.model_copy(update={
+            "issue_mentions": resolve_mention_subjects(validated, raw_text),
+        })
     extracted = extract_issue_mentions(raw_text)
     if not extracted:
         return payload
-    return payload.model_copy(update={"issue_mentions": extracted})
+    return payload.model_copy(update={
+        "issue_mentions": resolve_mention_subjects(extracted, raw_text),
+    })
 
 
 def payload_to_rich_turn(
@@ -499,7 +506,8 @@ def payload_to_rich_turn(
     from packages.dialogue_engine.mission import GoalAnswerCandidate, GoalDispositionCandidate
 
     enriched = enrich_payload_issue_mentions(payload, raw_text)
-    goal_facts = tuple(enriched.facts) or extract_goal_facts(raw_text)
+    goal_facts = (extract_goal_facts(raw_text) if requires_scoped_goal_evidence(raw_text)
+                  else tuple(enriched.facts) or extract_goal_facts(raw_text))
     correction = enriched.dialogue_act == "correction" or detect_correction(raw_text)
     user_q = enriched.user_question or detect_user_question(raw_text)
     goal_answers = tuple(
@@ -737,27 +745,25 @@ def _build_rich_turn_from_text(
                 f.field: f
                 for f in extract_goal_facts(text.strip(), answer_slot=answer_slot)
             }
-        for f in turn.goal_facts:
-            harvested.setdefault(f.field, f)
+        scoped = requires_scoped_goal_evidence(text)
+        if not scoped:
+            for f in turn.goal_facts:
+                harvested.setdefault(f.field, f)
         if confident and sem.slots:
             raw = text.strip()
             multi_slot = len(sem.slots) >= 2
             for slot_name, cand in sem.slots.items():
                 if slot_name not in ("wellness", "mood", "sleep", "plans"):
                     continue
-                if slot_name == "plans":
-                    # Plans' existing fact owner checks tense/subject and
-                    # binds the actual plan clause. A contextual candidate
-                    # cannot resurrect a rejected past/other-person activity,
-                    # or broaden accepted narrow evidence to the whole turn.
+                if slot_name == "plans" or scoped:
+                    # Plans and mixed subjects require the fact owner's
+                    # scoped evidence. Context must not resurrect rejected
+                    # foreign facts or broaden a quote to the whole story.
                     continue
                 if not multi_slot and answer_slot and slot_name != answer_slot:
                     continue
                 if slot_name in harvested and harvested[slot_name].value in (
-                    "positive",
-                    "negative",
-                    "uncertain",
-                    "neutral",
+                    "positive", "negative", "uncertain", "neutral",
                 ):
                     continue
                 value = cand.value or raw
@@ -769,7 +775,7 @@ def _build_rich_turn_from_text(
                     negated=False,
                     evidence=Evidence(start=0, end=len(raw), quote=raw),
                 )
-        if harvested:
+        if harvested or scoped:
             turn = turn.model_copy(update={"goal_facts": tuple(harvested.values())})
             # Single attach (P2 Cut 3): the attach above already ran with
             # identical inputs; re-attaching only recomputes the same result.

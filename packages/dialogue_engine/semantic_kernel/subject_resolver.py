@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds, clause_for_position
+from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
 from packages.dialogue_engine.semantic_kernel.lexicon import (
     OTHER_PERSON_MARKERS,
     SPEAKER_MARKERS,
@@ -23,6 +23,7 @@ _DOCTOR_QUOTE = re.compile(
     re.I,
 )
 _U_OTHER = re.compile(r"\bу\s+([а-яё\-]+)\b", re.I)
+_QUOTED = re.compile(r'«[^»]*»|“[^”]*”|"[^"\n]*"')
 
 
 def _subject_for_clause(clause: str, *, has_issue: bool) -> SubjectKind:
@@ -61,13 +62,15 @@ def resolve_subject(
         clause = clauses[0][2] if clauses else text
         return _subject_for_clause(clause, has_issue=False), ()
 
-    clauses = clause_bounds(text)
+    subjects_by_position = resolve_issue_subjects(
+        text, tuple(s.start for s in issues),
+        body_positions=tuple(s.start for s in spans if s.type == SpanType.BODY_SITE),
+    )
     relations: list[SemanticRelation] = []
     subjects: list[SubjectKind] = []
 
     for issue in issues:
-        clause = clause_for_position(clauses, issue.start)
-        subject = _subject_for_clause(clause, has_issue=True)
+        subject = subjects_by_position[issue.start]
         subjects.append(subject)
         if subject == SubjectKind.OTHER_PERSON:
             relations.append(
@@ -95,6 +98,58 @@ def resolve_subject(
     if all(s == SubjectKind.UNKNOWN for s in subjects):
         return SubjectKind.UNKNOWN, tuple(relations)
     return SubjectKind.SPEAKER, tuple(relations)
+
+
+def resolve_issue_subjects(
+    text: str, positions: tuple[int, ...], *, body_positions: tuple[int, ...] = (),
+) -> dict[int, SubjectKind]:
+    """Resolve implicit reports in their discourse, without assigning ambiguity.
+
+    A relative's preceding clause removes the implicit-speaker default. Explicit
+    self reference and a contrastive pivot can restore it. An additive return
+    ("А ещё спина") requires an earlier owned issue, not merely an earlier "я".
+    Literal quote words cannot establish the caller's subject.
+    """
+    quoted = [(m.start(), m.end()) for m in _QUOTED.finditer(text)]
+    subjects: dict[int, SubjectKind] = {}
+    previous_explicit = SubjectKind.UNKNOWN
+    owned_issue = False
+    previous_end = 0
+    for start, end, clause in clause_bounds(text):
+        visible = list(clause)
+        for left, right in quoted:
+            for offset in range(max(start, left), min(end, right)):
+                visible[offset - start] = " "
+        explicit = _subject_for_clause("".join(visible), has_issue=False)
+        clause_positions = sorted({p for p in positions if start <= p < end})
+        # The shared splitter removes conjunctions; recover grammar from the
+        # original gap, never from a rewritten/concatenated evidence string.
+        gap = text[previous_end:start].lower()
+        words = re.findall(r"[а-яё]+", gap + " " + clause.lower())
+        contrast = bool(words and words[0] in {"а", "но", "однако"})
+        additive = "ещё" in words[:3] or "еще" in words[:3] or "также" in words[:3]
+        connective_only = clause.lower() in {"а", "но", "однако"}
+        body_pivot = any(start <= position < end for position in body_positions)
+        for position in clause_positions:
+            if any(left <= position < right for left, right in quoted):
+                subject = SubjectKind.UNKNOWN
+            elif explicit != SubjectKind.UNKNOWN:
+                subject = explicit
+            elif previous_explicit == SubjectKind.OTHER_PERSON:
+                subject = (SubjectKind.SPEAKER if contrast and (
+                    (body_pivot and not additive) or (owned_issue and (additive or connective_only))
+                )
+                           else SubjectKind.UNKNOWN)
+            else:
+                subject = _subject_for_clause(clause, has_issue=True)
+            subjects[position] = subject
+        owned_issue = owned_issue or any(subjects[p] == SubjectKind.SPEAKER
+                                       for p in clause_positions)
+        if explicit != SubjectKind.UNKNOWN:
+            previous_explicit = explicit
+        if not connective_only:
+            previous_end = end
+    return subjects
 
 
 def subject_for_issue(

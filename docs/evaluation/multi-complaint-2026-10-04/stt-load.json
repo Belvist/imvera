@@ -1,0 +1,1624 @@
+{
+  "source_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+  "image_id": "sha256:e166562ee8209a4672ef7c9e07fd55b22562cba793a3a1460c12f44354ddc659",
+  "boundary": "real GigaAM + Linux HTTP worker; repository WAVs, no SIP/TTS",
+  "cases": [
+    {
+      "fixture": "tests/assets/blackbox_voice/wav/wellness_bad_03.wav",
+      "audio_sha256": "bf74f22f648a4851fcdf82ec20e11be351b1c3d33ac64414dfa8a2163e7a02dc",
+      "http_latency_ms": 257.19583099999,
+      "response": {
+        "request_id": "linux-wav-0",
+        "is_final": true,
+        "duration_ms": 1162,
+        "pcm_rms": 1931.5,
+        "engine": "gigaam",
+        "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+        "text": "Сегодня плохо.",
+        "raw_text": "Сегодня плохо.",
+        "asr_quality": "GOOD",
+        "generation_tokens": null,
+        "critical_terms": []
+      }
+    },
+    {
+      "fixture": "tests/assets/blackbox_voice/wav/decline_nothing_hurts_01.wav",
+      "audio_sha256": "02c66611c24ab515503224ce10949b42f9c797113a9a398aafcd16ea7bc367e6",
+      "http_latency_ms": 314.53799600421917,
+      "response": {
+        "request_id": "linux-wav-1",
+        "is_final": true,
+        "duration_ms": 1950,
+        "pcm_rms": 2871.1,
+        "engine": "gigaam",
+        "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+        "text": "Ничего не болит, всё хорошо.",
+        "raw_text": "Ничего не болит, всё хорошо.",
+        "asr_quality": "GOOD",
+        "generation_tokens": null,
+        "critical_terms": []
+      }
+    },
+    {
+      "fixture": "tests/assets/blackbox_voice/wav/mood_positive_01.wav",
+      "audio_sha256": "9a23fcf9519d523bdc5686a04dc6e162ebca4a650fae8f8f949a49cf50c9648b",
+      "http_latency_ms": 291.27200999937486,
+      "response": {
+        "request_id": "linux-wav-2",
+        "is_final": true,
+        "duration_ms": 1550,
+        "pcm_rms": 2200.7,
+        "engine": "gigaam",
+        "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+        "text": "Настроение хорошее.",
+        "raw_text": "Настроение хорошее.",
+        "asr_quality": "GOOD",
+        "generation_tokens": null,
+        "critical_terms": []
+      }
+    },
+    {
+      "fixture": "tests/assets/blackbox_voice/wav/plans_walk_01.wav",
+      "audio_sha256": "8acd32363cb0c9633136f1fae513ec4d001512923d9de2009e84fcfbbf8667ab",
+      "http_latency_ms": 234.18906899314607,
+      "response": {
+        "request_id": "linux-wav-3",
+        "is_final": true,
+        "duration_ms": 1037,
+        "pcm_rms": 2432.2,
+        "engine": "gigaam",
+        "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+        "text": "Пойду гулять.",
+        "raw_text": "Пойду гулять.",
+        "asr_quality": "GOOD",
+        "generation_tokens": null,
+        "critical_terms": []
+      }
+    }
+  ],
+  "host": {
+    "NCPU": 3,
+    "MemTotal": 10452496384,
+    "Driver": "vfs"
+  },
+  "cpu_quota_nanocpus": 2000000000,
+  "memory_limit_bytes": 4294967296,
+  "ready": {
+    "status": "ready",
+    "service": "stt",
+    "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+    "queue_depth": 0,
+    "runtime": {
+      "git_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+      "runtime_mode": "production",
+      "profile_sha256": "ecb395c19450546696f4c9372e1a9c2fa03a6e66be66050968b1cf963b456465",
+      "profile_id": "linux-cpu-qwen-http"
+    }
+  },
+  "samples": 4,
+  "http_p50_ms": 274.2339204996824,
+  "http_p95_nearest_rank_ms": 314.53799600421917,
+  "after": {
+    "status": "ready",
+    "service": "stt",
+    "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+    "queue_depth": 0,
+    "runtime": {
+      "git_sha": "2e78b543d3ccd5854d44eb681f1f07b8d016b06c",
+      "runtime_mode": "production",
+      "profile_sha256": "ecb395c19450546696f4c9372e1a9c2fa03a6e66be66050968b1cf963b456465",
+      "profile_id": "linux-cpu-qwen-http"
+    }
+  },
+  "docker_stats_idle": {
+    "BlockIO": "311kB / 0B",
+    "CPUPerc": "0.15%",
+    "Container": "imvera-stt-multi-capacity-20261004",
+    "ID": "37fe69f304e1",
+    "MemPerc": "36.38%",
+    "MemUsage": "1.455GiB / 4GiB",
+    "Name": "imvera-stt-multi-capacity-20261004",
+    "NetIO": "248kB / 5.19kB",
+    "PIDs": "11"
+  },
+  "load_fixture": {
+    "path": "tests/assets/blackbox_voice/wav/multi_slot_so_so_sleep_plans.wav",
+    "sha256": "dd8ea5e52fb6f37891e7da6430d8482c8ba87f08f412dd72c5e1b5d6aab5b72e",
+    "duration_s": 4.0875,
+    "rate": 16000
+  },
+  "load_levels": {
+    "1": {
+      "requests": 24,
+      "status_counts": {
+        "200": 24
+      },
+      "elapsed_s": 15.25819322100142,
+      "success_per_s": 1.5729254212724435,
+      "http_p50_ms": 639.8832195009163,
+      "http_p95_ms": 682.5570549990516,
+      "rows": [
+        {
+          "status": 200,
+          "http_latency_ms": 598.976813002082,
+          "response": {
+            "request_id": "capacity-1-0",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 609.0604210039601,
+          "response": {
+            "request_id": "capacity-1-1",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 687.6719329957268,
+          "response": {
+            "request_id": "capacity-1-2",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 682.5570549990516,
+          "response": {
+            "request_id": "capacity-1-3",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 629.8058520042105,
+          "response": {
+            "request_id": "capacity-1-4",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 646.746426995378,
+          "response": {
+            "request_id": "capacity-1-5",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 653.840733000834,
+          "response": {
+            "request_id": "capacity-1-6",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 634.5545680014766,
+          "response": {
+            "request_id": "capacity-1-7",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 617.4671710032271,
+          "response": {
+            "request_id": "capacity-1-8",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 640.7231609991868,
+          "response": {
+            "request_id": "capacity-1-9",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 644.906738998543,
+          "response": {
+            "request_id": "capacity-1-10",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 634.7229829989374,
+          "response": {
+            "request_id": "capacity-1-11",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 553.5162439991836,
+          "response": {
+            "request_id": "capacity-1-12",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 630.731145000027,
+          "response": {
+            "request_id": "capacity-1-13",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 647.2676519988454,
+          "response": {
+            "request_id": "capacity-1-14",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 639.8387369990814,
+          "response": {
+            "request_id": "capacity-1-15",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 653.9999289961997,
+          "response": {
+            "request_id": "capacity-1-16",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 606.3968050002586,
+          "response": {
+            "request_id": "capacity-1-17",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 643.1968460019561,
+          "response": {
+            "request_id": "capacity-1-18",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 658.8277210030355,
+          "response": {
+            "request_id": "capacity-1-19",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 616.2901459974819,
+          "response": {
+            "request_id": "capacity-1-20",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 571.1799120035721,
+          "response": {
+            "request_id": "capacity-1-21",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 661.9026800035499,
+          "response": {
+            "request_id": "capacity-1-22",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 639.9277020027512,
+          "response": {
+            "request_id": "capacity-1-23",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        }
+      ]
+    },
+    "2": {
+      "requests": 24,
+      "status_counts": {
+        "200": 24
+      },
+      "elapsed_s": 12.705261561000952,
+      "success_per_s": 1.8889811819119464,
+      "http_p50_ms": 1004.594839996571,
+      "http_p95_ms": 1266.5915260004112,
+      "rows": [
+        {
+          "status": 200,
+          "http_latency_ms": 1305.1926429980085,
+          "response": {
+            "request_id": "capacity-2-0",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 672.2508339953492,
+          "response": {
+            "request_id": "capacity-2-1",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1137.1128050013795,
+          "response": {
+            "request_id": "capacity-2-2",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1043.7734890001593,
+          "response": {
+            "request_id": "capacity-2-3",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1065.509348998603,
+          "response": {
+            "request_id": "capacity-2-4",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1122.4086019938113,
+          "response": {
+            "request_id": "capacity-2-5",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1065.0519100017846,
+          "response": {
+            "request_id": "capacity-2-6",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 974.900321001769,
+          "response": {
+            "request_id": "capacity-2-7",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 977.1324559987988,
+          "response": {
+            "request_id": "capacity-2-8",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 995.2975669948501,
+          "response": {
+            "request_id": "capacity-2-9",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1013.8921129982919,
+          "response": {
+            "request_id": "capacity-2-10",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 977.6956410059938,
+          "response": {
+            "request_id": "capacity-2-11",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1126.6259589974652,
+          "response": {
+            "request_id": "capacity-2-12",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1266.5915260004112,
+          "response": {
+            "request_id": "capacity-2-13",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1216.934638992825,
+          "response": {
+            "request_id": "capacity-2-14",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1204.9745990007068,
+          "response": {
+            "request_id": "capacity-2-15",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1115.297462005401,
+          "response": {
+            "request_id": "capacity-2-16",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 961.8197479940136,
+          "response": {
+            "request_id": "capacity-2-17",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 925.410452997312,
+          "response": {
+            "request_id": "capacity-2-18",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 917.660822000471,
+          "response": {
+            "request_id": "capacity-2-19",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 917.5652359990636,
+          "response": {
+            "request_id": "capacity-2-20",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 958.0463340025744,
+          "response": {
+            "request_id": "capacity-2-21",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 960.8980489938403,
+          "response": {
+            "request_id": "capacity-2-22",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 948.4475839999504,
+          "response": {
+            "request_id": "capacity-2-23",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        }
+      ]
+    },
+    "4": {
+      "requests": 24,
+      "status_counts": {
+        "200": 24
+      },
+      "elapsed_s": 12.793338720002794,
+      "success_per_s": 1.87597628150619,
+      "http_p50_ms": 2098.6421934976534,
+      "http_p95_ms": 2355.9970340065775,
+      "rows": [
+        {
+          "status": 200,
+          "http_latency_ms": 544.7608969989233,
+          "response": {
+            "request_id": "capacity-4-0",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2056.6072179935873,
+          "response": {
+            "request_id": "capacity-4-1",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1573.7178230046993,
+          "response": {
+            "request_id": "capacity-4-2",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1078.0608229979407,
+          "response": {
+            "request_id": "capacity-4-3",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2000.5301849960233,
+          "response": {
+            "request_id": "capacity-4-4",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1944.93494299968,
+          "response": {
+            "request_id": "capacity-4-5",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1918.267694003589,
+          "response": {
+            "request_id": "capacity-4-6",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2064.5563330035657,
+          "response": {
+            "request_id": "capacity-4-7",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2192.067838004732,
+          "response": {
+            "request_id": "capacity-4-8",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2341.1803700000746,
+          "response": {
+            "request_id": "capacity-4-9",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2495.151891002024,
+          "response": {
+            "request_id": "capacity-4-10",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2355.9970340065775,
+          "response": {
+            "request_id": "capacity-4-11",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2309.656338999048,
+          "response": {
+            "request_id": "capacity-4-12",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2201.2043870054185,
+          "response": {
+            "request_id": "capacity-4-13",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2107.7905959973577,
+          "response": {
+            "request_id": "capacity-4-14",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2122.3714549996657,
+          "response": {
+            "request_id": "capacity-4-15",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2089.493790997949,
+          "response": {
+            "request_id": "capacity-4-16",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2046.0695219953777,
+          "response": {
+            "request_id": "capacity-4-17",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1991.174877002777,
+          "response": {
+            "request_id": "capacity-4-18",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2048.258180002449,
+          "response": {
+            "request_id": "capacity-4-19",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2154.9540030027856,
+          "response": {
+            "request_id": "capacity-4-20",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2235.8429840023746,
+          "response": {
+            "request_id": "capacity-4-21",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2215.8958979998715,
+          "response": {
+            "request_id": "capacity-4-22",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2128.257725998992,
+          "response": {
+            "request_id": "capacity-4-23",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        }
+      ]
+    },
+    "8": {
+      "requests": 24,
+      "status_counts": {
+        "200": 4,
+        "429": 20
+      },
+      "elapsed_s": 2.4745689039991703,
+      "success_per_s": 1.616443168559812,
+      "http_p50_ms": 1726.1024184990674,
+      "http_p95_ms": 2461.7025350016775,
+      "rows": [
+        {
+          "status": 200,
+          "http_latency_ms": 960.0445370015223,
+          "response": {
+            "request_id": "capacity-8-0",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 111.87719799636398,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1488.3061239961535,
+          "response": {
+            "request_id": "capacity-8-2",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 115.06776999885915,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 1963.8987130019814,
+          "response": {
+            "request_id": "capacity-8-4",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 200,
+          "http_latency_ms": 2461.7025350016775,
+          "response": {
+            "request_id": "capacity-8-5",
+            "is_final": true,
+            "duration_ms": 4087,
+            "pcm_rms": 2074.4,
+            "engine": "gigaam",
+            "model_revision": "gigaam:v3_e2e_rnnt@cpu",
+            "text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "raw_text": "Да так себе сегодня, почти не спал. После обеда в больницу пойду.",
+            "asr_quality": "GOOD",
+            "generation_tokens": null,
+            "critical_terms": []
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 112.89905599551275,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 105.44256099819904,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 41.95166700083064,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 124.05153199506458,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 123.44746299640974,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 94.3782390022534,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 114.25959199550562,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 72.04832100251224,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 61.34798000130104,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 77.3381969993352,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 76.48199899995234,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 93.35769799508853,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 22.537796998221893,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 116.52778700226918,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 73.15504999860423,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 93.0838619970018,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 63.97916800051462,
+          "response": {
+            "detail": "inference queue full"
+          }
+        },
+        {
+          "status": 429,
+          "http_latency_ms": 47.36648299876833,
+          "response": {
+            "detail": "inference queue full"
+          }
+        }
+      ]
+    }
+  },
+  "docker_stats_after_load": {
+    "BlockIO": "311kB / 0B",
+    "CPUPerc": "0.14%",
+    "Container": "imvera-stt-multi-capacity-20261004",
+    "ID": "37fe69f304e1",
+    "MemPerc": "36.53%",
+    "MemUsage": "1.461GiB / 4GiB",
+    "Name": "imvera-stt-multi-capacity-20261004",
+    "NetIO": "17.1MB / 122kB",
+    "PIDs": "11"
+  }
+}

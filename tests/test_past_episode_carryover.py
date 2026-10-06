@@ -1,6 +1,6 @@
 """Cross-call episode carryover — the past survives the call (ADR-023 slice).
 
-Write: build_call_metadata projects up to 2 grounded speaker episodes as
+Write: build_call_metadata projects up to 6 grounded speaker episodes as
 `past_episodes` (string-only, snapshot contract intact).
 Read: prior_followup_question speaks from the digest when the old keys
 are absent; mid-call a grounded mention matching the digest marks

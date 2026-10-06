@@ -80,7 +80,10 @@ def _verify_checksum(path: Path, model_name: str) -> None:
     expected = _MODEL_HASHES.get(model_name)
     if expected is None:
         return
-    actual = hashlib.md5(path.read_bytes()).hexdigest()
+    # Avoid a checkpoint-sized temporary allocation (~428MiB for RNNT).
+    # Same official checksum, bounded stdlib buffer; never disable verification.
+    with path.open("rb") as checkpoint:
+        actual = hashlib.file_digest(checkpoint, "md5").hexdigest()
     if actual != expected:
         raise RuntimeError(
             f"GigaAM checksum mismatch for {model_name}: expected {expected}, got {actual}. "

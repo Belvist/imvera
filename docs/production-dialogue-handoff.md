@@ -1,5 +1,80 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## Implicit subject ownership — latest source cut
+
+See [actual SDK evidence and integration](evaluation/implicit-subject-2026-10-05/README.md)
+and [source/checks](evaluation/implicit-subject-2026-10-05/checks.json). The previous
+subjectless-family counterexample is fixed at source, not accepted on target phone.
+Unknown reports remain evidence and cannot authorize personal probes or summaries.
+SDK payloads share binding; explicit correction of a unique inactive report is
+acknowledged without interrogation. Do not duplicate this logic in adapters.
+No new flag/model/global policy promotion/admission increase. Breathing wording,
+grounded coverage, family-only positive return, audio/trace and actual load gates
+remain OPEN. Target bridge was not restarted here.
+
+## Собственные факты и replica routing — 2026-10-05
+
+[Plan/resource model](dialogue-and-capacity-plan-2026-10-05.md),
+[evidence and known counterexamples](evaluation/subject-and-replicas-2026-10-05/README.md),
+[exact source/CI](evaluation/subject-and-replicas-2026-10-05/checks.json).
+Verified source **d3224982996dd418682926edfa27f482683f83ae**,
+[CI37248532450](https://github.com/Belvist/imvera/actions/runs/37248532450): all11 PASS,
+3409 PASS/0 FAIL/3 SKIP/206.11s; genuine LFS/model readiness PASS. Metadata-only
+follow-up leaves runtime/test/config/workflow identical to this tested source.
+Keep one Understand/Reducer/state/selector/renderer. Do not repeat a mixed-story
+fact harvester or turn foreign symptoms into own wellness in CallActor. Plans keep
+original tense/span owner. No new flag/generative speech/global policy promotion.
+
+Configured independent replicas now rotate across concurrently live adapters in
+one process; URL ordering defines the pool. STT prefixes rotate once/no retry.
+Do not count repeated HTTP aliases pointing to one resident voice model as capacity.
+Production profile cap1 unchanged. Six CPU-STT replicas is only an assumed average
+T4/min,C100 estimate on prior4.088s WAV service curve, not accepted full calls.
+
+Before accepting deployment verify actual bridge/image/SHA/profile/provider/backend
+revision, drain active calls and repeat own sleep vs daughter's opposite sleep,
+three complaints, question/stop/canonical urgent. Record STT.raw_text/text, accepted
+source offsets, heard need/episode and first PCM. Workspace did not restart target.
+Known semantic continuation and «трудно дышать» cases remain OPEN in SDK replays;
+close them before claiming product safety/human dialogue. Real phone and100-call
+model load acceptance remain NOT VERIFIED; see evidence for exact commands/limits.
+
+
+## Несколько жалоб и capacity — 2026-10-04 UTC
+
+[Причины, before/after, реальные STT измерения и ограничения](evaluation/multi-complaint-2026-10-04/README.md).
+[Точная source/CI revision](evaluation/multi-complaint-2026-10-04/checks.json).
+Verified source **c11674ef97382570f1e5ef544f2380b8c612b3de**,
+[CI37244559679](https://github.com/Belvist/imvera/actions/runs/37244559679):
+all11 PASS,3392 PASS/0 FAIL/3 SKIP,208.77s; actual LFS weights verified.
+Новые flags, generator, endpoint или второй dialogue brain не нужны. Fetch целевой
+m5 и проверь **actual** bridge SHA, runtime mode/profile SHA, STT/TTS/backend
+revision. Source checkout не доказывает, что живой мост обновился. Этот workspace
+не перезапускал M5/FreeSWITCH/БД. Не смешивать состояние активного звонка между
+двумя версиями кода; обновлять после drain.
+
+Replay запись fs-fd317c1c: три жалобы → `Понятно. В12 вроде` → ответ о силе;
+затем отдельно давление/сахар, без заимствования времени между эпизодами.
+Повторить неизвестное время/отказ одного вопроса, complaint другого человека,
+explicit stop и urgent. Capture actual audio/raw trace: user STT.raw_text/text,
+question_id/semantic_need/episode_id, delivered generation, known/unanswered,
+pending queue, digest. Не считать итоговый concern-list доказательством уточнения
+всех жалоб; unanswered metadata не превращать в клинические facts.
+
+У existing EngineState.last_temporal_probe identity теперь может включать
+`@episode_id`; старые values читаются, snapshot roundtrip проверен. Digest до6,
+старый строковый формат сохранён. Carryover не самостоятельный источник текущей
+болезни. Не дублировать parser/episode очередь в CallActor/TTS.
+
+Для ресурсов снимай отдельно bridge/STT/TTS-adapter/Qwen resident RSS/VRAM и CPU
+под реальным workload. Docker limits9GiB/5CPU — не общий RSS. HTTP replicas с
+общим Qwen backend — одна compute lane. В production mode profile cap1 оставить
+до полного hardware capacity gate; lab runtime actual admission нужно проверить.
+STT-only curve из Linux не принимает телефонную ёмкость Mac. Corrected
+`capacity_probe.py` требует explicit isolated endpoints/ordered WAVs, передаёт
+реальный STT output и canonical validated speech, consent не устанавливает.
+FirstPCM/completePCM и failures разделены; это simulated delivery, не SIP gate.
+
 ## Volunteered facts / pending / closing integration — 2026-10-04
 
 [Evidence and actual gates](evaluation/volunteered-needs-2026-10-04/README.md),

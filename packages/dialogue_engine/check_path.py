@@ -890,11 +890,13 @@ _BARE_VERB_LABELS = frozenset(
     {"болит", "боль", "ноет", "ломит", "давит", "беспокоит", "побаливает"}
 )
 
+MAX_CARRYOVER_EPISODES = 6
+
 
 def episode_digest(state: EngineState) -> str:
     """Compact carryover of this call's grounded episodes for the next call.
 
-    Up to 2 speaker episodes as `label@site:status` joined by ` | `.
+    Up to 6 speaker episodes as `label@site:status` joined by ` | `.
     String-only (snapshot metadata contract); someone else's complaints,
     bare verbs without a site, and empty labels are skipped — the next
     call must never inherit debris as biography. Read by
@@ -904,7 +906,7 @@ def episode_digest(state: EngineState) -> str:
     parts: list[str] = []
     sited = any((ep.body_site or "").strip() for ep in state.issue_episodes.values())
     for ep in state.issue_episodes.values():
-        if len(parts) >= 2:
+        if len(parts) >= MAX_CARRYOVER_EPISODES:
             break
         if (ep.subject or "unknown") == "other_person":
             continue

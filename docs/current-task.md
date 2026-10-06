@@ -1,3 +1,102 @@
+# Implicit clinical subject ownership — 2026-10-05 UTC
+
+Target **feature/voice-zoiper-m5**, baseline **0abdc46**; main untouched.
+[Evidence, actual exchanges and handoff](evaluation/implicit-subject-2026-10-05/README.md),
+[checks/source fingerprints](evaluation/implicit-subject-2026-10-05/checks.json).
+
+CHANGED: kernel/legacy/SDK share original-clause clinical subject binding; quoted
+and ambiguous family continuations cannot become own reports. Routine facts stay
+scoped, including family-only turns and proposed payload facts. Existing scheduler,
+ack and summary require own subject; unknown reports retained. A unique inactive
+report accepts explicit family correction, acknowledged without another question.
+No new model/brain/writer/flag/global policy cutover; safety/control bytes unchanged.
+
+VERIFIED: new20 PASS; baseline13 FAIL/7 PASS (four missing newly exposed APIs);
+paired13-case/310-turn SDK exchanges each, simulated delivery. Rich862, kernel294, runtime322, corpus500/500, policy diff12expected/0unexplained,
+make lint and whitespace PASS. Final full/CI remain pending in checks. No existing assertion weakened.
+NOT VERIFIED: deployed M5/image/provider profile, real phone/audio hearing and
+end-of-speech→PCM, full-system RAM/VRAM and100 actual calls.
+REMAINING RISKS: family-only→`А у меня всё нормально` repair; breathing wording;
+lexical coverage and ordered minima; arbitrary unpunctuated references/quotes.
+NEXT GATE: grounded coverage/breathing meaning with preserved hard safety; then
+target full phone/audio/raw-trace acceptance. No target restart/deployment.
+
+---
+
+# Собственные факты и100 клиентов — 2026-10-05 UTC
+
+Target **feature/voice-zoiper-m5**, baseline **0b87de7**; main untouched.
+[Plan/journal/resource formula](dialogue-and-capacity-plan-2026-10-05.md),
+[actual paired SDK exchanges and limits](evaluation/subject-and-replicas-2026-10-05/README.md),
+[source/CI/checks](evaluation/subject-and-replicas-2026-10-05/checks.json).
+
+CHANGED: original speaker-owned routine fact clauses; shared mission wellness
+boundary; no whole-turn contextual resurrection; mixed-only compatibility/source
+and first-topic ownership. Plans and non-mixed clinical paths preserved. Locked
+weak shared replica cursor and one-attempt optional prefixes. No new brain/model/
+generator/flag; production profile admission1 unchanged.
+
+VERIFIED: local full3401 PASS/2 inherited relation-LFS readiness FAIL/9 SKIP/145.89s;
+rich842 PASS/10.99s; runtime322 PASS/19.34s; corpus500/500/5.53s; policy diff12expected/
+0unexplained; Ruff/whitespace PASS. Routing100 controlled independent adapter
+requests50/50, identities distinct and intact; not100 model/phone capacity. Existing
+15 clinical/topic regressions corrected without changing existing assertions.
+Paired SDK12cases/380turns each; simulated delivery. Exact source **d3224982996dd418682926edfa27f482683f83ae**:
+[CI37248532450](https://github.com/Belvist/imvera/actions/runs/37248532450), all11 PASS;
+**3409 PASS/0 FAIL/3 SKIP/206.11s** with genuine LFS/model readiness. Follow-up
+metadata only; runtime/test/config/workflow bytes unchanged from tested source.
+
+NOT VERIFIED: actual M5 deployed SHA/profile/providers, phone warmth/recognition,
+end-of-speech→PCM latency, whole-stack RAM/VRAM and100 admitted calls.
+REMAINING RISKS: subjectless family continuation may still become an own kernel
+clinical episode; source replay «трудно дышать» lacks urgent handling in baseline
+and current code; canonical «Не могу дышать» remains urgent. These block product
+acceptance. Lexical coverage/ordered minima remain, CPU-STT6 replicas is only an
+average-workload estimate; real TTS and burst capacity unmeasured.
+NEXT GATE: close documented semantic ownership/safety-wording/coverage counterexamples,
+then target CallActor/FreeSWITCH/audio/raw trace and staged compute load acceptance.
+No target M5/FreeSWITCH/DB restart/deployment performed.
+
+---
+
+# Несколько жалоб: ownership/память и измеренная нагрузка — 2026-10-04 UTC
+
+Цель **feature/voice-zoiper-m5**, baseline **ad5aad75037ac7b2df048b8cd190cafbd5c754bc**.
+[Отчёт/actual transcripts](evaluation/multi-complaint-2026-10-04/README.md),
+[checks/source/CI](evaluation/multi-complaint-2026-10-04/checks.json).
+
+CHANGED: acknowledge всех grounded жалоб; hedged clock ownership без borrowing
+из medication/plans; episode-scoped temporal loop identity и snapshot type;
+продолжение queued speaker complaints после exhausted question с honest unanswered;
+digest6 вместо2. Truthful HTTP/SDK capacity probe без scripted STT/TTS и consent
+mutations; isolated real GigaAM capacity curve, исправлена старая scaling claim.
+Startup checksum bounded stream: actual Python peak428MiB→261KiB, intact integrity.
+No new brain/flags/model stage/global medical promotion. Past morning current
+восстановлен после пойманной проверки, existing assertions не ослаблены.
+
+VERIFIED: exact source **c11674ef97382570f1e5ef544f2380b8c612b3de**,
+[CI37244559679](https://github.com/Belvist/imvera/actions/runs/37244559679), all11 PASS;
+**3392 PASS/0 FAIL/3 SKIP/208.77s**, genuine LFS/model readiness PASS.
+Rich831 PASS/10.77s, runtime316 PASS/19.31s, corpus500/500/6.00s,
+policy diff12 expected/0 unexplained, Ruff/whitespace PASS. Local full before
+final checksum:3383 PASS/2 inherited LFS FAIL/9 SKIP/145.43s; final checksum
+focused44 PASS/1.18s. Follow-up reports/provenance only; all runtime/test/config/
+workflow bytes identical to exact-CI source. Raw real STT load artifact с image/profile,
+24requests/level1/2/4/8; steady working-set1.455→1.461GiB, quota2CPU/4GiB.
+Paired source-bound SDK7cases/260turns per side; delivery simulated, не audio.
+
+NOT VERIFIED: actual M5 SHA/profile/provider flags, raw fs-fd317c1c audio/STT
+качество, full live speech/human acceptance, bridge/Qwen/FS/PG RSS и capacity.
+REMAINING RISKS: ordered deterministic product packs/minima/общие caps остаются;
+swelling не доказан отдельным structured атрибутом; неизвестные факты сохраняются
+unknown. Локальный LFS relation file — pointer; exact-source CI проверил
+настоящие weights. Existing question limits не повышены.
+NEXT GATE: реальный repeated multi-complaint CallActor/FreeSWITCH звонок на exact
+revision с audio+raw trace/stage latency/hardware memory; затем compute load soak.
+Target M5/FreeSWITCH/БД здесь не перезапускались.
+
+---
+
 # Volunteered meaning, pending selection and closing (2026-10-04)
 
 Target **feature/voice-zoiper-m5**, baseline **d0bfac667f6a97426d42974c60127b1958a673d5**.

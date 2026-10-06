@@ -830,6 +830,16 @@ def _plans_fact(raw: str, *, answer_slot: str | None) -> FactCandidate | None:
     return None
 
 
+def requires_scoped_goal_evidence(text: str) -> bool:
+    """A foreign subject cannot use a whole-turn caller-fact fallback."""
+    from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
+    from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
+    from packages.dialogue_engine.semantic_kernel.types import SubjectKind
+
+    return any(_subject_for_clause(clause, has_issue=False) == SubjectKind.OTHER_PERSON
+               for _, _, clause in clause_bounds(text))
+
+
 def extract_goal_facts(
     text: str,
     *,
@@ -839,6 +849,52 @@ def extract_goal_facts(
 
     answer_slot is a hint, not a gate — one utterance may cover wellness+mood+plans.
     """
+    if not requires_scoped_goal_evidence(text):
+        return _extract_owned_goal_facts(text, answer_slot=answer_slot)
+
+    # Plans already has its own original-span/tense owner. Keep it intact;
+    # applying its sole-clause rule to an extracted subclause would broaden it.
+    plan = _plans_fact(text.strip(), answer_slot=answer_slot)
+    facts: dict[str, FactCandidate] = {"plans": plan} if plan is not None else {}
+    for clause in speaker_goal_clauses(text):
+        for fact in _extract_owned_goal_facts(clause.text, answer_slot=answer_slot):
+            if fact.field == "plans":
+                continue
+            evidence = fact.evidence.model_copy(update={
+                "start": clause.start + fact.evidence.start,
+                "end": clause.start + fact.evidence.end,
+            })
+            facts.setdefault(fact.field, fact.model_copy(update={"evidence": evidence}))
+    return tuple(facts.values())
+
+
+def speaker_goal_clauses(text: str) -> tuple:
+    """Exact speaker-owned spans shared by routine facts and mission binding."""
+    from packages.dialogue_engine.deterministic_mission import split_mission_clauses
+    from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
+    from packages.dialogue_engine.semantic_kernel.types import SubjectKind
+
+    # An initial implicit self report retains its existing interpretation;
+    # a later relative changes the owner until an explicit self return.
+    subject = SubjectKind.SPEAKER
+    clauses = []
+    for clause in split_mission_clauses(text):
+        explicit = _subject_for_clause(clause.text, has_issue=False)
+        if explicit != SubjectKind.UNKNOWN:
+            subject = explicit
+        # A continuation inherits the last explicit subject, but quoted speech
+        # never establishes the caller's answer. No edited/concatenated evidence.
+        if subject == SubjectKind.SPEAKER and not any(
+            mark in clause.text for mark in ('"', '«', '»')
+        ):
+            clauses.append(clause)
+    return tuple(clauses)
+
+
+def _extract_owned_goal_facts(
+    text: str, *, answer_slot: str | None = None,
+) -> tuple[FactCandidate, ...]:
+    """Single existing fact extractor, after the subject/evidence boundary."""
     raw = text.strip()
     if not raw:
         return ()
@@ -858,29 +914,6 @@ def extract_goal_facts(
     )
     if _has_other and not _has_speaker:
         return (plans_fact,) if plans_fact is not None else ()
-    if _has_other and _has_speaker:
-        # Mixed subjects («у мужа плохо, а у меня более-менее»): evaluate
-        # speaker clauses only — husband's «плохо» must not become speaker
-        # wellness. Drop other-only clauses, keep speaker evidence.
-        try:
-            from packages.dialogue_engine.policy import (
-                _is_other_person_only as _mixed_other_only,
-            )
-
-            _parts = re.split(r"\s*[,;]\s*|\s+а\s+|\s+но\s+|\s+однако\s+", raw)
-            _kept = [
-                p.strip()
-                for p in _parts
-                if p.strip() and not _mixed_other_only(p.strip())
-            ]
-            if not _kept:
-                return ()
-            raw = " ".join(_kept).strip()
-            raw = re.sub(r"^а\s+", "", raw, flags=re.I).strip()
-            n = raw.lower().replace("ё", "е")
-            _low = n
-        except Exception:  # noqa: BLE001
-            pass
     facts: list[FactCandidate] = []
     full_evidence = _evidence(raw, 0, len(raw))
     seen: set[str] = set()

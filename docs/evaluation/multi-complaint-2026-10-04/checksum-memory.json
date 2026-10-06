@@ -1,0 +1,15 @@
+{
+  "boundary": "actual official checkpoint; Python traced allocations only",
+  "artifact_bytes": 448929252,
+  "sha256": "f60c62fe45902d967000770a12f260de7c5ac4d4b8e5e852f1df8c548e3958b5",
+  "measurements": {
+    "baseline_whole_file": {
+      "python_peak_allocated_bytes": 448934176,
+      "elapsed_s": 0.7442326329983189
+    },
+    "current_bounded_stream": {
+      "python_peak_allocated_bytes": 267377,
+      "elapsed_s": 0.6212996949980152
+    }
+  }
+}

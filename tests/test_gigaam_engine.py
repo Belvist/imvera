@@ -76,3 +76,25 @@ def test_load_asr_backend_gigaam_mock() -> None:
         backend, revision = load_asr_backend({"engine": "gigaam", "id": "v3_e2e_rnnt"})
     assert backend is fake
     assert revision == "gigaam:v3_e2e_rnnt@cpu"
+
+
+def test_checkpoint_checksum_keeps_integrity_without_whole_file_read(tmp_path, monkeypatch):
+    import hashlib
+
+    from services.stt import gigaam_engine
+
+    checkpoint = tmp_path / 'test.ckpt'
+    payload = b'checkpoint boundary\x00' * 130000
+    checkpoint.write_bytes(payload)
+    monkeypatch.setitem(gigaam_engine._MODEL_HASHES, 'test', hashlib.md5(payload).hexdigest())
+
+    def forbid_whole_file_read(path):
+        raise AssertionError('checkpoint-sized allocation is forbidden')
+
+    monkeypatch.setattr(Path, 'read_bytes', forbid_whole_file_read)
+    gigaam_engine._verify_checksum(checkpoint, 'test')
+    with checkpoint.open('r+b') as stream:
+        stream.seek(len(payload) - 1)
+        stream.write(b'!')
+    with pytest.raises(RuntimeError, match='checksum mismatch'):
+        gigaam_engine._verify_checksum(checkpoint, 'test')

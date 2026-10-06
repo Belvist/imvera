@@ -117,7 +117,7 @@ class HttpSTTProvider:
         }
         # Optional work is never retried across replicas: do not multiply load.
         try:
-            response = await self._post(self._pool.urls[0], "/v1/preview", body, 2.0)
+            response = await self._post(self._pool.order()[0], "/v1/preview", body, 2.0)
         except httpx.HTTPError as exc:
             raise ProviderUnavailable(f"STT preview unavailable: {exc}") from exc
         if response.status_code == 499:

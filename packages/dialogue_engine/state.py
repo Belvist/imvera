@@ -205,7 +205,8 @@ class EngineState(BaseModel):
     active_playout_generation: int = 0
 
     slot_unclear_counts: dict[str, int] = Field(default_factory=dict)
-    last_temporal_probe: Literal["temporal_onset", "temporal_duration"] | None = None
+    # Probe identity may include @episode_id; old unscoped values remain readable.
+    last_temporal_probe: str | None = None
     waiting_on_slot: str | None = None
     summary_spoken: bool = False
     summary_delivered: bool = False

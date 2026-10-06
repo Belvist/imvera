@@ -1,0 +1,85 @@
+{
+  "baseline": "0abdc460f892498a3f025be2a2e74ab7d3acf532",
+  "scope": "source-bound synthetic SDK with simulated delivery; no deployed phone claim",
+  "source_files_sha256": {
+    "packages/dialogue_engine/conversation_policy.py": "cc1d9d575adae178271053649cd66840a622cd927f097d1fdbabca4669b2cb2f",
+    "packages/dialogue_engine/issue_memory.py": "8030d0c64e4e5cbaadfa31e2aa38464f64c0e0fa04df813484463cdcb25055be",
+    "packages/dialogue_engine/issue_mention_extract.py": "1142514367336d8bd0a817c3ee8150dc4a92b3e12081331b8da8dbabdd180985",
+    "packages/dialogue_engine/questions.py": "f05da2b87df426d04acee0e5e2a6b6370041081b185a19461e9f14b71b83726b",
+    "packages/dialogue_engine/semantic_kernel/kernel.py": "6e355269a95222a7867ce66de4e42b5a21e176650523d2d83a10dd09f9460338",
+    "packages/dialogue_engine/semantic_kernel/observation_memory.py": "654f97c1eb41791e6b5b84b23cbb3e8696fc44253a3c41435c07d7b8ce88ac36",
+    "packages/dialogue_engine/semantic_kernel/subject_resolver.py": "097453a26372a599d97baddca6fa6fe3133a90d1157762825bfd9f64bb590f36",
+    "packages/dialogue_engine/turn_understanding.py": "4c05133ba7dc3df76877e0f49d279513a3bf853980ab91b88d62d21c3a6d488b",
+    "tests/test_implicit_subject_ownership.py": "994943fee068a4bae3a5a3d0a1de491e2ea81c06be21c6932231ab670dd3cf0b",
+    "Makefile": "13acf60b6bacd4c693fac9625d0f212bdbc11f8677a5faef03156f1dc94c7642"
+  },
+  "new_tests": {
+    "current": "20 PASS; final focused352 PASS/1.24s",
+    "baseline": "13 FAIL/7 PASS/0.62s; four new resolver API absences, nine behavior failures"
+  },
+  "paired_sdk": {
+    "before": {
+      "checkout": "/tmp/imvera-implicit-subject-baseline",
+      "head": "0abdc460f892498a3f025be2a2e74ab7d3acf532",
+      "dirty": false,
+      "flags": {
+        "IMVERA_DIALOGUE_ENGINE": "1",
+        "IMVERA_COVERAGE_LADDER": "1",
+        "IMVERA_ACTION_POLICY_MODE": "off",
+        "IMVERA_LLM_INTERPRET": "0",
+        "IMVERA_MISSION_LLM_INTERPRET": "0",
+        "IMVERA_SPEECH_DAY": "102",
+        "IMVERA_SPEECH_HOUR": "14"
+      },
+      "scope": "synthetic canonical SDK; simulated audible completion",
+      "repeats": 10,
+      "text_turns": 310,
+      "sdk_turn_ms_p50": 2.3974169999974038,
+      "sdk_turn_ms_p95": 4.853840000009768,
+      "end_of_speech_to_PCM": "NOT_RUN",
+      "provider_model_invocations": "NOT_MEASURED"
+    },
+    "after": {
+      "checkout": "/workspace/imvera-live-review",
+      "head": "80f7685169adc5b8432cb382137bd95c2772955b",
+      "dirty": true,
+      "flags": {
+        "IMVERA_DIALOGUE_ENGINE": "1",
+        "IMVERA_COVERAGE_LADDER": "1",
+        "IMVERA_ACTION_POLICY_MODE": "off",
+        "IMVERA_LLM_INTERPRET": "0",
+        "IMVERA_MISSION_LLM_INTERPRET": "0",
+        "IMVERA_SPEECH_DAY": "102",
+        "IMVERA_SPEECH_HOUR": "14"
+      },
+      "scope": "synthetic canonical SDK; simulated audible completion",
+      "repeats": 10,
+      "text_turns": 310,
+      "sdk_turn_ms_p50": 2.4483974999611746,
+      "sdk_turn_ms_p95": 7.444127000098888,
+      "end_of_speech_to_PCM": "NOT_RUN",
+      "provider_model_invocations": "NOT_MEASURED"
+    }
+  },
+  "local_full": "Final pivot source RUNNING; published parent80f7685 exact local full3419 PASS/2 inherited LFS FAIL/9 SKIP/149.85s. Current352 focused PASS; existing assertions unchanged.",
+  "ci": "NOT_RUN until exact-source publication",
+  "live_audio_latency_capacity": "NOT_RUN",
+  "known_gaps": [
+    "breathing wording трудно дышать unchanged",
+    "lexical coverage still counts indirect text",
+    "correction ambiguity with multiple unowned episodes abstains",
+    "unpunctuated/implicit person/quote recognition not universally proved",
+    "family-only then А у меня всё нормально replay asks wellness repair; not accepted conversational flow",
+    "actual M5 providers/image/phone/100-call capacity not established"
+  ],
+  "no_new_model_stage": true,
+  "live_model_invocations": "NOT_MEASURED",
+  "gates": {
+    "rich": "862 PASS (final pivot log)",
+    "kernel": "294 PASS/1.51s",
+    "runtime": "322 PASS/20.88s on parent80f7685; runtime bytes unchanged",
+    "corpus": "500/500 PASS/6.54s;8 gate tests PASS/30.89s",
+    "policy_diff": "12 expected/0 unexplained",
+    "lint": "make lint: PASS; git diff --check: PASS"
+  }
+}

@@ -1,0 +1,1960 @@
+{
+  "checkout": "/tmp/imvera-multi-baseline-ad5",
+  "head": "ad5aad75037ac7b2df048b8cd190cafbd5c754bc",
+  "dirty": false,
+  "flags": {
+    "IMVERA_DIALOGUE_ENGINE": "1",
+    "IMVERA_COVERAGE_LADDER": "1",
+    "IMVERA_ACTION_POLICY_MODE": "off",
+    "IMVERA_LLM_INTERPRET": "0",
+    "IMVERA_MISSION_LLM_INTERPRET": "0",
+    "IMVERA_SPEECH_DAY": "102",
+    "IMVERA_SPEECH_HOUR": "14"
+  },
+  "scope": "synthetic canonical SDK; simulated audible completion",
+  "repeats": 10,
+  "text_turns": 260,
+  "sdk_turn_ms_p50": 2.411520003079204,
+  "sdk_turn_ms_p95": 5.337887996574864,
+  "end_of_speech_to_PCM": "NOT_RUN",
+  "provider_model_invocations": "NOT_MEASURED",
+  "transcripts": {
+    "reported_clock": [
+      {
+        "user": "Плохо.",
+        "vera": "Мне жаль это слышать. Спасибо, что рассказали. На что жалуетесь?",
+        "intent": "probe_concern",
+        "slot": "probe_concern",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Рука болит опухла, что-то давление ещё, и этот сахар поднялся.",
+        "vera": "Жаль, что рука болит. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-589772e9_onset",
+        "slot": "episode_ep-589772e9_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Понятно. В 12 вроде.",
+        "vera": "Я вас слушаю. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-589772e9_onset",
+        "slot": "episode_ep-589772e9_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "Понятно. В 12 вроде.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": [
+          {
+            "call_id": "floor-reported_clock",
+            "utterance_id": "u-3",
+            "text": "Понятно. В 12 вроде.",
+            "turn_number": 3
+          }
+        ]
+      },
+      {
+        "user": "Не знаю, как будто бы в 12:00 сегодня.",
+        "vera": "Спасибо, Тамара Юрьевна. Я записала: рука болит, давление и сахар. На сегодня всё. Берегите себя.",
+        "intent": "summary",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "Понятно. В 12 вроде.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": [
+          {
+            "call_id": "floor-reported_clock",
+            "utterance_id": "u-3",
+            "text": "Понятно. В 12 вроде.",
+            "turn_number": 3
+          }
+        ]
+      }
+    ],
+    "all_three": [
+      {
+        "user": "Плохо.",
+        "vera": "Мне жаль это слышать. Спасибо, что рассказали. Что именно беспокоит?",
+        "intent": "probe_concern",
+        "slot": "probe_concern",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Рука болит опухла, что-то давление ещё, и этот сахар поднялся.",
+        "vera": "Жаль, что рука болит. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-282f2892_onset",
+        "slot": "episode_ep-282f2892_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "severity": "Терпимо."
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "В 12 вроде.",
+        "vera": "Я вас слушаю. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-282f2892_onset",
+        "slot": "episode_ep-282f2892_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "В 12 вроде.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "severity": "Терпимо."
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": [
+          {
+            "call_id": "floor-all_three",
+            "utterance_id": "u-3",
+            "text": "В 12 вроде.",
+            "turn_number": 3
+          }
+        ]
+      },
+      {
+        "user": "Терпимо.",
+        "vera": "Поняла, сейчас терпимо. Спасибо, Тамара Юрьевна. Я записала: рука болит, давление и сахар. На сегодня всё. Берегите себя.",
+        "intent": "summary",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "В 12 вроде.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "severity": "Терпимо."
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": [
+          {
+            "call_id": "floor-all_three",
+            "utterance_id": "u-3",
+            "text": "В 12 вроде.",
+            "turn_number": 3
+          }
+        ]
+      },
+      {
+        "user": "Со вчера.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "В 12 вроде.",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "severity": "Терпимо."
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": [
+          {
+            "call_id": "floor-all_three",
+            "utterance_id": "u-3",
+            "text": "В 12 вроде.",
+            "turn_number": 3
+          }
+        ]
+      },
+      {
+        "user": "Сегодня после обеда.",
+        "vera": null,
+        "intent": null,
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "В 12 вроде.",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1",
+              "severity": "Терпимо."
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": [
+          {
+            "call_id": "floor-all_three",
+            "utterance_id": "u-3",
+            "text": "В 12 вроде.",
+            "turn_number": 3
+          }
+        ]
+      }
+    ],
+    "first_unknown": [
+      {
+        "user": "Плохо.",
+        "vera": "Мне жаль это слышать. Спасибо, что рассказали. Что вас беспокоит сильнее всего?",
+        "intent": "probe_concern",
+        "slot": "probe_concern",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Рука болит опухла, что-то давление ещё, и этот сахар поднялся.",
+        "vera": "Жаль, что рука болит. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-6afc3dd6_onset",
+        "slot": "episode_ep-6afc3dd6_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Ну такое.",
+        "vera": "Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-6afc3dd6_onset",
+        "slot": "episode_ep-6afc3dd6_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Такое какое-то.",
+        "vera": "Спасибо, Тамара Юрьевна. Я записала: рука болит, давление и сахар. На сегодня всё. Берегите себя.",
+        "intent": "summary",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "three_temporal": [
+      {
+        "user": "Горло першит, нос заложен и ухо заложено.",
+        "vera": "Слышу вас: горло першит и нос заложен и ухо заложено. Давайте по порядку. Когда это началось — сегодня или раньше?",
+        "intent": "episode_ep-a977366e_onset",
+        "slot": "episode_ep-a977366e_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Горло першит, нос заложен и ухо заложено."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "горло першит",
+            "site": "горло",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1",
+              "onset": "С утра."
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "нос заложен",
+            "site": "нос",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1",
+              "onset": "Со вчера."
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "ухо заложено",
+            "site": "ухо",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1",
+              "_product_asked:duration": "1",
+              "_temporal_skipped": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "горло першит",
+            "site": "горло",
+            "subject": "speaker",
+            "evidence": "першит",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "нос заложен",
+            "site": "нос",
+            "subject": "speaker",
+            "evidence": "заложен",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "ухо заложено",
+            "site": "ухо",
+            "subject": "speaker",
+            "evidence": "заложено",
+            "source_turn_id": "u-1",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "С утра.",
+        "vera": "Нос заложен — давайте уточним. Когда это началось — сегодня или раньше?",
+        "intent": "episode_ep-2489430d_onset",
+        "slot": "episode_ep-2489430d_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Горло першит, нос заложен и ухо заложено."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "горло першит",
+            "site": "горло",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1",
+              "onset": "С утра."
+            },
+            "unanswered": {},
+            "status": "resolved"
+          },
+          {
+            "label": "нос заложен",
+            "site": "нос",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1",
+              "onset": "Со вчера."
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "ухо заложено",
+            "site": "ухо",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1",
+              "_product_asked:duration": "1",
+              "_temporal_skipped": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "горло першит",
+            "site": "горло",
+            "subject": "speaker",
+            "evidence": "першит",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "нос заложен",
+            "site": "нос",
+            "subject": "speaker",
+            "evidence": "заложен",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "ухо заложено",
+            "site": "ухо",
+            "subject": "speaker",
+            "evidence": "заложено",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "С утра.",
+            "site": "горло",
+            "subject": "speaker",
+            "evidence": "С утра.",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Со вчера.",
+        "vera": "Как сегодня с едой — нормально поели?",
+        "intent": "background_nutrition",
+        "slot": "background_nutrition",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "Горло першит, нос заложен и ухо заложено."
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [
+          {
+            "label": "горло першит",
+            "site": "горло",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1",
+              "onset": "С утра."
+            },
+            "unanswered": {},
+            "status": "resolved"
+          },
+          {
+            "label": "нос заложен",
+            "site": "нос",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1",
+              "onset": "Со вчера."
+            },
+            "unanswered": {},
+            "status": "resolved"
+          },
+          {
+            "label": "ухо заложено",
+            "site": "ухо",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "generic_symptom",
+              "_product_asked:onset": "1",
+              "_product_asked:duration": "1",
+              "_temporal_skipped": "1"
+            },
+            "unanswered": {},
+            "status": "resolved"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "горло першит",
+            "site": "горло",
+            "subject": "speaker",
+            "evidence": "першит",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "нос заложен",
+            "site": "нос",
+            "subject": "speaker",
+            "evidence": "заложен",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "ухо заложено",
+            "site": "ухо",
+            "subject": "speaker",
+            "evidence": "заложено",
+            "source_turn_id": "u-1",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "С утра.",
+            "site": "горло",
+            "subject": "speaker",
+            "evidence": "С утра.",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "onset",
+            "value": "Со вчера.",
+            "site": "нос",
+            "subject": "speaker",
+            "evidence": "Со вчера.",
+            "source_turn_id": "u-3",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "wrong_clock_owner": [
+      {
+        "user": "Плохо.",
+        "vera": "Мне жаль это слышать. Спасибо, что рассказали. Что-то беспокоит?",
+        "intent": "probe_concern",
+        "slot": "probe_concern",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Рука болит опухла, что-то давление ещё, и этот сахар поднялся.",
+        "vera": "Жаль, что рука болит. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-c410d863_onset",
+        "slot": "episode_ep-c410d863_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Дочь приедет в 12, кажется.",
+        "vera": "Про дочь поняла. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-c410d863_onset",
+        "slot": "episode_ep-c410d863_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "Дочь приедет в 12, кажется.",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": [
+          {
+            "call_id": "floor-wrong_clock_owner",
+            "utterance_id": "u-3",
+            "text": "Дочь приедет в 12, кажется.",
+            "turn_number": 3
+          }
+        ]
+      }
+    ],
+    "safety": [
+      {
+        "user": "Плохо.",
+        "vera": "Мне жаль это слышать. Спасибо, что рассказали. Что вас беспокоит сильнее всего?",
+        "intent": "probe_concern",
+        "slot": "probe_concern",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Рука болит опухла, что-то давление ещё, и этот сахар поднялся.",
+        "vera": "Жаль, что рука болит. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-3f6d70b6_onset",
+        "slot": "episode_ep-3f6d70b6_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "Не могу дышать.",
+        "vera": "Понимаю, это важно. Я передам информацию близким. Спасибо за разговор. До свидания.",
+        "intent": "urgent_close",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "RED"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ],
+    "stop": [
+      {
+        "user": "Плохо.",
+        "vera": "Мне жаль это слышать. Спасибо, что рассказали. Что вас беспокоит сильнее всего?",
+        "intent": "probe_concern",
+        "slot": "probe_concern",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": null,
+        "episodes": [],
+        "observations": [],
+        "personal_context": []
+      },
+      {
+        "user": "Рука болит опухла, что-то давление ещё, и этот сахар поднялся.",
+        "vera": "Жаль, что рука болит. Когда появилась эта боль — сегодня или раньше?",
+        "intent": "episode_ep-de807ee3_onset",
+        "slot": "episode_ep-de807ee3_onset",
+        "marks_question": true,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": false,
+        "outcomes": {
+          "call_outcome": "TECHNICAL",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "UNSET"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      },
+      {
+        "user": "До свидания.",
+        "vera": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+        "intent": "goodbye_final",
+        "slot": null,
+        "marks_question": false,
+        "wellness": "FILLED",
+        "facts": {
+          "wellness": "negative"
+        },
+        "thread_statement": "",
+        "thread_finished": false,
+        "closed": true,
+        "outcomes": {
+          "call_outcome": "COMPLETED",
+          "mission_status": "NOT_RUN",
+          "candidate_family_status": "YELLOW"
+        },
+        "pending_episode_attribute": "onset",
+        "episodes": [
+          {
+            "label": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "known": {
+              "current": "active",
+              "_product_family": "limb_pain",
+              "_product_asked:onset": "1"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "давление",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          },
+          {
+            "label": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "known": {
+              "current": "active"
+            },
+            "unanswered": {},
+            "status": "open"
+          }
+        ],
+        "observations": [
+          {
+            "attribute": "issue",
+            "value": "рука болит",
+            "site": "рука",
+            "subject": "speaker",
+            "evidence": "болит",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "давление",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "давление",
+            "source_turn_id": "u-2",
+            "current": null
+          },
+          {
+            "attribute": "issue",
+            "value": "сахар",
+            "site": null,
+            "subject": "speaker",
+            "evidence": "сахар",
+            "source_turn_id": "u-2",
+            "current": null
+          }
+        ],
+        "personal_context": []
+      }
+    ]
+  }
+}
