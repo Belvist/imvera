@@ -1,6 +1,7 @@
 # Live-call evidence (newest on top)
 
 | Call | Date (MSK) | What it proved |
+| [fs-844600d2-help-yes-handoff](fs-844600d2-help-yes-handoff.md) | 2026-10-06 | «Need help? yes» plain-close, fixed with handoff |
 | [fs-fd317c1c-multi-complaint](fs-fd317c1c-multi-complaint.md) | 2026-10-04 | Three complaints, hedged onset, memory write |
 | [fs-9de2dab3-borscht-thread](fs-9de2dab3-borscht-thread.md) | 2026-10-05 | Borscht thread, abrupt caller-side end |
 |------|-----------|----------------|
