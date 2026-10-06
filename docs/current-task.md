@@ -1393,6 +1393,21 @@ canonical == TTS == delivered speech, and a single farewell.
 
 ---
 
+# Fast-forward to c8370aa + full restart (2026-10-04)
+
+- His batch (narrative recall, floor/speech admission, pending source,
+  production plan). Fast-forward, no conflicts. Gates: 3355/2(known
+  origin-reds), corpus 500/500, ruff clean.
+- Someone deleted committed files from worktree again — restored from
+  HEAD before merging (recurring; needs lanes).
+- Full restart: workers, bridge, qwen server, FS, DB. Lesson: qwen
+  server must be up BEFORE TTS warmup (single-batch drops concurrent
+  streams -> silent silero fallback + split-brain voices). Restarted
+  sequentially -> both TTS on qwen. DB intact (461/2225). Zoiper
+  re-registered, Reachable. Watch OK c8370aa.
+
+---
+
 # Fast-forward to 3957f62: production hardening batch (2026-10-03)
 
 - His 15 (bridge/runtime admission, Linux inference, TTS bounds, grounding
