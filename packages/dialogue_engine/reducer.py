@@ -778,8 +778,20 @@ def _commit_emitted_question(state: EngineState, question: Question) -> None:
         bump_product_ask(state, classify_episode_family(ep))
 
 
-def _consume_pending_share_decline(state: EngineState, turn: RichUserTurn) -> None:
-    """Terminal ITS reply consumption is independent of the next selector."""
+def _release_answered_share_question(state: EngineState) -> None:
+    delivered = state.delivered_question
+    if (state.important_to_share_resolved and delivered is not None
+            and delivered.intent in ("important_to_share", "important_to_share_listen")):
+        state.delivered_question = None
+        state.waiting_on_slot = None
+
+
+def _consume_pending_share_reply(state: EngineState, turn: RichUserTurn) -> None:
+    """Consume the open invitation, independently of who selects the next move.
+
+    A source-admitted story answers a heard invitation. It does not answer a
+    clinical/mission need or assert the absence of further complaints.
+    """
     if (
         not state.important_to_share_asked or state.important_to_share_resolved
         or turn.control not in ("none", "") or turn.user_question
@@ -795,6 +807,53 @@ def _consume_pending_share_decline(state: EngineState, turn: RichUserTurn) -> No
     kind = _classify_important_to_share_answer(turn, turn.raw_text, state)
     if kind in ("DECLINE", "TOPIC_COMPLETE") and not _turn_reports_fresh_negative(turn):
         state.important_to_share_resolved = True
+        _release_answered_share_question(state)
+        return
+    from packages.dialogue_engine.discourse import accepted_personal_statement
+
+    delivered = state.delivered_question
+    if (kind == "UNCLEAR" and delivered is not None
+            and delivered.intent in ("important_to_share", "important_to_share_listen")
+            and not state.risk_handling and not state.red_state_pending
+            and state.check_path != CheckPath.URGENT and state.safety_mode != "red"
+            and not _turn_reports_fresh_negative(turn)
+            and accepted_personal_statement(state, turn)):
+        state.important_to_share_resolved = True
+        _release_answered_share_question(state)
+
+
+def _reopen_summary(state: EngineState) -> None:
+    """New accepted content invalidates the old summary's completion scope."""
+    if (state.fsm_state == FsmState.SUMMARY and not state.call_closed
+            and not state.risk_handling and not state.red_state_pending
+            and state.check_path != CheckPath.URGENT and state.safety_mode != "red"):
+        state.fsm_state = FsmState.DAILY_CHECK
+        state.summary_spoken = False
+        state.summary_delivered = False
+        _release_answered_share_question(state)
+
+
+def _reopen_summary_after_rich_apply(state: EngineState, turn: RichUserTurn) -> None:
+    """Read accepted current-turn evidence; rejected proposals cannot reopen."""
+    if state.fsm_state != FsmState.SUMMARY or state.call_closed:
+        return
+    if not turn.utterance_id or turn.control not in ("none", ""):
+        return
+    from packages.dialogue_engine.discourse import accepted_personal_statement
+    from packages.dialogue_engine.semantic_kernel.types import Observation
+
+    accepted = any(
+        record.source_turn_id == turn.utterance_id and record.source_text.strip()
+        for record in (*state.slot_records.values(), *state.coverage_records.values())
+    ) or any(
+        isinstance(obs, Observation) and obs.status == "confirmed"
+        and obs.source_turn_id == turn.utterance_id and obs.evidence.strip()
+        for obs in state.observations.values()
+    ) or any(
+        turn.utterance_id in ep.evidence_turn_ids for ep in state.issue_episodes.values()
+    )
+    if accepted or accepted_personal_statement(state, turn) or turn.user_question:
+        _reopen_summary(state)
 
 
 def _on_playout_cancelled(
@@ -1092,6 +1151,7 @@ def _apply_goal_facts(state: EngineState, turn: RichUserTurn) -> list[str]:
                     correction=True,
                 )
                 _clear_thread_heard_listening(state)
+                _reopen_summary(state)
             continue
         if fact.field in ("wellness", "mood", "sleep"):
             from packages.dialogue_engine.policy import _is_other_person_only
@@ -1199,6 +1259,8 @@ def _schedule_advance(
         answer_not_recalled=answer_not_recalled,
     )
     plan = schedule_next_action(state, ctx)
+    if turn is not None:
+        _reopen_summary_after_rich_apply(state, turn)
     return _emit_from_plan(state, plan)
 
 
@@ -1453,7 +1515,8 @@ def _apply_rich_turn(
 
     turn = filter_rich_turn_mentions(state, turn)
     atomic_semantic_apply(state, turn)
-    _consume_pending_share_decline(state, turn)
+    _reopen_summary_after_rich_apply(state, turn)
+    _consume_pending_share_reply(state, turn)
     if turn.issue_mentions:
         from packages.dialogue_engine.mission_flow import (
             capture_mission_suspend,
@@ -1650,6 +1713,9 @@ def _apply_rich_turn(
         state,
         TurnContext(turn=turn, user_text=user_text, answer_slot=answer_slot),
     )
+    # The shared scheduler may just have admitted a source-grounded routine
+    # record. It too must invalidate the prior summary before emission.
+    _reopen_summary_after_rich_apply(state, turn)
     if plan.action == "control" and plan.control:
         control_outcome = _apply_rich_control(state, turn)
         if control_outcome is not None:
@@ -2807,6 +2873,8 @@ def _advance_after_fills(
     user_text: str = "",
     turn: RichUserTurn | None = None,
 ) -> tuple[EngineState, list[Effect]]:
+    if filled_slots:
+        _reopen_summary(state)
     if not user_text and turn is not None:
         user_text = turn.raw_text or ""
     if not user_text:

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — 2026-10-07
+
+- Let a source-admitted personal narrative answer a heard open invitation without reserving more health questions or fabricating a health/mission fact. Keep clinical references and pure meal/medication reports with their existing owners.
+- Invalidate a previous summary's completion scope when new content is accepted; preserve facts and listening through the existing reducer/selector, including stale and cancelled delivery. Retain whole completion, safety and consent behavior.
+- Record paired source exchanges and actual SDK/CallActor controlled-PCM regressions separately from target phone/audio acceptance.
+
 ## Unreleased — 2026-10-05
 
 - Bind implicit clinical subjects through original discourse in the existing kernel/SDK owner; retain ambiguous foreign reports without caller-directed probing or recap. Scope family-only routine facts and structured proposals; rebase unique original evidence and acknowledge explicit family correction without another medical question.

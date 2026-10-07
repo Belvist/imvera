@@ -259,6 +259,8 @@ class EngineState(BaseModel):
         }
     )
     important_to_share_asked: bool = False
+    # The open invitation was answered/declined; no absence-of-complaints fact
+    # or medical/mission goal completion follows from this dialogue flag.
     important_to_share_resolved: bool = False
     # Frozen MEDICATION followup asked once per call (pack status_today).
     medication_asked: bool = False

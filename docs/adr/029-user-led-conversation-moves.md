@@ -107,3 +107,27 @@ unknown/new content remains on the ordinary path. Outcome projection honors
 the reducer's accepted urgent close before earlier positive facts or stale
 external status. Core remains final verdict owner. See the
 [source evidence and limits](../evaluation/volunteered-needs-2026-10-04/README.md).
+
+## Open invitation and summary scope (2026-10-07)
+
+The existing reducer consumes a heard open ITS invitation when its existing
+discourse writer admitted an attributable personal narrative. This completes
+the invitation only: no health/mission goal, absence of complaints, or family
+fact is established. The separate required clinical/mission needs remain open.
+Pure medication reports and clinical references retain their existing owners;
+unclear/unheard invitations are not falsely answered. Release the answered
+invitation's delivered-question ownership before the existing ActionPolicy
+selects the continuation. No new selector or policy-core version is introduced.
+
+Accepted nonterminal content after SUMMARY re-enters the existing daily-check
+state and invalidates the old summary's completion scope. Canonical mission
+answers, accepted SDK facts, routine coverage evidence, clinical reports,
+personal narrative and user questions retain their original admission owners.
+Noise/rejected proposals do not invalidate it. A new summary must be delivered
+before its completion opportunity applies; stale/cancelled generations still
+cannot establish delivery. Terminal/safety/control/consent owners are unchanged.
+
+This replaces repeated ITS reservations on stories and the reuse of an old
+summary to close after new content. Bounded personal memory remains discourse
+context. Protocol minima, full medical authority and optional natural surface
+remain separate cuts. See [paired source/delivery evidence](../evaluation/continuation-2026-10-07/README.md).

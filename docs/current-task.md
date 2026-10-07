@@ -1,3 +1,35 @@
+# Continuation ownership — 2026-10-07 UTC
+
+Target feature/voice-zoiper-m5, baseline c827d9d; main untouched.
+[Source/paired exchanges/integration handoff](evaluation/continuation-2026-10-07/README.md),
+[plan](plans/continuation-ownership-2026-10-07.md),
+[exact checks](evaluation/continuation-2026-10-07/checks.json).
+
+CHANGED: existing reducer consumes a heard open invitation's accepted personal
+story; release answered delivery ownership before the same ActionPolicy selects
+continuation. No health/family/mission fact follows from invitation completion.
+New accepted content invalidates the old summary's completion scope; include
+mission/SDK facts and routine coverage. Clinical references and pure report
+classes keep their owners. No new brain/model/phrase bank/flag, generative live
+delivery, global policy cutover, protocol-minimum change or target restart.
+
+VERIFIED: identical26 new tests baseline12 FAIL/14 PASS, final26 PASS; actual
+SDK/CallActor controlled-PCM completion/cancel paths included. Full local3489
+PASS/0 FAIL/9 SKIP,182.29s; rich924, runtime324, kernel294, corpus500/500 plus8
+gate tests, policy diff12 expected/0 unexplained, lint/whitespace PASS. Existing
+six full-suite regressions corrected without altering their assertions.
+Paired10 scenarios/850 SDK turns per side; audible delivery simulated. Exact
+published-source CI pending; record actual result after publication.
+
+NOT VERIFIED: current M5 loaded SHA/image/providers/flags, real phone/STT/TTS
+audio, warmth/latency, total model invocations and100 actual calls. Cloud has
+no configured M5 identity; access information requested. REMAINING RISKS:
+routine minima/ordered questions remain; fresh-summary spoken transition and
+listening pacing require heard acceptance; full free conversation is still
+bounded. NEXT GATE: exact-source CI, then target actual audio/trace acceptance.
+
+---
+
 # Grounded routine coverage — 2026-10-07 UTC
 
 Target feature/voice-zoiper-m5, baseline ee92a719; main untouched.

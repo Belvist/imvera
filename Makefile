@@ -45,7 +45,7 @@ test-dialogue-rich:
 		tests/test_conversation_floor_navigation.py tests/test_personal_context_recall.py \
 		tests/test_volunteered_clinical_facts.py tests/test_multi_complaint_progression.py \
 		tests/test_mixed_subject_routine_facts.py tests/test_implicit_subject_ownership.py \
-		tests/test_grounded_coverage.py -q
+		tests/test_grounded_coverage.py tests/test_continuation_ownership.py -q
 
 test-dialogue-runtime:
 	@echo "GATE: CallActor rich path + LLM worker contract"
