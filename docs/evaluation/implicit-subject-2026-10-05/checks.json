@@ -61,8 +61,16 @@
       "provider_model_invocations": "NOT_MEASURED"
     }
   },
-  "local_full": "Final pivot source RUNNING; published parent80f7685 exact local full3419 PASS/2 inherited LFS FAIL/9 SKIP/149.85s. Current352 focused PASS; existing assertions unchanged.",
-  "ci": "NOT_RUN until exact-source publication",
+  "local_full": "Last directly captured parent80f7685 local full3419 PASS/2 inherited relation LFS readiness FAIL/9 SKIP/149.85s. Final bbef source accepted by exact CI above; later local log unavailable after environment replacement.",
+  "ci": {
+    "run_id": 37327811889,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37327811889",
+    "head_sha": "bbef144542a158a247b7805246eb498f5cdc2215",
+    "jobs": "11/11 SUCCESS",
+    "full": "3429 PASS /0 FAIL /3 SKIP /237.71s",
+    "full_job_id": 111823120362,
+    "genuine_lfs": "git lfs fetch present in full job log; model readiness63 PASS/7.47s"
+  },
   "live_audio_latency_capacity": "NOT_RUN",
   "known_gaps": [
     "breathing wording трудно дышать unchanged",
@@ -81,5 +89,16 @@
     "corpus": "500/500 PASS/6.54s;8 gate tests PASS/30.89s",
     "policy_diff": "12 expected/0 unexplained",
     "lint": "make lint: PASS; git diff --check: PASS"
+  },
+  "implementation_sha": "bbef144542a158a247b7805246eb498f5cdc2215",
+  "continued_in_latest": {
+    "checked_utc_date": "2026-10-07",
+    "head_sha": "81f3272be67207581e55b7ba0b9a97e63dca2feb",
+    "all10_source_hashes_match": true,
+    "ci_url": "https://github.com/Belvist/imvera/actions/runs/37555647610",
+    "jobs": "11/11 SUCCESS",
+    "full": "3433 PASS/0 FAIL/3 SKIP/204.87s",
+    "full_job_id": 112581219063,
+    "model_readiness": "63 PASS/7.79s with genuine LFS fetch"
   }
 }

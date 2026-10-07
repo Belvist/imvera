@@ -1,3 +1,17 @@
+# Progress audit — 2026-10-07 UTC
+
+Audited m5 source **81f3272**; latest CI all11 SUCCESS,3433 PASS/0 FAIL/3 SKIP.
+[Progress, exact evidence and next implementation cut](dialogue-progress-2026-10-07.md).
+Our subject/SDK changes retained byte-for-byte. Peer added help-affirmation tests,
+old-bridge live report and64-entry PCM cache/max-batch2. Source fixes are distinct
+from post-restart heard acceptance. Grounded coverage/selector remains next.
+CHANGED: documentation only. VERIFIED: exact source CI/logs and10 source hashes.
+NOT VERIFIED: current M5 actual audio/trace/latency/100-call capacity.
+REMAINING RISKS: lexical coverage, breathing wording, own-positive return and
+cache deadline/byte-budget/backend identity. NEXT GATE: grounded coverage cut.
+
+---
+
 # Implicit clinical subject ownership — 2026-10-05 UTC
 
 Target **feature/voice-zoiper-m5**, baseline **0abdc46**; main untouched.
@@ -13,7 +27,7 @@ No new model/brain/writer/flag/global policy cutover; safety/control bytes uncha
 
 VERIFIED: new20 PASS; baseline13 FAIL/7 PASS (four missing newly exposed APIs);
 paired13-case/310-turn SDK exchanges each, simulated delivery. Rich862, kernel294, runtime322, corpus500/500, policy diff12expected/0unexplained,
-make lint and whitespace PASS. Final full/CI remain pending in checks. No existing assertion weakened.
+make lint and whitespace PASS. Exact bbef CI37327811889: all11 SUCCESS,3429 PASS/0 FAIL/3 SKIP/237.71s, genuine LFS/model readiness. Latest81f3272 CI37555647610: all11 SUCCESS,3433 PASS/0 FAIL/3 SKIP/204.87s; same dialogue source hashes. No existing assertion weakened.
 NOT VERIFIED: deployed M5/image/provider profile, real phone/audio hearing and
 end-of-speech→PCM, full-system RAM/VRAM and100 actual calls.
 REMAINING RISKS: family-only→`А у меня всё нормально` repair; breathing wording;
