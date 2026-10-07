@@ -24,6 +24,8 @@
 		<string>8899</string>
 		<string>--lang</string>
 		<string>Russian</string>
+		<string>--max-batch</string>
+		<string>2</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>

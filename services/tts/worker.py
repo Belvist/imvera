@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import os
 import queue
@@ -190,14 +191,59 @@ class _QwenStreamFailure(RuntimeError):
         self.emitted_chunks = emitted_chunks
 
 
+_QWEN_PHRASE_CACHE: dict[tuple[str, str, str], list[tuple[bytes, int]]] = {}
+_QWEN_PHRASE_CACHE_MAX = 64
+# Warmup probes the LIVE path (failure integrity depends on it) — never
+# serve warmup from cache. Counted separately from real traffic.
+_QWEN_CACHE_BYPASS = False
+
+
+@contextlib.contextmanager
+def qwen_cache_bypassed():
+    """Serve+store nothing: the request hits the live server path."""
+    global _QWEN_CACHE_BYPASS
+    old, _QWEN_CACHE_BYPASS = _QWEN_CACHE_BYPASS, True
+    try:
+        yield
+    finally:
+        _QWEN_CACHE_BYPASS = old
+
+
+def _qwen_cache_key(voice: str | None, lang: str, text: str) -> tuple[str, str, str]:
+    return (voice or "", lang, text)
+
+
 def _produce_qwen_chunks(
     req: SynthesizeRequest, out_q: queue.Queue, tts_cfg: dict[str, Any]
 ) -> int:
     """Qwen GGUF primary via resident server. Returns chunk count, raises
-    on failure, sends NO sentinel (caller owns it for fallback control)."""
+    on failure, sends NO sentinel (caller owns it for fallback control).
+
+    Exact (voice, lang, text) repeats are served from an in-process LRU:
+    identical bytes, zero GPU — greetings/closings repeat verbatim across
+    calls. Cancel checks still apply on serve.
+    """
     from services.tts.qwen_gguf import QWEN_SAMPLE_RATE, synthesize_stream
 
+    lang = req.language or "Russian"
+    key = _qwen_cache_key(req.voice, lang, req.text)
+    cached = None if _QWEN_CACHE_BYPASS else _QWEN_PHRASE_CACHE.get(key)
     seq = 0
+    if cached is not None:
+        for chunk_pcm, sr in cached:
+            if _is_cancelled(req):
+                break
+            out_q.put(
+                {
+                    "sequence": seq,
+                    "sample_rate": sr,
+                    "pcm_b64": base64.b64encode(chunk_pcm).decode("ascii"),
+                    "is_last": False,
+                }
+            )
+            seq += 1
+        return seq
+    collected: list[tuple[bytes, int]] = []
     try:
         for pcm in synthesize_stream(
             req.text,
@@ -219,10 +265,16 @@ def _produce_qwen_chunks(
                     }
                 )
                 seq += 1
+                collected.append((chunk_pcm, sr))
     except (StreamCancelled, TimeoutError):
         raise
     except Exception as exc:
         raise _QwenStreamFailure(str(exc), seq) from exc
+    if collected and not _is_cancelled(req) and not _QWEN_CACHE_BYPASS:
+        # Full render only: partial/cancelled audio never poisons the cache.
+        _QWEN_PHRASE_CACHE[key] = collected
+        while len(_QWEN_PHRASE_CACHE) > _QWEN_PHRASE_CACHE_MAX:
+            _QWEN_PHRASE_CACHE.pop(next(iter(_QWEN_PHRASE_CACHE)))
     return seq
 
 
@@ -359,7 +411,9 @@ def _ping_and_warmup_qwen(tts_cfg: dict[str, Any]) -> None:
                 out_q.put(None)
 
         # Probe the selected provider; per-request fallback cannot prove it ready.
-        first_s = warmup_synthesis(produce_selected, text="А.", timeout_s=180.0)
+        # Bypass the phrase cache: warmup must touch the live server path.
+        with qwen_cache_bypassed():
+            first_s = warmup_synthesis(produce_selected, text="А.", timeout_s=180.0)
         if first_s <= 0:
             _qwen_warmup_failure(tts_cfg, "qwen warmup produced no audio")
             return

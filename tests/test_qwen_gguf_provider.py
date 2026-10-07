@@ -111,3 +111,53 @@ def test_worker_falls_back_to_silero_on_qwen_failure(
     )
     worker._produce_chunks(req, out_q)
     assert calls == ["qwen", "silero"]
+
+
+def test_qwen_phrase_cache_serves_repeat_without_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import services.tts.worker as worker
+
+    worker._QWEN_PHRASE_CACHE.clear()
+    calls = []
+
+    def fake_stream(text, **kw):
+        calls.append(text)
+        yield b"\x01\x00" * 8000
+
+    import services.tts.qwen_gguf as qg
+
+    monkeypatch.setattr(qg, "synthesize_stream", fake_stream)
+
+    def run(text):
+        out_q: queue.Queue = queue.Queue()
+        req = worker.SynthesizeRequest(
+            call_id="t", generation_id="g", phrase_id="p", text=text
+        )
+        n = worker._produce_qwen_chunks(req, out_q, {})
+        items = []
+        while True:
+            try:
+                items.append(out_q.get_nowait())
+            except queue.Empty:
+                break
+        return n, items
+
+    n1, items1 = run("Здравствуйте.")
+    n2, items2 = run("Здравствуйте.")
+    assert n1 > 0 and n2 == n1
+    assert [i["pcm_b64"] for i in items1] == [i["pcm_b64"] for i in items2]
+    assert calls == ["Здравствуйте."], calls
+    worker._QWEN_PHRASE_CACHE.clear()
+
+
+def test_qwen_phrase_cache_capped() -> None:
+    import services.tts.worker as worker
+
+    worker._QWEN_PHRASE_CACHE.clear()
+    for i in range(worker._QWEN_PHRASE_CACHE_MAX + 5):
+        worker._QWEN_PHRASE_CACHE[("v", "Russian", f"t{i}")] = [(b"x", 24000)]
+        while len(worker._QWEN_PHRASE_CACHE) > worker._QWEN_PHRASE_CACHE_MAX:
+            worker._QWEN_PHRASE_CACHE.pop(next(iter(worker._QWEN_PHRASE_CACHE)))
+    assert len(worker._QWEN_PHRASE_CACHE) == worker._QWEN_PHRASE_CACHE_MAX
+    worker._QWEN_PHRASE_CACHE.clear()
