@@ -15,13 +15,18 @@ VERIFIED: identical30 tests baseline3 FAIL/27 PASS; new plus existing floor/
 closing113 PASS. Full local3493 PASS/0 FAIL/9 SKIP/184.81s; rich928, runtime324,
 kernel294, corpus500/500 plus8 gate tests; policy diff12expected/0unexplained,
 lint/whitespace PASS. Original assertions intact. Paired5-case/410-turn captures
-per side; simulated audible completion. Publication/exact-source CI pending.
+per side; simulated audible completion. Exact source
+**f7b748ca36d3633286a280ae82f79235ba0f1247**:
+[CI37645641929](https://github.com/Belvist/imvera/actions/runs/37645641929),
+all11 SUCCESS,3499 PASS/0 FAIL/3 SKIP/229.97s; genuine LFS fetch observed.
+This follow-up only records verification; five source/test/gate hashes match.
 
 NOT VERIFIED: actual M5 SHA/image/provider profile and phone audio/trace,
 human listening quality, firstPCM/total model invocations or100-call capacity.
 No SSH config/target runtime/credentials in cloud; text access question pending.
 REMAINING RISKS: protocol minima/ordered optional questions, refreshed-summary
-surface and bounded free answers. NEXT GATE: exact-source CI, then target audio.
+surface and bounded free answers. NEXT GATE: target actual audio/trace and
+listener acceptance on the tested source. No target deployment performed.
 
 ---
 

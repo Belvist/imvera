@@ -5,6 +5,11 @@ Baseline **4d3ad19934e2212ab71982c466c9b3b6a92ffe82**, m5. That source has
 all11 SUCCESS,3495 PASS/0 FAIL/3 SKIP/233.93s. This subsequent source cut is
 separately fingerprinted and checked in [checks](checks.json).
 
+Exact resulting source **f7b748ca36d3633286a280ae82f79235ba0f1247**:
+[CI37645641929](https://github.com/Belvist/imvera/actions/runs/37645641929),
+all11 SUCCESS,3499 PASS/0 FAIL/3 SKIP/229.97s, genuine LFS fetch. Local
+3493 PASS/0 FAIL/9 SKIP. Documentation receipt changes no tested source bytes.
+
 After an actually heard personal invitation, the existing discourse writer
 recognized bare «нет», but recorded «Нет, ничего» as more personal content.
 It kept yielding listener ACKs instead of returning the floor to the selector.
@@ -39,7 +44,7 @@ real audio/STT/TTS/FreeSWITCH, heard pacing/warmth/firstPCM and100 calls. There
 is no configured target SSH identity/host in this cloud; access question pending.
 REMAINING RISKS: routine minima/ordered optional questions, refreshed summary
 surface, bounded free answers and previously documented semantic edge cases.
-NEXT GATE: exact-source CI, then target audio/trace acceptance.
+NEXT GATE: target actual audio/trace acceptance.
 
 Integrating agent: follow [continuation handoff](../continuation-2026-10-07/README.md),
 also record whole no-more vs mixed story continuation and return to a genuinely

@@ -27,11 +27,18 @@
     "rich": "928 passed / 15.15s",
     "runtime": "324 passed / 25.80s",
     "kernel": "294 passed / 5.34s",
-    "corpus": "500/500; 8 tests / 43.63s",
+    "corpus": "500/500 / 8.60s; 8 tests / 43.63s",
     "policy_diff": "12 expected / 0 unexplained",
     "lint": "PASS",
     "whitespace": "PASS",
-    "exact_source_ci": "PENDING"
+    "exact_source_ci": {
+      "run_id": 37645641929,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37645641929",
+      "jobs": "11/11 SUCCESS",
+      "full": "3499 passed / 0 failed / 3 skipped / 229.97s",
+      "full_job_id": 112875726123,
+      "genuine_lfs_fetch": "observed full-job log"
+    }
   },
   "parent_exact_ci": {
     "source": "4d3ad19934e2212ab71982c466c9b3b6a92ffe82",
@@ -74,5 +81,6 @@
     "bounded free answers",
     "previously documented semantic edge cases"
   ],
-  "next_gate": "exact-source CI then target audio/trace"
+  "next_gate": "target actual audio/trace and human listening acceptance",
+  "verified_source_commit": "f7b748ca36d3633286a280ae82f79235ba0f1247"
 }
