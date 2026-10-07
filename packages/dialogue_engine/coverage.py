@@ -72,75 +72,69 @@ _NUTRITION_MARKERS = re.compile(
 )
 
 
-def _all_user_text(state: EngineState) -> str:
-    bits: list[str] = []
-    for key in ("important_to_share", "wellness_concern", "wellness_duration"):
-        val = state.observations.get(key) or getattr(state, key, "")
-        if val:
-            bits.append(str(val))
-    for slot in ("wellness", "mood", "sleep", "plans"):
-        val = state.slot_values.get(slot)
-        if val:
-            bits.append(str(val))
-    for ev_list in state.topic_evidence.values():
-        for ev in ev_list:
-            bits.append(ev.clause)
-    for ep in state.issue_episodes.values():
-        bits.append(ep.primary_label or "")
-        for attr in ("onset", "duration", "severity", "current", "pattern",
-                     "daytime_impact", "intake", "barrier", "status_today"):
-            val = ep.known_attributes.get(attr)
-            if val and not str(val).startswith("_product_asked"):
-                bits.append(str(val))
-    return " ".join(bits)
+def _evidenced_record(record) -> bool:
+    return bool(record is not None and record.source_text.strip()
+                and str(record.value).strip().casefold() not in {"", "unknown", "none", "null"})
+
+
+def _owned_current_episode(ep) -> bool:
+    return ep.subject == "speaker" and bool(ep.evidence_turn_ids) and any(
+        m.subject == "speaker" and m.evidence.quote.strip()
+        and m.temporal_scope != "past" for m in ep.mentions
+    )
 
 
 def covered_domains(state: EngineState) -> set[str]:
     """Domains with real evidence — asked+answered OR volunteered."""
     from packages.contracts.enums import SlotStatus
+    from packages.dialogue_engine.semantic_kernel.types import Observation, SubjectKind
 
     covered: set[str] = set()
-    if state.slots.get("wellness") == SlotStatus.FILLED:
-        covered.add("wellbeing")
-    if state.slots.get("mood") == SlotStatus.FILLED:
-        covered.add("mood")
-    if state.slots.get("sleep") == SlotStatus.FILLED:
-        covered.add("sleep")
-
-    text = _all_user_text(state)
-    if _MOOD_MARKERS.search(text):
-        covered.add("mood")
-    if _SLEEP_MARKERS.search(text):
-        covered.add("sleep")
-    if _MEDICATION_MARKERS.search(text) or state.medication_asked:
-        covered.add("medication")
-    if _NUTRITION_MARKERS.search(text):
-        covered.add("nutrition")
-    # Filler answers are recorded verbatim (fact-checks, not extractions).
-    for domain in DOMAINS:
-        if state.observations.get(f"coverage_{domain}"):
+    for slot, domain in (("wellness", "wellbeing"), ("mood", "mood"), ("sleep", "sleep")):
+        if state.slots.get(slot) == SlotStatus.FILLED and _evidenced_record(
+            state.slot_records.get(slot)
+        ):
             covered.add(domain)
+    for domain, record in state.coverage_records.items():
+        if domain in DOMAINS and _evidenced_record(record):
+            covered.add(domain)
+    # Mission answers can have a confirmed observation without a check slot.
+    # Candidate/rejected/superseded or foreign evidence cannot establish coverage.
+    for obs in state.observations.values():
+        if (isinstance(obs, Observation) and obs.status == "confirmed"
+                and obs.subject == SubjectKind.SPEAKER and obs.temporal.current is not False
+                and obs.source_turn_id and obs.evidence.strip()
+                and obs.value.strip().casefold() not in {"", "unknown", "none", "null"}):
+            domain = "wellbeing" if obs.goal_id == "wellness" else obs.goal_id
+            if domain in DOMAINS:
+                covered.add(domain)
+    episode_domains = {
+        "sleep_problem": "sleep", "mood_problem": "mood", "medication_issue": "medication",
+    }
     for ep in state.issue_episodes.values():
-        label = (ep.primary_label or "").lower()
-        kind = (ep.kind or "").lower()
-        if kind == "sleep_problem" or "сон" in label or "спал" in label:
-            covered.add("sleep")
-        if "таблет" in label or "лекар" in label:
-            covered.add("medication")
+        if _owned_current_episode(ep) and ep.kind in episode_domains:
+            covered.add(episode_domains[ep.kind])
     return covered
 
 
 def content_exchanges(state: EngineState) -> int:
-    """Answered content turns: filled check slots + grounded episodes."""
+    """Existing check-item minimum, with only evidenced personal episodes.
+
+    Keep the protocol's check-slot counter independent of domain coverage until
+    the closing/listening migration is verified. Internal counters are not content.
+    """
     from packages.contracts.enums import SlotStatus
 
     n = sum(
-        1
-        for slot in ("wellness", "mood", "sleep", "plans")
+        1 for slot in ("wellness", "mood", "sleep", "plans")
         if state.slots.get(slot) == SlotStatus.FILLED
+        and _evidenced_record(state.slot_records.get(slot))
     )
     n += sum(
-        1 for ep in state.issue_episodes.values() if ep.known_attributes
+        1 for ep in state.issue_episodes.values()
+        if _owned_current_episode(ep)
+        and any(not key.startswith("_") and str(value).strip()
+                for key, value in ep.known_attributes.items())
     )
     if state.observations.get("important_to_share"):
         n += 1
@@ -172,7 +166,11 @@ def coverage_reply_quote(turn, domain: str) -> str | None:
     used for coverage. This is a relevance gate, not a positive/negative judge.
     The renderer must not infer an outcome from this quote.
     """
-    from packages.dialogue_engine.deterministic_mission import split_mission_clauses
+    from packages.dialogue_engine.deterministic_mission import (
+        _clause_uncertain,
+        split_mission_clauses,
+    )
+    from packages.dialogue_engine.issue_mention_extract import speaker_goal_clauses
     from packages.dialogue_engine.reluctance import _SHORT_CONTENT_VERBS
     from packages.dialogue_engine.semantic_kernel.controls import is_local_question_refusal
     from packages.dialogue_engine.semantic_kernel.lexicon import FOOD_WORDS
@@ -186,16 +184,22 @@ def coverage_reply_quote(turn, domain: str) -> str | None:
         or turn.not_recalled or is_local_question_refusal(raw)
     ):
         return None
+    if domain == "nutrition":
+        record = nutrition_reply_record(turn, answering=True)
+        return record.source_text if record is not None else None
     for fact in turn.goal_facts:
-        if fact.field == domain and fact.subject != "other":
+        if fact.field == domain and fact.subject == "speaker" and fact.temporal_scope != "past":
             quote = fact.evidence.quote.strip()
             if quote and quote in raw:
                 return quote
     bare = None
-    for clause in split_mission_clauses(raw):
+    owned = {clause.start for clause in speaker_goal_clauses(raw)}
+    clauses = split_mission_clauses(raw)
+    for index, clause in enumerate(clauses):
         text = clause.text
         tokens = set(re.findall(r"[а-яё]+", text.casefold()))
-        if (_subject_for_clause(text, has_issue=False) == SubjectKind.OTHER_PERSON
+        if (clause.start not in owned or _clause_uncertain(clauses, index)
+                or _subject_for_clause(text, has_issue=False) == SubjectKind.OTHER_PERSON
                 or {"он", "она", "они", "оно"}.intersection(tokens)):
             continue
         core = text.casefold().strip().rstrip(".!?…")
@@ -207,17 +211,56 @@ def coverage_reply_quote(turn, domain: str) -> str | None:
             scoped = turn.model_copy(update={"raw_text": text, "goal_facts": ()})
             if food_object or nutrition_reply_record(scoped) is not None:
                 continue
-        if (domain == "nutrition" and _MEDICATION_MARKERS.search(text)
-                and not _NUTRITION_MARKERS.search(text)):
-            continue
         if domain == "medication" and classify_medication_screen(text) != "unclear":
             return text
         marker = _DOMAIN_MARKERS.get(domain)
         if marker is not None and marker.search(text):
             return text
-        if domain in ("nutrition", "medication") and _SHORT_CONTENT_VERBS.search(text):
+        if domain == "medication" and _SHORT_CONTENT_VERBS.search(text):
             return text
     return bare
+
+
+def medication_reply_record(turn):
+    """Decisive own medication report, using the existing screen adjudicator.
+
+    Reported today's status (including non-intake) or no routine medication
+    resolves the screen. A habit alone still needs the existing conditional
+    today question. This record declares neither adherence nor positive polarity.
+    """
+    from packages.dialogue_engine.check_path import is_narrative_fiction_frame
+    from packages.dialogue_engine.context import SlotValue
+    from packages.dialogue_engine.deterministic_mission import (
+        _clause_uncertain,
+        _is_user_question,
+        split_mission_clauses,
+    )
+    from packages.dialogue_engine.issue_mention_extract import speaker_goal_clauses
+    from packages.dialogue_engine.semantic_kernel.controls import is_local_question_refusal
+    from packages.safety.patterns import is_past_without_present
+
+    raw = (turn.raw_text or "").strip()
+    if (not raw or turn.not_recalled or turn.user_question or _is_user_question(raw)
+            or turn.control not in ("", "none") or is_local_question_refusal(raw)
+            or any(mark in raw for mark in ('"', '«', '»'))
+            or is_narrative_fiction_frame(raw)):
+        return None
+    owned = {clause.start for clause in speaker_goal_clauses(raw)}
+    clauses = split_mission_clauses(raw)
+    record = None
+    for index, clause in enumerate(clauses):
+        if (clause.start not in owned or _clause_uncertain(clauses, index)
+                or is_past_without_present(clause.text)
+                or {"если", "бы"}.intersection(re.findall(r"[а-яё]+", clause.text.casefold()))
+                or not _MEDICATION_MARKERS.search(clause.text)):
+            continue
+        if classify_medication_screen(clause.text) not in {"no_meds", "already_took"}:
+            continue
+        record = SlotValue(
+            value=clause.text, source_text=clause.text, source_turn_id=turn.utterance_id,
+            confirmed=True,
+        )
+    return record
 
 
 def nutrition_reply_record(turn, *, answering: bool = False):
@@ -234,6 +277,7 @@ def nutrition_reply_record(turn, *, answering: bool = False):
         split_mission_clauses,
     )
     from packages.dialogue_engine.fast_interpreter import _detect_polarity
+    from packages.dialogue_engine.issue_mention_extract import speaker_goal_clauses
     from packages.dialogue_engine.semantic_kernel.controls import is_local_question_refusal
     from packages.dialogue_engine.semantic_kernel.morphology import _load_morph
     from packages.dialogue_engine.semantic_kernel.subject_resolver import _subject_for_clause
@@ -252,10 +296,12 @@ def nutrition_reply_record(turn, *, answering: bool = False):
     if morph is None:
         return None
     clauses = split_mission_clauses(raw)
+    owned = {clause.start for clause in speaker_goal_clauses(raw)}
     record = None
     for index, clause in enumerate(clauses):
         tokens = re.findall(r"[а-яё]+", clause.text.casefold())
-        if (_subject_for_clause(clause.text, has_issue=False) == SubjectKind.OTHER_PERSON
+        if (clause.start not in owned
+                or _subject_for_clause(clause.text, has_issue=False) == SubjectKind.OTHER_PERSON
                 or {"он", "она", "они", "оно", "если", "бы"}.intersection(tokens)
                 or _clause_uncertain(clauses, index) or is_past_without_present(clause.text)):
             continue
@@ -347,6 +393,11 @@ def scored_next_domain(
     («спал плохо» → sleep next, not nutrition). Ties → FILLER_ORDER.
     """
     covered = covered_domains(state)
+    from packages.dialogue_engine.issue_mention_extract import speaker_goal_clauses
+
+    # A relative's topic is not a reason to switch into a personal health screen.
+    # The same original-clause owner governs admitted facts and topical relevance.
+    owned_text = " ".join(clause.text for clause in speaker_goal_clauses(last_user_text or ""))
     asked = state.coverage_asked_domains if skip_asked else frozenset()
     best: str | None = None
     best_key: tuple[float, int] | None = None
@@ -354,7 +405,7 @@ def scored_next_domain(
         if domain in covered or domain in asked:
             continue
         score, _ = score_domain(
-            domain, last_user_text=last_user_text, order_index=order_index
+            domain, last_user_text=owned_text, order_index=order_index
         )
         key = (score, -order_index)
         if best_key is None or key > best_key:

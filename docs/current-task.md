@@ -1,3 +1,32 @@
+# Grounded routine coverage — 2026-10-07 UTC
+
+Target feature/voice-zoiper-m5, baseline ee92a719; main untouched.
+[Source changes, full exchanges and integration handoff](evaluation/grounded-coverage-2026-10-07/README.md),
+[plan/counter-migration blocker](plans/grounded-coverage-2026-10-07.md).
+
+CHANGED: remove aggregate lexical coverage owner; read accepted own records and
+evidenced current episodes. Existing scheduler records decisive volunteered
+medication evidence; same clause owner scopes food/meds/relevance. Asked,
+unknown and declined are not known answers. No new brain/model/phrase bank,
+live generation, global policy cutover or target restart. Check-slot minimum
+preserved after a broader trial exposed ITS/summary closing gaps.
+
+VERIFIED: new36 PASS; baseline13 FAIL/23 PASS. Rich898, kernel294, corpus500/500
+plus8 gate tests, policy diff12 expected/0 unexplained, repository lint and
+whitespace PASS. Genuine pinned encoder LFS fetch/checkout; two previously
+pointer-blocked readiness tests now PASS. Exact full/CI outputs:
+[checks](evaluation/grounded-coverage-2026-10-07/checks.json).
+Paired14-case/260-turn SDK captures per side; delivery simulated.
+
+NOT VERIFIED: actual M5 bridge/image/providers/flags, phone warmth, firstPCM,
+family delivery or100-call capacity. REMAINING RISKS: routine minima and ordered
+packs persist; earlier ITS/summary paths need a separate ownership correction.
+Medication habit alone may still receive the screen. Human convenience has not
+been accepted by these text checks. NEXT GATE: ITS/summary/listening ownership,
+then exact-revision real call/audio/raw trace and listener acceptance.
+
+---
+
 # Progress audit — 2026-10-07 UTC
 
 Audited m5 source **81f3272**; latest CI all11 SUCCESS,3433 PASS/0 FAIL/3 SKIP.

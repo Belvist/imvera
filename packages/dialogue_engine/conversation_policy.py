@@ -363,7 +363,7 @@ def _apply_coverage_reply(state: EngineState, context: TurnContext) -> ResponseP
         return None
     if turn is None:
         return None
-    from packages.dialogue_engine.coverage import nutrition_reply_record
+    from packages.dialogue_engine.coverage import medication_reply_record, nutrition_reply_record
     from packages.dialogue_engine.discourse import listening_question_pending
 
     # A volunteered intake answer can satisfy coverage before the meal question
@@ -376,6 +376,10 @@ def _apply_coverage_reply(state: EngineState, context: TurnContext) -> ResponseP
     if food is not None:
         state.coverage_records["nutrition"] = food
         state.observations["coverage_nutrition"] = food.source_text
+    medication = medication_reply_record(turn)
+    if medication is not None:
+        state.coverage_records["medication"] = medication
+        state.observations["coverage_medication"] = medication.source_text
     if not domain:
         return None
     if turn.issue_mentions or turn.control not in ("", "none") or turn.correction:
@@ -426,6 +430,13 @@ def _apply_coverage_reply(state: EngineState, context: TurnContext) -> ResponseP
             state.pending_coverage_domain = None
         return None
     state.observations[f"coverage_{domain}"] = quote or turn.raw_text.strip()
+    from packages.dialogue_engine.context import SlotValue
+
+    if domain != "nutrition" or food is None:
+        state.coverage_records[domain] = SlotValue(
+            value=quote or turn.raw_text.strip(), source_text=quote or turn.raw_text.strip(),
+            source_turn_id=turn.utterance_id, confirmed=True,
+        )
     state.last_answered_domain = domain
     state.pending_coverage_domain = None
     return None

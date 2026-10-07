@@ -1,0 +1,783 @@
+{
+  "head": "ee92a719ab7ad046ebad33e4267cb8e1e2b07b32",
+  "dirty": true,
+  "source_hashes": {
+    "packages/dialogue_engine/coverage.py": "da87d2649fa8517f89bb8bdd729de0761154786b873642d49845dc86804c55cb",
+    "packages/dialogue_engine/conversation_policy.py": "c05f61e86161f9aa7998589275d564c6bfc6201a6b2411218c6fa7234dd949e8",
+    "packages/dialogue_engine/deterministic_mission.py": "9b1da58de783df6881f7ef557e792302024b811eaf2b8850167337be4786a12e"
+  },
+  "flags": {
+    "IMVERA_DIALOGUE_ENGINE": "1",
+    "IMVERA_COVERAGE_LADDER": "1",
+    "IMVERA_ACTION_POLICY_MODE": "off",
+    "IMVERA_LLM_INTERPRET": "0",
+    "IMVERA_MISSION_LLM_INTERPRET": "0",
+    "IMVERA_SPEECH_DAY": "102",
+    "IMVERA_SPEECH_HOUR": "14"
+  },
+  "scope": "synthetic SDK; simulated audible completion",
+  "repeats": 10,
+  "turns": 260,
+  "sdk_ms_p50": 2.4428364999948826,
+  "sdk_ms_p95": 4.858953999701043,
+  "end_of_speech_to_PCM": "NOT_RUN",
+  "model_invocations": "NOT_MEASURED",
+  "transcripts": {
+    "volunteered_three": [
+      {
+        "user": "Мне хорошо. Сегодня поела, таблетки уже приняла.",
+        "speaks": [
+          {
+            "text": "Хорошо, что поели. А какое у вас сегодня настроение?",
+            "intent": "background_mood",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "таблетки уже приняла.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "таблетки уже приняла.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": false
+      },
+      {
+        "user": "Нет, больше ничего.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали про настроение. А спалось сегодня нормально?",
+            "intent": "background_sleep",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "medication",
+          "mood",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "таблетки уже приняла.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "таблетки уже приняла.",
+            "polarity": null,
+            "confirmed": true
+          },
+          "mood": {
+            "value": "Нет",
+            "confidence": 0.9,
+            "source_turn_id": "u-2",
+            "source_text": "Нет",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "sleep",
+        "closed": false
+      }
+    ],
+    "negative_three": [
+      {
+        "user": "Мне хорошо. Сегодня не ела. Таблетки не принимаю.",
+        "speaks": [
+          {
+            "text": "Поняла, пока не ели. А какое у вас сегодня настроение?",
+            "intent": "background_mood",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "not_eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня не ела",
+            "polarity": "negative",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "Таблетки не принимаю.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Таблетки не принимаю.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": false
+      },
+      {
+        "user": "Не помню.",
+        "speaks": [
+          {
+            "text": "Понимаю, не будем угадывать. А ночью как спали — выспались?",
+            "intent": "background_sleep",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "not_eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня не ела",
+            "polarity": "negative",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "Таблетки не принимаю.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Таблетки не принимаю.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "sleep",
+        "closed": false
+      }
+    ],
+    "family_sleep": [
+      {
+        "user": "Я чувствую себя хорошо. Дочь приехала. Плохо спала.",
+        "speaks": [
+          {
+            "text": "Рада это слышать. Как сегодня с едой — нормально поели?",
+            "intent": "background_nutrition",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {},
+        "pending": "nutrition",
+        "closed": false
+      },
+      {
+        "user": "Нет, я про дочь.",
+        "speaks": [
+          {
+            "text": "Спасибо, что рассказали.",
+            "intent": "episode_correction_ack",
+            "marks_question": false
+          }
+        ],
+        "covered": [
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {},
+        "pending": null,
+        "closed": false
+      }
+    ],
+    "clinical_sugar": [
+      {
+        "user": "Мне хорошо. Сахар сегодня высокий.",
+        "speaks": [
+          {
+            "text": "Сахар — записала, спасибо. Как сегодня с едой — нормально поели?",
+            "intent": "background_nutrition",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "wellbeing"
+        ],
+        "content_items": 2,
+        "records": {},
+        "pending": "nutrition",
+        "closed": false
+      }
+    ],
+    "family_food": [
+      {
+        "user": "Мне хорошо. Дочь приехала. Поела.",
+        "speaks": [
+          {
+            "text": "Понимаю. Спасибо, что сказали. Как сегодня с едой — нормально поели?",
+            "intent": "background_nutrition",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {},
+        "pending": "nutrition",
+        "closed": false
+      }
+    ],
+    "own_food_return": [
+      {
+        "user": "Мне хорошо. Дочь приехала. Я сегодня поела.",
+        "speaks": [
+          {
+            "text": "Про дочь поняла. Есть ли у вас лекарства, которые вы обычно принимаете?",
+            "intent": "background_medication",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Я сегодня поела.",
+            "polarity": "positive",
+            "confirmed": true
+          }
+        },
+        "pending": "medication",
+        "closed": false
+      }
+    ],
+    "uncertain_meds": [
+      {
+        "user": "Мне хорошо. Может быть, таблетки уже приняла.",
+        "speaks": [
+          {
+            "text": "Понимаю. Спасибо, что сказали. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+            "intent": "background_medication",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {},
+        "pending": "medication",
+        "closed": false
+      }
+    ],
+    "heard_answers": [
+      {
+        "user": "Мне хорошо.",
+        "speaks": [
+          {
+            "text": "Понимаю. Спасибо, что сказали. Как сегодня с едой — нормально поели?",
+            "intent": "background_nutrition",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {},
+        "pending": "nutrition",
+        "closed": false
+      },
+      {
+        "user": "Да.",
+        "speaks": [
+          {
+            "text": "Хорошо, что поели. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+            "intent": "background_medication",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-2",
+            "source_text": "Да.",
+            "polarity": "positive",
+            "confirmed": true
+          }
+        },
+        "pending": "medication",
+        "closed": false
+      },
+      {
+        "user": "Таблетки не принимаю.",
+        "speaks": [
+          {
+            "text": "Хорошо, что сказали про лекарства. А какое у вас сегодня настроение?",
+            "intent": "background_mood",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-2",
+            "source_text": "Да.",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "Таблетки не принимаю.",
+            "confidence": 0.9,
+            "source_turn_id": "u-3",
+            "source_text": "Таблетки не принимаю.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": false
+      }
+    ],
+    "medication_habit": [
+      {
+        "user": "Мне хорошо. Сегодня поела. Таблетки каждый день принимаю.",
+        "speaks": [
+          {
+            "text": "Хорошо, что поели. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+            "intent": "background_medication",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          }
+        },
+        "pending": "medication",
+        "closed": false
+      }
+    ],
+    "story": [
+      {
+        "user": "Мне хорошо. Сегодня поела, таблетки уже приняла.",
+        "speaks": [
+          {
+            "text": "Хорошо, что поели. А какое у вас сегодня настроение?",
+            "intent": "background_mood",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "таблетки уже приняла.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "таблетки уже приняла.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": false
+      },
+      {
+        "user": "Вчера дочь приехала, мы смотрели фотографии.",
+        "speaks": [
+          {
+            "text": "Про дочь поняла. Расскажите, я слушаю.",
+            "intent": "thread_invite",
+            "marks_question": false
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "таблетки уже приняла.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "таблетки уже приняла.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": false
+      },
+      {
+        "user": "Долго сидели и вспоминали дачу.",
+        "speaks": [
+          {
+            "text": "Поняла про дачу.",
+            "intent": "thread_listening_ack",
+            "marks_question": false
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "таблетки уже приняла.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "таблетки уже приняла.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": false
+      },
+      {
+        "user": "А потом пили чай и смеялись.",
+        "speaks": [
+          {
+            "text": "Я вас слушаю.",
+            "intent": "thread_listening_ack",
+            "marks_question": false
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "таблетки уже приняла.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "таблетки уже приняла.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": false
+      }
+    ],
+    "local_refusal": [
+      {
+        "user": "Мне хорошо.",
+        "speaks": [
+          {
+            "text": "Понимаю. Спасибо, что сказали. А покушать сегодня уже успели?",
+            "intent": "background_nutrition",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {},
+        "pending": "nutrition",
+        "closed": false
+      },
+      {
+        "user": "Не хочу отвечать.",
+        "speaks": [
+          {
+            "text": "Есть ли у вас лекарства, которые вы обычно принимаете?",
+            "intent": "background_medication",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {},
+        "pending": "medication",
+        "closed": false
+      }
+    ],
+    "unknown": [
+      {
+        "user": "Мне хорошо.",
+        "speaks": [
+          {
+            "text": "Понимаю. Спасибо, что сказали. Как сегодня с едой — нормально поели?",
+            "intent": "background_nutrition",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {},
+        "pending": "nutrition",
+        "closed": false
+      },
+      {
+        "user": "Не помню.",
+        "speaks": [
+          {
+            "text": "Понимаю, не будем угадывать. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+            "intent": "background_medication",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {},
+        "pending": "medication",
+        "closed": false
+      }
+    ],
+    "urgent": [
+      {
+        "user": "Мне хорошо. Сегодня поела, таблетки уже приняла.",
+        "speaks": [
+          {
+            "text": "Хорошо, что поели. А какое у вас сегодня настроение?",
+            "intent": "background_mood",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "таблетки уже приняла.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "таблетки уже приняла.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": false
+      },
+      {
+        "user": "Не могу дышать.",
+        "speaks": [
+          {
+            "text": "Понимаю, это важно. Я передам информацию близким. Спасибо за разговор. До свидания.",
+            "intent": "urgent_close",
+            "marks_question": false
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "таблетки уже приняла.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "таблетки уже приняла.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": true
+      }
+    ],
+    "goodbye": [
+      {
+        "user": "Мне хорошо. Сегодня поела, таблетки уже приняла.",
+        "speaks": [
+          {
+            "text": "Хорошо, что поели. А какое у вас сегодня настроение?",
+            "intent": "background_mood",
+            "marks_question": true
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "таблетки уже приняла.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "таблетки уже приняла.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": false
+      },
+      {
+        "user": "До свидания.",
+        "speaks": [
+          {
+            "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+            "intent": "goodbye_final",
+            "marks_question": false
+          }
+        ],
+        "covered": [
+          "medication",
+          "nutrition",
+          "wellbeing"
+        ],
+        "content_items": 1,
+        "records": {
+          "nutrition": {
+            "value": "eaten",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Сегодня поела",
+            "polarity": "positive",
+            "confirmed": true
+          },
+          "medication": {
+            "value": "таблетки уже приняла.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "таблетки уже приняла.",
+            "polarity": null,
+            "confirmed": true
+          }
+        },
+        "pending": "mood",
+        "closed": true
+      }
+    ]
+  }
+}
