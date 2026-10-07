@@ -14,7 +14,12 @@ preserved after a broader trial exposed ITS/summary closing gaps.
 VERIFIED: new36 PASS; baseline13 FAIL/23 PASS. Rich898, kernel294, corpus500/500
 plus8 gate tests, policy diff12 expected/0 unexplained, repository lint and
 whitespace PASS. Genuine pinned encoder LFS fetch/checkout; two previously
-pointer-blocked readiness tests now PASS. Exact full/CI outputs:
+pointer-blocked readiness tests now PASS. Full local3463 PASS/0 FAIL/9 SKIP,
+168.57s. Exact source **29b87a792c24b49d6d63046aa9bcf3b6990b5f03**:
+[CI37636824409](https://github.com/Belvist/imvera/actions/runs/37636824409),
+all11 SUCCESS; full3469 PASS/0 FAIL/3 SKIP,235.69s; genuine LFS fetch verified.
+This follow-up changes documentation only; five source/gate hashes match.
+Exact full/CI outputs:
 [checks](evaluation/grounded-coverage-2026-10-07/checks.json).
 Paired14-case/260-turn SDK captures per side; delivery simulated.
 

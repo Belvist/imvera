@@ -57,7 +57,12 @@ Exact commands and source/model provenance: [checks.json](checks.json).
 New36 regressions: baseline13 FAIL/23 PASS; final36 PASS. No historical assertion
 changed, deleted or skipped. Rich898 PASS, kernel294 PASS, corpus500/500 plus8
 gate tests; policy diff12 expected/0 unexplained; repository Ruff/whitespace PASS.
-Full/model/CI results are recorded separately in checks rather than inferred.
+Full local3463 PASS/0 FAIL/9 SKIP,168.57s after genuine encoder checkout;
+two previously pointer-blocked readiness tests passed. Exact source
+**29b87a792c24b49d6d63046aa9bcf3b6990b5f03**:
+[CI37636824409](https://github.com/Belvist/imvera/actions/runs/37636824409),
+all11 SUCCESS; full3469 PASS/0 FAIL/3 SKIP,235.69s. Full log verifies actual LFS
+fetch. This metadata follow-up retains all five recorded source/test/gate hashes.
 
 Paired14 synthetic scenarios,260 SDK turns each. Source fingerprints pin runtime
 bytes even though the after capture's HEAD names its precommit parent. The

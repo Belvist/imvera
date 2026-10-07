@@ -30,7 +30,14 @@
     "full_before_encoder_checkout": "3461 passed / 2 readiness failures / 9 skipped / 154.99s",
     "genuine_readiness": "2 passed / 9.08s",
     "full_after_encoder_checkout": "3463 passed / 0 failed / 9 skipped / 168.57s",
-    "exact_commit_ci": "PENDING"
+    "exact_commit_ci": {
+      "run_id": 37636824409,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37636824409",
+      "jobs": "11/11 SUCCESS",
+      "full": "3469 passed / 0 failed / 3 skipped / 235.69s",
+      "full_job_id": 112845312785,
+      "workers_job_id": 112845127492
+    }
   },
   "model_provenance": {
     "encoder_oid": "560fb3342f1d837ef68383982d963c4a8853594427dbdaf7260f0935abba62c7",
@@ -51,5 +58,6 @@
     "Check-slot minimum and ordered clinical plans retained",
     "Broader count relaxation blocked by ITS/summary closing ownership",
     "Habit-only medication may still be screened again"
-  ]
+  ],
+  "tested_commit": "29b87a792c24b49d6d63046aa9bcf3b6990b5f03"
 }
