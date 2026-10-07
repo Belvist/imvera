@@ -1,3 +1,30 @@
+# Listener completion — 2026-10-07 UTC
+
+Target feature/voice-zoiper-m5, baseline4d3ad19; main untouched.
+[Source/evidence/integration handoff](evaluation/listener-completion-2026-10-07/README.md),
+[plan](plans/listener-completion-2026-10-07.md),
+[checks](evaluation/listener-completion-2026-10-07/checks.json).
+
+CHANGED: the existing discourse listener reads the existing whole-utterance
+completion meaning; no new classifier/phrase bank/model/state/timer/selector.
+«Нет, ничего» completes the topic, not the call or a health fact. Mixed
+completion words with new story continue listening; genuine required needs
+resume through the same ActionPolicy/legacy owners. No target restart.
+
+VERIFIED: identical30 tests baseline3 FAIL/27 PASS; new plus existing floor/
+closing113 PASS. Full local3493 PASS/0 FAIL/9 SKIP/184.81s; rich928, runtime324,
+kernel294, corpus500/500 plus8 gate tests; policy diff12expected/0unexplained,
+lint/whitespace PASS. Original assertions intact. Paired5-case/410-turn captures
+per side; simulated audible completion. Publication/exact-source CI pending.
+
+NOT VERIFIED: actual M5 SHA/image/provider profile and phone audio/trace,
+human listening quality, firstPCM/total model invocations or100-call capacity.
+No SSH config/target runtime/credentials in cloud; text access question pending.
+REMAINING RISKS: protocol minima/ordered optional questions, refreshed-summary
+surface and bounded free answers. NEXT GATE: exact-source CI, then target audio.
+
+---
+
 # Continuation ownership — 2026-10-07 UTC
 
 Target feature/voice-zoiper-m5, baseline c827d9d; main untouched.
@@ -19,14 +46,17 @@ PASS/0 FAIL/9 SKIP,182.29s; rich924, runtime324, kernel294, corpus500/500 plus8
 gate tests, policy diff12 expected/0 unexplained, lint/whitespace PASS. Existing
 six full-suite regressions corrected without altering their assertions.
 Paired10 scenarios/850 SDK turns per side; audible delivery simulated. Exact
-published-source CI pending; record actual result after publication.
+published-source **4d3ad19934e2212ab71982c466c9b3b6a92ffe82**:
+[CI37643179274](https://github.com/Belvist/imvera/actions/runs/37643179274),
+all11 SUCCESS,3495 PASS/0 FAIL/3 SKIP/233.93s; actual LFS fetch observed.
 
 NOT VERIFIED: current M5 loaded SHA/image/providers/flags, real phone/STT/TTS
 audio, warmth/latency, total model invocations and100 actual calls. Cloud has
 no configured M5 identity; access information requested. REMAINING RISKS:
 routine minima/ordered questions remain; fresh-summary spoken transition and
 listening pacing require heard acceptance; full free conversation is still
-bounded. NEXT GATE: exact-source CI, then target actual audio/trace acceptance.
+bounded. NEXT GATE: target actual audio/trace acceptance. Subsequent listener
+completion source is recorded separately above.
 
 ---
 

@@ -131,3 +131,9 @@ This replaces repeated ITS reservations on stories and the reuse of an old
 summary to close after new content. Bounded personal memory remains discourse
 context. Protocol minima, full medical authority and optional natural surface
 remain separate cuts. See [paired source/delivery evidence](../evaluation/continuation-2026-10-07/README.md).
+
+Whole no-more meaning is shared read-only with personal listening. Topic
+completion yields the floor to the same selector; it does not imply stop-call
+or a health answer. Mixed completion words with new content continue listening.
+No completion/control classifier, state schema or policy-core change follows.
+See [listener-completion evidence](../evaluation/listener-completion-2026-10-07/README.md).

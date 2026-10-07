@@ -132,6 +132,32 @@ def test_a_story_containing_thanks_is_not_whole_floor_completion():
     assert result.speak_effects[-1].intent == "thread_invite"
 
 
+@pytest.mark.parametrize("text", ["Нет, ничего.", "Вроде бы нет.", "Больше ничего."])
+def test_whole_no_more_after_a_heard_listener_yields_the_floor_without_a_health_fact(text):
+    runner = heard_invitation()
+    runner.run(STORY[:2])
+    records = copy.deepcopy(runner.state.slot_records)
+    statements = copy.deepcopy(runner.state.thread_statements)
+    result = runner.run([text])
+    assert runner.state.thread_reply_finished
+    assert runner.state.slot_records == records
+    assert runner.state.thread_statements == statements
+    assert result.speak_effects[-1].intent == "summary"
+    assert not runner.state.call_closed  # topic completion is not a stop-call action
+
+
+def test_no_more_words_with_new_story_content_do_not_complete_the_floor():
+    runner = heard_invitation()
+    runner.run(STORY[:2])
+    records = copy.deepcopy(runner.state.slot_records)
+    text = "Вроде нет, а потом мы вспоминали нашу поездку к морю."
+    result = runner.run([text])
+    assert not runner.state.thread_reply_finished and not runner.state.call_closed
+    assert runner.state.thread_statements[-1].text in text
+    assert runner.state.slot_records == records
+    assert result.speak_effects[-1].intent == "thread_listening_ack"
+
+
 @pytest.mark.parametrize("outcome", ["unheard", "cancelled"])
 def test_unheard_open_invitation_is_not_completed_by_a_story(outcome):
     from packages.dialogue_engine.engine import DialogueEngine

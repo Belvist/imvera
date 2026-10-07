@@ -2,6 +2,7 @@
 
 ## Unreleased — 2026-10-07
 
+- Share whole-utterance completion meaning with personal listening: finish the topic on «Нет, ничего», preserve mixed story continuation and resume genuinely unanswered required information without fabricating a health answer.
 - Let a source-admitted personal narrative answer a heard open invitation without reserving more health questions or fabricating a health/mission fact. Keep clinical references and pure meal/medication reports with their existing owners.
 - Invalidate a previous summary's completion scope when new content is accepted; preserve facts and listening through the existing reducer/selector, including stale and cancelled delivery. Retain whole completion, safety and consent behavior.
 - Record paired source exchanges and actual SDK/CallActor controlled-PCM regressions separately from target phone/audio acceptance.

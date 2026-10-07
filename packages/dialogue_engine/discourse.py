@@ -97,8 +97,16 @@ def _listening_reply(state, turn, raw: str) -> bool:
     ):
         return False
     low = raw.lower().rstrip(".!?…")
-    finished = _floor_handoff(raw) or bool(getattr(turn, "not_recalled", False)) or low in (
-        "нет", "неа", "не знаю", "не помню", "ничего", "больше нечего добавить",
+    from packages.dialogue_engine.reducer import _is_summary_completion_ack
+
+    # Reuse the whole-utterance completion meaning. Here it yields the topic
+    # floor; only the existing selector may resume a need or summarize.
+    # Mixed no-more words plus new content cannot consume the continuation.
+    finished = (
+        _is_summary_completion_ack(raw) or _floor_handoff(raw)
+        or bool(getattr(turn, "not_recalled", False)) or low in (
+            "нет", "неа", "не знаю", "не помню", "ничего", "больше нечего добавить",
+        )
     )
     if not finished and (
         getattr(turn, "dialogue_act", "") != "answer" or not raw or len(raw) > 2048

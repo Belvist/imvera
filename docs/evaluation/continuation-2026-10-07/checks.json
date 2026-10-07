@@ -30,7 +30,14 @@
     "policy_diff": "12 expected / 0 unexplained",
     "lint": "PASS",
     "whitespace": "PASS",
-    "exact_source_ci": "PENDING"
+    "exact_source_ci": {
+      "run_id": 37643179274,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37643179274",
+      "jobs": "11/11 SUCCESS",
+      "full": "3495 passed / 0 failed / 3 skipped / 233.93s",
+      "full_job_id": 112867160858,
+      "genuine_lfs_fetch": "observed full-job log"
+    }
   },
   "source_review": "one reducer/state/selector; core manifest unchanged; original assertions unchanged; no transport/voice/model/provider/consent/safety implementation change",
   "new_callactor_tests": "actual SDK/outbox/playback/cancel; controlled PCM, no audio model or SIP",
@@ -76,5 +83,6 @@
     "fresh-summary wording and listening pacing",
     "bounded open-question repertoire"
   ],
-  "next_gate": "exact-source CI then actual target audio/trace"
+  "next_gate": "exact-source CI then actual target audio/trace",
+  "verified_source_commit": "4d3ad19934e2212ab71982c466c9b3b6a92ffe82"
 }

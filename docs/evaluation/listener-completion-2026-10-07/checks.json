@@ -1,0 +1,78 @@
+{
+  "baseline_commit": "4d3ad19934e2212ab71982c466c9b3b6a92ffe82",
+  "target_branch": "feature/voice-zoiper-m5",
+  "source_hashes": {
+    "packages/dialogue_engine/discourse.py": "014c40bd61ca3a8c06de6255627689a94e984aa43b9c1d1e0b5b2a4479a67c99",
+    "packages/dialogue_engine/reducer.py": "2dd3e44fe20a80c5f31bede81b0c00e5121255577183f6695208916fc02d408e",
+    "packages/dialogue_engine/state.py": "0ee96c949d85ea21205b3cf458602294a271996a0184de091bb841687003b5f3",
+    "tests/test_continuation_ownership.py": "7579650a16608e3271b69aa5302448206f838af9ff39a2552ceb807dc7a39a4f",
+    "Makefile": "6514d69e311c72d9fb74fa6a2250390f8c5ea83450857240a563d46cae28b7f8"
+  },
+  "commands": {
+    "baseline_same_tests": "python -m pytest tests/test_continuation_ownership.py -q",
+    "targeted": "python -m pytest tests/test_continuation_ownership.py tests/test_conversation_floor_navigation.py tests/test_sdk_closing_evidence.py -q",
+    "rich": "make test-dialogue-rich",
+    "runtime": "make test-dialogue-runtime",
+    "kernel": "make test-semantic-kernel",
+    "full": "make test",
+    "corpus": "make dialogue-corpus-gate",
+    "policy_diff": "python tools/voice_lab/policy_diff_v8_v9.py",
+    "lint": "make lint; git diff --check"
+  },
+  "interpreter": "/workspace/imvera-review-venv/bin/python",
+  "results": {
+    "baseline_same_tests": "3 failed / 27 passed / 0.90s; identical final test bytes",
+    "targeted": "113 passed / 1.32s",
+    "full": "3493 passed / 0 failed / 9 skipped / 184.81s",
+    "rich": "928 passed / 15.15s",
+    "runtime": "324 passed / 25.80s",
+    "kernel": "294 passed / 5.34s",
+    "corpus": "500/500; 8 tests / 43.63s",
+    "policy_diff": "12 expected / 0 unexplained",
+    "lint": "PASS",
+    "whitespace": "PASS",
+    "exact_source_ci": "PENDING"
+  },
+  "parent_exact_ci": {
+    "source": "4d3ad19934e2212ab71982c466c9b3b6a92ffe82",
+    "run_id": 37643179274,
+    "jobs": "11/11 SUCCESS",
+    "full": "3495 passed / 0 failed / 3 skipped / 233.93s"
+  },
+  "sdk_capture": {
+    "before": {
+      "head": "4d3ad19934e2212ab71982c466c9b3b6a92ffe82",
+      "dirty": true,
+      "scope": "synthetic SDK text; simulated audible completion",
+      "cases": 5,
+      "turns": 410,
+      "sdk_ms_p50": 2.412898000329733,
+      "sdk_ms_p95": 34.57870100010041
+    },
+    "after": {
+      "head": "4d3ad19934e2212ab71982c466c9b3b6a92ffe82",
+      "dirty": true,
+      "scope": "synthetic SDK text; simulated audible completion",
+      "cases": 5,
+      "turns": 410,
+      "sdk_ms_p50": 2.204263500061643,
+      "sdk_ms_p95": 31.97362599985354
+    }
+  },
+  "added_model_stages": 0,
+  "actual_total_model_invocations": "NOT_MEASURED",
+  "performance_limit": "shared cloud CPU with concurrent gates; not end-of-speech to PCM, target latency or 100-call capacity",
+  "not_verified": [
+    "actual M5 image/loaded SHA/providers/flags",
+    "real STT/TTS/FreeSWITCH audio/trace",
+    "human warmth/pacing/interruptions",
+    "total model counts and full-system RAM/VRAM/concurrency"
+  ],
+  "remaining": [
+    "protocol minima/ordered optional questions",
+    "fresh-summary surface",
+    "bounded free answers",
+    "previously documented semantic edge cases"
+  ],
+  "next_gate": "exact-source CI then target audio/trace"
+}
