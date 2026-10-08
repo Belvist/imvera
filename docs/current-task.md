@@ -22,13 +22,26 @@ kernel294/1.65s, corpus500/500/5.46s +8 tests/29.61s; policy diff12 expected/
 now follow the earlier optional invitation; factual/clinical/control/closure
 assertions retained, correction keeps an explicit required mood need.
 [Actual captures and checks](evaluation/information-sufficiency-2026-10-08/README.md).
-Publishing exact source and checking CI; not yet a target deployment.
+Exact source **cdb3e7c35be138af7230e480b8a76a77ad4741e3** published to m5:
+[CI37856818078](https://github.com/Belvist/imvera/actions/runs/37856818078),
+all11 SUCCESS,3549 PASS/0 FAIL/3 SKIP/231.16s; real LFS fetch observed.
+This following audit/documentation receipt changes no tested runtime/test/gate
+bytes. No target deployment.
+
+Follow-up: same15 SDK scenarios under isolated legacy/shadow/policy on exact
+source cdb3e7c, short preset/ML off/simulated delivery. Legacy/shadow replies
+match; policy7 reply sequences/4 outcomes differ.
+[Actual projected evidence](evaluation/information-sufficiency-2026-10-08/authority-followup.json).
+OPEN blockers: policy temporal unknown disposition, legacy sleep correction/
+late detail, optional functional-impact speech. No global policy flag flip.
 
 NOT VERIFIED: actual target M5/runtime/audio/turn-taking, Core receipts and
 100 full calls; no configured target/Core access, questions remain pending.
 REMAINING RISKS: three-domain target remains in explicitly enabled full mode,
 ordinary selection remains mostly legacy, free language remains bounded.
-NEXT GATE: full regression + source CI, then exact-revision phone/audio trace.
+NEXT GATE: source red/green for the newly captured authority/correction
+blockers before broad promotion; exact-revision phone/audio trace remains the
+independent live acceptance gate for this first cut.
 
 ---
 

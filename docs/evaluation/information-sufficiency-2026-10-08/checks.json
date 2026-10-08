@@ -183,5 +183,99 @@
       "result": "PASS"
     }
   ],
-  "source_ci": "PENDING_PUBLISH"
+  "source_ci": {
+    "source_sha": "cdb3e7c35be138af7230e480b8a76a77ad4741e3",
+    "run_id": 37856818078,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37856818078",
+    "jobs": [
+      {
+        "conclusion": "success",
+        "id": 113582873868,
+        "name": "dialogue-runtime"
+      },
+      {
+        "conclusion": "success",
+        "id": 113582874149,
+        "name": "dialogue-corpus-gate"
+      },
+      {
+        "conclusion": "success",
+        "id": 113582874169,
+        "name": "lint-dialogue"
+      },
+      {
+        "conclusion": "success",
+        "id": 113582874175,
+        "name": "contracts"
+      },
+      {
+        "conclusion": "success",
+        "id": 113582874195,
+        "name": "semantic-kernel"
+      },
+      {
+        "conclusion": "success",
+        "id": 113582874208,
+        "name": "policy-diff"
+      },
+      {
+        "conclusion": "success",
+        "id": 113582874271,
+        "name": "dialogue-rich"
+      },
+      {
+        "conclusion": "success",
+        "id": 113582874277,
+        "name": "action-policy-shadow"
+      },
+      {
+        "conclusion": "success",
+        "id": 113582874335,
+        "name": "production-workers"
+      },
+      {
+        "conclusion": "success",
+        "id": 113582874348,
+        "name": "legacy-lint"
+      },
+      {
+        "conclusion": "success",
+        "id": 113582974441,
+        "name": "test"
+      }
+    ],
+    "all_jobs_success": true,
+    "full_suite": {
+      "job_id": 113582974441,
+      "passed": 3549,
+      "failed": 0,
+      "skipped": 3,
+      "seconds": 231.16
+    },
+    "actual_lfs_fetch_observed": true
+  },
+  "authority_followup": {
+    "source_sha": "cdb3e7c35be138af7230e480b8a76a77ad4741e3",
+    "tool": "tools/voice_lab/dialogue_comparison.py --suite tools/voice_lab/fixtures/conversational_moves_v1.json run --decision-metadata",
+    "scope": "isolated SDK short preset, ML disabled, simulated delivery; no live flag changes",
+    "cases_per_mode": 15,
+    "modes": [
+      "legacy",
+      "shadow",
+      "policy"
+    ],
+    "legacy_shadow_equal_replies": true,
+    "policy_changed_reply_sequences": 7,
+    "policy_changed_outcomes": 4,
+    "global_cutover": "BLOCKED_PENDING_FOUND_DISPOSITION_CORRECTION_NEED_REALIZATION_REGRESSIONS",
+    "artifact": "authority-followup.json"
+  },
+  "documentation_followup_runtime_test_gate_hashes": {
+    "packages/dialogue_engine/coverage.py": "b7eabef0c8878a0fc22717a44399d98ed7d4eb540c9f0e67142951f2a34b9689",
+    "packages/dialogue_engine/conversation_policy.py": "05ff066dc156327d78ee126afc2db3d8ce962bea5767e5439453a97829190c78",
+    "tests/test_information_sufficient_coverage.py": "0e987dffc6f717592f5256ce1f563eb9211bbbfd8b814252a1ac4d6d4a620096",
+    "tests/test_continuation_ownership.py": "3d17a70ba91ff847dec37d84d9beda9fb167e047c82e3d4170ee79e6d22b220a",
+    "tests/corpus/test_conversation_eval.py": "df00cbdbb565639b65aeeb9dd871296305114ea07bd908ebbaa4775119bb9dd6",
+    "Makefile": "928fdd9c59a61931917a9f0e243b27c824a2f7650ef95a18b67082828ac8371a"
+  }
 }

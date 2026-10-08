@@ -79,7 +79,25 @@ no test is skipped or made less strict. Corpus plus new/continuation recheck:
 89 PASS/11.16s. Final full3543 PASS/0 FAIL/9 SKIP/165.23s; rich964/13.37s,
 runtime338/21.37s, kernel294/1.65s; corpus500/500/5.46s plus8 tests/29.61s.
 Policy diff12 expected/0 unexplained; lint/contracts/whitespace PASS.
-[Exact commands/checks](checks.json). Source CI pending publication; no target deploy.
+[Exact commands/checks](checks.json). Exact source **cdb3e7c35be138af7230e480b8a76a77ad4741e3** published to m5;
+[CI37856818078](https://github.com/Belvist/imvera/actions/runs/37856818078):
+all11 SUCCESS,3549 PASS/0 FAIL/3 SKIP/231.16s; actual LFS fetch observed.
+This subsequent documentation/audit follow-up changes no tested runtime, test
+or gate bytes. No target deploy.
+
+## Authority follow-up
+
+[Authority follow-up](authority-followup.json): identical15 SDK scenarios in
+isolated legacy/shadow/policy, short preset and semantic ML off; actual source
+cdb3e7c. Legacy/shadow replies match, policy changes7 sequences/4 outcomes.
+Captured original replies/meaning/delivered need/episode/slot values/router and
+outcomes are retained with raw hashes. No live flags changed, no model/phone
+quality claim. Current blockers: policy ignores temporal unknown disposition;
+legacy sleep correction/detail loses accepted topic and can close; policy's
+optional functional-impact question falls into ungrammatical generic speech.
+These are **OPEN**, separately described in the completion plan. Exact source
+CI for the first cut does not prove these newly found issues fixed. Next
+source gate is their red/green regressions before broader authority promotion.
 
 ## Integration / next acceptance
 

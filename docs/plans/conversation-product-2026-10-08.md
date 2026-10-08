@@ -4,6 +4,10 @@
 `2c7cc19147aba178350b6ef9614d9eb61c3b3666`. Это план работ и критерии
 приёмки, а не утверждение о готовности production.
 
+Этап1 source cut опубликован на cdb3e7c; CI37856818078:11/11 SUCCESS,
+3549 PASS/0 FAIL/3 SKIP. Этапы2–7 OPEN; обнаруженные текущие blockers
+и actual captures ниже. Target deployment/audio не выполнялись.
+
 ## Что строим
 
 Пожилой человек говорит в своём темпе, может рассказать историю, сообщить
@@ -92,6 +96,35 @@ published versions; Retell — пользователь может заране�
 start/stop speaking планы; PolyAI — user-led dialogue + интеграции;
 ElliQ — elder companionship, иной аппаратный формат.
 Ничьи опубликованные проценты/миллисекунды не являются нашим benchmark.
+
+## Следующий cut: подтверждённые блокеры authority
+
+После публикации первого cut на cdb3e7c повторены 15 одинаковых SDK сценариев
+в isolated legacy/shadow/policy, short preset, simulated delivery и semantic ML
+off; service flags не менялись. [Captured replies/state](../evaluation/information-sufficiency-2026-10-08/authority-followup.json).
+Legacy/shadow speech совпала; policy меняет7 sequences и4 outcomes. Это не
+автоматическая оценка качества и не принятие global cutover.
+
+1. **Unknown disposition → legal needs.** EpisodeSnapshot/need-value отличают
+   известное значение от отсутствующего, но не переносят unanswered/temporal
+   disposition из EngineState. Policy повторяет onset после «Не помню».
+   Следующий versioned cut должен проецировать disposition, исключать такой ASK
+   из единого legal set через aliases duration/onset/temporal и НЕ объявлять
+   неизвестное известным. Frozen v10 manifest не перепинывается ради зелёного CI.
+2. **Correction + additional detail.** «Нет, я перепутала, спала плохо» приходит
+   без correction, одновременно как wellness negative и sleep fact. Legacy
+   сохраняет старый filled sleep, затем «Часто просыпалась» после summary
+   достигает goodbye. Нужны единый смысл correction/domain attribution и
+   reducer-owned acceptance подробности; не просто убрать goodbye или добавить
+   phrase template. Проверять чужое/прошлое/отрицание/прямой stop отдельно.
+3. **Clinical optional need realization.** Policy выбирает functional impact
+   после уже volunteered onset/current/severity и получает generic fallback
+   «про головная боль». Нужны согласование meaningful need с product sufficiency
+   и существующим semantic realizer, а не ещё один обязательный вопрос.
+
+Все три OPEN; source CI первого cut не проверяет исправление этих находок.
+Промышленное включение общего policy заблокировано до их source regressions,
+объяснённого differential и последующей живой приёмки.
 
 ## Внешние зависимости приёмки
 
