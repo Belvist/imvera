@@ -20,7 +20,10 @@ assertions3/3 and sequential full/runtime pass. No thresholds weakened.
 Paired6 synthetic SDK cases, eight personal replies; memory bounded6.
 The review's mixed-sentence illustration differs from actual RichUserTurn;
 captured real parser output is retained, not replaced with a desired schema.
-Source CI/publish receipt remains to be recorded after exact source completion.
+Exact source **887d8cc629d6d5339b38dbc3e9d179c7beb33c8c**, published to m5:
+[CI37716232555](https://github.com/Belvist/imvera/actions/runs/37716232555),
+all11 SUCCESS,3536 PASS/0 FAIL/3 SKIP/240.05s; actual LFS fetch observed.
+This subsequent documentation receipt changes no tested runtime/test/gate bytes.
 
 NOT VERIFIED: actual M5 SHA/image/providers/flags/audio/SIP, phone warmth and
 latency/barge-in, real Core→family delivery, total inference counts/RAM/VRAM or

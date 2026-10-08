@@ -54,6 +54,22 @@
     "same-ID resident/voice artifact changes require revision discipline/restart",
     "Telegram demo lacks durable per-recipient retry receipts"
   ],
-  "source_ci": "PENDING exact commit",
-  "next_gate": "target recorded call and original RED event through real test Core/recipient; access/receiver information pending"
+  "source_ci": {
+    "run_id": 37716232555,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37716232555",
+    "jobs": "11/11 SUCCESS",
+    "full": "3536 passed / 0 failed / 3 skipped / 240.05s",
+    "full_job_id": 113113265912,
+    "genuine_lfs_fetch": "observed exact-source full job log"
+  },
+  "next_gate": "target recorded call and original RED event through real test Core/recipient; access/receiver information pending",
+  "verified_source_commit": "887d8cc629d6d5339b38dbc3e9d179c7beb33c8c",
+  "self_review": {
+    "verdict": "approve source cut with documented live/Core/capacity gaps",
+    "original_assertions": "unchanged",
+    "frozen_action_policy_core": "unchanged",
+    "canonical_text": "no transport rewrite",
+    "target_deployment": "NOT_RUN",
+    "external_notifications": "NOT_SENT"
+  }
 }

@@ -9,6 +9,12 @@ whose recorded full result is3499 PASS/0 FAIL/3 SKIP. The historical count is
 not the count for this subsequent safety/cache cut. Exact new checks and source
 fingerprints are in [checks.json](checks.json).
 
+Published source **887d8cc629d6d5339b38dbc3e9d179c7beb33c8c**:
+[CI37716232555](https://github.com/Belvist/imvera/actions/runs/37716232555),
+all11 SUCCESS, full3536 PASS/0 FAIL/3 SKIP/240.05s; actual LFS fetch observed.
+The subsequent receipt edits documentation only; all seven source/test/gate
+fingerprints match the tested source. No target deployment is claimed.
+
 ## Evidence boundary
 
 This checks the supplied technical review against source, original measured
