@@ -1,5 +1,27 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## Technical audit / breathing and cache — 2026-10-08
+
+[Claim-by-claim report, actual SDK captures and checks](evaluation/technical-audit-2026-10-08/README.md).
+Baseline361972eb. The existing shared safety owner now admits current
+«трудно/тяжело дышать» (both word orders), with negation/history/third-person
+guards; direct SDK urgent close and descriptive CallSession safety confirmation
+are recorded separately. Original RED quote persists; this is not a family ack.
+Qwen PCM cache has16MiB/64-entry LRU bounds, backend/accepted-revision/effective
+voice identity and per-frame deadline/cancellation. Oversized audio still streams,
+but is not retained. Runtime/SDK owners, frozen policy manifest and generative
+authorization are unchanged. No bridge/FreeSWITCH/Postgres restart performed.
+
+After draining calls, load the exact tested m5 source with the existing deployment
+procedure. Record loaded bridge SHA/image/profile, resident model ID and immutable
+weights/voice hashes; restart the adapter if replacing an artifact under the same
+resident ID. Repeat current/denied/foreign/past breathing plus existing emergency,
+false-alarm, help-yes and stop/consent; compare source quote, RED_SIGNAL and risk
+observation with audible canonical text. Confirm real Core acceptance and a test
+recipient receipt separately. The tools/family_notify Telegram demo is a candidate
+snapshot reporter, not proof of the production Core path or every recipient.
+Keep admission1 and preview/barge-in defaults until actual audio/load acceptance.
+
 ## Implicit subject ownership — latest source cut
 
 See [actual SDK evidence and integration](evaluation/implicit-subject-2026-10-05/README.md)

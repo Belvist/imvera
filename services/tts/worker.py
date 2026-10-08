@@ -10,6 +10,7 @@ import os
 import queue
 import threading
 import time
+from collections import OrderedDict
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -191,8 +192,11 @@ class _QwenStreamFailure(RuntimeError):
         self.emitted_chunks = emitted_chunks
 
 
-_QWEN_PHRASE_CACHE: dict[tuple[str, str, str], list[tuple[bytes, int]]] = {}
+_QWEN_PHRASE_CACHE: OrderedDict[tuple[str, ...], list[tuple[bytes, int]]] = OrderedDict()
 _QWEN_PHRASE_CACHE_MAX = 64
+# PCM retention only; not a bound on the resident model or entire worker RSS.
+_QWEN_PHRASE_CACHE_MAX_BYTES = 16 * 1024 * 1024
+_QWEN_CACHE_LOCK = threading.Lock()
 # Warmup probes the LIVE path (failure integrity depends on it) — never
 # serve warmup from cache. Counted separately from real traffic.
 _QWEN_CACHE_BYPASS = False
@@ -209,8 +213,10 @@ def qwen_cache_bypassed():
         _QWEN_CACHE_BYPASS = old
 
 
-def _qwen_cache_key(voice: str | None, lang: str, text: str) -> tuple[str, str, str]:
-    return (voice or "", lang, text)
+def _qwen_cache_key(voice: str, lang: str, text: str) -> tuple[str, ...]:
+    from services.tts.qwen_gguf import server_url
+
+    return (server_url(), state.model_revision, voice, lang, text)
 
 
 def _produce_qwen_chunks(
@@ -219,20 +225,26 @@ def _produce_qwen_chunks(
     """Qwen GGUF primary via resident server. Returns chunk count, raises
     on failure, sends NO sentinel (caller owns it for fallback control).
 
-    Exact (voice, lang, text) repeats are served from an in-process LRU:
+    Exact backend/revision/effective voice/language/text repeats use a bounded LRU:
     identical bytes, zero GPU — greetings/closings repeat verbatim across
     calls. Cancel checks still apply on serve.
     """
-    from services.tts.qwen_gguf import QWEN_SAMPLE_RATE, synthesize_stream
+    from services.tts.qwen_gguf import QWEN_SAMPLE_RATE, qwen_voice, synthesize_stream
 
     lang = req.language or "Russian"
-    key = _qwen_cache_key(req.voice, lang, req.text)
-    cached = None if _QWEN_CACHE_BYPASS else _QWEN_PHRASE_CACHE.get(key)
+    voice = req.voice or qwen_voice(tts_cfg)
+    key = _qwen_cache_key(voice, lang, req.text)
+    check_deadline(req.deadline)
+    with _QWEN_CACHE_LOCK:
+        cached = None if _QWEN_CACHE_BYPASS else _QWEN_PHRASE_CACHE.get(key)
+        if cached is not None:
+            _QWEN_PHRASE_CACHE.move_to_end(key)
     seq = 0
     if cached is not None:
         for chunk_pcm, sr in cached:
             if _is_cancelled(req):
                 break
+            check_deadline(req.deadline)
             out_q.put(
                 {
                     "sequence": seq,
@@ -244,11 +256,13 @@ def _produce_qwen_chunks(
             seq += 1
         return seq
     collected: list[tuple[bytes, int]] = []
+    collected_bytes = 0
+    cacheable = not _QWEN_CACHE_BYPASS and _QWEN_PHRASE_CACHE_MAX_BYTES > 0
     try:
         for pcm in synthesize_stream(
             req.text,
-            voice=req.voice,
-            lang=req.language or "Russian",
+            voice=voice,
+            lang=lang,
             cfg=tts_cfg,
             deadline=req.deadline,
             cancelled=lambda: _is_cancelled(req),
@@ -256,6 +270,9 @@ def _produce_qwen_chunks(
             if _is_cancelled(req):
                 break
             for chunk_pcm, sr in _chunk_pcm(pcm, QWEN_SAMPLE_RATE):
+                if _is_cancelled(req):
+                    break
+                check_deadline(req.deadline)
                 out_q.put(
                     {
                         "sequence": seq,
@@ -265,16 +282,30 @@ def _produce_qwen_chunks(
                     }
                 )
                 seq += 1
-                collected.append((chunk_pcm, sr))
+                if cacheable:
+                    collected_bytes += len(chunk_pcm)
+                    if collected_bytes <= _QWEN_PHRASE_CACHE_MAX_BYTES:
+                        collected.append((chunk_pcm, sr))
+                    else:
+                        # Keep delivering; cease accumulating an oversized phrase.
+                        cacheable = False
+                        collected.clear()
     except (StreamCancelled, TimeoutError):
         raise
     except Exception as exc:
         raise _QwenStreamFailure(str(exc), seq) from exc
-    if collected and not _is_cancelled(req) and not _QWEN_CACHE_BYPASS:
+    check_deadline(req.deadline)
+    if cacheable and collected and not _is_cancelled(req) and not _QWEN_CACHE_BYPASS:
         # Full render only: partial/cancelled audio never poisons the cache.
-        _QWEN_PHRASE_CACHE[key] = collected
-        while len(_QWEN_PHRASE_CACHE) > _QWEN_PHRASE_CACHE_MAX:
-            _QWEN_PHRASE_CACHE.pop(next(iter(_QWEN_PHRASE_CACHE)))
+        with _QWEN_CACHE_LOCK:
+            _QWEN_PHRASE_CACHE[key] = collected
+            _QWEN_PHRASE_CACHE.move_to_end(key)
+            retained = sum(len(pcm) for chunks in _QWEN_PHRASE_CACHE.values()
+                           for pcm, _ in chunks)
+            while (len(_QWEN_PHRASE_CACHE) > _QWEN_PHRASE_CACHE_MAX
+                   or retained > _QWEN_PHRASE_CACHE_MAX_BYTES):
+                _, evicted = _QWEN_PHRASE_CACHE.popitem(last=False)
+                retained -= sum(len(pcm) for pcm, _ in evicted)
     return seq
 
 

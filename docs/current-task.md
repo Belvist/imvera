@@ -1,3 +1,36 @@
+# Full technical audit — 2026-10-08 UTC
+
+Target feature/voice-zoiper-m5; baseline361972eb, clean/origin/GitHub agreed.
+[Claim-by-claim report and actual captures](evaluation/technical-audit-2026-10-08/README.md),
+[checks](evaluation/technical-audit-2026-10-08/checks.json),
+[runtime handoff](production-dialogue-handoff.md).
+
+CHANGED: shared deterministic breathing difficulty surface/third-person forms;
+Qwen worker bounded16MiB/64 LRU, selected endpoint/model/voice key and per-frame
+deadline/cancellation; new behavior regressions in rich/runtime gates; stale
+root README corrected. No new model/FSM/selector/generative flag, policy repin,
+target restart, Core consumer or external message.
+
+VERIFIED: identical37 tests baseline21 FAIL/16 PASS; targeted105 PASS. Sequential
+full3530 PASS/0 FAIL/9 SKIP/173.70s, runtime338 PASS/22.92s, kernel294/1.66s;
+rich951 PASS, corpus500/500 plus8 tests, policy diff12 expected/0 unexplained;
+make lint/contracts/whitespace PASS. Parallel first full/runtimes had one
+unchanged model300ms abstention and one runtime deadline; original focused
+assertions3/3 and sequential full/runtime pass. No thresholds weakened.
+Paired6 synthetic SDK cases, eight personal replies; memory bounded6.
+The review's mixed-sentence illustration differs from actual RichUserTurn;
+captured real parser output is retained, not replaced with a desired schema.
+Source CI/publish receipt remains to be recorded after exact source completion.
+
+NOT VERIFIED: actual M5 SHA/image/providers/flags/audio/SIP, phone warmth and
+latency/barge-in, real Core→family delivery, total inference counts/RAM/VRAM or
+100 calls. No configured target identity/VPN; access/Core questions pending.
+REMAINING RISKS: routine minima/legacy ordinary flow, bounded free language,
+same-ID resident artifacts, Telegram demo's lack of per-recipient receipts.
+NEXT GATE: target recorded audio/trace + actual test Core/recipient delivery.
+
+---
+
 # Listener completion — 2026-10-07 UTC
 
 Target feature/voice-zoiper-m5, baseline4d3ad19; main untouched.

@@ -1,0 +1,59 @@
+{
+  "baseline_commit": "361972eb0f12b1402bed619c5b43eb7b664efa19",
+  "target_branch": "feature/voice-zoiper-m5",
+  "source_hashes": {
+    "packages/safety/patterns.py": "ce32696db97f29f517f1040c935be0bd75008c8f60ef028c78a77381a48ddbcd",
+    "packages/safety/rules.py": "9402be17abf18b5e7f0a66f381bfdb55e38cff7a1d1acaa4d24973d603aaee84",
+    "packages/dialogue_engine/check_path.py": "c9bf9e01902321f8ca126a998b61dd8927ab68099d7bf7df649d40c897757bcd",
+    "services/tts/worker.py": "0eb98987970dca5bd8fdd41a2d3b5dd8276ea2f998620e4c7f71b27b06b08b97",
+    "tests/test_breathing_safety_scope.py": "a28f3b911bd7c5e152d9b3fd90eaa8737de16f81d1f7ae850d5653d6c068ff05",
+    "tests/test_qwen_cache_bounds.py": "80ff09777c65c7fa07c2bc2c448c55e5f70199409dfabd46ac50a5d619dd05b8",
+    "Makefile": "b70b540eaffec1a7c2df5fb6dfa426e57592fdacf949ec4a14f4a292112453f7"
+  },
+  "interpreter": "/workspace/imvera-review-venv/bin/python",
+  "results": {
+    "same_final_37_tests_baseline": "21 failed / 16 passed / 3.63s; identical final tests; same built slot_answer_clf.pkl",
+    "targeted_plus_existing": "105 passed / 0 failed / 0.91s",
+    "first_parallel_full": "3529 passed / 1 failed / 9 skipped / 280.56s; unchanged act-head forward abstained under300ms budget",
+    "first_parallel_runtime": "337 passed / 1 failed / 50.90s; unchanged deadline assertion",
+    "original_failed_checks_recheck": "3 passed / 8.41s; no expectations/budgets changed",
+    "final_sequential_full": "3530 passed / 0 failed / 9 skipped / 173.70s",
+    "rich": "951 passed / 69.71s",
+    "final_sequential_runtime": "338 passed / 22.92s",
+    "final_sequential_kernel": "294 passed / 1.66s",
+    "corpus": "500/500 / 17.50s; 8 tests passed / 107.20s shared-load gate",
+    "policy_diff": "12 expected / 0 unexplained",
+    "make_lint": "PASS packages/services/tests/scripts",
+    "contracts_check": "PASS",
+    "extra_ruff_all": "16 pre-existing errors under archive/audits; not changed or included in make lint"
+  },
+  "commands": {
+    "baseline_and_targeted": "python -m pytest tests/test_breathing_safety_scope.py tests/test_qwen_cache_bounds.py tests/test_safety_matrix.py tests/test_urgent_safety.py tests/test_qwen_gguf_provider.py tests/test_qwen_tts_failure_integrity.py -q; baseline runs only same37 new tests",
+    "full": "make test",
+    "rich": "make test-dialogue-rich",
+    "runtime_and_kernel": "make test-dialogue-runtime test-semantic-kernel",
+    "corpus": "make dialogue-corpus-gate",
+    "policy_diff": "python tools/voice_lab/policy_diff_v8_v9.py",
+    "lint": "make lint; python -m ruff check docs/evaluation/technical-audit-2026-10-08/replay.py; git diff --check",
+    "contracts": "make contracts-check"
+  },
+  "sdk_scope": "six synthetic text cases, simulated heard delivery; eight narrative statements remain open/ring bounded6; before and after contain exact source hashes",
+  "added_model_stages": 0,
+  "actual_total_model_invocations": "NOT_MEASURED",
+  "cache_pcm_retention_max_bytes": 16777216,
+  "cache_entries_max": 64,
+  "not_verified": [
+    "actual M5 deployment/SHA/image/providers/flags",
+    "real speech/STT/TTS/SIP/audio/firstPCM/warmth/barge-in",
+    "real Postgres to Core ack to test recipient",
+    "whole-stack RSS/VRAM/inference counts/100 full calls"
+  ],
+  "remaining": [
+    "coverage minima/ordinary legacy routing",
+    "bounded semantic/free language",
+    "same-ID resident/voice artifact changes require revision discipline/restart",
+    "Telegram demo lacks durable per-recipient retry receipts"
+  ],
+  "source_ci": "PENDING exact commit",
+  "next_gate": "target recorded call and original RED event through real test Core/recipient; access/receiver information pending"
+}

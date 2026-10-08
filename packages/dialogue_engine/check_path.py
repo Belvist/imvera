@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from packages.safety.patterns import BREATHING_DIFFICULTY
+
 if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState
 
@@ -138,6 +140,7 @@ def _fz(word: str) -> str:
 _URGENT_ACTION = re.compile(
     r"\b(скор(ую|ая|ой)\b|срочн\w*|помогите|спасите|не\s+могу\s+дышать|"
     r"не\s+хватает\s+воздуха|нехватка\s+воздуха|"
+    + BREATHING_DIFFICULTY + r"|"
     + _fz("задыха")
     + r"\w*|зад[аы]\b|удуш\w*|"
     r"кровь|кро[вф]ь|"

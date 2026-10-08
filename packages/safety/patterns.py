@@ -11,6 +11,10 @@ from __future__ import annotations
 
 import re
 
+# Shared surface for an explicit breathing difficulty, in either word order.
+# The existing clause guards, not this lexical fragment, own attribution/time.
+BREATHING_DIFFICULTY = r"(?:трудно|тяжело)\s+дышать|дышать\s+(?:трудно|тяжело)"
+
 # Negation immediately before the match ("я не упала", "не падала").
 _NEGATION = re.compile(r"(?:\bне\b|\bни\b|\bникогда\b)[\s,]*$", re.I)
 
@@ -30,8 +34,9 @@ _PRESENT_DISTRESS = re.compile(
 
 # Third party without self ("муж упал" is not the caller's fall).
 _THIRD_PARTY = re.compile(
-    r"\b(сосед\w*|внук\w*|внучк\w*|дочь|дочк\w*|сын|мама|папа|"
-    r"брат|сестр\w*|родственник\w*|муж|жена|жену|мужа|супруг\w*)\b",
+    r"\b(сосед\w*|внук\w*|внучк\w*|дочь|дочер\w*|дочк\w*|сын\w*|мама|папа|"
+    r"брат\w*|сестр\w*|родственник\w*|муж(?:а|у|ем|е)?|жен(?:а|у|ы|е|ой)|"
+    r"супруг\w*|ему|ей|им)\b",
     re.I,
 )
 _SELF = re.compile(r"\b(я|мне|меня|у\s+меня)\b", re.I)
