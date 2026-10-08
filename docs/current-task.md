@@ -1,3 +1,37 @@
+# Dialogue product plan + information sufficiency — 2026-10-08 UTC
+
+Target feature/voice-zoiper-m5, baseline2c7cc191. User requested an end-to-end
+completion plan, competitor research and continuing implementation.
+[Plan with owners and acceptance gates](plans/conversation-product-2026-10-08.md),
+[official-source comparison](research/voice-dialogue-competitors-2026-10-08.md).
+
+CHANGED: existing coverage completion no longer requires check-slot count in
+addition to evidenced domains. No new selector/model/regex/phrase bank/flag;
+short default and explicit mission/clinical/safety owners preserved. Existing
+invitation/cancelled-playback fixtures enter the actual earlier invitation;
+all original assertions retained. Counter migration's prior ITS/summary
+blockers were repaired in4d3ad19/f7b748ca before this cut.
+
+VERIFIED so far: identical13 new tests baseline5 FAIL/8 PASS; new plus existing
+coverage/listening/closing/status tests133 PASS, including controlled PCM
+CallActor completion/cancel. Existing paired SDK harness14 cases/260 turns
+per side, simulated delivery. Public URLs6/6 HTTP200; no competitor agent run.
+Final full3543 PASS/0 FAIL/9 SKIP/165.23s; rich964/13.37s, runtime338/21.37s,
+kernel294/1.65s, corpus500/500/5.46s +8 tests/29.61s; policy diff12 expected/
+0 unexplained; lint/contracts/whitespace PASS. Four original corpus scenarios
+now follow the earlier optional invitation; factual/clinical/control/closure
+assertions retained, correction keeps an explicit required mood need.
+[Actual captures and checks](evaluation/information-sufficiency-2026-10-08/README.md).
+Publishing exact source and checking CI; not yet a target deployment.
+
+NOT VERIFIED: actual target M5/runtime/audio/turn-taking, Core receipts and
+100 full calls; no configured target/Core access, questions remain pending.
+REMAINING RISKS: three-domain target remains in explicitly enabled full mode,
+ordinary selection remains mostly legacy, free language remains bounded.
+NEXT GATE: full regression + source CI, then exact-revision phone/audio trace.
+
+---
+
 # Full technical audit — 2026-10-08 UTC
 
 Target feature/voice-zoiper-m5; baseline361972eb, clean/origin/GitHub agreed.

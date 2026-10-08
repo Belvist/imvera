@@ -34,8 +34,9 @@ def flags(monkeypatch):
 
 def heard_invitation():
     runner = ScenarioRunner(call_id="continuation-ownership")
-    result = runner.run([CallStarted(), "Хорошо.", "Поела.", "Нет.",
-                         "Нормальное.", "Выспалась."])
+    # Reach the actual invitation; sufficient food/medication evidence now
+    # yields the floor before optional mood/sleep questions.
+    result = runner.run([CallStarted(), "Хорошо.", "Поела.", "Нет."])
     assert result.speak_effects[-1].intent == "important_to_share"
     assert runner.state.delivered_question.intent == "important_to_share"
     return runner
@@ -168,12 +169,12 @@ def test_unheard_open_invitation_is_not_completed_by_a_story(outcome):
         while (s := engine.pop_speak_effect()) is not None:
             engine.on_playout_completed(s.generation, s.question_id)
     deliver()
-    for i, text in enumerate(["Хорошо.", "Поела.", "Нет.", "Нормальное."]):
+    for i, text in enumerate(["Хорошо.", "Поела."]):
         turn = engine.build_rich_turn(text, utterance_id=f"routine-{i}")
         engine.on_user_turn(turn.utterance_id, text, rich_turn=turn)
         deliver()
-    text = "Выспалась."
-    turn = engine.build_rich_turn(text, utterance_id="sleep")
+    text = "Нет."
+    turn = engine.build_rich_turn(text, utterance_id="medication")
     engine.on_user_turn(turn.utterance_id, text, rich_turn=turn)
     invitation = engine.pop_speak_effect()
     assert invitation.intent == "important_to_share"
@@ -313,10 +314,10 @@ def test_sdk_actor_actual_pcm_completion_and_cancel_keep_continuation_ownership(
             return session.handle_user_text(text, utterance_id=uid, rich_turn=turn).speak_effect
 
         finish(session.start().speak_effect)
-        for i, text in enumerate(["Хорошо.", "Поела.", "Нет.", "Нормальное."]):
+        for i, text in enumerate(["Хорошо.", "Поела."]):
             finish(reply(text, f"routine-{i}"))
         previous_heard = engine.state.delivered_question.question_id
-        effect = reply("Выспалась.", "sleep")
+        effect = reply("Нет.", "medication")
         assert effect.intent == "important_to_share"
         if phase == "summary":
             finish(effect)

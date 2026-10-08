@@ -1,5 +1,10 @@
 # IMVERA conversation product: current owners, cuts and acceptance
 
+Historical baseline/implementation journal. For the current completion plan,
+updated owners and acceptance criteria see
+[2026-10-08 plan](plans/conversation-product-2026-10-08.md). The older minima
+and OPEN findings below describe their recorded revisions, not current runtime.
+
 Target: `feature/voice-zoiper-m5`. Audited baseline:
 `2f18791c155079efde6c967d7292e488ecc74bac`. Work proceeds on the latest m5
 source; main and the deployed Mac are not assumed equivalent.

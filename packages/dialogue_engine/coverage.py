@@ -3,8 +3,9 @@
 The client is not a form: Vera must cover up to 5 wellbeing domains
 (wellbeing / mood / sleep / medication / nutrition), but only what is still
 unknown. Anything the client already volunteered counts as covered and is
-never re-asked. Minimum bar (MVP numbers): 3 content exchanges and
-3 covered domains before IMPORTANT_TO_SHARE → summary may close the call.
+never re-asked. Full check-in targets 3 evidenced domains before yielding
+to IMPORTANT_TO_SHARE; it does not require a separate number of replies.
+Explicit mission goals and clinical needs keep their existing owners.
 
 Emergency (URGENT) bypasses coverage entirely — handled before this module.
 """
@@ -25,7 +26,6 @@ from packages.dialogue_engine.semantic_kernel.lexicon import (
 if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState
 
-MIN_CONTENT_QUESTIONS = 3
 MIN_COVERED_DOMAINS = 3
 
 DOMAINS: tuple[str, ...] = ("wellbeing", "mood", "sleep", "medication", "nutrition")
@@ -118,10 +118,11 @@ def covered_domains(state: EngineState) -> set[str]:
 
 
 def content_exchanges(state: EngineState) -> int:
-    """Existing check-item minimum, with only evidenced personal episodes.
+    """Historical check-item diagnostic, with only evidenced personal episodes.
 
-    Keep the protocol's check-slot counter independent of domain coverage until
-    the closing/listening migration is verified. Internal counters are not content.
+    Retained for earlier paired captures; not a completion predicate. Food and
+    medication coverage records are not check slots, so this counter cannot
+    decide whether another optional question is necessary.
     """
     from packages.contracts.enums import SlotStatus
 
@@ -142,10 +143,13 @@ def content_exchanges(state: EngineState) -> int:
 
 
 def coverage_met(state: EngineState) -> bool:
-    return (
-        content_exchanges(state) >= MIN_CONTENT_QUESTIONS
-        and len(covered_domains(state)) >= MIN_COVERED_DOMAINS
-    )
+    """Enough accepted information for the opt-in routine coverage target.
+
+    Several domains may be answered in one utterance. Requiring check-slot
+    exchanges as well would add unrelated questions despite sufficient facts.
+    This does not satisfy required mission goals or resolve clinical episodes.
+    """
+    return len(covered_domains(state)) >= MIN_COVERED_DOMAINS
 
 
 def next_uncovered_domain(

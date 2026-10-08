@@ -1,5 +1,29 @@
 # M5 dialogue reliability: запуск и приёмка
 
+# 2026-10-08 — information sufficiency and completion plan
+
+Target m5. [Current product plan](plans/conversation-product-2026-10-08.md)
+names existing owners, ordered cuts and audio/Core/load/listening gates.
+[Competitor review](research/voice-dialogue-competitors-2026-10-08.md) uses
+official documents; vendor-call comparison remains NOT_RUN.
+
+Integration delta: `IMVERA_COVERAGE_LADDER=1` now regards accepted three-domain
+information as sufficient without requiring three separate check-slot items.
+Several facts in one utterance can yield the floor immediately. Do not add
+mood/sleep as `required_background_goals` merely to restore the old ladder;
+use them only when actually required by the mission. Explicit required goals
+and clinical/safety needs still resume through their existing owners.
+Unknown/refused/foreign/past reports do not fabricate coverage. No new flag,
+provider, model or global ActionPolicy promotion. Short mode/default unchanged.
+
+Test setup must follow the actual delivered question: food+medication now reaches
+the open invitation earlier. Canonical text/playback truth remains authoritative;
+cancelled/unheard invitations are not answered by a subsequent story. Never
+interpret emitted speech as heard audio or local outcome as Core receipt.
+No M5 restart/deploy or production acceptance performed in this workspace.
+
+---
+
 ## Technical audit / breathing and cache — 2026-10-08
 
 [Claim-by-claim report, actual SDK captures and checks](evaluation/technical-audit-2026-10-08/README.md).

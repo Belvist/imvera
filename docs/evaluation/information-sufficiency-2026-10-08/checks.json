@@ -1,0 +1,187 @@
+{
+  "baseline_sha": "2c7cc19147aba178350b6ef9614d9eb61c3b3666",
+  "branch_target": "feature/voice-zoiper-m5",
+  "source_hashes": {
+    "packages/dialogue_engine/coverage.py": "b7eabef0c8878a0fc22717a44399d98ed7d4eb540c9f0e67142951f2a34b9689",
+    "packages/dialogue_engine/conversation_policy.py": "05ff066dc156327d78ee126afc2db3d8ce962bea5767e5439453a97829190c78",
+    "packages/dialogue_engine/action_policy/scorer.py": "2792a46bd04756c4b8bfd63d61d964d1a214cde8de7da3f0faa91c178d2aa0be",
+    "packages/dialogue_engine/reducer.py": "2dd3e44fe20a80c5f31bede81b0c00e5121255577183f6695208916fc02d408e",
+    "packages/safety/rules.py": "9402be17abf18b5e7f0a66f381bfdb55e38cff7a1d1acaa4d24973d603aaee84"
+  },
+  "before_production_hashes_match_baseline": true,
+  "scope": "Source / synthetic SDK / controlled PCM; actual target audio and Core unverified",
+  "new_tests_baseline": {
+    "command": "python -m pytest tests/test_information_sufficient_coverage.py -q",
+    "failed": 5,
+    "passed": 8,
+    "seconds": 0.58
+  },
+  "targeted": {
+    "command": "python -m pytest tests/test_information_sufficient_coverage.py tests/test_grounded_coverage.py tests/test_continuation_ownership.py tests/test_thread_listening_lifecycle.py tests/test_checkin_mode_status.py -q",
+    "passed": 133,
+    "seconds": 1.81
+  },
+  "corpus_recheck": {
+    "command": "python -m pytest tests/corpus/test_conversation_eval.py tests/test_information_sufficient_coverage.py tests/test_continuation_ownership.py -q",
+    "passed": 89,
+    "seconds": 11.16
+  },
+  "first_full": {
+    "passed": 3539,
+    "failed": 4,
+    "skipped": 9,
+    "seconds": 169.11,
+    "failure_class": "Four old optional-ladder expectations in conversation corpus; generic factual/control/closure assertions retained, expected routine inputs migrated; required mood question explicitly retained in correction test"
+  },
+  "captures": {
+    "harness": "docs/evaluation/grounded-coverage-2026-10-07/replay.py",
+    "repeat_count": 10,
+    "cases_per_side": 14,
+    "turns_per_side": 260,
+    "before_ms_p50": 2.7274004969513044,
+    "before_ms_p95": 5.643992000841536,
+    "after_ms_p50": 2.4547350039938465,
+    "after_ms_p95": 4.82231100613717,
+    "scope": "simulated playback text, not speech latency",
+    "model_invocations": "NOT_MEASURED",
+    "question_effect_count_first_capture": {
+      "before": 20,
+      "after": 18
+    }
+  },
+  "actual_target": "NOT_VERIFIED",
+  "core_receipts": "NOT_VERIFIED",
+  "competitor_calls": "NOT_RUN",
+  "100_sip_calls": "NOT_RUN",
+  "full_and_gates": "PASS",
+  "expected_capture_deltas": [
+    {
+      "scenario": "volunteered_three",
+      "turn": 1,
+      "before_intents": [
+        "background_mood"
+      ],
+      "after_intents": [
+        "important_to_share"
+      ]
+    },
+    {
+      "scenario": "volunteered_three",
+      "turn": 2,
+      "before_intents": [
+        "background_sleep"
+      ],
+      "after_intents": [
+        "summary"
+      ]
+    },
+    {
+      "scenario": "negative_three",
+      "turn": 1,
+      "before_intents": [
+        "background_mood"
+      ],
+      "after_intents": [
+        "important_to_share"
+      ]
+    },
+    {
+      "scenario": "negative_three",
+      "turn": 2,
+      "before_intents": [
+        "background_sleep"
+      ],
+      "after_intents": [
+        "summary"
+      ]
+    },
+    {
+      "scenario": "heard_answers",
+      "turn": 3,
+      "before_intents": [
+        "background_mood"
+      ],
+      "after_intents": [
+        "important_to_share"
+      ]
+    },
+    {
+      "scenario": "story",
+      "turn": 1,
+      "before_intents": [
+        "background_mood"
+      ],
+      "after_intents": [
+        "important_to_share"
+      ]
+    },
+    {
+      "scenario": "urgent",
+      "turn": 1,
+      "before_intents": [
+        "background_mood"
+      ],
+      "after_intents": [
+        "important_to_share"
+      ]
+    },
+    {
+      "scenario": "goodbye",
+      "turn": 1,
+      "before_intents": [
+        "background_mood"
+      ],
+      "after_intents": [
+        "important_to_share"
+      ]
+    }
+  ],
+  "final_full": {
+    "command": "python -m pytest tests/ -q",
+    "passed": 3543,
+    "failed": 0,
+    "skipped": 9,
+    "seconds": 165.23
+  },
+  "source_gates": [
+    {
+      "command": "make test-dialogue-rich",
+      "passed": 964,
+      "seconds": 13.37
+    },
+    {
+      "command": "make test-dialogue-runtime",
+      "passed": 338,
+      "seconds": 21.37
+    },
+    {
+      "command": "make test-semantic-kernel",
+      "passed": 294,
+      "seconds": 1.65
+    },
+    {
+      "command": "make dialogue-corpus-gate",
+      "trajectories_passed": 500,
+      "trajectories_total": 500,
+      "trajectory_seconds": 5.46,
+      "gate_tests_passed": 8,
+      "gate_test_seconds": 29.61
+    },
+    {
+      "command": "python tools/voice_lab/policy_diff_v8_v9.py",
+      "changed": 12,
+      "expected": 12,
+      "unexplained": 0,
+      "gate_pass": true
+    },
+    {
+      "command": "make lint contracts-check",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "source_ci": "PENDING_PUBLISH"
+}

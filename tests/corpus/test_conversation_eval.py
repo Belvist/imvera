@@ -34,9 +34,9 @@ class Conversation:
 CLOSE = (Turn("Нет, ничего.", "summary"), Turn("Нет, ничего.", "goodbye_final"))
 ROUTINE = (
     Turn("Поела.", "background_medication"),
-    Turn("Нет.", "background_mood"),
-    Turn("Нормальное.", "background_sleep"),
-    Turn("Выспалась.", "important_to_share"),
+    # Three accepted domains satisfy optional screening; do not require
+    # unrelated mood/sleep replies just to traverse the former quota.
+    Turn("Нет.", "important_to_share"),
     Turn("Дома буду.", "summary"),
     Turn("Нет, ничего.", "goodbye_final"),
 )
@@ -149,15 +149,21 @@ def test_positive_correction_does_not_answer_mood(runner: ConversationRunner) ->
     assert runner.state.slot_corrections[-1] == {
         "slot": "wellness", "old": "Плохо.", "new": "positive", "source_turn": "u-3",
     }
+    # Preserve a genuine later mood question for this context-binding test.
+    # Sufficient optional coverage must not satisfy an explicit mission need.
+    runner.state.required_background_goals = {"mood"}
     runner.run(["Поела."])
     result = runner.run(["Нет."])
-    assert [effect.intent for effect in result.speak_effects] == ["background_mood"]
+    assert [effect.intent for effect in result.speak_effects] == ["important_to_share"]
+    assert runner.state.slots["mood"].value == "OPEN"
+    result = runner.run(["Нет, ничего."])
+    assert [effect.intent for effect in result.speak_effects] == ["check_mood"]
     runner.run(["Плохое."])
     mood = runner.state.slot_records["mood"]
     assert runner.state.slots["mood"].value == "FILLED"
     assert mood.polarity == "negative"
     assert mood.source_text == "Плохое."
-    assert mood.source_turn_id == "u-6"
+    assert mood.source_turn_id == "u-7"
 
 
 @pytest.mark.parametrize("mood_text", ["Настроение плохое.", "Настроение хорошее."])

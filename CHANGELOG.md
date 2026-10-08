@@ -2,6 +2,7 @@
 
 ## Unreleased — 2026-10-08
 
+- Let accepted routine information satisfy opt-in full coverage without an independent check-slot reply quota; preserve required mission/clinical needs and heard invitation/summary ownership. Record the completion plan and refreshed official competitor research.
 - Recognize current breathing difficulty in both deterministic safety detectors with shared wording and existing negation/history/third-person guards; retain the original RED event/observation quote without claiming family delivery.
 - Bound Qwen phrase PCM retention to 16 MiB and 64 entries with true LRU eviction; scope cache identity to backend, accepted revision and effective voice, and enforce deadline/cancellation on cached and generated frames.
 - Audit the supplied technical review against actual source, SDK exchanges and stored capacity measurements; correct the stale root README and document remaining target/Core/load acceptance.

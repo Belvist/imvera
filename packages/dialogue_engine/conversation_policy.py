@@ -1795,7 +1795,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 # Forbidden: declined, rejoin the ladder below.
 
     # Adaptive coverage (not a questionnaire): when nothing acute is open
-    # but the minimum (3 exchanges / 3 domains) is unmet, ask ONE next
+    # but the evidenced domain target is unmet, ask ONE next
     # uncovered baseline domain — volunteered topics are never re-asked,
     # declined ones are never repeated. Tired clients skip straight to ITS.
     # ADR-014 exception, flagged: IMVERA_COVERAGE_LADDER=1 (default frozen).
