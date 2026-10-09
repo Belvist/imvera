@@ -52,7 +52,14 @@ Final local gates: full3558 PASS/0 FAIL/9 SKIP/166.90s; rich974/13.27s;
 runtime338/21.92s; kernel294/1.69s; topic68/0.78s; corpus500/500/6.28s
 and8 regression tests/29.12s. Policy diff12 expected/0 unexplained.
 Lint/contracts/whitespace PASS. Captured production source hashes match the
-final working tree. Exact published-source CI is recorded separately.
+final working tree. Exact published source **fdac1a305d18f80ab5d4047dcf130d4b9c6cc860**:
+[CI37866259826](https://github.com/Belvist/imvera/actions/runs/37866259826),
+all11 SUCCESS; actual full log3564 PASS/0 FAIL/3 SKIP/238.84s. This later
+evidence receipt changes no tested runtime, test or gate bytes.
+Additional [120 permutations](permutation-check.json) of the same five
+positive/medication-non-use fragments:120 PASS/0 FAIL on the exact source.
+This checks order-independent coverage for those fragments, not general
+paraphrase understanding, audio or medical acceptance.
 
 ## NOT VERIFIED
 
@@ -63,6 +70,14 @@ replay is not phone acceptance. Runtime short/default flags were not changed.
 ## REMAINING RISKS
 
 Legacy explicit sleep correction/late detail still drops updated information;
+[reproduced again on exact fdac1a3](open-sleep-correction.json): old positive
+sleep remains, negative sleep spills into wellness, then late detail closes
+the call. Existing `_apply_goal_facts` skips filled sleep while accepting a
+wellness deterioration; explicit «перепутала» is not recognized as correction.
+Repair requires scoped accepted-fact revision in the existing Understand/Reducer
+owners, with foreign/history/quote/question/stop guards and summary invalidation;
+more question variants do not repair state. This is an active product blocker.
+Also,
 experimental global-policy temporal unknown disposition and generic functional
 impact prompts still block promotion. These defects remain tracked, not
 certified repaired by this cut. Safety completeness beyond the tested pack

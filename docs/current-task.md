@@ -14,10 +14,16 @@ VERIFIED: new medical contract baseline7 FAIL/3 PASS; after coverage correction
 8 PASS/2 FAIL exposed the pre-existing sleep scope bug; after scope repair
 medical + topic tracker26 PASS. Additional scope tests2 FAIL/3 PASS exposed
 a regression in locally negated quality; refined detector/inference31 PASS.
-Final full3558 PASS/0 FAIL/9 SKIP/166.90s; rich974/13.27s, runtime338/21.92s,
+Exact sourcefdac1a305d18f80ab5d4047dcf130d4b9c6cc860 published to m5;
+[CI37866259826](https://github.com/Belvist/imvera/actions/runs/37866259826)
+all11 SUCCESS,3564 PASS/0 FAIL/3 SKIP/238.84s. Later evidence receipt changes
+no tested runtime/tests/gates. Final local full3558 PASS/0 FAIL/9 SKIP/166.90s; rich974/13.27s, runtime338/21.92s,
 kernel294/1.69s, topic68/0.78s; corpus500/500/6.28s +8 tests/29.12s; policy
 diff12 expected/0 unexplained; lint/contracts/whitespace PASS. Paired nine SDK
 cases/25 turns each; simulated delivery, final source hashes match captures.
+Exact-source120 fragment permutations PASS; this is order coverage, not audio
+or human-language acceptance. Sleep-correction counterexample reproduced
+again on exact source; still OPEN in the current evidence folder.
 
 NOT VERIFIED: deployed M5 flags/SHA, original audio/STT/TTS, real Core receipts,
 100 full calls or human listening. No target access configured here.
@@ -25,8 +31,8 @@ REMAINING RISKS: legacy sleep correction/late detail and experimental policy
 unknown temporal disposition/functional-impact speech remain open. Global
 policy promotion remains blocked. These are actual defects, not merely access
 limitations. Next cut must reproduce and repair their existing owners.
-NEXT GATE: exact published-source CI, then actual configured target
-call/audio trace and the existing-owner sleep correction/disposition cut.
+NEXT GATE: existing-owner grounded fact revision for sleep correction/late
+detail, then actual configured target call/audio trace and policy-disposition cut.
 [Current evidence](evaluation/medical-completeness-2026-10-09/README.md).
 
 ---

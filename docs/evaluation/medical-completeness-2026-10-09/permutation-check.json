@@ -1,0 +1,15 @@
+{
+  "scope": "synthetic SDK, full legacy, simulated delivery, ML/generation off",
+  "source_sha": "fdac1a305d18f80ab5d4047dcf130d4b9c6cc860",
+  "cases": 120,
+  "passed": 120,
+  "failed": 0,
+  "failures": [],
+  "fragments": [
+    "Мне хорошо.",
+    "Сегодня поела.",
+    "Таблетки не принимаю.",
+    "Настроение хорошее.",
+    "Выспалась."
+  ]
+}

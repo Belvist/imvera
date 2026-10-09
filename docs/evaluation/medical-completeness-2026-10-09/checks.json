@@ -71,5 +71,15 @@
     "lint": "PASS",
     "contracts": "PASS",
     "whitespace": "PASS"
+  },
+  "published_source_sha": "fdac1a305d18f80ab5d4047dcf130d4b9c6cc860",
+  "source_ci": {
+    "run_id": 37866259826,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37866259826",
+    "jobs_success": 11,
+    "full_passed": 3564,
+    "full_failed": 0,
+    "full_skipped": 3,
+    "full_seconds": 238.84
   }
 }

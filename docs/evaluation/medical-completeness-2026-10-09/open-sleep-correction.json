@@ -1,0 +1,50 @@
+{
+  "source_sha": "fdac1a305d18f80ab5d4047dcf130d4b9c6cc860",
+  "scope": "synthetic SDK; simulated delivery; short mode; ML/generation off; no audio",
+  "flags": {
+    "IMVERA_DIALOGUE_ENGINE": "1",
+    "IMVERA_COVERAGE_LADDER": "0",
+    "IMVERA_ACTION_POLICY_MODE": "off",
+    "IMVERA_LLM_INTERPRET": "0",
+    "IMVERA_MISSION_LLM_INTERPRET": "0"
+  },
+  "status": "OPEN, not repaired by medical coverage cut",
+  "turns": [
+    {
+      "user": "Самочувствие хорошее, спала хорошо.",
+      "speaks": [
+        {
+          "intent": "important_to_share",
+          "text": "Спасибо, что сказали, как спалось. Что-то ещё хотите сказать?"
+        }
+      ],
+      "sleep": "Самочувствие хорошее, спала хорошо.",
+      "wellness": "positive",
+      "closed": false
+    },
+    {
+      "user": "Нет, я перепутала, спала плохо.",
+      "speaks": [
+        {
+          "intent": "summary",
+          "text": "Спасибо, что рассказали. На сегодня всё. Берегите себя."
+        }
+      ],
+      "sleep": "Самочувствие хорошее, спала хорошо.",
+      "wellness": "negative",
+      "closed": false
+    },
+    {
+      "user": "Часто просыпалась.",
+      "speaks": [
+        {
+          "intent": "goodbye_final",
+          "text": "До свидания, Даниил. Всего вам хорошего."
+        }
+      ],
+      "sleep": "Самочувствие хорошее, спала хорошо.",
+      "wellness": "negative",
+      "closed": true
+    }
+  ]
+}
