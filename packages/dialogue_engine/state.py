@@ -312,6 +312,10 @@ class EngineState(BaseModel):
     # Actual delivered answer owner at admission, before scheduling may replace
     # the question. Planning/starting another question is not delivery proof.
     last_user_delivered_slot: str = ""
+    # The same turn-scoped receipt carries meaning/episode, never inferred
+    # from an intent suffix after the question has been cleared for scheduling.
+    last_user_delivered_need: QuestionNeed | None = None
+    last_user_delivered_episode_id: str = ""
     # A baseline domain the person answered in this turn (food, meds, mood,
     # sleep). Coverage answers are observations, not slots, so the renderer
     # needs this to ground a reaction instead of asking the next question cold.

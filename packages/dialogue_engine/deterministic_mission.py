@@ -94,6 +94,7 @@ _META_ABOUT_CALL = re.compile(
 _CORRECTION_MARKER = re.compile(
     r"(?i)("
     r"я\s+ошиб(?:ся|лась|лись)|"
+    r"\bя\s+перепутал(?:а)?\b|"
     r"\bточнее\b|"
     r"нет[,]?\s*поправлю|"
     r"на\s+самом\s+деле|"

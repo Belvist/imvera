@@ -150,8 +150,17 @@ def parse_relations(
         # never guess across another activity/person or multiple complaints.
         nominal_issues = [s for s in clause_spans if s.type == SpanType.ISSUE]
         nominal_pain = len(nominal_issues) == 1 and nominal_issues[0].normalized == "боль"
-        if previous is not None and (not nominal_issues or nominal_pain):
-            from packages.dialogue_engine.issue_memory import clinical_issue_concept
+        from packages.dialogue_engine.issue_memory import clinical_issue_concept
+
+        repeated_current_pain = (
+            len(nominal_issues) == 1
+            and clinical_issue_concept(
+                nominal_issues[0].text, nominal_issues[0].normalized,
+            ) == "pain"
+            and any(s.type == SpanType.TIME and s.text.lower() == "сейчас" for s in clause_spans)
+        )
+        elliptic_pain = nominal_pain or repeated_current_pain
+        if previous is not None and (not nominal_issues or elliptic_pain):
 
             pstart, pend, pclause = previous
             owners = [s for s in spans if s.type == SpanType.ISSUE and pstart <= s.start < pend]
@@ -172,7 +181,7 @@ def parse_relations(
                 owner_rest = owner_rest[:a] + " " + owner_rest[b:]
             owner_words = re.findall(r"[а-яёa-z]+", owner_rest.lower())
             rest = clause
-            omitted = degrees + current_times + (nominal_issues if nominal_pain else [])
+            omitted = degrees + current_times + (nominal_issues if elliptic_pain else [])
             if status_continuation:
                 omitted += status_updates
             for degree in sorted(omitted, key=lambda s: s.start, reverse=True):
@@ -180,7 +189,7 @@ def parse_relations(
                 rest = rest[:a] + " " + rest[b:]
             words = re.findall(r"[а-яёa-z]+", rest.lower())
             if (
-                len(owners) == 1 and (degrees or status_continuation)
+                len(owners) == 1 and (degrees or status_continuation or repeated_current_pain)
                 and all(w in {"я", "у", "меня", "мне", "с", "со", "уже", "и", "а",
                               "ещё", "еще", "это", "но", "пока", "очень", "вполне", "довольно"}
                         for w in owner_words)
@@ -189,7 +198,7 @@ def parse_relations(
                 and not any(s.type in (SpanType.NEGATION, SpanType.UNCERTAINTY,
                                       SpanType.BODY_SITE, SpanType.ACTIVITY, SpanType.PERSON)
                             for s in clause_spans)
-                and (not nominal_pain or (
+                and (not elliptic_pain or (
                     len(owner_bodies) == 1
                     and clinical_issue_concept(owners[0].text, owners[0].normalized) == "pain"
                 ))
@@ -201,7 +210,7 @@ def parse_relations(
                 and not any(r.type == RelationType.NEGATES and r.target_span_id == owners[0].span_id
                             for r in relations)
             ):
-                if nominal_pain:
+                if elliptic_pain:
                     # A nominal restatement of ONE preceding pain inherits its
                     # grounded anatomical owner. The cross-clause BODY_OF is
                     # the explicit ellipsis link; no episode/active-slot guess.
@@ -226,5 +235,9 @@ def parse_relations(
                         type=RelationType.STATUS_OF, source_span_id=update.span_id,
                         target_span_id=owners[0].span_id, confidence=0.85,
                     ) for update in status_updates)
+                if repeated_current_pain:
+                    # Keep the original anatomical antecedent for a following
+                    # degree clause; this repeated predicate is not a new owner.
+                    continue
         previous = (start, end, clause)
     return tuple(relations)

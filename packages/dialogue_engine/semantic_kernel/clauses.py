@@ -6,7 +6,8 @@ import re
 
 # Contrast/comma only — do NOT split on coordinating "и" inside one complaint.
 _CLAUSE_SPLIT = re.compile(
-    r"\s*(?:[,;.!?…]+|\s+(?:но|однако)\s+|\s+а\s+(?!также)|\s+а\s+также\s+|\s+ещё\s+|\s+еще\s+)\s*",
+    r"\s*(?:[,;.!?…]+|\s+(?:но|однако)\s+|\s+а\s+(?!также)|\s+а\s+также\s+|"
+    r"(?<!сейчас)(?<!всё)(?<!все)\s+ещё\s+|(?<!сейчас)(?<!всё)(?<!все)\s+еще\s+)\s*",
     re.I,
 )
 

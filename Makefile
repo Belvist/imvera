@@ -47,6 +47,11 @@ test-dialogue-rich:
 		tests/test_mixed_subject_routine_facts.py tests/test_implicit_subject_ownership.py \
 		tests/test_grounded_coverage.py tests/test_information_sufficient_coverage.py \
 		tests/test_medical_checkin_coverage.py \
+		tests/test_grounded_fact_revisions.py \
+		tests/test_functional_impact_answer.py \
+		tests/test_repeated_issue_evidence.py \
+		tests/test_urgent_delivery_truth.py \
+		tests/test_long_care_turn.py \
 		tests/test_continuation_ownership.py \
 		tests/test_breathing_safety_scope.py -q
 

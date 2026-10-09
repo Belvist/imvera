@@ -2,6 +2,14 @@
 
 ## Unreleased — 2026-10-09
 
+- Apply source-admitted caller sleep/mood revisions before response selection; invalidate obsolete summaries, distinguish post-verbal sleep quality from wellbeing, and prevent foreign/historical/conditional topic hints from filling caller sleep dimensions.
+- Keep current within-turn pain restatements with their sole anatomical antecedent and preserve original symptom offsets through kernel-to-mention conversion; retain separate complaints and subjects.
+- Version the existing ActionPolicy as v11 candidate with separate unknown/refusal dispositions in the canonical legal set; preserve scoring/safety/authority scope and immutable v9/v10 history. Give functional-impact questions an actual grounded answer path.
+- Replace the unconfirmed family-delivery promise in urgent speech with direct help guidance; Core/family receipt remains an independent acceptance gate.
+- Record a local clinical refusal through the existing unavailable-answer writer, separately from an unknown value, so neither legacy nor policy recreates the declined question.
+- Keep long sleep/plans fact values within the typed limit using literal source fragments; reject oversized contextual replacements and avoid a truncated whole-narrative polarity-model vote. Remote historical sleep cannot fill today's sleep goal.
+- Prevent GREEN on technical/no-contact/unfinished calls in the Telegram demo and redact URL-bearing exception details. Persist individual transport acceptances in its locked atomic local ledger; retry only failed recipients, never mark partial/dry-run results complete. Actual Telegram/Core receipts remain unverified.
+
 - Restore all five baseline topics as the completion target of opt-in full medical check-in; count volunteered answers without imposing a reply quota, retain bounded unknown/refusal handling and urgent/stop precedence. Supersedes the three-domain completion target.
 - Prevent an unrelated negation from turning positive rest into a sleep complaint (e.g. medication non-use plus «выспалась»).
 

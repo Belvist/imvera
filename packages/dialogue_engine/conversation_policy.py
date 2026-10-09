@@ -764,6 +764,20 @@ _MEDICATION_RE = None
 
 
 def _correction_plan(state: EngineState, turn: RichUserTurn) -> ResponsePlan:
+    if any(
+        fact.field in ("sleep", "mood")
+        and (record := state.slot_records.get(fact.field)) is not None
+        and record.source_turn_id == turn.utterance_id
+        for fact in turn.goal_facts
+    ):
+        topic = _topic_plan(state)
+        if topic is not None:
+            return topic
+        return ResponsePlan(
+            obligation=ConversationObligation.HANDLE_CORRECTION,
+            action="speak", acknowledge=questions.shared_information_ack(),
+            intent="episode_correction_ack", marks_question=False,
+        )
     ep = get_active_episode(state)
     if ep is None and turn.issue_mentions:
         from packages.dialogue_engine.issue_memory import _find_episode_for_mention

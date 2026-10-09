@@ -1,0 +1,2108 @@
+{
+  "head": "c1b3f1a35d41b78fd0ee7109ddbbe6efc0df04de",
+  "source_hashes": {
+    "reducer.py": "0e3cad7342099197e829ca4d30d7e4cfdca31a49e8697b23c17faa6aeeead298",
+    "state.py": "8d6b1e38b8cb9d48ce15f6537cbcaf5d821913e8ecad312177853d554df172d8",
+    "turn_understanding.py": "dd6522d24a96eb52297c8bedcd1577568c2d2e3ef4f0ff9b03bf06a7baf26afe",
+    "fast_interpreter.py": "bd4198b1125c8c7f81e60738c433402b82568b779cf351ce8af5b8069055309a",
+    "issue_mention_extract.py": "c85d3bcc1067ddd3cc9c2db3a8a6cadb615b86e78035536eabb93bda7badb8bb",
+    "mission_grounding.py": "ed0917d36d383c5905bd527b77b8c5aac3b4e86b5f283515002aee14aae46219",
+    "questions.py": "a7c2c482ef41fd6fededc94920a8816a51d8476b0a2f84303de4537f1626b7d8",
+    "deterministic_mission.py": "88a202c019cacf5ec0492d2672590ab3568a4ea9827aa475f1988ab93b1d1427",
+    "conversation_policy.py": "c9818614bf41a42fc54257bd2faecdbd952b1ca37c0583e0ba01cfacca92ba80",
+    "topic_tracker.py": "91e3df5dd7d689329373c9ff11db76b706cb9cf440ec288c4bc712db5557ee9c",
+    "issue_memory.py": "b2a74f220c9640550181899eaa8499752e79a087d752d50c390a7648dbf25cc3",
+    "semantic_kernel/clauses.py": "f4a0cfaee3d4f995697d93e033a127d4545b9bb3740861772ea7f8d77a8f21e6",
+    "semantic_kernel/kernel.py": "d6a4a7a1204633c4c9ea595df85e210e17995e2a544af6a7e3f9ff8c7e47120f",
+    "semantic_kernel/relation_parser.py": "1542ff7e7ecc15b22914b20bb18f713a1d457c8bfca9e75813634f84e8491032",
+    "semantic_kernel/observation_memory.py": "38ca3efbca2d44bbf1b3f2bae00c16c12d942cb252dba8c3a1ec080dbca7ea4e",
+    "action_policy/snapshot.py": "c842ac175ad1dcfed7cb97a629bd6bf443728d330a6c92480c88f421503483da",
+    "action_policy/needs.py": "1c0e57bb1fce3c60ac1cc8fcdb48cbc07240d78be4e45bee70f20a74d462dcbc",
+    "action_policy/need_value.py": "b3088e50bb443ba752accae3dcb2d72b51a49365264896c402f325813f6afe1a",
+    "action_policy/constraints.py": "d180ad53123b2d1bb0c98da6f51ccb4481b90bfbd72d8987ab0eaf0930919016",
+    "action_policy/scorer.py": "2e05f93145b6c4f6eda792c5a3cd4df410a6e3ce5c57ad8bcb4208026088cd3c",
+    "product/spoken.py": "daaece06f5185bf9a9976305c118e202a342b7e0e369baeff3d151df46be443e"
+  },
+  "flags": {
+    "IMVERA_DIALOGUE_ENGINE": "1",
+    "IMVERA_COVERAGE_LADDER": "0",
+    "IMVERA_ACTION_POLICY_MODE": "shadow",
+    "IMVERA_LLM_INTERPRET": "0",
+    "IMVERA_ACTION_POLICY_CUTOVER_ENABLED": "0",
+    "IMVERA_MISSION_LLM_INTERPRET": "0",
+    "IMVERA_SPEECH_DAY": "102",
+    "IMVERA_SPEECH_HOUR": "14"
+  },
+  "offline_environment": {
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1"
+  },
+  "git_state": "dirty",
+  "scope": "DialogueEngine SDK; simulated delivery; no audio",
+  "environment": {
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "logical_cpus": 3,
+    "cpu_max": "200000 100000"
+  },
+  "turns": 32,
+  "failed_turns": 0,
+  "sdk_ms_p50": 3.59038899978259,
+  "sdk_ms_p95": 9.066403999895556,
+  "model_invocations": "NOT_MEASURED; generative path explicitly disabled",
+  "counted_semantic_methods": {
+    "act": 0,
+    "polarity": 0,
+    "relation_cpu": 0
+  },
+  "warm_report": [
+    {
+      "name": "act",
+      "ok": true,
+      "device": "cpu"
+    },
+    {
+      "name": "relation_cpu",
+      "ok": true,
+      "device": "cpu"
+    },
+    {
+      "name": "polarity",
+      "ok": true,
+      "device": "cpu"
+    }
+  ],
+  "first_audible_pcm": "NOT_RUN",
+  "transcripts": {
+    "correction": [
+      {
+        "user": "Самочувствие хорошее, спала хорошо.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. Подскажите, есть ли ещё что-то важное по здоровью или дома?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 85.94921999974758,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Нет, я перепутала, спала плохо.",
+        "speaks": [
+          {
+            "text": "Что ночью мешало спать?",
+            "intent": "topic_sleep_pattern"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Нет, я перепутала, спала плохо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-2",
+            "source_text": "Нет, я перепутала, спала плохо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {
+          "sleep": [
+            "quality"
+          ]
+        },
+        "episodes": {
+          "ep-0c19e340": {
+            "episode_id": "ep-0c19e340",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "speaker",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-85697a17",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 19,
+                  "end": 30,
+                  "quote": "спала плохо"
+                },
+                "subject": "speaker",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-2"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 6.7148170001019025,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Часто просыпалась.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. А днём как — есть усталость?",
+            "intent": "topic_sleep_daytime_impact"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Часто просыпалась.",
+            "confidence": 0.9,
+            "source_turn_id": "u-3",
+            "source_text": "Часто просыпалась.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {
+          "sleep": [
+            "quality",
+            "pattern"
+          ]
+        },
+        "episodes": {
+          "ep-0c19e340": {
+            "episode_id": "ep-0c19e340",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "speaker",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-85697a17",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 19,
+                  "end": 30,
+                  "quote": "спала плохо"
+                },
+                "subject": "speaker",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-2"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered_attributes": {},
+            "status": "resolved"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.275697999924887,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "late_summary": [
+      {
+        "user": "Самочувствие хорошее, спала хорошо.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. Подскажите, есть ли ещё что-то важное по здоровью или дома?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.6379849998411373,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Нет, ничего.",
+        "speaks": [
+          {
+            "text": "Спасибо, Анной Петровной. На сегодня всё. Берегите себя.",
+            "intent": "summary"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 2.5359999999636784,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Часто просыпалась.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. На сегодня всё. Берегите себя.",
+            "intent": "summary"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Часто просыпалась.",
+            "confidence": 0.9,
+            "source_turn_id": "u-3",
+            "source_text": "Часто просыпалась.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 2.8602109996427316,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "foreign": [
+      {
+        "user": "Самочувствие хорошее, спала хорошо.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. Что-то ещё хотите сказать?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.6805170002480736,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Дочь спала плохо.",
+        "speaks": [
+          {
+            "text": "Спасибо, Анной Петровной. На сегодня всё. Берегите себя.",
+            "intent": "summary"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-29cd0bc9": {
+            "episode_id": "ep-29cd0bc9",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "other_person",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-56fcc9d3",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 0,
+                  "end": 16,
+                  "quote": "Дочь спала плохо"
+                },
+                "subject": "other_person",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-2"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.293022999969253,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "historical": [
+      {
+        "user": "Самочувствие хорошее, спала хорошо.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. Что-то ещё важное есть?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.7438609997479944,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Я перепутала, раньше спала плохо.",
+        "speaks": [
+          {
+            "text": "Да, вы говорили, что плохой сон. Это была одна плохая ночь или так уже несколько ночей?",
+            "intent": "episode_sleep_pattern"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-15b046f9": {
+            "episode_id": "ep-15b046f9",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "speaker",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-cd1a953e",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 14,
+                  "end": 32,
+                  "quote": "раньше спала плохо"
+                },
+                "subject": "speaker",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-2"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor",
+              "onset": "раньше спала плохо",
+              "_product_family": "sleep",
+              "_product_asked:pattern": "1"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": "pattern",
+        "closed": false,
+        "sdk_ms": 3.6110749997533276,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "conditional": [
+      {
+        "user": "Самочувствие хорошее, спала хорошо.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. Может, ещё что-то важное хотите рассказать — по здоровью или дома?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.444066999691131,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Если я спала плохо, то буду усталой.",
+        "speaks": [
+          {
+            "text": "Плохой сон — поняла вас, записала. Спасибо, Анной Петровной. Я записала: плохой сон. На сегодня всё. Берегите себя.",
+            "intent": "summary"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "negative",
+            "confidence": 0.9,
+            "source_turn_id": "u-2",
+            "source_text": "Если я спала плохо, то буду усталой.",
+            "polarity": "negative",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-a9727c24": {
+            "episode_id": "ep-a9727c24",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "speaker",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-63ec03e6",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 0,
+                  "end": 18,
+                  "quote": "Если я спала плохо"
+                },
+                "subject": "speaker",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-2"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered_attributes": {},
+            "status": "resolved"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 5.384434000006877,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "foreign_pattern": [
+      {
+        "user": "Самочувствие хорошее, спала хорошо.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. Ещё что-то беспокоит?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.2879459995456273,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Нет, я перепутала, спала плохо.",
+        "speaks": [
+          {
+            "text": "Что ночью мешало спать?",
+            "intent": "topic_sleep_pattern"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Нет, я перепутала, спала плохо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-2",
+            "source_text": "Нет, я перепутала, спала плохо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {
+          "sleep": [
+            "quality"
+          ]
+        },
+        "episodes": {
+          "ep-1767eb63": {
+            "episode_id": "ep-1767eb63",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "speaker",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-7f5c3181",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 19,
+                  "end": 30,
+                  "quote": "спала плохо"
+                },
+                "subject": "speaker",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-2"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.7795150001329603,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Дочь проснулась в четыре.",
+        "speaks": [
+          {
+            "text": "Про дочь поняла. А днём как — есть усталость?",
+            "intent": "topic_sleep_daytime_impact"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Нет, я перепутала, спала плохо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-2",
+            "source_text": "Нет, я перепутала, спала плохо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {
+          "sleep": [
+            "quality"
+          ]
+        },
+        "episodes": {
+          "ep-1767eb63": {
+            "episode_id": "ep-1767eb63",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "speaker",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-7f5c3181",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 19,
+                  "end": 30,
+                  "quote": "спала плохо"
+                },
+                "subject": "speaker",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-2"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered_attributes": {},
+            "status": "resolved"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 2.629659000376705,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "different_complaint": [
+      {
+        "user": "Самочувствие хорошее, спала хорошо.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. А кроме этого — по самочувствию ничего не тревожит?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.6288510000304086,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Нет, я перепутала, спала плохо.",
+        "speaks": [
+          {
+            "text": "Что ночью мешало спать?",
+            "intent": "topic_sleep_pattern"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Нет, я перепутала, спала плохо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-2",
+            "source_text": "Нет, я перепутала, спала плохо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {
+          "sleep": [
+            "quality"
+          ]
+        },
+        "episodes": {
+          "ep-0f46e32e": {
+            "episode_id": "ep-0f46e32e",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "speaker",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-89943dfc",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 19,
+                  "end": 30,
+                  "quote": "спала плохо"
+                },
+                "subject": "speaker",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-2"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.694488999826717,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Голова болит пять часов.",
+        "speaks": [
+          {
+            "text": "Теперь про головную боль. Сейчас голова болит сильно или терпимо?",
+            "intent": "episode_headache_severity"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "negative",
+            "confidence": 0.9,
+            "source_turn_id": "u-3",
+            "source_text": "Голова болит пять часов.",
+            "polarity": "negative",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Нет, я перепутала, спала плохо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-2",
+            "source_text": "Нет, я перепутала, спала плохо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {
+          "sleep": [
+            "quality"
+          ]
+        },
+        "episodes": {
+          "ep-0f46e32e": {
+            "episode_id": "ep-0f46e32e",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "speaker",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-89943dfc",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 19,
+                  "end": 30,
+                  "quote": "спала плохо"
+                },
+                "subject": "speaker",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-2"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor"
+            },
+            "unanswered_attributes": {},
+            "status": "resolved"
+          },
+          "ep-c9ca4b3b": {
+            "episode_id": "ep-c9ca4b3b",
+            "primary_label": "головная боль",
+            "kind": "symptom",
+            "body_site": "голова",
+            "subject": "speaker",
+            "canonical_key": "головной боль",
+            "mentions": [
+              {
+                "mention_id": "im-4837cd03",
+                "kind": "symptom",
+                "label": "головная боль",
+                "role": "primary",
+                "body_site": "голова",
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": "пять часов",
+                "severity": null,
+                "evidence": {
+                  "start": 7,
+                  "end": 12,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "головной боль"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-3"
+            ],
+            "known_attributes": {
+              "onset": "пять часов",
+              "current": "active",
+              "duration": "пять часов",
+              "_product_family": "headache",
+              "_product_asked:severity": "1"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": "severity",
+        "closed": false,
+        "sdk_ms": 4.084827000042424,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "safety": [
+      {
+        "user": "Самочувствие хорошее, спала хорошо.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. А кроме этого — по самочувствию ничего не тревожит?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.5697029998118524,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Мне сейчас трудно дышать.",
+        "speaks": [
+          {
+            "text": "Это важно. Пожалуйста, свяжитесь с близкими. Если помощь нужна прямо сейчас, звоните 112. До свидания.",
+            "intent": "urgent_close"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": true,
+        "sdk_ms": 1.659701000789937,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "stop": [
+      {
+        "user": "Самочувствие хорошее, спала хорошо.",
+        "speaks": [
+          {
+            "text": "Спасибо, что сказали, как спалось. А кроме этого — по самочувствию ничего не тревожит?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 3.317339000204811,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Не звоните больше.",
+        "speaks": [
+          {
+            "text": "До свидания, Анной Петровной. Всего вам хорошего.",
+            "intent": "goodbye_final"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": "positive",
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Самочувствие хорошее, спала хорошо.",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, спала хорошо.",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {},
+        "pending_episode_attribute": null,
+        "closed": true,
+        "sdk_ms": 1.6891949999262579,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "unknown_onset": [
+      {
+        "user": "Голова болит.",
+        "speaks": [
+          {
+            "text": "Жаль, что голова болит. Когда начала болеть голова — сегодня или раньше?",
+            "intent": "episode_headache_duration"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Голова болит.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Голова болит.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-ed4d6cb8": {
+            "episode_id": "ep-ed4d6cb8",
+            "primary_label": "головная боль",
+            "kind": "symptom",
+            "body_site": "голова",
+            "subject": "speaker",
+            "canonical_key": "головной боль",
+            "mentions": [
+              {
+                "mention_id": "im-227586b1",
+                "kind": "symptom",
+                "label": "головная боль",
+                "role": "primary",
+                "body_site": "голова",
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 7,
+                  "end": 12,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "головной боль"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "_product_family": "headache",
+              "_product_asked:duration": "1"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": "duration",
+        "closed": false,
+        "sdk_ms": 3.2778099994175136,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Не помню.",
+        "speaks": [
+          {
+            "text": "Понимаю, не будем угадывать. Сейчас голова болит сильно или терпимо?",
+            "intent": "episode_headache_severity"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Голова болит.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Голова болит.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-ed4d6cb8": {
+            "episode_id": "ep-ed4d6cb8",
+            "primary_label": "головная боль",
+            "kind": "symptom",
+            "body_site": "голова",
+            "subject": "speaker",
+            "canonical_key": "головной боль",
+            "mentions": [
+              {
+                "mention_id": "im-227586b1",
+                "kind": "symptom",
+                "label": "головная боль",
+                "role": "primary",
+                "body_site": "голова",
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 7,
+                  "end": 12,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "головной боль"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "_product_family": "headache",
+              "_product_asked:duration": "1",
+              "_product_asked:onset": "1",
+              "_temporal_skipped": "1",
+              "_product_asked:severity": "1"
+            },
+            "unanswered_attributes": {
+              "duration": "Не помню."
+            },
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": "severity",
+        "closed": false,
+        "sdk_ms": 2.9455779995259945,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "declined_onset": [
+      {
+        "user": "Голова болит.",
+        "speaks": [
+          {
+            "text": "Жаль, что голова болит. Когда начала болеть голова — сегодня или раньше?",
+            "intent": "episode_headache_duration"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Голова болит.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Голова болит.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-8db0c954": {
+            "episode_id": "ep-8db0c954",
+            "primary_label": "головная боль",
+            "kind": "symptom",
+            "body_site": "голова",
+            "subject": "speaker",
+            "canonical_key": "головной боль",
+            "mentions": [
+              {
+                "mention_id": "im-060b7a11",
+                "kind": "symptom",
+                "label": "головная боль",
+                "role": "primary",
+                "body_site": "голова",
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 7,
+                  "end": 12,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "головной боль"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "_product_family": "headache",
+              "_product_asked:duration": "1"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": "duration",
+        "closed": false,
+        "sdk_ms": 3.3972370001720265,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Не хочу отвечать.",
+        "speaks": [
+          {
+            "text": "Понимаю, не будем угадывать. Сейчас голова болит сильно или терпимо?",
+            "intent": "episode_headache_severity"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Голова болит.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Голова болит.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-8db0c954": {
+            "episode_id": "ep-8db0c954",
+            "primary_label": "головная боль",
+            "kind": "symptom",
+            "body_site": "голова",
+            "subject": "speaker",
+            "canonical_key": "головной боль",
+            "mentions": [
+              {
+                "mention_id": "im-060b7a11",
+                "kind": "symptom",
+                "label": "головная боль",
+                "role": "primary",
+                "body_site": "голова",
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 7,
+                  "end": 12,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "головной боль"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "_product_family": "headache",
+              "_product_asked:duration": "1",
+              "_product_asked:onset": "1",
+              "_temporal_skipped": "1",
+              "_product_asked:severity": "1"
+            },
+            "unanswered_attributes": {
+              "duration": "Не хочу отвечать."
+            },
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": "severity",
+        "closed": false,
+        "sdk_ms": 2.4634940000396455,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "open_historical_sleep": [
+      {
+        "user": "Самочувствие хорошее, год назад спала плохо.",
+        "speaks": [
+          {
+            "text": "Плохой сон — записала, спасибо. Может, ещё что-то важное хотите рассказать — по здоровью или дома?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Самочувствие хорошее, год назад спала плохо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Самочувствие хорошее, год назад спала плохо.",
+            "polarity": "positive",
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-3ffb2f99": {
+            "episode_id": "ep-3ffb2f99",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "speaker",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-d5ad639f",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 22,
+                  "end": 43,
+                  "quote": "год назад спала плохо"
+                },
+                "subject": "speaker",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor",
+              "onset": "год назад спала плохо"
+            },
+            "unanswered_attributes": {},
+            "status": "resolved"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 5.412937000073725,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "long_sleep": [
+      {
+        "user": "Спала плохо. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. ",
+        "speaks": [
+          {
+            "text": "Плохой сон — записала, спасибо. Ещё что-то беспокоит?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Спала плохо. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Спала плохо. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад. Вчера мы вспоминали фотографии и сад.",
+            "polarity": null,
+            "confirmed": false
+          },
+          "sleep": {
+            "value": "Спала плохо",
+            "confidence": 0.9,
+            "source_turn_id": "u-1",
+            "source_text": "Спала плохо",
+            "polarity": null,
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-d69e3dec": {
+            "episode_id": "ep-d69e3dec",
+            "primary_label": "плохой сон",
+            "kind": "sleep_problem",
+            "body_site": null,
+            "subject": "speaker",
+            "canonical_key": "плохой сон",
+            "mentions": [
+              {
+                "mention_id": "im-af4648af",
+                "kind": "sleep_problem",
+                "label": "плохой сон",
+                "role": "primary",
+                "body_site": null,
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": null,
+                "severity": null,
+                "evidence": {
+                  "start": 0,
+                  "end": 11,
+                  "quote": "Спала плохо"
+                },
+                "subject": "speaker",
+                "canonical_key": "плохой сон"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "current": "active",
+              "quality": "poor",
+              "onset": "Спала плохо. Вчера мы вспоминали фотографии"
+            },
+            "unanswered_attributes": {},
+            "status": "resolved"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 43.81980800008023,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "functional_answer": [
+      {
+        "user": "Голова болит со вчера, сейчас ещё болит, терпимо.",
+        "speaks": [
+          {
+            "text": "Жаль, что голова болит. Подскажите, есть ли ещё что-то важное по здоровью или дома?",
+            "intent": "important_to_share"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Голова болит со вчера, сейчас ещё болит, терпимо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Голова болит со вчера, сейчас ещё болит, терпимо.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-3ce55f04": {
+            "episode_id": "ep-3ce55f04",
+            "primary_label": "головная боль",
+            "kind": "symptom",
+            "body_site": "голова",
+            "subject": "speaker",
+            "canonical_key": "головной боль",
+            "mentions": [
+              {
+                "mention_id": "im-799767dc",
+                "kind": "symptom",
+                "label": "головная боль",
+                "role": "primary",
+                "body_site": "голова",
+                "temporal_scope": "past",
+                "status": "active",
+                "onset": "вчера",
+                "severity": "терпимо",
+                "evidence": {
+                  "start": 7,
+                  "end": 12,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "головной боль"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "onset": "вчера",
+              "severity": "терпимо",
+              "current": "сейчас"
+            },
+            "unanswered_attributes": {},
+            "status": "resolved"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 7.304461999410705,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Могу делать обычные дела.",
+        "speaks": [
+          {
+            "text": "Расскажите, я слушаю.",
+            "intent": "thread_invite"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Голова болит со вчера, сейчас ещё болит, терпимо.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Голова болит со вчера, сейчас ещё болит, терпимо.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-3ce55f04": {
+            "episode_id": "ep-3ce55f04",
+            "primary_label": "головная боль",
+            "kind": "symptom",
+            "body_site": "голова",
+            "subject": "speaker",
+            "canonical_key": "головной боль",
+            "mentions": [
+              {
+                "mention_id": "im-799767dc",
+                "kind": "symptom",
+                "label": "головная боль",
+                "role": "primary",
+                "body_site": "голова",
+                "temporal_scope": "past",
+                "status": "active",
+                "onset": "вчера",
+                "severity": "терпимо",
+                "evidence": {
+                  "start": 7,
+                  "end": 12,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "головной боль"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "onset": "вчера",
+              "severity": "терпимо",
+              "current": "сейчас"
+            },
+            "unanswered_attributes": {},
+            "status": "resolved"
+          }
+        },
+        "pending_episode_attribute": null,
+        "closed": false,
+        "sdk_ms": 4.185165999842866,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ],
+    "multi_complaint": [
+      {
+        "user": "Голова болит со вчера, живот болит с утра.",
+        "speaks": [
+          {
+            "text": "Поняла вас. Головная боль и боль в животе — это неприятно, давайте уточним по порядку. Сейчас голова болит сильно или терпимо?",
+            "intent": "episode_headache_severity"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Голова болит со вчера, живот болит с утра.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Голова болит со вчера, живот болит с утра.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-6052c002": {
+            "episode_id": "ep-6052c002",
+            "primary_label": "головная боль",
+            "kind": "symptom",
+            "body_site": "голова",
+            "subject": "speaker",
+            "canonical_key": "головной боль",
+            "mentions": [
+              {
+                "mention_id": "im-64ea3dde",
+                "kind": "symptom",
+                "label": "головная боль",
+                "role": "primary",
+                "body_site": "голова",
+                "temporal_scope": "past",
+                "status": "active",
+                "onset": "вчера",
+                "severity": null,
+                "evidence": {
+                  "start": 7,
+                  "end": 12,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "головной боль"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "onset": "вчера",
+              "current": "active",
+              "_product_family": "headache",
+              "_product_asked:severity": "1"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          },
+          "ep-65972cd6": {
+            "episode_id": "ep-65972cd6",
+            "primary_label": "живот болит",
+            "kind": "symptom",
+            "body_site": "живот",
+            "subject": "speaker",
+            "canonical_key": "живот болеть",
+            "mentions": [
+              {
+                "mention_id": "im-db91c710",
+                "kind": "symptom",
+                "label": "живот болит",
+                "role": "independent",
+                "body_site": "живот",
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": "с утра",
+                "severity": null,
+                "evidence": {
+                  "start": 29,
+                  "end": 34,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "живот болеть"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "onset": "с утра",
+              "current": "active"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": "severity",
+        "closed": false,
+        "sdk_ms": 9.066403999895556,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      },
+      {
+        "user": "Не помню.",
+        "speaks": [
+          {
+            "text": "Понимаю, не будем угадывать. Кроме головной боли, сейчас есть что-то ещё необычное — сильная слабость, головокружение или тошнота?",
+            "intent": "episode_headache_associated"
+          }
+        ],
+        "slots": {
+          "wellness": {
+            "value": "Голова болит со вчера, живот болит с утра.",
+            "confidence": 0.8,
+            "source_turn_id": "u-1",
+            "source_text": "Голова болит со вчера, живот болит с утра.",
+            "polarity": "negative",
+            "confirmed": false
+          }
+        },
+        "topic_dimensions": {},
+        "episodes": {
+          "ep-6052c002": {
+            "episode_id": "ep-6052c002",
+            "primary_label": "головная боль",
+            "kind": "symptom",
+            "body_site": "голова",
+            "subject": "speaker",
+            "canonical_key": "головной боль",
+            "mentions": [
+              {
+                "mention_id": "im-64ea3dde",
+                "kind": "symptom",
+                "label": "головная боль",
+                "role": "primary",
+                "body_site": "голова",
+                "temporal_scope": "past",
+                "status": "active",
+                "onset": "вчера",
+                "severity": null,
+                "evidence": {
+                  "start": 7,
+                  "end": 12,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "головной боль"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "onset": "вчера",
+              "current": "active",
+              "_product_family": "headache",
+              "_product_asked:severity": "1",
+              "_product_asked:associated": "1"
+            },
+            "unanswered_attributes": {
+              "severity": "Не помню."
+            },
+            "status": "open"
+          },
+          "ep-65972cd6": {
+            "episode_id": "ep-65972cd6",
+            "primary_label": "живот болит",
+            "kind": "symptom",
+            "body_site": "живот",
+            "subject": "speaker",
+            "canonical_key": "живот болеть",
+            "mentions": [
+              {
+                "mention_id": "im-db91c710",
+                "kind": "symptom",
+                "label": "живот болит",
+                "role": "independent",
+                "body_site": "живот",
+                "temporal_scope": "now",
+                "status": "active",
+                "onset": "с утра",
+                "severity": null,
+                "evidence": {
+                  "start": 29,
+                  "end": 34,
+                  "quote": "болит"
+                },
+                "subject": "speaker",
+                "canonical_key": "живот болеть"
+              }
+            ],
+            "evidence_turn_ids": [
+              "u-1"
+            ],
+            "known_attributes": {
+              "onset": "с утра",
+              "current": "active"
+            },
+            "unanswered_attributes": {},
+            "status": "open"
+          }
+        },
+        "pending_episode_attribute": "associated",
+        "closed": false,
+        "sdk_ms": 3.3554259998709313,
+        "semantic_method_calls": {
+          "act": 0,
+          "polarity": 0,
+          "relation_cpu": 0
+        }
+      }
+    ]
+  }
+}

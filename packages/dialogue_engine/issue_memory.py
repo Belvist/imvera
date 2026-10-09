@@ -1077,6 +1077,30 @@ def _fill_pending_attribute_for_episode(
                     _mark_temporal_asked(state, ep)
         return
     raw = turn.raw_text.strip().lower()
+    if attribute == "functional_impact":
+        from packages.dialogue_engine.mission_grounding import current_speaker_clauses
+        from packages.dialogue_engine.semantic_kernel.morphology import normalize_text
+        from packages.dialogue_engine.semantic_kernel.observation_memory import _predicate_tense
+
+        heard_need = state.last_user_delivered_need
+        if (raw.rstrip(".!?…") in {"да", "нет"} and heard_need is not None
+                and heard_need.attributes == (attribute,)
+                and state.last_user_delivered_episode_id == episode_id):
+            # Literal polarity answers this actually heard yes/no need only;
+            # acknowledgement tokens and planned/cancelled questions do not.
+            ep.known_attributes[attribute] = turn.raw_text.strip()
+            _maybe_clear_pending_attribute(state, episode_id, attribute)
+            return
+        for clause in current_speaker_clauses(turn.raw_text):
+            words = set(normalize_text(clause.text).split())
+            # The heard functional question supplies the referent; the literal
+            # response still needs a capability/activity predicate of its own.
+            if (_predicate_tense(clause.text) not in {"past", "futr"}
+                    and words & {"мочь", "делать", "ходить", "встать", "справляться", "мешать"}):
+                ep.known_attributes[attribute] = clause.text
+                _maybe_clear_pending_attribute(state, episode_id, attribute)
+                return
+        return
     if attribute == "current" and raw:
         if utterance_indicates_resolved(turn.raw_text):
             mark_episode_resolved(ep)

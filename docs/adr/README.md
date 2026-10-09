@@ -46,3 +46,4 @@ Master plan: [PLAN.md](../PLAN.md) v1.2 (historical freeze candidate). Active fr
 | [030](030-bounded-inference-streaming.md) | Bounded inference streaming and parallel PCM delivery | runtime slice implemented; M5/audio NOT VERIFIED |
 
 | [031](031-portable-production-inference.md) | Portable production inference and bounded request lifetime | runtime/launch slice implemented; real model/server/SIP NOT VERIFIED |
+| [032](032-grounded-revisions-and-dispositions.md) | Grounded fact revisions, v11 disposition candidate and urgent delivery truth | implementation candidate; target audio/Core NOT VERIFIED |

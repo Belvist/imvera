@@ -46,7 +46,7 @@ def outstanding_pending_obligation(snapshot: PolicySnapshot) -> bool:
     ep = snapshot.episode(snapshot.active_episode_id)
     if ep is None or not ep.interrogation_eligible:
         return False
-    return not ep.need_known(pending)
+    return not ep.need_known(pending) and not ep.need_disposed(pending)
 
 
 def hard_blocking_obligation(snapshot: PolicySnapshot) -> bool:
@@ -61,7 +61,7 @@ def episode_reopens_interrogation(snapshot: PolicySnapshot, ep: EpisodeSnapshot)
     if outstanding_pending_obligation(snapshot) and ep.episode_id == snapshot.active_episode_id:
         return True
     # Brand-new / never-started episode still needs first-touch interrogation.
-    return not episode_has_any_known_askable(ep)
+    return not episode_has_any_known_askable(ep) and bool(episode_unknown_needs(ep))
 
 
 def turn_reopens_interrogation(ctx: TurnContextView | None) -> bool:
@@ -79,7 +79,8 @@ def need_is_currently_askable(
     ctx: TurnContextView | None = None,
 ) -> bool:
     """Whether an unresolved askable need may generate/score an ASK this turn."""
-    if not ep.interrogation_eligible or ep.need_known(need) or ep.resolving:
+    if (not ep.interrogation_eligible or ep.need_known(need)
+            or ep.need_disposed(need) or ep.resolving):
         return False
     if is_pending_obligation(snapshot, ep.episode_id, need):
         return True

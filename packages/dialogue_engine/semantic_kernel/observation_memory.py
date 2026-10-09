@@ -175,11 +175,11 @@ def build_observations(result: SemanticKernelResult) -> tuple[Observation, ...]:
     clauses = clause_bounds(result.raw_text)
     for issue in issues:
         body_spans = body_of.get(issue.span_id, [])
-        if issue.normalized == "боль" and any(
+        if any(
             start <= issue.start < end and body.start < start
             for start, end, _clause in clauses for body in body_spans
         ):
-            # relation_parser resolved this nominal continuation to the sole
+            # relation_parser resolved this pain continuation to the sole
             # preceding pain. Its attributes already target that antecedent;
             # do not create a second, unsited clinical episode for «боль».
             continue
@@ -671,6 +671,12 @@ def _polarity_model_vote(text: str) -> str | None:
     Bare backchannels («ага» ≠ answer) never get a vote — the invariant
     outranks any model confidence.
     """
+    # A bounded fact is at most 500 characters. Scoring the whole longer
+    # narrative truncates the model's context and can spend seconds before
+    # its post-forward deadline rejects the vote. Preserve literal evidence
+    # and unknown valence instead; never load/run a model for that proposal.
+    if len(text) > 500:
+        return None
     try:
         from packages.dialogue.interpretation import _is_backchannel_only
 
@@ -778,6 +784,14 @@ def _apply_mission_goal_answers(state: EngineState, turn: RichUserTurn) -> None:
         for gid, g in state.goals.items()
         if g.lifecycle == GoalLifecycle.SATISFIED
     }
+    # A care record may be filled by the typed fact writer before a default
+    # mission projection has lifecycle metadata. That record is authoritative
+    # too: another complaint cannot masquerade as a fresh free-text sleep
+    # answer. Current revisions still pass the canonical correction boundary.
+    satisfied.update(
+        gid for gid in ("sleep", "mood")
+        if gid in state.slot_records and state.slots.get(gid) == SlotStatus.FILLED
+    )
     answers = getattr(turn, "goal_answers", ()) or ()
     grounded = filter_grounded_goal_answers(
         answers,
@@ -1034,6 +1048,9 @@ def persist_turn_observations(state: EngineState, turn: RichUserTurn) -> None:
 def observations_to_issue_mentions(
     observations: tuple[Observation, ...],
     raw_text: str,
+    *,
+    spans: tuple[SemanticSpan, ...] = (),
+    relations: tuple = (),
 ) -> tuple[IssueMention, ...]:
     """Compatibility projection for existing IssueEpisode ingest."""
     severity_by_key: dict[tuple[str | None, str], str] = {}
@@ -1046,6 +1063,9 @@ def observations_to_issue_mentions(
 
     mentions: list[IssueMention] = []
     primary_set = False
+    consumed: set[str] = set()
+    body_of = _targets_for_relation(RelationType.BODY_OF, spans, relations)
+    clauses = clause_bounds(raw_text)
     for obs in observations:
         if obs.status == "superseded":
             continue
@@ -1055,10 +1075,31 @@ def observations_to_issue_mentions(
             continue
         body_site = obs.body_site
         severity = severity_by_key.get((body_site, obs.issue_normalized))
-        start = raw_text.lower().find(obs.evidence.lower())
-        if start < 0:
-            start = 0
-        end = min(len(raw_text), start + len(obs.evidence))
+        origins = [s for s in spans if s.type == SpanType.ISSUE
+                   and s.span_id not in consumed and s.normalized == obs.issue_normalized
+                   and (s.text.lower() == obs.evidence.lower()
+                        or clause_for_position(clauses, s.start) == obs.evidence)
+                   and (body_of[s.span_id][0].normalized
+                        if body_of.get(s.span_id) else None) == body_site
+                   and subject_for_issue(s.span_id, relations, clause_subject=_subject_for_clause(
+                       clause_for_position(clauses, s.start), has_issue=True,
+                   )) == obs.subject]
+        if origins:
+            origin = min(origins, key=lambda s: s.start)
+            consumed.add(origin.span_id)
+            start, end = origin.start, origin.end
+            if origin.text != obs.evidence:
+                # Full-clause tremor evidence is deliberate; keep the exact
+                # clause containing this origin, including uncertain words.
+                start, end, _ = next(c for c in clauses if c[0] <= origin.start < c[1])
+        else:
+            # Compatibility callers without spans must have one exact source,
+            # never the first identical word in another person's complaint.
+            positions = [m.start() for m in re.finditer(re.escape(obs.evidence), raw_text, re.I)]
+            if spans or len(positions) != 1 or not obs.evidence.strip():
+                continue
+            start = positions[0]
+            end = start + len(obs.evidence)
         if not body_site and _mention_negated(raw_text, start, end):
             # Live 2257cab2: «Ничего меня не беспокоит» spawned a 'беспокоит'
             # episode + onset probe. A negated site-less mention is a denied

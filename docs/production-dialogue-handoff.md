@@ -1,5 +1,39 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## 2026-10-09 — grounded revisions and disposition candidate
+
+[ADR-032](adr/032-grounded-revisions-and-dispositions.md) repairs the existing
+owners: accepted current sleep/mood revisions precede selection; late sleep
+details invalidate stale summaries; repeated pain predicates retain their sole
+anatomical owner and original offsets; unknown/local refusal discharges the
+clinical question without becoming medical knowledge. Functional-impact speech
+now asks about ordinary activity and accepts a literal current caller answer.
+Long speech retains bounded original fact fragments without truncating the whole
+turn; explicit remote sleep history cannot answer today's question.
+
+The existing ActionPolicy core is versioned v11 candidate with a separate manifest;
+historical v9/v10 proof stays immutable. This is **not global policy cutover**.
+Keep current production flags/admission until target comparison passes. Full
+medical mode still needs all five baseline topics (or honest unavailable-answer
+dispositions); no five-reply quota and no live generative renderer.
+
+Urgent speech no longer promises unconfirmed family delivery. Preserve RED_SIGNAL
+and verify its real Core acceptance and every test-recipient receipt. The Telegram
+demo suppresses misleading GREEN/sensitive exceptions and records individual
+acceptances in its locked atomic local ledger. Partial failures retry only missing
+recipients; dry-run/corrupt state cannot claim delivery. Mocked transport tests do
+not prove production Core delivery. Old call-only markers have no per-recipient
+proof, and a crash between API acceptance and local persistence can still duplicate
+a retry. No external message was sent by this development session.
+
+Before promotion repeat the source SDK cases on the exact loaded target through
+CallActor/FreeSWITCH, with original WAV/STT text, source offsets, heard question,
+cancelled/interrupted generations and first PCM. Review trace-log retention/free
+space: local proof files previously exhausted this workspace; old records were
+losslessly compressed, not deleted. This is not deployment of a retention service.
+
+---
+
 ## 2026-10-09 — medical completeness correction
 
 Target m5. User clarified that full medical check-in retains all five baseline

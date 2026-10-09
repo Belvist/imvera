@@ -124,6 +124,8 @@ def reject_candidate(
             )
         if ep.need_known(action.question_need):
             return _reject(action, "already_known", "requested semantic need already satisfied")
+        if ep.need_disposed(action.question_need):
+            return _reject(action, "answer_disposition", "requested need was declined or unknown")
         need = normalize_need(action.question_need)
         delivered = snapshot.last_delivered_question_need or snapshot.last_question_need
         if delivered and need == delivered:

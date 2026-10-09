@@ -1,0 +1,51 @@
+{
+  "scope": "captured SDK/source invariants only; no phone/audio/Core receipt",
+  "checks": {
+    "legacy": {
+      "no_sdk_errors": true,
+      "source_hashes_match": true,
+      "sleep_correction_kept": true,
+      "late_detail_kept": true,
+      "foreign_history_conditional_not_revisions": true,
+      "other_complaint_cannot_overwrite_sleep": true,
+      "history_cannot_fill_daily_sleep": true,
+      "long_sleep_is_bounded_source": true,
+      "urgent_and_stop_still_close": true,
+      "urgent_has_direct_help_not_delivery_promise": true,
+      "unknown_onset_does_not_reask_or_invent_time": true,
+      "declined_onset_does_not_reask_or_invent_time": true
+    },
+    "shadow": {
+      "no_sdk_errors": true,
+      "source_hashes_match": true,
+      "sleep_correction_kept": true,
+      "late_detail_kept": true,
+      "foreign_history_conditional_not_revisions": true,
+      "other_complaint_cannot_overwrite_sleep": true,
+      "history_cannot_fill_daily_sleep": true,
+      "long_sleep_is_bounded_source": true,
+      "urgent_and_stop_still_close": true,
+      "urgent_has_direct_help_not_delivery_promise": true,
+      "unknown_onset_does_not_reask_or_invent_time": true,
+      "declined_onset_does_not_reask_or_invent_time": true
+    },
+    "policy": {
+      "no_sdk_errors": true,
+      "source_hashes_match": true,
+      "sleep_correction_kept": true,
+      "late_detail_kept": true,
+      "foreign_history_conditional_not_revisions": true,
+      "other_complaint_cannot_overwrite_sleep": true,
+      "history_cannot_fill_daily_sleep": true,
+      "long_sleep_is_bounded_source": true,
+      "urgent_and_stop_still_close": true,
+      "urgent_has_direct_help_not_delivery_promise": true,
+      "unknown_onset_does_not_reask_or_invent_time": true,
+      "declined_onset_does_not_reask_or_invent_time": true,
+      "single_complaint_all_volunteered_details_and_functional_answer": true
+    },
+    "shadow_preserves_legacy_speech": true
+  },
+  "passed": 38,
+  "total": 38
+}

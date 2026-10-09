@@ -1,0 +1,20 @@
+{
+  "scope": "isolated warmed optional polarity helper; no SDK/STT/TTS/SIP",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "logical_cpus": 3,
+  "cpu_max": "200000 100000",
+  "input_chars": 973,
+  "predict_calls": 0,
+  "samples_ms": [
+    0.003094000021519605,
+    0.0009120003596763127,
+    0.00044099942897446454
+  ],
+  "median_ms": 0.0009120003596763127,
+  "votes": [
+    null,
+    null,
+    null
+  ],
+  "source_sha256": "38ca3efbca2d44bbf1b3f2bae00c16c12d942cb252dba8c3a1ec080dbca7ea4e"
+}

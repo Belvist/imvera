@@ -7,6 +7,12 @@
 
 # IMVERA: путь до приёмки диалогового продукта
 
+> **Следующий source cut, 2026-10-09:** [ADR-032](../adr/032-grounded-revisions-and-dispositions.md)
+> исправляет grounded revisions, поздние детали, исходные позиции одинаковых
+> жалоб, unknown/refusal в существующей policy, функциональный вопрос и длинную
+> речь. Глобальная medical authority не включена; target audio/Core/full-load
+> остаются отдельными gates. [Сравнение и проверка](../evaluation/grounded-revisions-2026-10-09/README.md).
+
 Дата: 2026-10-08. Целевая ветка `feature/voice-zoiper-m5`, исходная база
 `2c7cc19147aba178350b6ef9614d9eb61c3b3666`. Это план работ и критерии
 приёмки, а не утверждение о готовности production.

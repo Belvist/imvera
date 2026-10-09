@@ -8,13 +8,13 @@ from __future__ import annotations
 import os
 from typing import Any
 
-# Historical baselines remain immutable. The v10 correctness source below
-# passed every exact-source CI job before this metadata-only pin.
+# Historical v9/v10 baselines remain immutable. v11 preserves unknown/refusal
+# evidence in the existing snapshot. Exact-source CI is required before pinning.
 HISTORICAL_BASELINE_SHA = "254f0baed11ba7913d276c50ca7bd574778f19a5"
-FROZEN_POLICY_SHA: str | None = "dc72d6edaca212dbe3f0dde91bffe631fff98b36"
-POLICY_STATUS = "frozen"
-POLICY_VERSION = "action-policy-phase1-v10"
-ACTIVE_POLICY_MANIFEST = "docs/evaluation/action-policy-v10-pending-candidate-manifest.json"
+FROZEN_POLICY_SHA: str | None = None
+POLICY_STATUS = "candidate"
+POLICY_VERSION = "action-policy-phase1-v11"
+ACTIVE_POLICY_MANIFEST = "docs/evaluation/action-policy-v11-disposition-candidate-manifest.json"
 
 
 def policy_provenance() -> dict[str, Any]:
@@ -86,7 +86,7 @@ def action_policy_runtime_truth() -> dict[str, Any]:
         "action_policy.policy_version": POLICY_VERSION,
         "action_policy.frozen_policy_sha": FROZEN_POLICY_SHA,
         "action_policy.decision_scope": DECISION_SCOPE,
-        "action_policy.personal_thread_authority": "action_policy_v10",
+        "action_policy.personal_thread_authority": "action_policy_v11",
         "action_policy.personal_thread_scope": "grounded_nonurgent_daily",
         "action_policy.historical_baseline_sha": HISTORICAL_BASELINE_SHA,
         "action_policy.policy_status": POLICY_STATUS,
