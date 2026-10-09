@@ -9,10 +9,11 @@ import os
 from typing import Any
 
 # Historical v9/v10 baselines remain immutable. v11 preserves unknown/refusal
-# evidence in the existing snapshot. Exact-source CI is required before pinning.
+# evidence in the existing snapshot. Its exact source passed all CI jobs before
+# this metadata-only pin; global medical authority remains separately gated.
 HISTORICAL_BASELINE_SHA = "254f0baed11ba7913d276c50ca7bd574778f19a5"
-FROZEN_POLICY_SHA: str | None = None
-POLICY_STATUS = "candidate"
+FROZEN_POLICY_SHA: str | None = "4274a45149c46b2141cb5fe2d3e2dfce37b90cdc"
+POLICY_STATUS = "frozen"
 POLICY_VERSION = "action-policy-phase1-v11"
 ACTIVE_POLICY_MANIFEST = "docs/evaluation/action-policy-v11-disposition-candidate-manifest.json"
 

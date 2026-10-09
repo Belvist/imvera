@@ -1,7 +1,7 @@
 {
-  "status": "candidate",
+  "status": "frozen",
   "policy_version": "action-policy-phase1-v11",
-  "tested_sha": null,
+  "tested_sha": "4274a45149c46b2141cb5fe2d3e2dfce37b90cdc",
   "source_parent_sha": "c1b3f1a35d41b78fd0ee7109ddbbe6efc0df04de",
   "historical_baseline_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
   "prior_v10_sha": "dc72d6edaca212dbe3f0dde91bffe631fff98b36",
@@ -22,9 +22,20 @@
   "hash_construction": "sha256 per core blob; concatenated ten files sorted by filename",
   "authority_scope": "unchanged scoped personal authority; global medical cutover remains gated",
   "change": "project caller unknown/refusal separately from known facts; exclude discharged alias needs in canonical legal set and pending obligations; unchanged actions, weights and priority",
-  "pin_workflow": "candidate has no tested SHA; freeze metadata only after exact published source CI observed PASS",
+  "pin_workflow": "metadata-only pin after observed exact-source CI; unchanged ten policy core files, authority scope and weights",
   "not_verified": [
     "actual target SIP/audio/human warmth/latency/load",
     "Core acceptance and family receipt"
-  ]
+  ],
+  "verified_ci": {
+    "run_id": 37979468470,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37979468470",
+    "jobs": "11/11 SUCCESS",
+    "suite": {
+      "passed": 3647,
+      "failed": 0,
+      "skipped": 3,
+      "seconds": 237.28
+    }
+  }
 }

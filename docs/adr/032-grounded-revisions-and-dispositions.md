@@ -1,8 +1,12 @@
 # ADR-032: Grounded revisions and answered-question dispositions
 
 Date: 2026-10-09
-Status: implementation candidate; source gates pending; live acceptance NOT VERIFIED
+Status: source verified; v11 core frozen after exact-source CI; live acceptance NOT VERIFIED
 Target: feature/voice-zoiper-m5, parent c1b3f1a35d41b78fd0ee7109ddbbe6efc0df04de
+
+Verified source:4274a45149c46b2141cb5fe2d3e2dfce37b90cdc,
+[CI37979468470](https://github.com/Belvist/imvera/actions/runs/37979468470):11/11 SUCCESS,
+3647 PASS/0 FAIL/3 SKIP. Subsequent pin changes provenance/evidence only.
 
 ## Evidence and decision
 

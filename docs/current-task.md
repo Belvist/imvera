@@ -1,14 +1,16 @@
 # Grounded revisions and production blockers — 2026-10-09
 
 Target feature/voice-zoiper-m5; source parent c1b3f1a35d41b78fd0ee7109ddbbe6efc0df04de,
-clean/equal origin at task start and rechecked before publication. Owner authorizes
+clean/equal origin at task start and rechecked before publication. Source4274a451
+published; CI37979468470 all11 SUCCESS,3647 PASS/0 FAIL/3 SKIP/237.28s.
+Owner authorizes
 fixes/commit/push. No M5/Core credentials or configured VPN route; no deployment.
 
 CHANGED: existing owners now accept grounded caller sleep/mood revisions before
 selection, retain late details and invalidate obsolete summary; explicit sleep
 report is separate from another predicate's clock. Original symptom positions and
 sole-anatomical current pain continuation retained. Existing unknown/refusal writer
-and v11 candidate legal set discharge unanswered needs without invented values.
+and v11 legal set discharge unanswered needs without invented values.
 Functional-impact answers use actual delivered semantic need/episode, including
 literal yes/no but never backchannel/cancelled delivery. Long speech gets bounded
 original fact fragments without losing later complaints or running a useless
@@ -26,7 +28,8 @@ three-model warmup PASS; supported SDK cohort itself invoked none of the three
 counted semantic methods (outside-actor inference not counted). Isolated genuine
 long polarity probe3 discarded calls/392.95ms median before,0 calls/early abstain
 after. Linux SDK timing is not end-of-speech→PCM or M5 capacity. Exact published
-source CI remains pending until observed; freeze metadata only after that proof.
+source CI observed PASS; subsequent metadata freezes the same ten core files
+without changing selector/fact/render/test/gate behavior. Actual target unchanged.
 
 NOT VERIFIED: target SHA/image/profile/providers/audio/STT/first PCM/interruption,
 Core/test-recipient receipts, human listening,100 full calls/load. No target access.
@@ -36,7 +39,7 @@ acceptance/before local receipt can duplicate retry; demo is not distributed Cor
 Trace collection/retention/free-space monitoring needs target acceptance; old local
 records were losslessly compressed after filling the workspace. No zero-risk or
 production-ready claim.
-NEXT GATE: exact source CI/publication, then configured target runtime truth +
+NEXT GATE: configured target runtime truth +
 original CallActor/FreeSWITCH WAV/trace and real Core/test-recipient acceptance.
 [Actual captures, commands and limitations](evaluation/grounded-revisions-2026-10-09/README.md).
 [ADR-032](adr/032-grounded-revisions-and-dispositions.md) and handoff describe

@@ -1,6 +1,6 @@
 # M5 dialogue reliability: запуск и приёмка
 
-## 2026-10-09 — grounded revisions and disposition candidate
+## 2026-10-09 — grounded revisions and v11 source freeze
 
 [ADR-032](adr/032-grounded-revisions-and-dispositions.md) repairs the existing
 owners: accepted current sleep/mood revisions precede selection; late sleep
@@ -11,8 +11,10 @@ now asks about ordinary activity and accepts a literal current caller answer.
 Long speech retains bounded original fact fragments without truncating the whole
 turn; explicit remote sleep history cannot answer today's question.
 
-The existing ActionPolicy core is versioned v11 candidate with a separate manifest;
-historical v9/v10 proof stays immutable. This is **not global policy cutover**.
+The existing ActionPolicy core is pinned as v11 on verified source4274a451;
+[CI37979468470](https://github.com/Belvist/imvera/actions/runs/37979468470):11/11 SUCCESS,
+3647 PASS/0 FAIL/3 SKIP. Historical v9/v10 proof stays immutable.
+This is **not global policy cutover**.
 Keep current production flags/admission until target comparison passes. Full
 medical mode still needs all five baseline topics (or honest unavailable-answer
 dispositions); no five-reply quota and no live generative renderer.

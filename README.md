@@ -19,10 +19,14 @@ Control confirmation → CONFIRMED RED.
 [актуальный аудит и проверяемые ограничения](docs/evaluation/technical-audit-2026-10-08/README.md),
 [журнал](docs/current-task.md), [передача runtime-агенту](docs/production-dialogue-handoff.md).
 Сквозная промышленная приёмка на целевом сервере не подтверждена.
+Source4274a451 (2026-10-09): [CI11/11 SUCCESS,3647 PASS/0 FAIL/3 SKIP](https://github.com/Belvist/imvera/actions/runs/37979468470),
+[grounded revisions / unknown / длинная речь](docs/evaluation/grounded-revisions-2026-10-09/README.md).
+Полный медицинский режим сохраняет все пять базовых тем; target audio/Core/load
+по-прежнему требуют отдельной приёмки.
 
 | Направление | Состояние |
 |-------------|-----------|
-| Dialogue engine (single-writer, grounded facts) | SDK/regression CI проходит; личные темы — ActionPolicy v10, обычный check-in преимущественно legacy |
+| Dialogue engine (single-writer, grounded facts) | SDK/regression CI проходит; личные темы — ActionPolicy v11, обычный check-in преимущественно legacy |
 | Voice runtime | streaming PCM, generation cancellation, playback ledger реализованы; live stop/latency gate открыт |
 | STT | GigaAM final; prefix_batch opt-in, не stateful streaming; Linux CPU service curve измерена отдельно |
 | Local SIP lab | есть исторические звонки/trace; текущий source требует нового аудио gate |

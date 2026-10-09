@@ -1,0 +1,101 @@
+{
+  "source_sha": "4274a45149c46b2141cb5fe2d3e2dfce37b90cdc",
+  "target_branch": "feature/voice-zoiper-m5",
+  "source_ci": {
+    "run_id": 37979468470,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37979468470",
+    "jobs": "11/11 SUCCESS",
+    "suite": {
+      "passed": 3647,
+      "failed": 0,
+      "skipped": 3,
+      "seconds": 237.28
+    }
+  },
+  "jobs": [
+    {
+      "id": 113986002481,
+      "name": "dialogue-rich",
+      "conclusion": "success"
+    },
+    {
+      "id": 113986002877,
+      "name": "production-workers",
+      "conclusion": "success"
+    },
+    {
+      "id": 113986002907,
+      "name": "legacy-lint",
+      "conclusion": "success"
+    },
+    {
+      "id": 113986002911,
+      "name": "action-policy-shadow",
+      "conclusion": "success"
+    },
+    {
+      "id": 113986002918,
+      "name": "semantic-kernel",
+      "conclusion": "success"
+    },
+    {
+      "id": 113986002924,
+      "name": "lint-dialogue",
+      "conclusion": "success"
+    },
+    {
+      "id": 113986002944,
+      "name": "dialogue-runtime",
+      "conclusion": "success"
+    },
+    {
+      "id": 113986002970,
+      "name": "policy-diff",
+      "conclusion": "success"
+    },
+    {
+      "id": 113986002990,
+      "name": "dialogue-corpus-gate",
+      "conclusion": "success"
+    },
+    {
+      "id": 113986002991,
+      "name": "contracts",
+      "conclusion": "success"
+    },
+    {
+      "id": 113986107546,
+      "name": "test",
+      "conclusion": "success"
+    }
+  ],
+  "local": {
+    "full_dialogue_code": {
+      "passed": 3636,
+      "failed": 0,
+      "skipped": 9,
+      "seconds": 180.2
+    },
+    "final_demo_reporter": {
+      "passed": 12,
+      "failed": 0,
+      "seconds": 0.09
+    },
+    "rich": 1038,
+    "runtime": 338,
+    "topic": 68,
+    "kernel": 294,
+    "shadow": 84,
+    "corpus": 500,
+    "capture_invariants": 38
+  },
+  "metadata_scope": "policy provenance pin and evidence only; no selector/fact/render/test/gate changes after tested source",
+  "not_verified": [
+    "target M5/FreeSWITCH/audio/STT/firstPCM/interruption",
+    "Core and every actual test-recipient acceptance",
+    "human listening and 100 full calls/load",
+    "target log retention/collector/disk monitoring"
+  ],
+  "deployed": false,
+  "external_messages_sent": false
+}

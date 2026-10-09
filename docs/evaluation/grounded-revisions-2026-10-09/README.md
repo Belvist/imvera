@@ -5,7 +5,12 @@ Target `feature/voice-zoiper-m5`; baseline
 not target phone acceptance. Captures label the working source **dirty** and
 record SHA256 of all 21 relevant modules; HEAD alone does not identify those
 bytes. `verify.py` checks the current files against the captured bytes.
-Exact published source CI is recorded separately after it actually completes.
+Exact published source **4274a45149c46b2141cb5fe2d3e2dfce37b90cdc** passed
+[CI37979468470](https://github.com/Belvist/imvera/actions/runs/37979468470):
+**11/11 SUCCESS, 3647 PASS / 0 FAIL / 3 SKIP**, 237.28s; actual LFS fetch
+observed. [Machine-readable receipt](source-ci.json). The following metadata-only
+pin freezes those same ten v11 core files; it does not promote medical authority
+or claim deployment/audio acceptance.
 
 ## What changed, with existing owners
 
@@ -22,8 +27,8 @@ Exact published source CI is recorded separately after it actually completes.
 
 All five baseline medical topics remain required in opt-in full check-in. No
 live generator, second state writer/FSM/selector, new model or global medical
-policy cutover. v9/v10 manifests remain immutable; v11 is a candidate until
-exact-source CI permits a metadata-only pin.
+policy cutover. v9/v10 manifests remain immutable; v11 source is now pinned after
+observed exact-source CI. No behavior/test/gate bytes changed for that receipt.
 
 ## Actually run
 
