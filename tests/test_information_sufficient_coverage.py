@@ -1,4 +1,4 @@
-"""Accepted information, not number of check-slot replies, ends optional screening."""
+"""Accepted information, not number of check-slot replies, ends the configured full check-in."""
 from __future__ import annotations
 
 import copy
@@ -11,6 +11,10 @@ from packages.dialogue_engine.events import CallStarted
 from packages.dialogue_engine.scenario_runner import ScenarioRunner
 
 pytestmark = pytest.mark.dialogue_engine
+ALL_KNOWN = (
+    "Мне хорошо. Сегодня поела, таблетки уже приняла. "
+    "Настроение хорошее. Выспалась."
+)
 
 
 @pytest.fixture(autouse=True)
@@ -24,11 +28,11 @@ def flags(monkeypatch):
 
 
 @pytest.mark.parametrize("texts", [
-    ["Мне хорошо. Сегодня поела, таблетки уже приняла."],
-    ["Мне хорошо. Сегодня не ела. Таблетки не принимаю."],
-    ["Хорошо.", "Поела.", "Нет."],
+    [ALL_KNOWN],
+    ["Мне хорошо. Сегодня не ела. Таблетки не принимаю. Настроение хорошее. Выспалась."],
+    ["Хорошо.", "Поела.", "Нет.", "Нормальное.", "Выспалась."],
 ])
-def test_sufficient_facts_yield_an_invitation_without_optional_mood_sleep_questions(texts):
+def test_all_required_facts_yield_an_invitation_without_repeated_questions(texts):
     runner = ScenarioRunner(call_id="information-sufficient")
     runner.run([CallStarted()])
     for text in texts:
@@ -36,15 +40,15 @@ def test_sufficient_facts_yield_an_invitation_without_optional_mood_sleep_questi
     assert {"wellbeing", "nutrition", "medication"} <= covered_domains(runner.state)
     assert coverage_met(runner.state)
     assert result.speak_effects[-1].intent == "important_to_share"
-    assert runner.state.slots["mood"] == SlotStatus.OPEN
-    assert runner.state.slots["sleep"] == SlotStatus.OPEN
+    assert runner.state.slots["mood"] == SlotStatus.FILLED
+    assert runner.state.slots["sleep"] == SlotStatus.FILLED
     assert not runner.state.call_closed
 
 
 def test_early_invitation_keeps_an_engaged_story_and_then_yields_to_summary():
     runner = ScenarioRunner(call_id="sufficient-story")
     result = runner.run([CallStarted(),
-                        "Мне хорошо. Сегодня поела, таблетки уже приняла."])
+                        ALL_KNOWN])
     assert result.speak_effects[-1].intent == "important_to_share"
     facts = copy.deepcopy(runner.state.coverage_records)
     for text in [
@@ -68,14 +72,14 @@ def test_early_invitation_keeps_an_engaged_story_and_then_yields_to_summary():
 
 
 def test_sufficient_optional_coverage_does_not_discharge_an_explicit_required_goal():
-    runner = ScenarioRunner(call_id="required-sleep")
-    runner.state.required_background_goals = {"sleep"}
-    runner.run([CallStarted(), "Мне хорошо. Сегодня поела, таблетки уже приняла."])
+    runner = ScenarioRunner(call_id="required-plans")
+    runner.state.required_background_goals = {"plans"}
+    runner.run([CallStarted(), ALL_KNOWN])
     assert coverage_met(runner.state)
-    assert runner.state.background_goal_needs_attention("sleep")
+    assert runner.state.background_goal_needs_attention("plans")
     result = runner.run(["Нет, ничего."])
     assert not runner.state.call_closed
-    assert any(e.slot == "sleep" and e.marks_question for e in result.speak_effects)
+    assert any(e.slot == "plans" and e.marks_question for e in result.speak_effects)
 
 
 @pytest.mark.parametrize("report", [
@@ -107,7 +111,7 @@ def test_unknown_or_refusal_is_not_a_known_domain(text, domain):
 ])
 def test_earlier_optional_completion_does_not_delay_safety_or_stop(text, intent):
     runner = ScenarioRunner(call_id="sufficient-control")
-    runner.run([CallStarted(), "Мне хорошо. Сегодня поела, таблетки уже приняла."])
+    runner.run([CallStarted(), ALL_KNOWN])
     result = runner.run([text])
     assert result.speak_effects[-1].intent == intent
     assert runner.state.call_closed

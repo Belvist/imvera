@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — 2026-10-09
+
+- Restore all five baseline topics as the completion target of opt-in full medical check-in; count volunteered answers without imposing a reply quota, retain bounded unknown/refusal handling and urgent/stop precedence. Supersedes the three-domain completion target.
+- Prevent an unrelated negation from turning positive rest into a sleep complaint (e.g. medication non-use plus «выспалась»).
+
 ## Unreleased — 2026-10-08
 
 - Let accepted routine information satisfy opt-in full coverage without an independent check-slot reply quota; preserve required mission/clinical needs and heard invitation/summary ownership. Record the completion plan and refreshed official competitor research.

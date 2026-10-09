@@ -106,7 +106,7 @@ def test_a_foreign_sleep_story_does_not_promote_the_callers_sleep_question():
 def test_all_volunteered_check_slots_remain_covered():
     runner, _ = exchange("Мне хорошо. Настроение хорошее. Выспалась.")
     assert {"wellbeing", "mood", "sleep"} <= covered_domains(runner.state)
-    assert coverage_met(runner.state)
+    assert not coverage_met(runner.state)  # food and medication still need attention
 
 
 @pytest.mark.parametrize("food", [

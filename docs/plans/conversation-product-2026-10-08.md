@@ -1,3 +1,10 @@
+> **Уточнение владельца продукта, 2026-10-09:** IMVERA — медицинский
+> check-in, поэтому полный режим сохраняет все пять базовых тем:
+> самочувствие, настроение, сон, лекарства, питание. Нижеописанный cut с
+> достаточностью трёх доменов **заменён**: убрать повторный вопрос и квоту
+> реплик допустимо; убрать недостающие медицинские темы — нет.
+> [Исправление и проверка](../evaluation/medical-completeness-2026-10-09/README.md).
+
 # IMVERA: путь до приёмки диалогового продукта
 
 Дата: 2026-10-08. Целевая ветка `feature/voice-zoiper-m5`, исходная база
@@ -37,8 +44,8 @@ coverage. Глобальный medical cutover, живой turn-taking, Core del
 
 | Этап | Работа в существующем владельце | Доказательство выхода |
 | --- | --- | --- |
-| 1 — убрать лишнее условие опроса | `coverage.coverage_met`: accepted domains вместо требования количества check-slot ответов; удалить старый closing predicate | Одни и те же 3 факта одним/несколькими ходами дают одинаковый остаток needs; mood/sleep не навязываются без mission; story после раннего приглашения не закрывается |
-| 2 — единый выбор уместного хода | Existing ActionPolicy/DecisionRouter: различить required/optional needs, заменить оставшуюся обязательную квоту доменов реальными mission needs, расширить authority через shadow → объяснённый diff → soft; legacy владельца удалить после приёмки замены | Ноль необъяснённых critical divergences; user question прежде необязательного опроса; required clinical needs не потеряны; selector latency измерена |
+| 1 — убрать лишнее условие опроса | `coverage.coverage_met`: accepted domains вместо требования количества check-slot ответов; удалить старый closing predicate | Одни и те же сведения одним/несколькими ходами дают одинаковый остаток needs; full check-in проверяет все пять тем, не переспрашивает известные; story после раннего приглашения не закрывается |
+| 2 — единый выбор уместного хода | Existing ActionPolicy/DecisionRouter: различить required/optional needs, сохранить пять baseline care needs в полном режиме и отдельные mission needs, расширить authority через shadow → объяснённый diff → soft; legacy владельца удалить после приёмки замены | Ноль необъяснённых critical divergences; user question прежде необязательного опроса; required clinical needs не потеряны; selector latency измерена |
 | 3 — содержательная реакция и тема | Existing discourse + ResponsePlan/realization: grounded response, meaningful follow-up, continuation/resume и короткий ACK без обязательного вопроса | 15 типов диалогов из ADR-028; no fact invention, no repeated known/declined need; несколько тематических ходов, смена/возврат темы и исправление |
 | 4 — слышимый realtime | Existing VAD/STT/turn pipeline/CallActor: endpointing для медленной речи, ограниченные previews, слышимое cancel/барge-in, TTS/prosody | Реальные WAV/trace через FreeSWITCH на точном SHA; proposed targets end-of-speech→first audible PCM p95≤1.5s, audible interruption stop p95≤250ms; не срезать медленные фразы |
 | 5 — надёжный продуктовый результат | Existing persistence/outbox → тестовый Core → получатель; idempotency/retry/ack | Реальный ID события, ack Core и receipt каждого тестового получателя; outage/replay не теряет и не дублирует тревогу; текст Веры соответствует реально доступному действию |

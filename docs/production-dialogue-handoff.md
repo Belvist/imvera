@@ -1,26 +1,28 @@
 # M5 dialogue reliability: запуск и приёмка
 
-# 2026-10-08 — information sufficiency and completion plan
+## 2026-10-09 — medical completeness correction
 
-Target m5. [Current product plan](plans/conversation-product-2026-10-08.md)
-names existing owners, ordered cuts and audio/Core/load/listening gates.
-[Competitor review](research/voice-dialogue-competitors-2026-10-08.md) uses
-official documents; vendor-call comparison remains NOT_RUN.
+Target m5. User clarified that full medical check-in retains all five baseline
+care topics: wellbeing, mood, sleep, medication and nutrition. The previous
+three-domain sufficiency integration instruction is superseded.
+`IMVERA_COVERAGE_LADDER=1` now yields to the open invitation when every topic
+has accepted evidence, or remaining unavailable topics have been handled by
+the existing bounded unknown/refusal logic. Unknown/refused is not known.
+Do not force five separate replies: one volunteered report can answer all
+five. A personal story may pause the check; the remaining topics resume when
+the person finishes. Urgency and explicit stop retain priority.
 
-Integration delta: `IMVERA_COVERAGE_LADDER=1` now regards accepted three-domain
-information as sufficient without requiring three separate check-slot items.
-Several facts in one utterance can yield the floor immediately. Do not add
-mood/sleep as `required_background_goals` merely to restore the old ladder;
-use them only when actually required by the mission. Explicit required goals
-and clinical/safety needs still resume through their existing owners.
-Unknown/refused/foreign/past reports do not fabricate coverage. No new flag,
-provider, model or global ActionPolicy promotion. Short mode/default unchanged.
+Also corrected the existing sleep topic detector: unrelated medication
+negation plus positive «выспалась» no longer creates a poor-sleep probe.
+No new selector, model, flag, global policy promotion or deployed runtime
+change. Short mode/default remains unchanged. Verify actual M5 configuration
+before calling a short preset a full check-in.
 
-Test setup must follow the actual delivered question: food+medication now reaches
-the open invitation earlier. Canonical text/playback truth remains authoritative;
-cancelled/unheard invitations are not answered by a subsequent story. Never
-interpret emitted speech as heard audio or local outcome as Core receipt.
-No M5 restart/deploy or production acceptance performed in this workspace.
+[Evidence, limitations and remaining defects](evaluation/medical-completeness-2026-10-09/README.md).
+[Product plan](plans/conversation-product-2026-10-08.md) keeps audio/Core/load
+and blind-listening acceptance gates. Competitor UX does not define medical
+coverage. Canonical speech/playback truth remains authoritative: a cancelled
+invitation is not a heard invitation, and a local result is not a Core receipt.
 
 ---
 

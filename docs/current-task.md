@@ -1,3 +1,36 @@
+# Full medical check-in correction — 2026-10-09 UTC
+
+User clarified that natural dialogue must retain medical completeness.
+Baseline866b072a9b0ecad80919cea9ebc29497c7be0d12 on target m5. The previous
+three-domain sufficiency cut was an incorrect interpretation of that goal.
+
+CHANGED: existing coverage owner requires accepted evidence for all five
+baseline topics in full mode; no independent reply quota. Existing disposition,
+clinical/mission, story-resume, stop and urgent owners retained. Fixed positive
+sleep misclassified by an unrelated negation in the same turn. No new brain,
+flags, models or frozen ActionPolicy change; short mode unchanged.
+
+VERIFIED: new medical contract baseline7 FAIL/3 PASS; after coverage correction
+8 PASS/2 FAIL exposed the pre-existing sleep scope bug; after scope repair
+medical + topic tracker26 PASS. Additional scope tests2 FAIL/3 PASS exposed
+a regression in locally negated quality; refined detector/inference31 PASS.
+Final full3558 PASS/0 FAIL/9 SKIP/166.90s; rich974/13.27s, runtime338/21.92s,
+kernel294/1.69s, topic68/0.78s; corpus500/500/6.28s +8 tests/29.12s; policy
+diff12 expected/0 unexplained; lint/contracts/whitespace PASS. Paired nine SDK
+cases/25 turns each; simulated delivery, final source hashes match captures.
+
+NOT VERIFIED: deployed M5 flags/SHA, original audio/STT/TTS, real Core receipts,
+100 full calls or human listening. No target access configured here.
+REMAINING RISKS: legacy sleep correction/late detail and experimental policy
+unknown temporal disposition/functional-impact speech remain open. Global
+policy promotion remains blocked. These are actual defects, not merely access
+limitations. Next cut must reproduce and repair their existing owners.
+NEXT GATE: exact published-source CI, then actual configured target
+call/audio trace and the existing-owner sleep correction/disposition cut.
+[Current evidence](evaluation/medical-completeness-2026-10-09/README.md).
+
+---
+
 # Dialogue product plan + information sufficiency — 2026-10-08 UTC
 
 Target feature/voice-zoiper-m5, baseline2c7cc191. User requested an end-to-end

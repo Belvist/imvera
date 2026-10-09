@@ -46,6 +46,7 @@ test-dialogue-rich:
 		tests/test_volunteered_clinical_facts.py tests/test_multi_complaint_progression.py \
 		tests/test_mixed_subject_routine_facts.py tests/test_implicit_subject_ownership.py \
 		tests/test_grounded_coverage.py tests/test_information_sufficient_coverage.py \
+		tests/test_medical_checkin_coverage.py \
 		tests/test_continuation_ownership.py \
 		tests/test_breathing_safety_scope.py -q
 

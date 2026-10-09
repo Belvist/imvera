@@ -3,7 +3,7 @@
 The client is not a form: Vera must cover up to 5 wellbeing domains
 (wellbeing / mood / sleep / medication / nutrition), but only what is still
 unknown. Anything the client already volunteered counts as covered and is
-never re-asked. Full check-in targets 3 evidenced domains before yielding
+never re-asked. Full check-in targets every configured baseline domain before yielding
 to IMPORTANT_TO_SHARE; it does not require a separate number of replies.
 Explicit mission goals and clinical needs keep their existing owners.
 
@@ -25,8 +25,6 @@ from packages.dialogue_engine.semantic_kernel.lexicon import (
 
 if TYPE_CHECKING:
     from packages.dialogue_engine.state import EngineState
-
-MIN_COVERED_DOMAINS = 3
 
 DOMAINS: tuple[str, ...] = ("wellbeing", "mood", "sleep", "medication", "nutrition")
 
@@ -143,13 +141,13 @@ def content_exchanges(state: EngineState) -> int:
 
 
 def coverage_met(state: EngineState) -> bool:
-    """Enough accepted information for the opt-in routine coverage target.
+    """Every baseline medical topic has accepted evidence in full check-in.
 
     Several domains may be answered in one utterance. Requiring check-slot
     exchanges as well would add unrelated questions despite sufficient facts.
     This does not satisfy required mission goals or resolve clinical episodes.
     """
-    return len(covered_domains(state)) >= MIN_COVERED_DOMAINS
+    return set(DOMAINS).issubset(covered_domains(state))
 
 
 def next_uncovered_domain(

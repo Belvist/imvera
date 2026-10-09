@@ -77,6 +77,10 @@ _SLEEP_PATTERN_MARKERS = (
     "не засып",
     "часов",
 )
+_SLEEP_NEGATIVE_QUALITY = re.compile(
+    r"\bспал(?:а|и)?\b\s+(?:(?:очень|совсем)\s+)?"
+    r"(?:плох\w*|мало|не\s+(?:очень\s+)?(?:хорош\w*|нормальн\w*))"
+)
 _ABDOMINAL_MARKERS = ("живот", "тошн", "рвот")
 _HEADACHE_MARKERS = ("голов", "головн")
 _LIMB_MARKERS = re.compile(
@@ -151,7 +155,12 @@ def _clause_has_sleep(n: str) -> bool:
         return True
     if any(m in n for m in _SLEEP_PATTERN_MARKERS):
         return True
-    return "спал" in n and any(x in n for x in ("плох", "не ", "мало", "час"))
+    # An unrelated negation (e.g. medication refusal) must not turn
+    # «выспалась» into a sleep complaint. Require the sleep verb itself
+    # and a locally attached negative quality/duration.
+    return bool(_SLEEP_NEGATIVE_QUALITY.search(n) or re.search(
+        r"\bспал(?:а|и)?\b\s+\d+\s+час\w*", n,
+    ))
 
 
 def _clause_has_abdominal(n: str) -> bool:
@@ -222,9 +231,7 @@ def infer_dimensions(
     found: list[str] = []
 
     if family == TopicFamily.SLEEP:
-        if any(x in n for x in _SLEEP_QUALITY_MARKERS) or (
-            "спал" in n and "плох" in n
-        ):
+        if any(x in n for x in _SLEEP_QUALITY_MARKERS) or _SLEEP_NEGATIVE_QUALITY.search(n):
             found.append("quality")
         if _WAKE_MARKERS.search(n) or any(x in n for x in _SLEEP_PATTERN_MARKERS):
             found.append("pattern")
