@@ -1482,6 +1482,18 @@ canonical == TTS == delivered speech, and a single farewell.
 
 ---
 
+# Speed + economy: batch-2, phrase cache, all live (2026-10-07)
+
+- Measured: batch-1 serializes 2 parallel (9.2 s wall); batch-2 does
+  both in 4.3 s, deterministic per mode. Prod server -> --max-batch 2.
+- Phrase cache (exact voice/text/lang, LRU-64): repeat 2706 ms -> 31 ms,
+  zero GPU. Warmup bypasses cache (it poisoned a failure test — caught
+  by gates, fixed with bypass flag). Fixed warmup deadlock for real
+  (threaded drain, all engines).
+- Both TTS on qwen base+clone, bridge 81f3272 hot, watch OK. Pushed.
+
+---
+
 # Full prod restart verified (2026-10-02, still 09cff20)
 
 - Restarted everything in no-call window: STT/TTS x2, bridge, FS, DB.

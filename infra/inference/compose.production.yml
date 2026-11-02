@@ -22,7 +22,7 @@ services:
     volumes:
       - ${IMVERA_NLP_MODELS_DIR:?genuine NLP models required}:/app/models:ro
       - ${IMVERA_HF_CACHE_DIR:?accepted encoder and tokenizer cache required}:/app/hf-cache:ro
-    restart: unless-stopped
+    restart: "no"
     init: true
     stop_grace_period: 30s
     mem_limit: ${IMVERA_BRIDGE_MEMORY:-4g}
@@ -52,7 +52,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     init: true
-    restart: unless-stopped
+    restart: "no"
     stop_grace_period: 30s
     mem_limit: ${IMVERA_TTS_WORKER_MEMORY:-1g}
     cpus: ${IMVERA_TTS_WORKER_CPUS:-1}
@@ -80,7 +80,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m
     init: true
-    restart: unless-stopped
+    restart: "no"
     stop_grace_period: 30s
     mem_limit: ${IMVERA_STT_WORKER_MEMORY:-4g}
     cpus: ${IMVERA_STT_WORKER_CPUS:-2}

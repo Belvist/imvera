@@ -20,7 +20,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    restart: unless-stopped
+    restart: "no"
 
   cache:
     image: redis:7-alpine
@@ -35,7 +35,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    restart: unless-stopped
+    restart: "no"
 
   storage:
     image: minio/minio:latest
@@ -49,7 +49,7 @@ services:
     ports:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:9001:9001"
-    restart: unless-stopped
+    restart: "no"
 
   api:
     build:
@@ -74,7 +74,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    restart: unless-stopped
+    restart: "no"
 
 volumes:
   pgdata:
