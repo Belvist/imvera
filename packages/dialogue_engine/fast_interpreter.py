@@ -46,14 +46,21 @@ _WELLNESS_NEGATIVE = re.compile(
     re.I,
 )
 _MOOD_NEGATIVE = re.compile(r"^(плох\w+|груст\w+|ужасн\w+|тоскл\w+)\.?$", re.I)
-_SLEEP_ANSWER = re.compile(
-    r"(спал\w*\s+(?:нормально|хорошо|плохо|великолепн\w*|отличн\w*)|"
+_SLEEP_REPORT_PATTERN = (
+    r"спал\w*\s+(?:нормально|хорошо|плохо|великолепн\w*|отличн\w*)|"
     r"спало\s+(?:нормально|хорошо|плохо|великолепн\w*|отличн\w*)|"
     r"хорошо[,\s]+спал\w*|"
     r"(?:нормально|плохо|отлично)\s+спал\w*|"
     r"сон\s+(?:хорош\w*|плох\w*|нормальн\w*)|"
-    r"не\s+спал\w*|выспал\w*|мало\s+спал\w*|недоспал\w*|просыпал\w*|"
-    r"часов\s+\w+|пять\s+часов|шесть\s+часов|беспокойн\w*)",
+    r"не\s+спал\w*|выспал\w*|мало\s+спал\w*|недоспал\w*|просыпал\w*"
+)
+# Bare hours/restlessness are contextual answers, never independent sleep facts.
+_SLEEP_REPORT = re.compile(
+    rf"(?:{_SLEEP_REPORT_PATTERN}|\bспал(?:а|и)?\s+(?:\w+\s+час\w*|часов\s+\w+))",
+    re.I,
+)
+_SLEEP_ANSWER = re.compile(
+    rf"(?:{_SLEEP_REPORT_PATTERN}|часов\s+\w+|пять\s+часов|шесть\s+часов|беспокойн\w*)",
     re.I,
 )
 _PLANS_ANSWER = re.compile(

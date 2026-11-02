@@ -34,6 +34,41 @@ def evidence_grounded_in_utterance(evidence: str, utterance: str) -> bool:
     return bool(ev2) and ev2 in ut2
 
 
+def _asserted_span(utterance: str, start: int, end: int, ranges: tuple | list) -> bool:
+    return not any(
+        char.isalnum() and not any(left <= index < right for left, right in ranges)
+        for index, char in enumerate(utterance[start:end], start)
+    )
+
+
+def current_speaker_clauses(utterance: str) -> tuple:
+    """Original current caller assertions; no quotes or conditional continuations."""
+    from packages.dialogue_engine.issue_mention_extract import speaker_goal_clauses
+    from packages.dialogue_engine.turn_understanding import _asserted_question_ranges
+
+    ranges = _asserted_question_ranges(utterance)
+    return tuple(
+        clause for clause in speaker_goal_clauses(utterance)
+        if _asserted_span(utterance, clause.start, clause.end, ranges)
+        and not re.search(r"\b(?:раньше|тогда|бывало|назад|в\s+прошл\w*)\b",
+                          clause.text, re.I)
+    )
+
+
+def current_care_facts(utterance: str) -> tuple:
+    """Source assertions shared by typed fact and built-in goal revisions."""
+    from packages.dialogue_engine.issue_mention_extract import extract_goal_facts
+    from packages.dialogue_engine.turn_understanding import _asserted_question_ranges
+
+    ranges = _asserted_question_ranges(utterance)
+    return tuple(
+        fact for fact in extract_goal_facts(utterance)
+        if fact.subject == "speaker" and fact.temporal_scope in ("now", "today")
+        and not fact.negated
+        and _asserted_span(utterance, fact.evidence.start, fact.evidence.end, ranges)
+    )
+
+
 def validate_goal_answer_candidate(
     candidate: GoalAnswerCandidate,
     *,
@@ -74,6 +109,24 @@ def validate_goal_answer_candidate(
 
     if candidate.confidence < 0.0 or candidate.confidence > 1.0:
         return False, "invalid_confidence"
+
+    if (candidate.is_correction and gdef.source == "daily_check_preset"
+            and candidate.goal_id in ("sleep", "mood")):
+        if not any(
+            fact.field == candidate.goal_id
+            and evidence_grounded_in_utterance(evidence, fact.evidence.quote)
+            for fact in current_care_facts(utterance)
+        ):
+            return False, "care_revision_not_current_speaker_assertion"
+
+    if gdef.source == "daily_check_preset" and candidate.goal_id == "sleep":
+        from packages.dialogue_engine.issue_mention_extract import extract_goal_facts
+
+        sleep_reports = [fact for fact in extract_goal_facts(utterance) if fact.field == "sleep"]
+        if sleep_reports and not any(
+            fact.temporal_scope in ("now", "today") for fact in sleep_reports
+        ):
+            return False, "sleep_history_not_daily_answer"
 
     return True, "ok"
 

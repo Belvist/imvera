@@ -57,7 +57,7 @@ def _floor_handoff(text: str) -> bool:
     words = frozenset(normalize_text(text).split())
     return bool(words & {"всё", "все"} and words <= {
         "всё", "все", "я", "говорить", "сказать", "уже", "правильно", "вот",
-        "и", "ну", "это", "пока", "на", "этот",
+        "и", "ну", "это", "пока", "на", "этот", "спасибо",
     })
 
 
@@ -97,8 +97,16 @@ def _listening_reply(state, turn, raw: str) -> bool:
     ):
         return False
     low = raw.lower().rstrip(".!?…")
-    finished = _floor_handoff(raw) or bool(getattr(turn, "not_recalled", False)) or low in (
-        "нет", "неа", "не знаю", "не помню", "ничего", "больше нечего добавить",
+    from packages.dialogue_engine.reducer import _is_summary_completion_ack
+
+    # Reuse the whole-utterance completion meaning. Here it yields the topic
+    # floor; only the existing selector may resume a need or summarize.
+    # Mixed no-more words plus new content cannot consume the continuation.
+    finished = (
+        _is_summary_completion_ack(raw) or _floor_handoff(raw)
+        or bool(getattr(turn, "not_recalled", False)) or low in (
+            "нет", "неа", "не знаю", "не помню", "ничего", "больше нечего добавить",
+        )
     )
     if not finished and (
         getattr(turn, "dialogue_act", "") != "answer" or not raw or len(raw) > 2048
@@ -231,6 +239,21 @@ def update_discourse(state, turn) -> None:
     """Single reducer-invoked discourse writer, including bounded context."""
     _update_discourse(state, turn)
     _remember_personal_statement(state, turn)
+
+
+def accepted_personal_statement(state, turn) -> str | None:
+    """Read a current-turn excerpt admitted by the discourse writer, not a proposal."""
+    uid = getattr(turn, "utterance_id", "")
+    raw = getattr(turn, "raw_text", "")
+    if (not uid or state.current_thread_label != "рассказ"
+            or state.thread_last_utterance_id != uid
+            or getattr(turn, "control", "none") not in ("none", "")
+            or getattr(turn, "user_question", None) or getattr(turn, "correction", False)
+            or getattr(turn, "issue_mentions", ()) or getattr(turn, "risk_candidates", ())):
+        return None
+    return next((item.text for item in reversed(state.thread_statements)
+                 if item.call_id == state.call_id and item.utterance_id == uid
+                 and item.text and item.text in raw), None)
 
 
 def _remember_personal_statement(state, turn) -> None:
@@ -441,6 +464,13 @@ def _update_discourse(state, turn) -> None:
             _other = False
         words = raw.split()
         content = [w for w in words if len(w.strip(".,!?…")) >= 5]
+        from packages.dialogue_engine.semantic_kernel.types import RelationType
+
+        clinical_reference = any(
+            relation.type == RelationType.REFERS_TO
+            and relation.target_span_id in state.issue_episodes
+            for relation in getattr(turn, "semantic_relations", ())
+        )
         # Someone else's health state («муж плохо спал») is a report, not
         # the elder's topic — it must not become Vera's thread. An event
         # with the elder inside («внучка приезжала, посидели») is.
@@ -454,6 +484,7 @@ def _update_discourse(state, turn) -> None:
             and not getattr(turn, "correction", False)
             and not getattr(turn, "issue_mentions", None)
             and not _other_health
+            and not clinical_reference
             and not _easing
             and not _nohealth
             and not _floor_feedback(raw)

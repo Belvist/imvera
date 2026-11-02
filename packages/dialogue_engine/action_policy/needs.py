@@ -28,7 +28,8 @@ def normalize_attribute(attribute: str | None) -> str | None:
 
 
 def episode_unknown_needs(ep: EpisodeSnapshot) -> tuple[str, ...]:
-    return tuple(need for need in ASKABLE_NEEDS if not ep.need_known(need))
+    return tuple(need for need in ASKABLE_NEEDS
+                 if not ep.need_known(need) and not ep.need_disposed(need))
 
 
 def episode_has_any_known_askable(ep: EpisodeSnapshot) -> bool:

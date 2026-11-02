@@ -10,7 +10,10 @@ Usage:
     python3 tools/family_notify/telegram_report.py --call-id fs-xxxx --dry-run
 
 Env: IMVERA_TG_BOT_TOKEN, IMVERA_TG_CHAT_ID, IMVERA_PG_URL.
-Watch state: .run/family_notify_sent.json (already-sent call ids).
+Watch state: .run/family_notify_sent.json (completed calls + recipient acceptances).
+Old call-only markers do not prove historical per-recipient delivery. Telegram
+acceptance is not Core acceptance or a human read receipt. A process crash between
+API acceptance and local recording can still duplicate a retry; this is a demo.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -41,14 +45,44 @@ SENT_FILE = _ROOT / ".run" / "family_notify_sent.json"
 
 def _load_sent() -> set[str]:
     try:
-        return set(json.loads(SENT_FILE.read_text(encoding="utf-8")))
-    except Exception:
+        entries = json.loads(SENT_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
         return set()
+    if not isinstance(entries, list) or any(not isinstance(entry, str) for entry in entries):
+        raise ValueError("invalid demo delivery ledger")
+    return set(entries)
 
 
 def _save_sent(sent: set[str]) -> None:
+    import tempfile
+
     SENT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SENT_FILE.write_text(json.dumps(sorted(sent)), encoding="utf-8")
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=SENT_FILE.parent,
+                                     delete=False) as staging:
+        try:
+            staging.write(json.dumps(sorted(sent)))
+            staging.flush()
+            os.fsync(staging.fileno())
+            os.replace(staging.name, SENT_FILE)
+        finally:
+            Path(staging.name).unlink(missing_ok=True)
+
+
+@contextmanager
+def _delivery_lock():
+    # Demo is one local ledger, not the production distributed Core outbox.
+    import fcntl
+
+    SENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = SENT_FILE.with_suffix(".lock")
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(fd, "w") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        yield
+
+
+def _recipient_key(call_id: str, chat_id: str) -> str:
+    return "recipient:" + json.dumps([call_id, chat_id], separators=(",", ":"))
 
 
 def _dsn() -> str:
@@ -94,6 +128,9 @@ def build_message(call_id: str, snap) -> str:
     name = str(meta.get("elder_display_name") or "—")
     concern = str(meta.get("wellness_concern") or "").strip()
     ended = d.get("call_ended")
+    outcome = str(outcomes.get("call_outcome") or "")
+    if status == "GREEN" and (outcome in {"TECHNICAL", "NO_CONTACT"} or not ended):
+        status = "UNSET"
     when = datetime.now(UTC).astimezone().strftime("%d.%m %H:%M")
 
     lines = [
@@ -117,9 +154,10 @@ def build_message(call_id: str, snap) -> str:
                 its = o.get("value")
     if its:
         lines.append(f"Важно: {its}")
-    outcome = str(outcomes.get("call_outcome") or "")
     if outcome == "TECHNICAL":
         lines.append("Звонок сорвался по технической причине — данные частичные.")
+    if outcome == "NO_CONTACT":
+        lines.append("Связаться не удалось — состояние человека не подтверждено.")
     if not ended:
         lines.append("Звонок не завершён штатно.")
     lines += [
@@ -154,32 +192,47 @@ def report_call(call_id: str, *, dry_run: bool) -> bool:
         print(text)
         return True
     token = os.environ.get("IMVERA_TG_BOT_TOKEN", "")
-    chat_ids = [
+    chat_ids = list(dict.fromkeys(
         c.strip()
         for c in os.environ.get("IMVERA_TG_CHAT_ID", "").split(",")
         if c.strip()
-    ]
+    ))
     if not token or not chat_ids:
         print("IMVERA_TG_BOT_TOKEN / IMVERA_TG_CHAT_ID not set — dry output:")
         print(text)
         return False
-    failed: list[str] = []
-    for chat_id in chat_ids:
-        try:
-            send_message(token, chat_id, text)
-        except Exception as exc:
-            # One blocked chat (403) must not kill delivery to the rest.
-            print(f"send failed chat_id={chat_id}: {exc}")
-            failed.append(chat_id)
-    delivered = len(chat_ids) - len(failed)
-    print(f"sent report for {call_id} to {delivered}/{len(chat_ids)} chat(s)")
-    return delivered > 0
+    with _delivery_lock():
+        sent = _load_sent()  # Corruption must stop sending, not forget receipts.
+        delivered = 0
+        for chat_id in chat_ids:
+            key = _recipient_key(call_id, chat_id)
+            if key in sent:
+                delivered += 1
+                continue
+            try:
+                send_message(token, chat_id, text)
+            except Exception as exc:
+                # One blocked chat must not kill delivery to the rest. URLs
+                # may contain the bot token, so never log exception details.
+                print(f"send failed: {type(exc).__name__}")
+                continue
+            sent.add(key)
+            _save_sent(sent)  # Persist each success before the next recipient.
+            delivered += 1
+        complete = delivered == len(chat_ids)
+        if complete:
+            sent.add(call_id)
+        else:
+            sent.discard(call_id)
+        _save_sent(sent)
+        print(f"accepted report for {call_id}: {delivered}/{len(chat_ids)} chat(s)")
+        return complete
 
 
 def recent_ended_calls(limit: int = 20, since_hours: float = 24.0) -> list[str]:
     import psycopg
 
-    dsn = os.environ.get("IMVERA_PG_URL", "")
+    dsn = _dsn()
     with psycopg.connect(dsn, connect_timeout=5) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -193,18 +246,16 @@ def recent_ended_calls(limit: int = 20, since_hours: float = 24.0) -> list[str]:
 
 
 def watch(interval_s: float, dry_run: bool, since_hours: float) -> None:
-    sent = _load_sent()
-    print(f"watching (interval {interval_s}s), already sent: {len(sent)}")
+    print(f"watching (interval {interval_s}s)")
     while True:
         try:
+            sent = _load_sent()
             for call_id in recent_ended_calls(since_hours=since_hours):
                 if call_id in sent:
                     continue
-                if report_call(call_id, dry_run=dry_run):
-                    sent.add(call_id)
-                    _save_sent(sent)
+                report_call(call_id, dry_run=dry_run)
         except Exception as exc:
-            print(f"watch error: {exc}")
+            print(f"watch error: {type(exc).__name__}")
         time.sleep(interval_s)
 
 

@@ -51,7 +51,8 @@ def _kernel_mentions(text: str):
 
     result = interpret(text, utterance_id="u-1")
     observations = build_observations(result)
-    return observations_to_issue_mentions(observations, result.raw_text)
+    return observations_to_issue_mentions(observations, result.raw_text,
+                                         spans=result.spans, relations=result.relations)
 
 
 def test_surface_label_with_morphology(morph_present) -> None:
@@ -176,7 +177,7 @@ def test_followup_mention_attaches_to_same_episode(morph_present) -> None:
     )
     result = interpret("Живот болит.", utterance_id="u-2")
     second = observations_to_issue_mentions(
-        build_observations(result), result.raw_text
+        build_observations(result), result.raw_text, spans=result.spans, relations=result.relations
     )[0]
     assert second.label == "живот болит"
     assert _find_episode_for_mention(state, second) == "ep-1"

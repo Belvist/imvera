@@ -66,7 +66,7 @@ _PAUSE = re.compile(
 _UNCERTAINTY = re.compile(
     r"(?i)\b("
     r"не\s+знаю|не\s+помню|не\s+уверен\w*|не\s+уверена|"
-    r"возможно|наверное|кажется|хз"
+    r"возможно|наверное|кажется|вроде|может\s+быть|хз"
     r")\b"
 )
 _USER_QUESTION = re.compile(
@@ -94,6 +94,7 @@ _META_ABOUT_CALL = re.compile(
 _CORRECTION_MARKER = re.compile(
     r"(?i)("
     r"я\s+ошиб(?:ся|лась|лись)|"
+    r"\bя\s+перепутал(?:а)?\b|"
     r"\bточнее\b|"
     r"нет[,]?\s*поправлю|"
     r"на\s+самом\s+деле|"

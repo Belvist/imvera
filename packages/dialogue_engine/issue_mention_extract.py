@@ -310,7 +310,10 @@ def _clause_mentions(
             quote=clause,
         )
         first_symptom = False
-    if re.search(r"\bплохо\s+спал\w*\b|\bне\s+спал\w*\b|\bбессон\w*\b", n):
+    from packages.dialogue_engine.topic_tracker import _SLEEP_NEGATIVE_QUALITY
+
+    if (_SLEEP_NEGATIVE_QUALITY.search(n)
+            or re.search(r"\bплохо\s+спал\w*\b|\bне\s+спал\w*\b|\bбессон\w*\b", n)):
         add(
             label="плохой сон",
             kind="sleep_problem",
@@ -824,8 +827,9 @@ def _plans_fact(raw: str, *, answer_slot: str | None) -> FactCandidate | None:
             # mixed narratives still use only the accepted clause's span.
             start, end, clause = 0, len(raw), raw
         return FactCandidate(
-            field="plans", value=clause, subject="speaker", temporal_scope="now", negated=False,
-            evidence=_evidence(raw, start, end),
+            field="plans", value=clause[:500], subject="speaker",
+            temporal_scope="now", negated=False,
+            evidence=_evidence(raw, start, min(end, start + 500)),
         )
     return None
 
@@ -926,6 +930,7 @@ def _extract_owned_goal_facts(
         _NORMAL,
         _POSITIVE,
         _SLEEP_ANSWER,
+        _SLEEP_REPORT,
         _SO_SO,
         _WELLNESS_NEGATIVE,
         _WELLNESS_POSITIVE,
@@ -940,11 +945,26 @@ def _extract_owned_goal_facts(
     _judge = _tail if _tail is not None else raw
     _judge_n = _judge.lower().replace("ё", "е")
     # «плохо спал» is sleep evidence, not a wellness crisis by itself
+    from packages.dialogue_engine.topic_tracker import _SLEEP_NEGATIVE_QUALITY
+
     _judge_wellness = re.sub(r"плох\w*\s+спал\w*", " ", _judge_n)
+    _judge_wellness = _SLEEP_NEGATIVE_QUALITY.sub(" ", _judge_wellness)
 
     def _add(field: str, value: str, *, start: int = 0, end: int | None = None) -> None:
         if field in seen:
             return
+        if field == "sleep" and len(value) > 500:
+            from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
+
+            # Keep a bounded original sleep clause instead of the entire
+            # narrative. Other complaints still reach their own semantic owner.
+            start, end, _ = next(
+                (left, right, clause) for left, right, clause in clause_bounds(raw)
+                if _SLEEP_REPORT.search(clause.lower())
+                or _SLEEP_NEGATIVE_QUALITY.search(clause.lower())
+            )
+            end = min(end, start + 500)
+            value = raw[start:end]
         seen.add(field)
         evidence = full_evidence if end is None else _evidence(raw, start, end)
         facts.append(
@@ -1026,8 +1046,25 @@ def _extract_owned_goal_facts(
     ):
         _add("mood", "positive" if not _SO_SO.match(core) else "uncertain")
 
-    if _SLEEP_ANSWER.search(n):
+    # The legacy contextual matcher also recognizes bare hours/restlessness.
+    # They answer a heard sleep question, not an unrelated pain clock.
+    sleep_answer = bool(
+        _SLEEP_REPORT.search(n) or _SLEEP_NEGATIVE_QUALITY.search(n)
+        or (answer_slot == "sleep" and _SLEEP_ANSWER.fullmatch(core))
+    )
+    if sleep_answer:
         _add("sleep", raw)
+        # Last-night reports belong to daily sleep; remote history does not.
+        from packages.dialogue_engine.semantic_kernel.clauses import clause_bounds
+
+        sleep_clauses = [clause for _, _, clause in clause_bounds(raw)
+                         if _SLEEP_REPORT.search(clause)
+                         or _SLEEP_NEGATIVE_QUALITY.search(clause.lower())]
+        if sleep_clauses and all(
+            re.search(r"\b(?:раньше|тогда|бывало|назад|в\s+прошл\w*)\b", clause, re.I)
+            for clause in sleep_clauses
+        ):
+            facts[-1] = facts[-1].model_copy(update={"temporal_scope": "past"})
 
     if plans_fact is not None:
         facts.append(plans_fact)
@@ -1048,7 +1085,9 @@ def _extract_owned_goal_facts(
 
 
 def detect_correction(text: str) -> bool:
-    return bool(_CORRECTION.search(text))
+    from packages.dialogue_engine.deterministic_mission import _has_correction_marker
+
+    return bool(_CORRECTION.search(text) or _has_correction_marker(text))
 
 
 def detect_user_question(text: str) -> str | None:

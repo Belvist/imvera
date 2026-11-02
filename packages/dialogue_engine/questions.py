@@ -268,8 +268,8 @@ _EPISODE_ACK: dict[str, tuple[str, ...]] = {
 # Legacy constant — prefer summary_close_speech(state).
 _SUMMARY_TEXT = "Всё, спасибо. Всего вам хорошего. До свидания."
 _URGENT_CLOSE = (
-    "Понимаю, это важно. Я передам информацию близким. "
-    "Спасибо за разговор. До свидания."
+    "Это важно. Пожалуйста, свяжитесь с близкими. "
+    "Если помощь нужна прямо сейчас, звоните 112. До свидания."
 )
 _ANSWER_WAIT_MS = 7000
 # Neutral by default: the legacy "Хорошо." prefix lied after "Пло."/UNCLEAR

@@ -363,7 +363,7 @@ def _apply_coverage_reply(state: EngineState, context: TurnContext) -> ResponseP
         return None
     if turn is None:
         return None
-    from packages.dialogue_engine.coverage import nutrition_reply_record
+    from packages.dialogue_engine.coverage import medication_reply_record, nutrition_reply_record
     from packages.dialogue_engine.discourse import listening_question_pending
 
     # A volunteered intake answer can satisfy coverage before the meal question
@@ -376,6 +376,10 @@ def _apply_coverage_reply(state: EngineState, context: TurnContext) -> ResponseP
     if food is not None:
         state.coverage_records["nutrition"] = food
         state.observations["coverage_nutrition"] = food.source_text
+    medication = medication_reply_record(turn)
+    if medication is not None:
+        state.coverage_records["medication"] = medication
+        state.observations["coverage_medication"] = medication.source_text
     if not domain:
         return None
     if turn.issue_mentions or turn.control not in ("", "none") or turn.correction:
@@ -426,6 +430,13 @@ def _apply_coverage_reply(state: EngineState, context: TurnContext) -> ResponseP
             state.pending_coverage_domain = None
         return None
     state.observations[f"coverage_{domain}"] = quote or turn.raw_text.strip()
+    from packages.dialogue_engine.context import SlotValue
+
+    if domain != "nutrition" or food is None:
+        state.coverage_records[domain] = SlotValue(
+            value=quote or turn.raw_text.strip(), source_text=quote or turn.raw_text.strip(),
+            source_turn_id=turn.utterance_id, confirmed=True,
+        )
     state.last_answered_domain = domain
     state.pending_coverage_domain = None
     return None
@@ -753,6 +764,20 @@ _MEDICATION_RE = None
 
 
 def _correction_plan(state: EngineState, turn: RichUserTurn) -> ResponsePlan:
+    if any(
+        fact.field in ("sleep", "mood")
+        and (record := state.slot_records.get(fact.field)) is not None
+        and record.source_turn_id == turn.utterance_id
+        for fact in turn.goal_facts
+    ):
+        topic = _topic_plan(state)
+        if topic is not None:
+            return topic
+        return ResponsePlan(
+            obligation=ConversationObligation.HANDLE_CORRECTION,
+            action="speak", acknowledge=questions.shared_information_ack(),
+            intent="episode_correction_ack", marks_question=False,
+        )
     ep = get_active_episode(state)
     if ep is None and turn.issue_mentions:
         from packages.dialogue_engine.issue_memory import _find_episode_for_mention
@@ -1784,7 +1809,7 @@ def _schedule_next_action_legacy(state: EngineState, turn_context: TurnContext) 
                 # Forbidden: declined, rejoin the ladder below.
 
     # Adaptive coverage (not a questionnaire): when nothing acute is open
-    # but the minimum (3 exchanges / 3 domains) is unmet, ask ONE next
+    # but the evidenced domain target is unmet, ask ONE next
     # uncovered baseline domain — volunteered topics are never re-asked,
     # declined ones are never repeated. Tired clients skip straight to ITS.
     # ADR-014 exception, flagged: IMVERA_COVERAGE_LADDER=1 (default frozen).

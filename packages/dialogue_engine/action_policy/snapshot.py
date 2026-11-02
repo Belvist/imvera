@@ -31,6 +31,7 @@ class EpisodeSnapshot:
     status: str
     known_attributes: tuple[tuple[str, str], ...] = ()
     speaker_owned: bool = True
+    unanswered_attributes: tuple[tuple[str, str], ...] = ()
 
     @property
     def known(self) -> dict[str, str]:
@@ -39,6 +40,17 @@ class EpisodeSnapshot:
     def need_known(self, need: QuestionNeed | str) -> bool:
         attrs = need.attributes if isinstance(need, QuestionNeed) else (need,)
         return all(_need_group_known(self.known, attr) for attr in attrs)
+
+    def need_disposed(self, need: QuestionNeed | str) -> bool:
+        """A declined/unknown answer is not knowledge, but cannot be re-asked."""
+        attrs = need.attributes if isinstance(need, QuestionNeed) else (need,)
+        unanswered = dict(self.unanswered_attributes)
+        return any(
+            _need_group_known(unanswered, attr)
+            or (attr in ("onset", "duration", "temporal")
+                and self.known.get("_temporal_skipped") == "1")
+            for attr in attrs
+        )
 
     @property
     def temporal_known(self) -> bool:
@@ -84,7 +96,8 @@ class EpisodeSnapshot:
         """Unresolved askable needs exist (optional or obligatory)."""
         if not self.interrogation_eligible:
             return False
-        return any(not self.need_known(need) for need in ASKABLE_NEEDS)
+        return any(not self.need_known(need) and not self.need_disposed(need)
+                   for need in ASKABLE_NEEDS)
 
     @property
     def needs_attention(self) -> bool:
@@ -253,6 +266,9 @@ class PolicySnapshot:
                     status=item.get("status", "open"),
                     known_attributes=tuple(sorted((str(k), str(v)) for k, v in known.items())),
                     speaker_owned=bool(item.get("speaker_owned", True)),
+                    unanswered_attributes=tuple(sorted(
+                        (str(k), str(v)) for k, v in item.get("unanswered_attributes", {}).items()
+                    )),
                 )
             )
         bg = raw.get("background_goal_status", {})
@@ -534,6 +550,9 @@ def build_policy_snapshot(
                 sorted((str(k), str(v)) for k, v in ep.known_attributes.items())
             ),
             speaker_owned=_speaker_owned_episode(state, ep.episode_id),
+            unanswered_attributes=tuple(sorted(
+                (str(k), str(v)) for k, v in ep.unanswered_attributes.items()
+            )),
         )
         for ep in sorted(state.issue_episodes.values(), key=lambda item: item.episode_id)
     )

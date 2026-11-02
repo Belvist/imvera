@@ -1,0 +1,566 @@
+{
+  "head": "361972eb0f12b1402bed619c5b43eb7b664efa19",
+  "source_hashes": {
+    "packages/safety/patterns.py": "ce32696db97f29f517f1040c935be0bd75008c8f60ef028c78a77381a48ddbcd",
+    "packages/safety/rules.py": "9402be17abf18b5e7f0a66f381bfdb55e38cff7a1d1acaa4d24973d603aaee84",
+    "packages/dialogue_engine/check_path.py": "c9bf9e01902321f8ca126a998b61dd8927ab68099d7bf7df649d40c897757bcd",
+    "services/tts/worker.py": "0eb98987970dca5bd8fdd41a2d3b5dd8276ea2f998620e4c7f71b27b06b08b97"
+  },
+  "scope": "synthetic SDK text, simulated completed playback; no STT/TTS/SIP",
+  "flags": {
+    "IMVERA_DIALOGUE_ENGINE": "1",
+    "IMVERA_ACTION_POLICY_MODE": "off",
+    "IMVERA_COVERAGE_LADDER": "1",
+    "IMVERA_LLM_INTERPRET": "0",
+    "IMVERA_MISSION_LLM_INTERPRET": "0",
+    "IMVERA_SPEECH_DAY": "102",
+    "IMVERA_SPEECH_HOUR": "14"
+  },
+  "transcripts": {
+    "breathing": [
+      {
+        "user": "Мне сейчас трудно дышать.",
+        "signals": [
+          "breathing"
+        ],
+        "speech": [
+          {
+            "intent": "urgent_close",
+            "text": "Понимаю, это важно. Я передам информацию близким. Спасибо за разговор. До свидания.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "urgent",
+        "closed": true,
+        "personal_ring_size": 0
+      }
+    ],
+    "foreign_breathing": [
+      {
+        "user": "Дочери сейчас трудно дышать.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_invite",
+            "text": "Расскажите, я слушаю.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 1
+      }
+    ],
+    "past_breathing": [
+      {
+        "user": "Вчера было трудно дышать.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_invite",
+            "text": "Расскажите, я слушаю.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 1
+      }
+    ],
+    "denied_breathing": [
+      {
+        "user": "Мне сейчас не тяжело дышать.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_invite",
+            "text": "Расскажите, я слушаю.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 1
+      }
+    ],
+    "volunteered_food_meds": [
+      {
+        "user": "Мне хорошо. Сегодня поела, таблетки уже приняла.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "background_mood",
+            "text": "Хорошо, что поели. А какое у вас сегодня настроение?",
+            "marks_question": true
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 0
+      }
+    ],
+    "eight_story_turns": [
+      {
+        "user": "Хорошо.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "background_nutrition",
+            "text": "Рада это слышать. Как сегодня с едой — нормально поели?",
+            "marks_question": true
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 0
+      },
+      {
+        "user": "Поела.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "background_medication",
+            "text": "Хорошо, что поели. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+            "marks_question": true
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 0
+      },
+      {
+        "user": "Нет.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "background_mood",
+            "text": "Хорошо, что сказали про лекарства. А какое у вас сегодня настроение?",
+            "marks_question": true
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 0
+      },
+      {
+        "user": "Нормальное.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "background_sleep",
+            "text": "Спасибо, что сказали про настроение. А ночью как спали — выспались?",
+            "marks_question": true
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 0
+      },
+      {
+        "user": "Выспалась.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "important_to_share",
+            "text": "Спасибо, что сказали, как спалось. Что-то ещё хотите сказать?",
+            "marks_question": true
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 0
+      },
+      {
+        "user": "Вчера дочь приехала, мы смотрели фотографии.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_invite",
+            "text": "Про дочь поняла. Расскажите, я слушаю.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 1
+      },
+      {
+        "user": "Долго сидели и вспоминали дачу.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_listening_ack",
+            "text": "Поняла про дачу.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 2
+      },
+      {
+        "user": "А потом пили чай и смеялись.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_listening_ack",
+            "text": "Я вас слушаю.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 3
+      },
+      {
+        "user": "Она рассказала про поездку к морю.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_listening_ack",
+            "text": "Спасибо, что рассказали про поездку.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 4
+      },
+      {
+        "user": "Обсуждали фотографии с нашей прошлой поездки.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_listening_ack",
+            "text": "Я вас слушаю.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 5
+      },
+      {
+        "user": "Вспоминали, как гуляли по набережной вместе.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_listening_ack",
+            "text": "Про набережную услышала.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 6
+      },
+      {
+        "user": "Потом вспоминали нашу дачу и летние вечера.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_listening_ack",
+            "text": "Про дачу поняла.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 6
+      },
+      {
+        "user": "Рассматривали старые фотографии из поездки.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "thread_listening_ack",
+            "text": "Я вас слушаю.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 6
+      },
+      {
+        "user": "Нет, ничего.",
+        "signals": [],
+        "speech": [
+          {
+            "intent": "summary",
+            "text": "Спасибо, Тест. На сегодня всё. Берегите себя.",
+            "marks_question": false
+          }
+        ],
+        "check_path": "standard",
+        "closed": false,
+        "personal_ring_size": 6
+      }
+    ]
+  },
+  "understanding_illustration": {
+    "text": "Да нормально я. Вчера дочь заходила. А сегодня голова болит, но терпимо, таблетки уже выпила.",
+    "actual_rich_turn": {
+      "utterance_id": "illustration",
+      "raw_text": "Да нормально я. Вчера дочь заходила. А сегодня голова болит, но терпимо, таблетки уже выпила.",
+      "dialogue_act": "answer",
+      "control": "none",
+      "consent_answer": "not_applicable",
+      "answers_pending_question": true,
+      "needs_clarification": false,
+      "user_question": null,
+      "goal_facts": [
+        {
+          "field": "wellness",
+          "value": "positive",
+          "subject": "speaker",
+          "temporal_scope": "now",
+          "negated": false,
+          "evidence": {
+            "start": 0,
+            "end": 14,
+            "quote": "Да нормально я"
+          },
+          "replaces_observation_id": null
+        }
+      ],
+      "goal_answers": [],
+      "goal_dispositions": [],
+      "issue_mentions": [
+        {
+          "mention_id": "im-3f1f45f7",
+          "kind": "symptom",
+          "label": "головная боль",
+          "role": "primary",
+          "body_site": "голова",
+          "temporal_scope": "now",
+          "status": "active",
+          "onset": "сегодня",
+          "severity": "терпимо",
+          "evidence": {
+            "start": 54,
+            "end": 59,
+            "quote": "болит"
+          },
+          "subject": "speaker",
+          "canonical_key": "головной боль"
+        }
+      ],
+      "risk_candidates": [],
+      "episode_attributes": [],
+      "correction": false,
+      "not_recalled": false,
+      "semantic_spans": [
+        {
+          "span_id": "sp-2a94f9f7",
+          "type": "STATUS",
+          "text": "нормально",
+          "start": 3,
+          "end": 12,
+          "normalized": "нормально",
+          "confidence": 0.86
+        },
+        {
+          "span_id": "sp-7cd19ee2",
+          "type": "TIME",
+          "text": "Вчера",
+          "start": 16,
+          "end": 21,
+          "normalized": "вчера",
+          "confidence": 0.88
+        },
+        {
+          "span_id": "sp-f310bdb5",
+          "type": "TIME",
+          "text": "сегодня",
+          "start": 39,
+          "end": 46,
+          "normalized": "сегодня",
+          "confidence": 0.88
+        },
+        {
+          "span_id": "sp-87f40535",
+          "type": "BODY_SITE",
+          "text": "голова",
+          "start": 47,
+          "end": 53,
+          "normalized": "голова",
+          "confidence": 0.9
+        },
+        {
+          "span_id": "sp-0b9b7660",
+          "type": "ISSUE",
+          "text": "болит",
+          "start": 54,
+          "end": 59,
+          "normalized": "болеть",
+          "confidence": 0.92
+        },
+        {
+          "span_id": "sp-a00cb360",
+          "type": "SEVERITY",
+          "text": "терпимо",
+          "start": 64,
+          "end": 71,
+          "normalized": "терпимо",
+          "confidence": 0.85
+        }
+      ],
+      "semantic_relations": [
+        {
+          "type": "ONSET_OF",
+          "source_span_id": "sp-f310bdb5",
+          "target_span_id": "sp-0b9b7660",
+          "confidence": 0.85
+        },
+        {
+          "type": "BODY_OF",
+          "source_span_id": "sp-87f40535",
+          "target_span_id": "sp-0b9b7660",
+          "confidence": 0.9
+        },
+        {
+          "type": "SEVERITY_OF",
+          "source_span_id": "sp-a00cb360",
+          "target_span_id": "sp-0b9b7660",
+          "confidence": 0.85
+        }
+      ],
+      "observations": [
+        {
+          "observation_id": "obs-3f1f45f7",
+          "episode_id": null,
+          "attribute": "issue",
+          "value": "голова болит",
+          "normalized_value": "болеть",
+          "body_site": "голова",
+          "issue_normalized": "болеть",
+          "goal_id": null,
+          "subject": "speaker",
+          "temporal": {
+            "current": null,
+            "onset": "сегодня",
+            "duration": null,
+            "recurrence": null,
+            "raw_evidence": "сегодня"
+          },
+          "confidence": 0.92,
+          "source_turn_id": "illustration",
+          "evidence": "болит",
+          "status": "confirmed"
+        },
+        {
+          "observation_id": "obs-3f3f8771",
+          "episode_id": null,
+          "attribute": "severity",
+          "value": "терпимо",
+          "normalized_value": "терпимо",
+          "body_site": "голова",
+          "issue_normalized": "болеть",
+          "goal_id": null,
+          "subject": "speaker",
+          "temporal": {
+            "current": null,
+            "onset": null,
+            "duration": null,
+            "recurrence": null,
+            "raw_evidence": ""
+          },
+          "confidence": 1.0,
+          "source_turn_id": "illustration",
+          "evidence": "терпимо",
+          "status": "confirmed"
+        },
+        {
+          "observation_id": "obs-fb266ab9",
+          "episode_id": null,
+          "attribute": "onset",
+          "value": "сегодня",
+          "normalized_value": "сегодня",
+          "body_site": "голова",
+          "issue_normalized": "болеть",
+          "goal_id": null,
+          "subject": "speaker",
+          "temporal": {
+            "current": null,
+            "onset": "сегодня",
+            "duration": null,
+            "recurrence": null,
+            "raw_evidence": "сегодня"
+          },
+          "confidence": 1.0,
+          "source_turn_id": "illustration",
+          "evidence": "сегодня",
+          "status": "confirmed"
+        }
+      ],
+      "kernel_confidence": 0.85,
+      "kernel_ambiguities": [],
+      "kernel_level": 1,
+      "kernel_route": "kernel_l1",
+      "kernel_elapsed_ms": 2.306239999597892,
+      "kernel_corrections": [],
+      "tiny_route": null
+    },
+    "accepted_state": {
+      "slots": {
+        "wellness": {
+          "value": "positive",
+          "confidence": 0.9,
+          "source_turn_id": "illustration",
+          "source_text": "Да нормально я",
+          "polarity": null,
+          "confirmed": false
+        }
+      },
+      "coverage": {},
+      "episodes": {
+        "ep-c2e888d8": {
+          "episode_id": "ep-c2e888d8",
+          "primary_label": "головная боль",
+          "kind": "symptom",
+          "body_site": "голова",
+          "subject": "speaker",
+          "canonical_key": "головной боль",
+          "mentions": [
+            {
+              "mention_id": "im-3f1f45f7",
+              "kind": "symptom",
+              "label": "головная боль",
+              "role": "primary",
+              "body_site": "голова",
+              "temporal_scope": "now",
+              "status": "active",
+              "onset": "сегодня",
+              "severity": "терпимо",
+              "evidence": {
+                "start": 54,
+                "end": 59,
+                "quote": "болит"
+              },
+              "subject": "speaker",
+              "canonical_key": "головной боль"
+            }
+          ],
+          "evidence_turn_ids": [
+            "illustration"
+          ],
+          "known_attributes": {
+            "onset": "сегодня",
+            "severity": "терпимо",
+            "current": "active"
+          },
+          "unanswered_attributes": {},
+          "status": "resolved"
+        }
+      },
+      "personal_ring": [],
+      "speech": [
+        {
+          "intent": "background_nutrition",
+          "text": "Жаль, что голова болит. Как сегодня с едой — нормально поели?"
+        }
+      ]
+    }
+  }
+}

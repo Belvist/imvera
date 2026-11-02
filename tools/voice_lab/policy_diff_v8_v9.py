@@ -2,7 +2,7 @@
 """Isolated all-core ActionPolicy differential gate (lab tooling only).
 
 Historical v8->v9 is replayed from immutable Git bytes. The default gate compares
-historical v9 with the current v10 candidate. Both run in independent subprocesses
+historical v9 with the current candidate. Both run in independent subprocesses
 with the same captured support tree and inputs; the live worktree is never swapped.
 This is a policy/state replay, not an audio or human-conversation acceptance test.
 """
@@ -442,10 +442,10 @@ def compare_runs(
 
 
 def run_full_comparison(
-    ladders: tuple[str, ...] = LADDER_FLAGS, *, comparison: str = "v9-v10"
+    ladders: tuple[str, ...] = LADDER_FLAGS, *, comparison: str = "v9-current"
 ) -> dict[str, Any]:
     """Capture support sources once and replay all ten core files in subprocesses."""
-    if comparison not in {"v8-v9", "v9-v10"}:
+    if comparison not in {"v8-v9", "v9-v10", "v9-current"}:
         raise ValueError(f"unknown comparison: {comparison}")
     hashes_before = snapshot_hashes()
     baseline_sha = V8_BASELINE_SHA if comparison == "v8-v9" else HISTORICAL_BASELINE_SHA
@@ -455,7 +455,7 @@ def run_full_comparison(
         if comparison == "v8-v9"
         else read_working_tree()
     )
-    if comparison == "v9-v10" and FROZEN_POLICY_SHA is not None:
+    if comparison != "v8-v9" and FROZEN_POLICY_SHA is not None:
         pinned = {rel: git_show_file(FROZEN_POLICY_SHA, rel) for rel in POLICY_RELS}
         if pinned != candidate:
             raise RuntimeError("active pinned core differs from working-tree candidate")
@@ -476,10 +476,10 @@ def run_full_comparison(
             if path.is_file() and str(path.relative_to(support)) not in POLICY_RELS
         }
         base_run = _run_isolated(
-            baseline, ladders, include_threads=comparison == "v9-v10", support_root=support
+            baseline, ladders, include_threads=comparison != "v8-v9", support_root=support
         )
         cand_run = _run_isolated(
-            candidate, ladders, include_threads=comparison == "v9-v10", support_root=support
+            candidate, ladders, include_threads=comparison != "v8-v9", support_root=support
         )
     entries, changed = compare_runs(base_run["rows"], cand_run["rows"], comparison=comparison)
     expected = [e for e in changed if e["reason_for_difference"].startswith("expected-")]
@@ -557,7 +557,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", default=None, help="report file path")
     parser.add_argument("--stdout-only", action="store_true", help="skip file write")
-    parser.add_argument("--comparison", choices=("v8-v9", "v9-v10"), default="v9-v10")
+    parser.add_argument(
+        "--comparison", choices=("v8-v9", "v9-v10", "v9-current"), default="v9-current",
+    )
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--ladders", default="0,1", help=argparse.SUPPRESS)
     parser.add_argument("--include-threads", action="store_true", help=argparse.SUPPRESS)

@@ -1,0 +1,2357 @@
+{
+  "head": "4d3ad19934e2212ab71982c466c9b3b6a92ffe82",
+  "dirty": true,
+  "source_hashes": {
+    "packages/dialogue_engine/reducer.py": "2dd3e44fe20a80c5f31bede81b0c00e5121255577183f6695208916fc02d408e",
+    "packages/dialogue_engine/discourse.py": "014c40bd61ca3a8c06de6255627689a94e984aa43b9c1d1e0b5b2a4479a67c99",
+    "packages/dialogue_engine/state.py": "0ee96c949d85ea21205b3cf458602294a271996a0184de091bb841687003b5f3"
+  },
+  "flags": {
+    "IMVERA_DIALOGUE_ENGINE": "1",
+    "IMVERA_ACTION_POLICY_MODE": "off",
+    "IMVERA_LLM_INTERPRET": "0",
+    "IMVERA_MISSION_LLM_INTERPRET": "0",
+    "IMVERA_SPEECH_DAY": "102",
+    "IMVERA_SPEECH_HOUR": "14"
+  },
+  "scope": "synthetic SDK text; simulated audible completion",
+  "cases": 5,
+  "repeats": 10,
+  "turns": 410,
+  "sdk_ms_p50": 2.204263500061643,
+  "sdk_ms_p95": 31.97362599985354,
+  "end_of_speech_to_PCM": "NOT_RUN",
+  "model_invocations": "NOT_MEASURED",
+  "added_model_stages": 0,
+  "transcripts": {
+    "whole_no_more": {
+      "coverage_ladder": 1,
+      "turns": [
+        {
+          "user": "Хорошо.",
+          "speech": [
+            {
+              "text": "Рада это слышать. Как сегодня с едой — нормально поели?",
+              "intent": "background_nutrition",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {}
+        },
+        {
+          "user": "Поела.",
+          "speech": [
+            {
+              "text": "Хорошо, что поели. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+              "intent": "background_medication",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Нет.",
+          "speech": [
+            {
+              "text": "Хорошо, что сказали про лекарства. А какое у вас сегодня настроение?",
+              "intent": "background_mood",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Нормальное.",
+          "speech": [
+            {
+              "text": "Спасибо, что сказали про настроение. А ночью как спали — выспались?",
+              "intent": "background_sleep",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "настроение",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Выспалась.",
+          "speech": [
+            {
+              "text": "Спасибо, что сказали, как спалось. Что-то ещё важное есть?",
+              "intent": "important_to_share",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "сон",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Вчера дочь приехала, мы смотрели фотографии.",
+          "speech": [
+            {
+              "text": "Про дочь поняла. Расскажите, я слушаю.",
+              "intent": "thread_invite",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": true,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Долго сидели и вспоминали дачу.",
+          "speech": [
+            {
+              "text": "Поняла про дачу.",
+              "intent": "thread_listening_ack",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": true,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Нет, ничего.",
+          "speech": [
+            {
+              "text": "Спасибо, Тамара Юрьевна. На сегодня всё. Берегите себя.",
+              "intent": "summary",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "SUMMARY",
+          "important_invitation_resolved": true,
+          "summary_delivered": true,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "До свидания.",
+          "speech": [
+            {
+              "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+              "intent": "goodbye_final",
+              "marks_question": false
+            }
+          ],
+          "closed": true,
+          "fsm": "FINAL_CLASSIFICATION",
+          "important_invitation_resolved": true,
+          "summary_delivered": true,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        }
+      ]
+    },
+    "whole_soft_no": {
+      "coverage_ladder": 1,
+      "turns": [
+        {
+          "user": "Хорошо.",
+          "speech": [
+            {
+              "text": "Рада это слышать. А покушать сегодня уже успели?",
+              "intent": "background_nutrition",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {}
+        },
+        {
+          "user": "Поела.",
+          "speech": [
+            {
+              "text": "Хорошо, что поели. Есть ли у вас лекарства, которые вы обычно принимаете?",
+              "intent": "background_medication",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Нет.",
+          "speech": [
+            {
+              "text": "Хорошо, что сказали про лекарства. А какое у вас сегодня настроение?",
+              "intent": "background_mood",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Нормальное.",
+          "speech": [
+            {
+              "text": "Спасибо, что сказали про настроение. А спалось сегодня нормально?",
+              "intent": "background_sleep",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "настроение",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Выспалась.",
+          "speech": [
+            {
+              "text": "Спасибо, что сказали, как спалось. Ещё что-то беспокоит?",
+              "intent": "important_to_share",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "сон",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Вчера дочь приехала, мы смотрели фотографии.",
+          "speech": [
+            {
+              "text": "Про дочь поняла. Расскажите, я слушаю.",
+              "intent": "thread_invite",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": true,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Долго сидели и вспоминали дачу.",
+          "speech": [
+            {
+              "text": "Поняла про дачу.",
+              "intent": "thread_listening_ack",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": true,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Вроде бы нет.",
+          "speech": [
+            {
+              "text": "Спасибо, Тамара Юрьевна. На сегодня всё. Берегите себя.",
+              "intent": "summary",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "SUMMARY",
+          "important_invitation_resolved": true,
+          "summary_delivered": true,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "До свидания.",
+          "speech": [
+            {
+              "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+              "intent": "goodbye_final",
+              "marks_question": false
+            }
+          ],
+          "closed": true,
+          "fsm": "FINAL_CLASSIFICATION",
+          "important_invitation_resolved": true,
+          "summary_delivered": true,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        }
+      ]
+    },
+    "whole_nothing_else": {
+      "coverage_ladder": 1,
+      "turns": [
+        {
+          "user": "Хорошо.",
+          "speech": [
+            {
+              "text": "Рада это слышать. А покушать сегодня уже успели?",
+              "intent": "background_nutrition",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {}
+        },
+        {
+          "user": "Поела.",
+          "speech": [
+            {
+              "text": "Хорошо, что поели. Есть ли у вас лекарства, которые вы обычно принимаете?",
+              "intent": "background_medication",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Нет.",
+          "speech": [
+            {
+              "text": "Хорошо, что сказали про лекарства. А какое у вас сегодня настроение?",
+              "intent": "background_mood",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Нормальное.",
+          "speech": [
+            {
+              "text": "Спасибо, что сказали про настроение. А спалось сегодня нормально?",
+              "intent": "background_sleep",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "настроение",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Выспалась.",
+          "speech": [
+            {
+              "text": "Спасибо, что сказали, как спалось. Подскажите, есть ли ещё что-то важное по здоровью или дома?",
+              "intent": "important_to_share",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "сон",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Вчера дочь приехала, мы смотрели фотографии.",
+          "speech": [
+            {
+              "text": "Про дочь поняла. Расскажите, я слушаю.",
+              "intent": "thread_invite",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": true,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Долго сидели и вспоминали дачу.",
+          "speech": [
+            {
+              "text": "Поняла про дачу.",
+              "intent": "thread_listening_ack",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": true,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Больше ничего.",
+          "speech": [
+            {
+              "text": "Спасибо, Тамара Юрьевна. На сегодня всё. Берегите себя.",
+              "intent": "summary",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "SUMMARY",
+          "important_invitation_resolved": true,
+          "summary_delivered": true,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "До свидания.",
+          "speech": [
+            {
+              "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+              "intent": "goodbye_final",
+              "marks_question": false
+            }
+          ],
+          "closed": true,
+          "fsm": "FINAL_CLASSIFICATION",
+          "important_invitation_resolved": true,
+          "summary_delivered": true,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        }
+      ]
+    },
+    "mixed_continuation": {
+      "coverage_ladder": 1,
+      "turns": [
+        {
+          "user": "Хорошо.",
+          "speech": [
+            {
+              "text": "Рада это слышать. Как сегодня с едой — нормально поели?",
+              "intent": "background_nutrition",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {}
+        },
+        {
+          "user": "Поела.",
+          "speech": [
+            {
+              "text": "Хорошо, что поели. Скажите, а у вас есть лекарства, которые вы принимаете обычно?",
+              "intent": "background_medication",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Нет.",
+          "speech": [
+            {
+              "text": "Хорошо, что сказали про лекарства. А какое у вас сегодня настроение?",
+              "intent": "background_mood",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Нормальное.",
+          "speech": [
+            {
+              "text": "Спасибо, что сказали про настроение. А ночью как спали — выспались?",
+              "intent": "background_sleep",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "настроение",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Выспалась.",
+          "speech": [
+            {
+              "text": "Спасибо, что сказали, как спалось. Может, ещё что-то важное хотите рассказать — по здоровью или дома?",
+              "intent": "important_to_share",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "сон",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Вчера дочь приехала, мы смотрели фотографии.",
+          "speech": [
+            {
+              "text": "Про дочь поняла. Расскажите, я слушаю.",
+              "intent": "thread_invite",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": true,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Долго сидели и вспоминали дачу.",
+          "speech": [
+            {
+              "text": "Поняла про дачу.",
+              "intent": "thread_listening_ack",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": true,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "Вроде нет, а потом мы вспоминали нашу поездку к морю.",
+          "speech": [
+            {
+              "text": "Спасибо, что рассказали про поездку.",
+              "intent": "thread_listening_ack",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": true,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "На этом всё.",
+          "speech": [
+            {
+              "text": "Спасибо, Тамара Юрьевна. На сегодня всё. Берегите себя.",
+              "intent": "summary",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "SUMMARY",
+          "important_invitation_resolved": true,
+          "summary_delivered": true,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        },
+        {
+          "user": "До свидания.",
+          "speech": [
+            {
+              "text": "До свидания, Тамара Юрьевна. Всего вам хорошего.",
+              "intent": "goodbye_final",
+              "marks_question": false
+            }
+          ],
+          "closed": true,
+          "fsm": "FINAL_CLASSIFICATION",
+          "important_invitation_resolved": true,
+          "summary_delivered": true,
+          "thread": "рассказ",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-1",
+              "source_text": "Хорошо.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "mood": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": "positive",
+              "confirmed": false
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": false
+            }
+          },
+          "coverage_records": {
+            "nutrition": {
+              "value": "eaten",
+              "confidence": 0.9,
+              "source_turn_id": "u-2",
+              "source_text": "Поела.",
+              "polarity": "positive",
+              "confirmed": true
+            },
+            "medication": {
+              "value": "Нет.",
+              "confidence": 0.9,
+              "source_turn_id": "u-3",
+              "source_text": "Нет.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "mood": {
+              "value": "Нормальное.",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Нормальное.",
+              "polarity": null,
+              "confirmed": true
+            },
+            "sleep": {
+              "value": "Выспалась.",
+              "confidence": 0.9,
+              "source_turn_id": "u-5",
+              "source_text": "Выспалась.",
+              "polarity": null,
+              "confirmed": true
+            }
+          }
+        }
+      ]
+    },
+    "resume_required_wellness": {
+      "coverage_ladder": 1,
+      "turns": [
+        {
+          "user": "Внучка приезжала, хорошо посидели.",
+          "speech": [
+            {
+              "text": "Про внучку поняла. Расскажите, я слушаю.",
+              "intent": "thread_invite",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {},
+          "coverage_records": {}
+        },
+        {
+          "user": "Вспоминали нашу поездку к морю.",
+          "speech": [
+            {
+              "text": "Поняла про поездку.",
+              "intent": "thread_listening_ack",
+              "marks_question": false
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {},
+          "coverage_records": {}
+        },
+        {
+          "user": "Нет, ничего.",
+          "speech": [
+            {
+              "text": "Спасибо, что поделились. Всё хорошо у вас сегодня?",
+              "intent": "check_wellness",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "рассказ",
+          "records": {},
+          "coverage_records": {}
+        },
+        {
+          "user": "Самочувствие хорошее.",
+          "speech": [
+            {
+              "text": "Рада это слышать. Как сегодня с едой — нормально поели?",
+              "intent": "background_nutrition",
+              "marks_question": true
+            }
+          ],
+          "closed": false,
+          "fsm": "DAILY_CHECK",
+          "important_invitation_resolved": false,
+          "summary_delivered": false,
+          "thread": "самочувствие",
+          "records": {
+            "wellness": {
+              "value": "positive",
+              "confidence": 0.9,
+              "source_turn_id": "u-4",
+              "source_text": "Самочувствие хорошее.",
+              "polarity": "positive",
+              "confirmed": false
+            }
+          },
+          "coverage_records": {}
+        }
+      ]
+    }
+  }
+}

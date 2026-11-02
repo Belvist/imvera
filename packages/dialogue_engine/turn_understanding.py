@@ -767,6 +767,16 @@ def _build_rich_turn_from_text(
                 ):
                     continue
                 value = cand.value or raw
+                if (slot_name == "sleep" and (owned := harvested.get(slot_name)) is not None
+                        and owned.temporal_scope not in ("now", "today")):
+                    # Context cannot redress explicitly historical sleep as
+                    # today's answer merely because a check-in is pending.
+                    continue
+                if len(value) > 500:
+                    # Canonical clause harvesting already owns bounded facts.
+                    # A whole-turn contextual proposal cannot replace them or
+                    # exceed the typed value limit for a long spoken narrative.
+                    continue
                 harvested[slot_name] = FactCandidate(
                     field=slot_name,
                     value=value,
@@ -801,6 +811,8 @@ def _build_rich_turn_from_text(
             turn = turn.model_copy(update={"goal_facts": tuple(harvested.values())})
         return turn
     value = sem.value or text.strip()
+    if len(value) > 500:
+        return turn.model_copy(update={"goal_facts": tuple(harvested.values())})
     fact = FactCandidate(
         field=sem.target_slot,
         value=value,

@@ -2,6 +2,8 @@
 
 import re
 
+from packages.safety.patterns import BREATHING_DIFFICULTY
+
 RED_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("fall", re.compile(r"\b(упал[аио]?|упала|упали|падени[ея])\b", re.I)),
     ("cannot_stand", re.compile(r"\b(не\s+могу\s+(встать|подняться))\b", re.I)),
@@ -36,7 +38,7 @@ RED_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     )),
     ("breathing", re.compile(
         r"\b(задыха\w*|не\s+могу\s+дышать|не\s+хватает\s+воздуха|"
-        r"нехватка\s+воздуха|удуш\w*)\b",
+        r"нехватка\s+воздуха|удуш\w*|" + BREATHING_DIFFICULTY + r")\b",
         re.I,
     )),
 ]

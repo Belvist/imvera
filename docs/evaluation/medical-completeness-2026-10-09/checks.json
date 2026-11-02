@@ -1,0 +1,85 @@
+{
+  "baseline_sha": "866b072a9b0ecad80919cea9ebc29497c7be0d12",
+  "after_uncommitted": true,
+  "source_hashes": {
+    "packages/dialogue_engine/coverage.py": "626088d4354c50b500b0aa6da89302255fbd1c8e640cf721e16917981e424d03",
+    "packages/dialogue_engine/conversation_policy.py": "05ff066dc156327d78ee126afc2db3d8ce962bea5767e5439453a97829190c78",
+    "packages/dialogue_engine/deterministic_mission.py": "9b1da58de783df6881f7ef557e792302024b811eaf2b8850167337be4786a12e",
+    "packages/dialogue_engine/topic_tracker.py": "8848553f06c9888654e3954f53749dbacdf3228b62cfbeee082ba379bed4084c",
+    "packages/dialogue_engine/reducer.py": "2dd3e44fe20a80c5f31bede81b0c00e5121255577183f6695208916fc02d408e"
+  },
+  "cases": 9,
+  "turns_per_side": 25,
+  "scope": "synthetic SDK; simulated audible completion",
+  "checks": {
+    "three-food-needs-mood": true,
+    "three-sleep-needs-food": true,
+    "all-five-no-repeat-sleep": true,
+    "separate-five-invitation": true,
+    "unavailable-food-not-known": true,
+    "refused-food-not-known": true,
+    "story-resumes-missing-medical-topic": true,
+    "urgent-owner": true,
+    "stop-owner": true
+  },
+  "sdk_latency_not_comparable": "Single replay on shared CI CPU; not an end-of-speech/audio benchmark.",
+  "sleep_scope_refinement": {
+    "red": {
+      "failed": 2,
+      "passed": 3
+    },
+    "medical_plus_topic_green": {
+      "passed": 31,
+      "seconds": 0.49
+    }
+  },
+  "final_gates": {
+    "full": {
+      "passed": 3558,
+      "failed": 0,
+      "skipped": 9,
+      "seconds": 166.9
+    },
+    "rich": {
+      "passed": 974,
+      "seconds": 13.27
+    },
+    "runtime": {
+      "passed": 338,
+      "seconds": 21.92
+    },
+    "kernel": {
+      "passed": 294,
+      "seconds": 1.69
+    },
+    "topic": {
+      "passed": 68,
+      "seconds": 0.78
+    },
+    "corpus": {
+      "passed": 500,
+      "total": 500,
+      "seconds": 6.28,
+      "regression_tests_passed": 8,
+      "regression_tests_seconds": 29.12
+    },
+    "policy_diff": {
+      "changed": 12,
+      "expected": 12,
+      "unexplained": 0
+    },
+    "lint": "PASS",
+    "contracts": "PASS",
+    "whitespace": "PASS"
+  },
+  "published_source_sha": "fdac1a305d18f80ab5d4047dcf130d4b9c6cc860",
+  "source_ci": {
+    "run_id": 37866259826,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37866259826",
+    "jobs_success": 11,
+    "full_passed": 3564,
+    "full_failed": 0,
+    "full_skipped": 3,
+    "full_seconds": 238.84
+  }
+}

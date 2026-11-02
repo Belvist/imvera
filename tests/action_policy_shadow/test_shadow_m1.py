@@ -784,7 +784,7 @@ def test_runtime_truth_exposes_shadow_fields(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("IMVERA_ACTION_POLICY_MODE", "shadow")
     truth = runtime_truth()
     assert truth["action_policy.mode"] == "shadow"
-    assert truth["action_policy.policy_version"] == "action-policy-phase1-v10"
+    assert truth["action_policy.policy_version"] == "action-policy-phase1-v11"
     assert truth["action_policy.frozen_policy_sha"] == FROZEN_POLICY_SHA
     assert truth["action_policy.decision_scope"] == "conversation_scheduler"
 

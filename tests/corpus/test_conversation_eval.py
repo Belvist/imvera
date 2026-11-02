@@ -34,6 +34,7 @@ class Conversation:
 CLOSE = (Turn("Нет, ничего.", "summary"), Turn("Нет, ничего.", "goodbye_final"))
 ROUTINE = (
     Turn("Поела.", "background_medication"),
+    # Full care screening includes mood and sleep as well as food/medication.
     Turn("Нет.", "background_mood"),
     Turn("Нормальное.", "background_sleep"),
     Turn("Выспалась.", "important_to_share"),
@@ -149,9 +150,11 @@ def test_positive_correction_does_not_answer_mood(runner: ConversationRunner) ->
     assert runner.state.slot_corrections[-1] == {
         "slot": "wellness", "old": "Плохо.", "new": "positive", "source_turn": "u-3",
     }
+    # The full check-in asks the still-unknown mood directly.
     runner.run(["Поела."])
     result = runner.run(["Нет."])
     assert [effect.intent for effect in result.speak_effects] == ["background_mood"]
+    assert runner.state.slots["mood"].value == "OPEN"
     runner.run(["Плохое."])
     mood = runner.state.slot_records["mood"]
     assert runner.state.slots["mood"].value == "FILLED"

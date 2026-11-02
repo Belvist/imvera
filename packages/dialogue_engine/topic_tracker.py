@@ -72,10 +72,15 @@ _SLEEP_QUALITY_MARKERS = (
 _SLEEP_PATTERN_MARKERS = (
     "проснул",
     "проснула",
+    "просыпал",
     "не мог заснуть",
     "не могла заснуть",
     "не засып",
     "часов",
+)
+_SLEEP_NEGATIVE_QUALITY = re.compile(
+    r"\bспал(?:а|и)?\b\s+(?:(?:очень|совсем)\s+)?"
+    r"(?:плох\w*|мало|не\s+(?:очень\s+)?(?:хорош\w*|нормальн\w*))"
 )
 _ABDOMINAL_MARKERS = ("живот", "тошн", "рвот")
 _HEADACHE_MARKERS = ("голов", "головн")
@@ -151,7 +156,12 @@ def _clause_has_sleep(n: str) -> bool:
         return True
     if any(m in n for m in _SLEEP_PATTERN_MARKERS):
         return True
-    return "спал" in n and any(x in n for x in ("плох", "не ", "мало", "час"))
+    # An unrelated negation (e.g. medication refusal) must not turn
+    # «выспалась» into a sleep complaint. Require the sleep verb itself
+    # and a locally attached negative quality/duration.
+    return bool(_SLEEP_NEGATIVE_QUALITY.search(n) or re.search(
+        r"\bспал(?:а|и)?\b\s+\d+\s+час\w*", n,
+    ))
 
 
 def _clause_has_abdominal(n: str) -> bool:
@@ -222,9 +232,7 @@ def infer_dimensions(
     found: list[str] = []
 
     if family == TopicFamily.SLEEP:
-        if any(x in n for x in _SLEEP_QUALITY_MARKERS) or (
-            "спал" in n and "плох" in n
-        ):
+        if any(x in n for x in _SLEEP_QUALITY_MARKERS) or _SLEEP_NEGATIVE_QUALITY.search(n):
             found.append("quality")
         if _WAKE_MARKERS.search(n) or any(x in n for x in _SLEEP_PATTERN_MARKERS):
             found.append("pattern")
@@ -455,25 +463,30 @@ def _ingest_sleep_hints_only(
     if not turn_text:
         return TopicIngestResult()
     detected: list[str] = []
-    n = _norm(turn_text)
-    if _clause_has_sleep(n):
-        detected.append(TopicFamily.SLEEP)
-        _append_topic_evidence(state, TopicFamily.SLEEP, turn_text, turn_text)
-        dims = infer_dimensions(TopicFamily.SLEEP, turn_text, turn_context=turn_text)
-        _mark_dimensions(state, TopicFamily.SLEEP, dims)
-    if fallback == TopicFamily.SLEEP and TopicFamily.SLEEP not in detected:
-        detected.insert(0, TopicFamily.SLEEP)
-    if state.active_topic and turn_text:
-        fam = state.active_topic
+    for clause in _owned_topic_clauses(turn_text):
+        families = detect_families_in_clause(clause)
+        # A time anchor belonging to another complaint is not a sleep pattern.
+        if any(family != TopicFamily.SLEEP for family in families):
+            continue
+        fam = TopicFamily.SLEEP if TopicFamily.SLEEP in families else state.active_topic
+        if not fam:
+            continue
         if fam not in detected:
             detected.append(fam)
-        _append_topic_evidence(state, fam, turn_text, turn_text)
-        dims = infer_dimensions(fam, turn_text, turn_context=turn_text)
-        _mark_dimensions(state, fam, dims)
-        _update_resolution(state, fam, turn_text)
+        _append_topic_evidence(state, fam, clause, turn_text)
+        _mark_dimensions(state, fam, infer_dimensions(fam, clause, turn_context=clause))
+        _update_resolution(state, fam, clause)
+    if detected and fallback == TopicFamily.SLEEP and TopicFamily.SLEEP not in detected:
+        detected.insert(0, TopicFamily.SLEEP)
     if detected:
         _apply_focus_policy(state, _sort_by_priority(detected))
     return TopicIngestResult(families=_sort_by_priority(detected))
+
+
+def _owned_topic_clauses(text: str) -> tuple[str, ...]:
+    from packages.dialogue_engine.mission_grounding import current_speaker_clauses
+
+    return tuple(clause.text for clause in current_speaker_clauses(text))
 
 
 def sync_topic_hints_from_answer(state: EngineState, text: str, *, answer_slot: str | None) -> None:
@@ -482,23 +495,21 @@ def sync_topic_hints_from_answer(state: EngineState, text: str, *, answer_slot: 
         answer_slot and answer_slot.startswith("topic_")
     ):
         return
-    n = _norm(text)
     turn_text = text.strip()
-    if _clause_has_sleep(n) or state.active_topic == TopicFamily.SLEEP:
-        _append_topic_evidence(state, TopicFamily.SLEEP, turn_text, turn_text)
-        dims = infer_dimensions(TopicFamily.SLEEP, turn_text, turn_context=turn_text)
-        _mark_dimensions(state, TopicFamily.SLEEP, dims)
-    if re.search(r"\bживот\w*\b", n) and re.search(r"\b(бол|ноет)\w*", n):
-        _append_topic_evidence(state, TopicFamily.ABDOMINAL_PAIN, turn_text, turn_text)
-        dims = infer_dimensions(
-            TopicFamily.ABDOMINAL_PAIN, turn_text, turn_context=turn_text
-        )
-        _mark_dimensions(state, TopicFamily.ABDOMINAL_PAIN, dims)
-        if (
-            state.active_topic != TopicFamily.ABDOMINAL_PAIN
-            and TopicFamily.ABDOMINAL_PAIN not in state.pending_topics
-        ):
-            state.pending_topics.append(TopicFamily.ABDOMINAL_PAIN)
+    for clause in _owned_topic_clauses(turn_text):
+        families = detect_families_in_clause(clause)
+        if (not any(family != TopicFamily.SLEEP for family in families)
+                and (_clause_has_sleep(_norm(clause)) or state.active_topic == TopicFamily.SLEEP)):
+            _append_topic_evidence(state, TopicFamily.SLEEP, clause, turn_text)
+            dims = infer_dimensions(TopicFamily.SLEEP, clause, turn_context=clause)
+            _mark_dimensions(state, TopicFamily.SLEEP, dims)
+        if TopicFamily.ABDOMINAL_PAIN in families:
+            _append_topic_evidence(state, TopicFamily.ABDOMINAL_PAIN, clause, turn_text)
+            dims = infer_dimensions(TopicFamily.ABDOMINAL_PAIN, clause, turn_context=clause)
+            _mark_dimensions(state, TopicFamily.ABDOMINAL_PAIN, dims)
+            if (state.active_topic != TopicFamily.ABDOMINAL_PAIN
+                    and TopicFamily.ABDOMINAL_PAIN not in state.pending_topics):
+                state.pending_topics.append(TopicFamily.ABDOMINAL_PAIN)
 
 
 def prime_topics(state: EngineState, text: str, *, fallback: str | None = None) -> str | None:

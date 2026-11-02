@@ -1,5 +1,89 @@
 # M5 dialogue reliability: запуск и приёмка
 
+## 2026-10-09 — grounded revisions and v11 source freeze
+
+[ADR-032](adr/032-grounded-revisions-and-dispositions.md) repairs the existing
+owners: accepted current sleep/mood revisions precede selection; late sleep
+details invalidate stale summaries; repeated pain predicates retain their sole
+anatomical owner and original offsets; unknown/local refusal discharges the
+clinical question without becoming medical knowledge. Functional-impact speech
+now asks about ordinary activity and accepts a literal current caller answer.
+Long speech retains bounded original fact fragments without truncating the whole
+turn; explicit remote sleep history cannot answer today's question.
+
+The existing ActionPolicy core is pinned as v11 on verified source4274a451;
+[CI37979468470](https://github.com/Belvist/imvera/actions/runs/37979468470):11/11 SUCCESS,
+3647 PASS/0 FAIL/3 SKIP. Historical v9/v10 proof stays immutable.
+This is **not global policy cutover**.
+Keep current production flags/admission until target comparison passes. Full
+medical mode still needs all five baseline topics (or honest unavailable-answer
+dispositions); no five-reply quota and no live generative renderer.
+
+Urgent speech no longer promises unconfirmed family delivery. Preserve RED_SIGNAL
+and verify its real Core acceptance and every test-recipient receipt. The Telegram
+demo suppresses misleading GREEN/sensitive exceptions and records individual
+acceptances in its locked atomic local ledger. Partial failures retry only missing
+recipients; dry-run/corrupt state cannot claim delivery. Mocked transport tests do
+not prove production Core delivery. Old call-only markers have no per-recipient
+proof, and a crash between API acceptance and local persistence can still duplicate
+a retry. No external message was sent by this development session.
+
+Before promotion repeat the source SDK cases on the exact loaded target through
+CallActor/FreeSWITCH, with original WAV/STT text, source offsets, heard question,
+cancelled/interrupted generations and first PCM. Review trace-log retention/free
+space: local proof files previously exhausted this workspace; old records were
+losslessly compressed, not deleted. This is not deployment of a retention service.
+
+---
+
+## 2026-10-09 — medical completeness correction
+
+Target m5. User clarified that full medical check-in retains all five baseline
+care topics: wellbeing, mood, sleep, medication and nutrition. The previous
+three-domain sufficiency integration instruction is superseded.
+`IMVERA_COVERAGE_LADDER=1` now yields to the open invitation when every topic
+has accepted evidence, or remaining unavailable topics have been handled by
+the existing bounded unknown/refusal logic. Unknown/refused is not known.
+Do not force five separate replies: one volunteered report can answer all
+five. A personal story may pause the check; the remaining topics resume when
+the person finishes. Urgency and explicit stop retain priority.
+
+Also corrected the existing sleep topic detector: unrelated medication
+negation plus positive «выспалась» no longer creates a poor-sleep probe.
+No new selector, model, flag, global policy promotion or deployed runtime
+change. Short mode/default remains unchanged. Verify actual M5 configuration
+before calling a short preset a full check-in.
+
+[Evidence, limitations and remaining defects](evaluation/medical-completeness-2026-10-09/README.md).
+[Product plan](plans/conversation-product-2026-10-08.md) keeps audio/Core/load
+and blind-listening acceptance gates. Competitor UX does not define medical
+coverage. Canonical speech/playback truth remains authoritative: a cancelled
+invitation is not a heard invitation, and a local result is not a Core receipt.
+
+---
+
+## Technical audit / breathing and cache — 2026-10-08
+
+[Claim-by-claim report, actual SDK captures and checks](evaluation/technical-audit-2026-10-08/README.md).
+Baseline361972eb. The existing shared safety owner now admits current
+«трудно/тяжело дышать» (both word orders), with negation/history/third-person
+guards; direct SDK urgent close and descriptive CallSession safety confirmation
+are recorded separately. Original RED quote persists; this is not a family ack.
+Qwen PCM cache has16MiB/64-entry LRU bounds, backend/accepted-revision/effective
+voice identity and per-frame deadline/cancellation. Oversized audio still streams,
+but is not retained. Runtime/SDK owners, frozen policy manifest and generative
+authorization are unchanged. No bridge/FreeSWITCH/Postgres restart performed.
+
+After draining calls, load the exact tested m5 source with the existing deployment
+procedure. Record loaded bridge SHA/image/profile, resident model ID and immutable
+weights/voice hashes; restart the adapter if replacing an artifact under the same
+resident ID. Repeat current/denied/foreign/past breathing plus existing emergency,
+false-alarm, help-yes and stop/consent; compare source quote, RED_SIGNAL and risk
+observation with audible canonical text. Confirm real Core acceptance and a test
+recipient receipt separately. The tools/family_notify Telegram demo is a candidate
+snapshot reporter, not proof of the production Core path or every recipient.
+Keep admission1 and preview/barge-in defaults until actual audio/load acceptance.
+
 ## Implicit subject ownership — latest source cut
 
 See [actual SDK evidence and integration](evaluation/implicit-subject-2026-10-05/README.md)

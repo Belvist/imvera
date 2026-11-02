@@ -1,0 +1,54 @@
+{
+  "retrieved_date_utc": "2026-10-08",
+  "scope": "Official public documents only; no vendor calls or benchmark",
+  "sources": [
+    {
+      "name": "newo",
+      "url": "https://newo.ai/platform/newo-zero-hallucination-architecture",
+      "final_url": "https://newo.ai/platform/newo-zero-hallucination-architecture",
+      "status": 200,
+      "bytes": 76823,
+      "sha256": "e1fa8f125a36de54aa21e820bde2b4dce8425aef2f7081bfb0ba8bd1443df350"
+    },
+    {
+      "name": "fish",
+      "url": "https://docs.fish.audio/agents/overview.md",
+      "final_url": "https://docs.fish.audio/agents/overview.md",
+      "status": 200,
+      "bytes": 5477,
+      "sha256": "5b3094160a377b3a6c55b96794d7a1601a3c22e80933ada746d667809a32bb50"
+    },
+    {
+      "name": "retell",
+      "url": "https://docs.retellai.com/build/conversation-flow",
+      "final_url": "https://docs.retellai.com/build/conversation-flow/overview",
+      "status": 200,
+      "bytes": 500663,
+      "sha256": "6e5976bcc8191864f9f145f6df44e016200d60e5125c985fa4350f124f0f68d5"
+    },
+    {
+      "name": "vapi",
+      "url": "https://docs.vapi.ai/customization/speech-configuration",
+      "final_url": "https://docs.vapi.ai/customization/speech-configuration",
+      "status": 200,
+      "bytes": 308912,
+      "sha256": "eb17e1fc4b6286c1f001326daa4ea0814dfd69ce41917fd0ad2b760eb2e47205"
+    },
+    {
+      "name": "polyai",
+      "url": "https://poly.ai/technology/",
+      "final_url": "https://poly.ai/technology",
+      "status": 200,
+      "bytes": 197600,
+      "sha256": "42b4b19bafb9879d039b5541990ba6793e0001d617fcdcd7800086b8c10b5a0b"
+    },
+    {
+      "name": "elliq",
+      "url": "https://elliq.com/",
+      "final_url": "https://elliq.com/",
+      "status": 200,
+      "bytes": 317202,
+      "sha256": "bf1c8b82cbc22b0a54a3deb87c3b3cb5714ecd3c6c8a7f174cf6e42ab622cd8a"
+    }
+  ]
+}

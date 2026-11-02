@@ -1,0 +1,63 @@
+{
+  "baseline_commit": "ee92a719ab7ad046ebad33e4267cb8e1e2b07b32",
+  "target_branch": "feature/voice-zoiper-m5",
+  "runtime_source_hashes": {
+    "packages/dialogue_engine/coverage.py": "da87d2649fa8517f89bb8bdd729de0761154786b873642d49845dc86804c55cb",
+    "packages/dialogue_engine/conversation_policy.py": "c05f61e86161f9aa7998589275d564c6bfc6201a6b2411218c6fa7234dd949e8",
+    "packages/dialogue_engine/deterministic_mission.py": "9b1da58de783df6881f7ef557e792302024b811eaf2b8850167337be4786a12e",
+    "tests/test_grounded_coverage.py": "efe5dd02d88d6f9bf360cda2e79110318a2ee7b3209e13180df3962089bcb99c",
+    "Makefile": "540594547c52fb247b8cb0a9b6e453412b39b6907e5dc58182aa566a9b9f7fd1"
+  },
+  "new_tests": {
+    "baseline": "13 failed / 23 passed (same final test file; genuine pinned encoder)",
+    "after": "36 passed in 0.75s"
+  },
+  "commands": {
+    "rich": "make test-dialogue-rich PYTHON=/workspace/imvera-review-venv/bin/python",
+    "kernel": "make test-semantic-kernel PYTHON=/workspace/imvera-review-venv/bin/python",
+    "corpus": "make dialogue-corpus-gate PYTHON=/workspace/imvera-review-venv/bin/python",
+    "full": "make test PYTHON=/workspace/imvera-review-venv/bin/python",
+    "diff": "/workspace/imvera-review-venv/bin/python tools/voice_lab/policy_diff_v8_v9.py",
+    "lint": "make lint PYTHON=/workspace/imvera-review-venv/bin/python"
+  },
+  "results": {
+    "rich": "898 passed / 12.66s",
+    "kernel": "294 passed / 1.75s",
+    "corpus": "500/500 / 5.60s; 8 gate tests passed / 28.70s",
+    "policy_diff": "12 expected / 0 unexplained",
+    "lint": "PASS",
+    "whitespace": "PASS",
+    "full_before_encoder_checkout": "3461 passed / 2 readiness failures / 9 skipped / 154.99s",
+    "genuine_readiness": "2 passed / 9.08s",
+    "full_after_encoder_checkout": "3463 passed / 0 failed / 9 skipped / 168.57s",
+    "exact_commit_ci": {
+      "run_id": 37636824409,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37636824409",
+      "jobs": "11/11 SUCCESS",
+      "full": "3469 passed / 0 failed / 3 skipped / 235.69s",
+      "full_job_id": 112845312785,
+      "workers_job_id": 112845127492
+    }
+  },
+  "model_provenance": {
+    "encoder_oid": "560fb3342f1d837ef68383982d963c4a8853594427dbdaf7260f0935abba62c7",
+    "encoder_bytes": 596070136,
+    "lfs": "pinned SHA fetch and checkout; genuine * marker in git lfs ls-files; same baseline/after weights"
+  },
+  "performance_scope": "SDK process elapsed on shared cloud CPU; not phone latency, target capacity or total model counts",
+  "added_model_stages": 0,
+  "not_verified": [
+    "Target deployment/providers/flags",
+    "CallActor/FreeSWITCH audio acceptance",
+    "End of speech to first PCM",
+    "Listener warmth/convenience",
+    "Total model invocations",
+    "100 real concurrent calls"
+  ],
+  "remaining": [
+    "Check-slot minimum and ordered clinical plans retained",
+    "Broader count relaxation blocked by ITS/summary closing ownership",
+    "Habit-only medication may still be screened again"
+  ],
+  "tested_commit": "29b87a792c24b49d6d63046aa9bcf3b6990b5f03"
+}

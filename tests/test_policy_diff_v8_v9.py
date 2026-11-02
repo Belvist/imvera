@@ -323,14 +323,14 @@ def test_compare_runs_unit() -> None:
         pdiff.compare_runs(v8_rows, v9_rows[:1])
 
 
-def test_current_v10_gate_is_isolated_and_only_thread_deltas():
+def test_current_gate_is_isolated_and_retains_thread_deltas():
     before = pdiff.snapshot_hashes()
     proc = _run_child(["tools/voice_lab/policy_diff_v8_v9.py", "--stdout-only"])
     assert proc.returncode == 0, proc.stderr
     report = json.loads(proc.stdout)
-    assert report["comparison"] == "v9-v10"
+    assert report["comparison"] == "v9-current"
     assert report["baseline_policy_version"] == "action-policy-phase1-v9"
-    assert report["candidate_policy_version"] == "action-policy-phase1-v10"
+    assert report["candidate_policy_version"] == "action-policy-phase1-v11"
     assert report["candidate_sha"] == pdiff.FROZEN_POLICY_SHA
     assert report["working_tree_untouched"] and report["gate_pass"]
     assert report["unexplained_count"] == 0 and not report["failed_expectations"]

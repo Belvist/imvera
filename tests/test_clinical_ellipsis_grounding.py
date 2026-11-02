@@ -18,6 +18,8 @@ pytestmark = pytest.mark.dialogue_engine
     ("Голова болела вчера, сейчас сильная боль", "голова", "сильная"),
     ("Колено ноет с утра, сейчас сильная боль", "колено", "сильная"),
     ("Голова болит со вчера, но сейчас терпимо", "голова", "терпимо"),
+    ("Голова болит со вчера, сейчас ещё болит, терпимо", "голова", "терпимо"),
+    ("Колено ноет с утра, сейчас ещё ноет, сильно", "колено", "сильно"),
 ])
 def test_current_degree_continuation_keeps_one_symptom_and_original_onset(text, site, degree):
     result = interpret(text, utterance_id="u-clinical")

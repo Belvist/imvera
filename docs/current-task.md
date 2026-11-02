@@ -1,3 +1,289 @@
+# Grounded revisions and production blockers — 2026-10-09
+
+Target feature/voice-zoiper-m5; source parent c1b3f1a35d41b78fd0ee7109ddbbe6efc0df04de,
+clean/equal origin at task start and rechecked before publication. Source4274a451
+published; CI37979468470 all11 SUCCESS,3647 PASS/0 FAIL/3 SKIP/237.28s.
+Owner authorizes
+fixes/commit/push. No M5/Core credentials or configured VPN route; no deployment.
+
+CHANGED: existing owners now accept grounded caller sleep/mood revisions before
+selection, retain late details and invalidate obsolete summary; explicit sleep
+report is separate from another predicate's clock. Original symptom positions and
+sole-anatomical current pain continuation retained. Existing unknown/refusal writer
+and v11 legal set discharge unanswered needs without invented values.
+Functional-impact answers use actual delivered semantic need/episode, including
+literal yes/no but never backchannel/cancelled delivery. Long speech gets bounded
+original fact fragments without losing later complaints or running a useless
+truncated whole-narrative polarity vote. Urgent speech removes unconfirmed delivery
+promise. Existing Telegram demo has truthful status, sanitized exceptions and
+locked atomic per-recipient acceptance/retry; no external message sent.
+
+VERIFIED: final dialogue-code full3636 PASS/0 FAIL/9 SKIP/180.20s; final demo12/12,
+0.09s. Rich1038/15.33s, runtime338/22.46s, topic68, kernel294, shadow84;
+corpus500/500/6.20s +8 gate tests; historical policy diff12 expected/0 unexplained;
+Ruff/contracts/whitespace PASS. Paired actual public SDK15 scenarios/32 attempted
+turns per side/mode: baseline long-sleep ValidationError, final0 errors. All21
+source hashes match;38/38 invariant checks and legacy/shadow spoken parity. Real
+three-model warmup PASS; supported SDK cohort itself invoked none of the three
+counted semantic methods (outside-actor inference not counted). Isolated genuine
+long polarity probe3 discarded calls/392.95ms median before,0 calls/early abstain
+after. Linux SDK timing is not end-of-speech→PCM or M5 capacity. Exact published
+source CI observed PASS; subsequent metadata freezes the same ten core files
+without changing selector/fact/render/test/gate behavior. Actual target unchanged.
+
+NOT VERIFIED: target SHA/image/profile/providers/audio/STT/first PCM/interruption,
+Core/test-recipient receipts, human listening,100 full calls/load. No target access.
+REMAINING RISKS: deterministic free speech is bounded; global medical authority
+is not promoted. Old demo call markers lack recipient proof and crash after API
+acceptance/before local receipt can duplicate retry; demo is not distributed Core.
+Trace collection/retention/free-space monitoring needs target acceptance; old local
+records were losslessly compressed after filling the workspace. No zero-risk or
+production-ready claim.
+NEXT GATE: configured target runtime truth +
+original CallActor/FreeSWITCH WAV/trace and real Core/test-recipient acceptance.
+[Actual captures, commands and limitations](evaluation/grounded-revisions-2026-10-09/README.md).
+[ADR-032](adr/032-grounded-revisions-and-dispositions.md) and handoff describe
+existing-owner changes; full medical mode retains all five baseline care topics.
+
+---
+
+# Full medical check-in correction — 2026-10-09 UTC
+
+User clarified that natural dialogue must retain medical completeness.
+Baseline866b072a9b0ecad80919cea9ebc29497c7be0d12 on target m5. The previous
+three-domain sufficiency cut was an incorrect interpretation of that goal.
+
+CHANGED: existing coverage owner requires accepted evidence for all five
+baseline topics in full mode; no independent reply quota. Existing disposition,
+clinical/mission, story-resume, stop and urgent owners retained. Fixed positive
+sleep misclassified by an unrelated negation in the same turn. No new brain,
+flags, models or frozen ActionPolicy change; short mode unchanged.
+
+VERIFIED: new medical contract baseline7 FAIL/3 PASS; after coverage correction
+8 PASS/2 FAIL exposed the pre-existing sleep scope bug; after scope repair
+medical + topic tracker26 PASS. Additional scope tests2 FAIL/3 PASS exposed
+a regression in locally negated quality; refined detector/inference31 PASS.
+Exact sourcefdac1a305d18f80ab5d4047dcf130d4b9c6cc860 published to m5;
+[CI37866259826](https://github.com/Belvist/imvera/actions/runs/37866259826)
+all11 SUCCESS,3564 PASS/0 FAIL/3 SKIP/238.84s. Later evidence receipt changes
+no tested runtime/tests/gates. Final local full3558 PASS/0 FAIL/9 SKIP/166.90s; rich974/13.27s, runtime338/21.92s,
+kernel294/1.69s, topic68/0.78s; corpus500/500/6.28s +8 tests/29.12s; policy
+diff12 expected/0 unexplained; lint/contracts/whitespace PASS. Paired nine SDK
+cases/25 turns each; simulated delivery, final source hashes match captures.
+Exact-source120 fragment permutations PASS; this is order coverage, not audio
+or human-language acceptance. Sleep-correction counterexample reproduced
+again on exact source; still OPEN in the current evidence folder.
+
+NOT VERIFIED: deployed M5 flags/SHA, original audio/STT/TTS, real Core receipts,
+100 full calls or human listening. No target access configured here.
+REMAINING RISKS: legacy sleep correction/late detail and experimental policy
+unknown temporal disposition/functional-impact speech remain open. Global
+policy promotion remains blocked. These are actual defects, not merely access
+limitations. Next cut must reproduce and repair their existing owners.
+NEXT GATE: existing-owner grounded fact revision for sleep correction/late
+detail, then actual configured target call/audio trace and policy-disposition cut.
+[Current evidence](evaluation/medical-completeness-2026-10-09/README.md).
+
+---
+
+# Dialogue product plan + information sufficiency — 2026-10-08 UTC
+
+Target feature/voice-zoiper-m5, baseline2c7cc191. User requested an end-to-end
+completion plan, competitor research and continuing implementation.
+[Plan with owners and acceptance gates](plans/conversation-product-2026-10-08.md),
+[official-source comparison](research/voice-dialogue-competitors-2026-10-08.md).
+
+CHANGED: existing coverage completion no longer requires check-slot count in
+addition to evidenced domains. No new selector/model/regex/phrase bank/flag;
+short default and explicit mission/clinical/safety owners preserved. Existing
+invitation/cancelled-playback fixtures enter the actual earlier invitation;
+all original assertions retained. Counter migration's prior ITS/summary
+blockers were repaired in4d3ad19/f7b748ca before this cut.
+
+VERIFIED so far: identical13 new tests baseline5 FAIL/8 PASS; new plus existing
+coverage/listening/closing/status tests133 PASS, including controlled PCM
+CallActor completion/cancel. Existing paired SDK harness14 cases/260 turns
+per side, simulated delivery. Public URLs6/6 HTTP200; no competitor agent run.
+Final full3543 PASS/0 FAIL/9 SKIP/165.23s; rich964/13.37s, runtime338/21.37s,
+kernel294/1.65s, corpus500/500/5.46s +8 tests/29.61s; policy diff12 expected/
+0 unexplained; lint/contracts/whitespace PASS. Four original corpus scenarios
+now follow the earlier optional invitation; factual/clinical/control/closure
+assertions retained, correction keeps an explicit required mood need.
+[Actual captures and checks](evaluation/information-sufficiency-2026-10-08/README.md).
+Exact source **cdb3e7c35be138af7230e480b8a76a77ad4741e3** published to m5:
+[CI37856818078](https://github.com/Belvist/imvera/actions/runs/37856818078),
+all11 SUCCESS,3549 PASS/0 FAIL/3 SKIP/231.16s; real LFS fetch observed.
+This following audit/documentation receipt changes no tested runtime/test/gate
+bytes. No target deployment.
+
+Follow-up: same15 SDK scenarios under isolated legacy/shadow/policy on exact
+source cdb3e7c, short preset/ML off/simulated delivery. Legacy/shadow replies
+match; policy7 reply sequences/4 outcomes differ.
+[Actual projected evidence](evaluation/information-sufficiency-2026-10-08/authority-followup.json).
+OPEN blockers: policy temporal unknown disposition, legacy sleep correction/
+late detail, optional functional-impact speech. No global policy flag flip.
+
+NOT VERIFIED: actual target M5/runtime/audio/turn-taking, Core receipts and
+100 full calls; no configured target/Core access, questions remain pending.
+REMAINING RISKS: three-domain target remains in explicitly enabled full mode,
+ordinary selection remains mostly legacy, free language remains bounded.
+NEXT GATE: source red/green for the newly captured authority/correction
+blockers before broad promotion; exact-revision phone/audio trace remains the
+independent live acceptance gate for this first cut.
+
+---
+
+# Full technical audit — 2026-10-08 UTC
+
+Target feature/voice-zoiper-m5; baseline361972eb, clean/origin/GitHub agreed.
+[Claim-by-claim report and actual captures](evaluation/technical-audit-2026-10-08/README.md),
+[checks](evaluation/technical-audit-2026-10-08/checks.json),
+[runtime handoff](production-dialogue-handoff.md).
+
+CHANGED: shared deterministic breathing difficulty surface/third-person forms;
+Qwen worker bounded16MiB/64 LRU, selected endpoint/model/voice key and per-frame
+deadline/cancellation; new behavior regressions in rich/runtime gates; stale
+root README corrected. No new model/FSM/selector/generative flag, policy repin,
+target restart, Core consumer or external message.
+
+VERIFIED: identical37 tests baseline21 FAIL/16 PASS; targeted105 PASS. Sequential
+full3530 PASS/0 FAIL/9 SKIP/173.70s, runtime338 PASS/22.92s, kernel294/1.66s;
+rich951 PASS, corpus500/500 plus8 tests, policy diff12 expected/0 unexplained;
+make lint/contracts/whitespace PASS. Parallel first full/runtimes had one
+unchanged model300ms abstention and one runtime deadline; original focused
+assertions3/3 and sequential full/runtime pass. No thresholds weakened.
+Paired6 synthetic SDK cases, eight personal replies; memory bounded6.
+The review's mixed-sentence illustration differs from actual RichUserTurn;
+captured real parser output is retained, not replaced with a desired schema.
+Exact source **887d8cc629d6d5339b38dbc3e9d179c7beb33c8c**, published to m5:
+[CI37716232555](https://github.com/Belvist/imvera/actions/runs/37716232555),
+all11 SUCCESS,3536 PASS/0 FAIL/3 SKIP/240.05s; actual LFS fetch observed.
+This subsequent documentation receipt changes no tested runtime/test/gate bytes.
+
+NOT VERIFIED: actual M5 SHA/image/providers/flags/audio/SIP, phone warmth and
+latency/barge-in, real Core→family delivery, total inference counts/RAM/VRAM or
+100 calls. No configured target identity/VPN; access/Core questions pending.
+REMAINING RISKS: routine minima/legacy ordinary flow, bounded free language,
+same-ID resident artifacts, Telegram demo's lack of per-recipient receipts.
+NEXT GATE: target recorded audio/trace + actual test Core/recipient delivery.
+
+---
+
+# Listener completion — 2026-10-07 UTC
+
+Target feature/voice-zoiper-m5, baseline4d3ad19; main untouched.
+[Source/evidence/integration handoff](evaluation/listener-completion-2026-10-07/README.md),
+[plan](plans/listener-completion-2026-10-07.md),
+[checks](evaluation/listener-completion-2026-10-07/checks.json).
+
+CHANGED: the existing discourse listener reads the existing whole-utterance
+completion meaning; no new classifier/phrase bank/model/state/timer/selector.
+«Нет, ничего» completes the topic, not the call or a health fact. Mixed
+completion words with new story continue listening; genuine required needs
+resume through the same ActionPolicy/legacy owners. No target restart.
+
+VERIFIED: identical30 tests baseline3 FAIL/27 PASS; new plus existing floor/
+closing113 PASS. Full local3493 PASS/0 FAIL/9 SKIP/184.81s; rich928, runtime324,
+kernel294, corpus500/500 plus8 gate tests; policy diff12expected/0unexplained,
+lint/whitespace PASS. Original assertions intact. Paired5-case/410-turn captures
+per side; simulated audible completion. Exact source
+**f7b748ca36d3633286a280ae82f79235ba0f1247**:
+[CI37645641929](https://github.com/Belvist/imvera/actions/runs/37645641929),
+all11 SUCCESS,3499 PASS/0 FAIL/3 SKIP/229.97s; genuine LFS fetch observed.
+This follow-up only records verification; five source/test/gate hashes match.
+
+NOT VERIFIED: actual M5 SHA/image/provider profile and phone audio/trace,
+human listening quality, firstPCM/total model invocations or100-call capacity.
+No SSH config/target runtime/credentials in cloud; text access question pending.
+REMAINING RISKS: protocol minima/ordered optional questions, refreshed-summary
+surface and bounded free answers. NEXT GATE: target actual audio/trace and
+listener acceptance on the tested source. No target deployment performed.
+
+---
+
+# Continuation ownership — 2026-10-07 UTC
+
+Target feature/voice-zoiper-m5, baseline c827d9d; main untouched.
+[Source/paired exchanges/integration handoff](evaluation/continuation-2026-10-07/README.md),
+[plan](plans/continuation-ownership-2026-10-07.md),
+[exact checks](evaluation/continuation-2026-10-07/checks.json).
+
+CHANGED: existing reducer consumes a heard open invitation's accepted personal
+story; release answered delivery ownership before the same ActionPolicy selects
+continuation. No health/family/mission fact follows from invitation completion.
+New accepted content invalidates the old summary's completion scope; include
+mission/SDK facts and routine coverage. Clinical references and pure report
+classes keep their owners. No new brain/model/phrase bank/flag, generative live
+delivery, global policy cutover, protocol-minimum change or target restart.
+
+VERIFIED: identical26 new tests baseline12 FAIL/14 PASS, final26 PASS; actual
+SDK/CallActor controlled-PCM completion/cancel paths included. Full local3489
+PASS/0 FAIL/9 SKIP,182.29s; rich924, runtime324, kernel294, corpus500/500 plus8
+gate tests, policy diff12 expected/0 unexplained, lint/whitespace PASS. Existing
+six full-suite regressions corrected without altering their assertions.
+Paired10 scenarios/850 SDK turns per side; audible delivery simulated. Exact
+published-source **4d3ad19934e2212ab71982c466c9b3b6a92ffe82**:
+[CI37643179274](https://github.com/Belvist/imvera/actions/runs/37643179274),
+all11 SUCCESS,3495 PASS/0 FAIL/3 SKIP/233.93s; actual LFS fetch observed.
+
+NOT VERIFIED: current M5 loaded SHA/image/providers/flags, real phone/STT/TTS
+audio, warmth/latency, total model invocations and100 actual calls. Cloud has
+no configured M5 identity; access information requested. REMAINING RISKS:
+routine minima/ordered questions remain; fresh-summary spoken transition and
+listening pacing require heard acceptance; full free conversation is still
+bounded. NEXT GATE: target actual audio/trace acceptance. Subsequent listener
+completion source is recorded separately above.
+
+---
+
+# Grounded routine coverage — 2026-10-07 UTC
+
+Target feature/voice-zoiper-m5, baseline ee92a719; main untouched.
+[Source changes, full exchanges and integration handoff](evaluation/grounded-coverage-2026-10-07/README.md),
+[plan/counter-migration blocker](plans/grounded-coverage-2026-10-07.md).
+
+CHANGED: remove aggregate lexical coverage owner; read accepted own records and
+evidenced current episodes. Existing scheduler records decisive volunteered
+medication evidence; same clause owner scopes food/meds/relevance. Asked,
+unknown and declined are not known answers. No new brain/model/phrase bank,
+live generation, global policy cutover or target restart. Check-slot minimum
+preserved after a broader trial exposed ITS/summary closing gaps.
+
+VERIFIED: new36 PASS; baseline13 FAIL/23 PASS. Rich898, kernel294, corpus500/500
+plus8 gate tests, policy diff12 expected/0 unexplained, repository lint and
+whitespace PASS. Genuine pinned encoder LFS fetch/checkout; two previously
+pointer-blocked readiness tests now PASS. Full local3463 PASS/0 FAIL/9 SKIP,
+168.57s. Exact source **29b87a792c24b49d6d63046aa9bcf3b6990b5f03**:
+[CI37636824409](https://github.com/Belvist/imvera/actions/runs/37636824409),
+all11 SUCCESS; full3469 PASS/0 FAIL/3 SKIP,235.69s; genuine LFS fetch verified.
+This follow-up changes documentation only; five source/gate hashes match.
+Exact full/CI outputs:
+[checks](evaluation/grounded-coverage-2026-10-07/checks.json).
+Paired14-case/260-turn SDK captures per side; delivery simulated.
+
+NOT VERIFIED: actual M5 bridge/image/providers/flags, phone warmth, firstPCM,
+family delivery or100-call capacity. REMAINING RISKS: routine minima and ordered
+packs persist; earlier ITS/summary paths need a separate ownership correction.
+Medication habit alone may still receive the screen. Human convenience has not
+been accepted by these text checks. NEXT GATE: ITS/summary/listening ownership,
+then exact-revision real call/audio/raw trace and listener acceptance.
+
+---
+
+# Progress audit — 2026-10-07 UTC
+
+Audited m5 source **81f3272**; latest CI all11 SUCCESS,3433 PASS/0 FAIL/3 SKIP.
+[Progress, exact evidence and next implementation cut](dialogue-progress-2026-10-07.md).
+Our subject/SDK changes retained byte-for-byte. Peer added help-affirmation tests,
+old-bridge live report and64-entry PCM cache/max-batch2. Source fixes are distinct
+from post-restart heard acceptance. Grounded coverage/selector remains next.
+CHANGED: documentation only. VERIFIED: exact source CI/logs and10 source hashes.
+NOT VERIFIED: current M5 actual audio/trace/latency/100-call capacity.
+REMAINING RISKS: lexical coverage, breathing wording, own-positive return and
+cache deadline/byte-budget/backend identity. NEXT GATE: grounded coverage cut.
+
+---
+
 # Implicit clinical subject ownership — 2026-10-05 UTC
 
 Target **feature/voice-zoiper-m5**, baseline **0abdc46**; main untouched.
@@ -13,7 +299,7 @@ No new model/brain/writer/flag/global policy cutover; safety/control bytes uncha
 
 VERIFIED: new20 PASS; baseline13 FAIL/7 PASS (four missing newly exposed APIs);
 paired13-case/310-turn SDK exchanges each, simulated delivery. Rich862, kernel294, runtime322, corpus500/500, policy diff12expected/0unexplained,
-make lint and whitespace PASS. Final full/CI remain pending in checks. No existing assertion weakened.
+make lint and whitespace PASS. Exact bbef CI37327811889: all11 SUCCESS,3429 PASS/0 FAIL/3 SKIP/237.71s, genuine LFS/model readiness. Latest81f3272 CI37555647610: all11 SUCCESS,3433 PASS/0 FAIL/3 SKIP/204.87s; same dialogue source hashes. No existing assertion weakened.
 NOT VERIFIED: deployed M5/image/provider profile, real phone/audio hearing and
 end-of-speech→PCM, full-system RAM/VRAM and100 actual calls.
 REMAINING RISKS: family-only→`А у меня всё нормально` repair; breathing wording;

@@ -180,7 +180,8 @@ def kernel_to_rich_turn(
     from packages.dialogue_engine.turn_understanding import RichUserTurn
     from packages.voice_perception.post_stt_gate import filter_phantom_generic_issues
 
-    mentions = observations_to_issue_mentions(result.observations, result.raw_text)
+    mentions = observations_to_issue_mentions(result.observations, result.raw_text,
+                                             spans=result.spans, relations=result.relations)
     from packages.dialogue_engine.issue_mention_extract import extract_issue_mentions
 
     legacy = (() if result.route == "kernel_topic_request"

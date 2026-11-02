@@ -1,0 +1,88 @@
+{
+  "baseline_commit": "c827d9dde92da9e4206b437842855f5af48c97d4",
+  "target_branch": "feature/voice-zoiper-m5",
+  "source_hashes": {
+    "packages/dialogue_engine/reducer.py": "2dd3e44fe20a80c5f31bede81b0c00e5121255577183f6695208916fc02d408e",
+    "packages/dialogue_engine/discourse.py": "d614efce8d3b00d3d729807266bcc59892eebae607999d991d4549864e06f7a2",
+    "packages/dialogue_engine/state.py": "0ee96c949d85ea21205b3cf458602294a271996a0184de091bb841687003b5f3",
+    "tests/test_continuation_ownership.py": "a4d0c715063db524c572f1d788f2859bf88fbf50a8d8c8f896b46dc18044dcd9",
+    "Makefile": "6514d69e311c72d9fb74fa6a2250390f8c5ea83450857240a563d46cae28b7f8"
+  },
+  "commands": {
+    "new_tests": "python -m pytest tests/test_continuation_ownership.py -q",
+    "rich": "make test-dialogue-rich",
+    "runtime": "make test-dialogue-runtime",
+    "kernel": "make test-semantic-kernel",
+    "corpus": "make dialogue-corpus-gate",
+    "full": "make test",
+    "diff": "python tools/voice_lab/policy_diff_v8_v9.py",
+    "lint": "make lint; git diff --check"
+  },
+  "interpreter": "/workspace/imvera-review-venv/bin/python",
+  "results": {
+    "new_tests": "26 passed in 1.23s",
+    "baseline_same_tests": "12 failed, 14 passed in 0.89s; identical final test bytes; no missing APIs",
+    "rich": "924 passed / 17.98s",
+    "runtime": "324 passed / 24.04s",
+    "kernel": "294 passed / 2.41s",
+    "corpus": "500/500 / 10.58s; 8 tests / 36.66s",
+    "full": "3489 passed / 0 failed / 9 skipped / 182.29s",
+    "policy_diff": "12 expected / 0 unexplained",
+    "lint": "PASS",
+    "whitespace": "PASS",
+    "exact_source_ci": {
+      "run_id": 37643179274,
+      "url": "https://github.com/Belvist/imvera/actions/runs/37643179274",
+      "jobs": "11/11 SUCCESS",
+      "full": "3495 passed / 0 failed / 3 skipped / 233.93s",
+      "full_job_id": 112867160858,
+      "genuine_lfs_fetch": "observed full-job log"
+    }
+  },
+  "source_review": "one reducer/state/selector; core manifest unchanged; original assertions unchanged; no transport/voice/model/provider/consent/safety implementation change",
+  "new_callactor_tests": "actual SDK/outbox/playback/cancel; controlled PCM, no audio model or SIP",
+  "added_model_stages": 0,
+  "actual_total_model_invocations": "NOT_MEASURED",
+  "sdk_capture": {
+    "before": {
+      "head": "c827d9dde92da9e4206b437842855f5af48c97d4",
+      "dirty": true,
+      "scope": "synthetic SDK text; simulated audible completion",
+      "cases": 10,
+      "turns": 850,
+      "sdk_ms_p50": 1.3588944998446095,
+      "sdk_ms_p95": 2.9525569998440915
+    },
+    "after": {
+      "head": "c827d9dde92da9e4206b437842855f5af48c97d4",
+      "dirty": true,
+      "scope": "synthetic SDK text; simulated audible completion",
+      "cases": 10,
+      "turns": 850,
+      "sdk_ms_p50": 1.7499939995104796,
+      "sdk_ms_p95": 13.091129999338591
+    }
+  },
+  "timing_limit": "shared cloud CPU; after handles formerly discarded/terminal turns; not target phone latency or matched complete-call throughput",
+  "live_access": {
+    "cloud": "running/connected",
+    "configured_capabilities": [],
+    "configured_secrets": [],
+    "outbound_identities": [],
+    "m5": "NOT_CONFIGURED; text access question pending",
+    "containers_running": 0
+  },
+  "not_verified": [
+    "target SHA/image/providers/flags",
+    "CallActor/FreeSWITCH real phone audio/trace",
+    "human warmth/latency/interruption acceptance",
+    "whole-stack RAM/VRAM and 100-call capacity"
+  ],
+  "remaining": [
+    "routine minima and ordered optional questions",
+    "fresh-summary wording and listening pacing",
+    "bounded open-question repertoire"
+  ],
+  "next_gate": "exact-source CI then actual target audio/trace",
+  "verified_source_commit": "4d3ad19934e2212ab71982c466c9b3b6a92ffe82"
+}

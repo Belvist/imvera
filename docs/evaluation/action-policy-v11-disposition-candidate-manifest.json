@@ -1,0 +1,41 @@
+{
+  "status": "frozen",
+  "policy_version": "action-policy-phase1-v11",
+  "tested_sha": "4274a45149c46b2141cb5fe2d3e2dfce37b90cdc",
+  "source_parent_sha": "c1b3f1a35d41b78fd0ee7109ddbbe6efc0df04de",
+  "historical_baseline_sha": "254f0baed11ba7913d276c50ca7bd574778f19a5",
+  "prior_v10_sha": "dc72d6edaca212dbe3f0dde91bffe631fff98b36",
+  "prior_v10_manifest": "docs/evaluation/action-policy-v10-pending-candidate-manifest.json",
+  "core_file_sha256": {
+    "actions.py": "5bad9619a12de738cd5c1413e41f8261c0b8e9298ffde1cbca069663cbac282a",
+    "constraints.py": "d180ad53123b2d1bb0c98da6f51ccb4481b90bfbd72d8987ab0eaf0930919016",
+    "features.py": "5bd1204c8f7473b06318ffefa4c7aade53e9e319cc25b62640af62eaa606f832",
+    "mandatory.py": "5570d1c275e58945739bf6b4ff50d1891dbc48d887b1c69e8c97fdaa2da10d73",
+    "need_value.py": "b3088e50bb443ba752accae3dcb2d72b51a49365264896c402f325813f6afe1a",
+    "needs.py": "1c0e57bb1fce3c60ac1cc8fcdb48cbc07240d78be4e45bee70f20a74d462dcbc",
+    "policy.py": "0a6968db79cc7b83240332386f94e558d34d1a996be309381255db0815771eaf",
+    "scorer.py": "2e05f93145b6c4f6eda792c5a3cd4df410a6e3ce5c57ad8bcb4208026088cd3c",
+    "semantic_signals.py": "ba1e77a90e8f06ffce9bc1b579c7cffa9eeaa27fce55d53cea074c15c9ab06fc",
+    "snapshot.py": "c842ac175ad1dcfed7cb97a629bd6bf443728d330a6c92480c88f421503483da"
+  },
+  "policy_tree_sha256": "4707601ac5eef12ff60b9cec6e18738e65edd799ff92321d03a22cdfad8ba9a5",
+  "hash_construction": "sha256 per core blob; concatenated ten files sorted by filename",
+  "authority_scope": "unchanged scoped personal authority; global medical cutover remains gated",
+  "change": "project caller unknown/refusal separately from known facts; exclude discharged alias needs in canonical legal set and pending obligations; unchanged actions, weights and priority",
+  "pin_workflow": "metadata-only pin after observed exact-source CI; unchanged ten policy core files, authority scope and weights",
+  "not_verified": [
+    "actual target SIP/audio/human warmth/latency/load",
+    "Core acceptance and family receipt"
+  ],
+  "verified_ci": {
+    "run_id": 37979468470,
+    "url": "https://github.com/Belvist/imvera/actions/runs/37979468470",
+    "jobs": "11/11 SUCCESS",
+    "suite": {
+      "passed": 3647,
+      "failed": 0,
+      "skipped": 3,
+      "seconds": 237.28
+    }
+  }
+}

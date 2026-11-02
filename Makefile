@@ -44,7 +44,16 @@ test-dialogue-rich:
 		tests/test_question_report_grounding.py tests/test_single_need_questions.py \
 		tests/test_conversation_floor_navigation.py tests/test_personal_context_recall.py \
 		tests/test_volunteered_clinical_facts.py tests/test_multi_complaint_progression.py \
-		tests/test_mixed_subject_routine_facts.py tests/test_implicit_subject_ownership.py -q
+		tests/test_mixed_subject_routine_facts.py tests/test_implicit_subject_ownership.py \
+		tests/test_grounded_coverage.py tests/test_information_sufficient_coverage.py \
+		tests/test_medical_checkin_coverage.py \
+		tests/test_grounded_fact_revisions.py \
+		tests/test_functional_impact_answer.py \
+		tests/test_repeated_issue_evidence.py \
+		tests/test_urgent_delivery_truth.py \
+		tests/test_long_care_turn.py \
+		tests/test_continuation_ownership.py \
+		tests/test_breathing_safety_scope.py -q
 
 test-dialogue-runtime:
 	@echo "GATE: CallActor rich path + LLM worker contract"
@@ -60,7 +69,8 @@ test-dialogue-runtime:
 		tests/test_qwen_gguf_provider.py tests/test_qwen_tts_failure_integrity.py \
 		tests/test_tts_warmup.py tests/test_bounded_tts_streaming.py \
 		tests/test_production_inference.py tests/test_qwen_http_streaming.py \
-		tests/test_production_review_boundaries.py tests/test_replica_start_distribution.py -q
+		tests/test_production_review_boundaries.py tests/test_replica_start_distribution.py \
+		tests/test_qwen_cache_bounds.py -q
 
 test-action-policy-shadow:
 	@echo "GATE: ActionPolicy Shadow M1 (fail-open, pre-legacy, no cutover)"

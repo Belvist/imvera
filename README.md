@@ -10,24 +10,32 @@ Deterministic transcript rules → RED/YELLOW candidate.
 Control confirmation → CONFIRMED RED.
 ```
 
-## Status (main @ `544cce4`; `feature/voice-zoiper-m5` merged — identical SHAs verified 2026-09-21)
+## Status (`feature/voice-zoiper-m5`, проверка 2026-10-08)
 
-Архитектура выбрана и заморожена ([ADR-014](./docs/adr/014-architecture-freeze-acceptance-gates.md),
-путь: SIP → FreeSWITCH → CallActor → GigaAM → DialogueEngine → TTS).
-**Ни одни из 7 acceptance gates не пройдены** — это не прод.
+Рабочая ветка — **feature/voice-zoiper-m5**. На исходном `361972eb` она
+на 198 коммитов впереди main; прежняя запись об одинаковых ветках устарела.
+Путь: SIP → FreeSWITCH → CallActor → GigaAM → DialogueEngine → TTS.
+Техническая приёмка исходников и приёмка живого продукта различаются:
+[актуальный аудит и проверяемые ограничения](docs/evaluation/technical-audit-2026-10-08/README.md),
+[журнал](docs/current-task.md), [передача runtime-агенту](docs/production-dialogue-handoff.md).
+Сквозная промышленная приёмка на целевом сервере не подтверждена.
+Source4274a451 (2026-10-09): [CI11/11 SUCCESS,3647 PASS/0 FAIL/3 SKIP](https://github.com/Belvist/imvera/actions/runs/37979468470),
+[grounded revisions / unknown / длинная речь](docs/evaluation/grounded-revisions-2026-10-09/README.md).
+Полный медицинский режим сохраняет все пять базовых тем; target audio/Core/load
+по-прежнему требуют отдельной приёмки.
 
 | Направление | Состояние |
 |-------------|-----------|
-| Dialogue engine (single-writer, fail-safe uncertainty) | работает в лабе, 1494 passed / 17 baseline-failed |
-| Voice runtime (PCM integrity, utterance resume) | работает в лабе |
-| STT longform (>25s fallback) | код готов, вживую не проверен |
-| Local SIP lab (Zoiper ↔ FreeSWITCH ↔ Vera) | звонки идут, трассировки есть |
-| TTS provider | **открыт вопрос: дефолт `mlx_customvoice` (Qwen3-TTS), `silero_lab` — NC/lab-only, freeze называет Silero — нужен license/quality gate** |
-| PSTN via VoxImplant | **блокер: 403 Invalid CallerID** — нужен CallerID в панели |
-| PSTN via Novofon (gateway `novofon` в контейнере) | **блокер: провайдер молча дропает SIP с нашего IP** — шаги в кабинете |
-| Downstream stop/ack, barge-in | отсутствует (доказано тестом), включать запрещено |
-| Core inbox / результат → статус семье | не собрано |
-| Прод-сервер, GPU, мониторинг | нет |
+| Dialogue engine (single-writer, grounded facts) | SDK/regression CI проходит; личные темы — ActionPolicy v11, обычный check-in преимущественно legacy |
+| Voice runtime | streaming PCM, generation cancellation, playback ledger реализованы; live stop/latency gate открыт |
+| STT | GigaAM final; prefix_batch opt-in, не stateful streaming; Linux CPU service curve измерена отдельно |
+| Local SIP lab | есть исторические звонки/trace; текущий source требует нового аудио gate |
+| TTS provider | Mac profile MLX Qwen; portable profile Qwen HTTP resident; actual target backend/revision требует сверки |
+| Silero TTS | explicit lab backend; license/provenance конкретного артефакта требуется проверить |
+| PSTN | прежние ограничения операторов не перепроверены; актуальная доступность неизвестна |
+| Barge-in | механизм есть, default OFF; echo-reference gate не является полноценным AEC |
+| Core / семья | Postgres + transactional outbox есть; Core ack / уведомление получателю сквозным тестом не подтверждены |
+| Capacity | profile admission 1; 100 полных телефонных разговоров не принято |
 
 ## Quick start (lab, Mac)
 

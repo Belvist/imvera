@@ -202,3 +202,19 @@ def test_never_silent_on_sleep_complaint() -> None:
         ]
     )
     assert result.speak_effects, "every meaningful turn must produce Vera speech"
+
+
+@pytest.mark.parametrize("text", [
+    "Спала не очень хорошо.", "Я спал не нормально.", "Спала очень плохо.",
+])
+def test_locally_negative_sleep_quality_is_inferred_not_reasked(text):
+    assert TopicFamily.SLEEP in detect_families(text)
+    assert "quality" in infer_dimensions(TopicFamily.SLEEP, text)
+
+
+@pytest.mark.parametrize("text", [
+    "Мне хорошо. Выспалась. Таблетки не принимаю.",
+    "Спала хорошо. Таблетки не принимаю.",
+])
+def test_positive_sleep_is_not_a_complaint_because_another_topic_has_negation(text):
+    assert TopicFamily.SLEEP not in detect_families(text)

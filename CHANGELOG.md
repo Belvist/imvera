@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased — 2026-10-09
+
+- Apply source-admitted caller sleep/mood revisions before response selection; invalidate obsolete summaries, distinguish post-verbal sleep quality from wellbeing, and prevent foreign/historical/conditional topic hints from filling caller sleep dimensions.
+- Keep current within-turn pain restatements with their sole anatomical antecedent and preserve original symptom offsets through kernel-to-mention conversion; retain separate complaints and subjects.
+- Version and pin the existing ActionPolicy as v11 after exact-source CI, with separate unknown/refusal dispositions in the canonical legal set; preserve scoring/safety/authority scope and immutable v9/v10 history. Give functional-impact questions an actual grounded answer path.
+- Replace the unconfirmed family-delivery promise in urgent speech with direct help guidance; Core/family receipt remains an independent acceptance gate.
+- Record a local clinical refusal through the existing unavailable-answer writer, separately from an unknown value, so neither legacy nor policy recreates the declined question.
+- Keep long sleep/plans fact values within the typed limit using literal source fragments; reject oversized contextual replacements and avoid a truncated whole-narrative polarity-model vote. Remote historical sleep cannot fill today's sleep goal.
+- Prevent GREEN on technical/no-contact/unfinished calls in the Telegram demo and redact URL-bearing exception details. Persist individual transport acceptances in its locked atomic local ledger; retry only failed recipients, never mark partial/dry-run results complete. Actual Telegram/Core receipts remain unverified.
+
+- Restore all five baseline topics as the completion target of opt-in full medical check-in; count volunteered answers without imposing a reply quota, retain bounded unknown/refusal handling and urgent/stop precedence. Supersedes the three-domain completion target.
+- Prevent an unrelated negation from turning positive rest into a sleep complaint (e.g. medication non-use plus «выспалась»).
+
+## Unreleased — 2026-10-08
+
+- Let accepted routine information satisfy opt-in full coverage without an independent check-slot reply quota; preserve required mission/clinical needs and heard invitation/summary ownership. Record the completion plan and refreshed official competitor research.
+- Recognize current breathing difficulty in both deterministic safety detectors with shared wording and existing negation/history/third-person guards; retain the original RED event/observation quote without claiming family delivery.
+- Bound Qwen phrase PCM retention to 16 MiB and 64 entries with true LRU eviction; scope cache identity to backend, accepted revision and effective voice, and enforce deadline/cancellation on cached and generated frames.
+- Audit the supplied technical review against actual source, SDK exchanges and stored capacity measurements; correct the stale root README and document remaining target/Core/load acceptance.
+
+## Unreleased — 2026-10-07
+
+- Share whole-utterance completion meaning with personal listening: finish the topic on «Нет, ничего», preserve mixed story continuation and resume genuinely unanswered required information without fabricating a health answer.
+- Let a source-admitted personal narrative answer a heard open invitation without reserving more health questions or fabricating a health/mission fact. Keep clinical references and pure meal/medication reports with their existing owners.
+- Invalidate a previous summary's completion scope when new content is accepted; preserve facts and listening through the existing reducer/selector, including stale and cancelled delivery. Retain whole completion, safety and consent behavior.
+- Record paired source exchanges and actual SDK/CallActor controlled-PCM regressions separately from target phone/audio acceptance.
+
 ## Unreleased — 2026-10-05
 
 - Bind implicit clinical subjects through original discourse in the existing kernel/SDK owner; retain ambiguous foreign reports without caller-directed probing or recap. Scope family-only routine facts and structured proposals; rebase unique original evidence and acknowledge explicit family correction without another medical question.
